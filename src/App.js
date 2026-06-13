@@ -7473,7 +7473,6 @@ const ESPACE_CHEF_SECTIONS=[
   {id:"defi",icon:"🚀",label:"Défi Flash",desc:"Lancer un défi collectif pour toute l'équipe",chefOnly:true},
   {id:"powerhour",icon:"⏱️",label:"Power Hour",desc:"Sprint collectif synchrone de 20 minutes",chefOnly:true},
   {id:"distributeurs",icon:"👑",label:"Distributeurs",desc:"Voir et naviguer dans l'arborescence de ton équipe",chefOnly:false},
-  {id:"monequipe",icon:"👥",label:"Mon équipe",desc:"Naviguer dans l'arborescence de ton équipe",chefOnly:false},
   {id:"nouveaux",icon:"📋",label:"Nouveaux Distri",desc:"Suivi onboarding des filleules récentes",chefOnly:false},
   {id:"admin",icon:"🔧",label:"Administration",desc:"Gérer les contenus, citations, scripts, annonces et produits",melissaOnly:true},
 ];
