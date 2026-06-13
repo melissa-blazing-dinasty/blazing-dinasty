@@ -3698,9 +3698,13 @@ function DistributeursTab({distributeurs,save,uid}){
 
   const autoEntries = Object.values(annuaire)
     .filter(m=> isMelissa || (descendants && descendants.has(m.uid)))
-    .map(m=>({
-    ...m, id:"auto-"+m.uid, auto:true,
-  }));
+    .map(m=>{
+      // Dérive prenom/nom depuis uid si absents
+      const parts = m.uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1));
+      const prenom = m.prenom || parts[0] || "";
+      const nom = m.nom || parts.slice(1).join(" ") || "";
+      return {...m, prenom, nom, id:"auto-"+m.uid, auto:true};
+    });
   const allEntries = [...autoEntries, ...distributeurs.map(d=>({...d, auto:false}))];
 
   // Helpers navigation par équipe (basé sur le champ marraine de l'annuaire)
@@ -3831,7 +3835,7 @@ function DistributeursTab({distributeurs,save,uid}){
           return(
             <div key={d.id} onClick={()=>setSel(isActive?null:d.id)}
               style={{background:isActive?C.brun:C.blanc,border:`2px solid ${isActive?C.rose:C.pale}`,borderRadius:10,padding:".42rem .75rem",cursor:"pointer",flexShrink:0,transition:"all .2s",position:"relative"}}>
-              <div style={{fontSize:".78rem",fontWeight:600,color:isActive?C.blanc:C.brun}}>{d.prenom} {d.nom}{d.auto&&<span title="Connectée à l'app" style={{marginLeft:".3rem"}}>📱</span>}</div>
+              <div style={{fontSize:".78rem",fontWeight:600,color:isActive?C.blanc:C.brun}}>{d.prenom||d.nom ? `${d.prenom||""} ${d.nom||""}`.trim() : fmtNom(d.uid||"")}{d.auto&&<span title="Connectée à l'app" style={{marginLeft:".3rem"}}>📱</span>}</div>
               <div style={{fontSize:".58rem",color:isActive?C.pale:C.gris}}>{d.palier||"2%"} · {palierIdx+1}/{PALIERS.length}</div>
               {teamCount>0&&(
                 <div onClick={(e)=>{e.stopPropagation();setPath([dUid]);}}
@@ -3854,7 +3858,7 @@ function DistributeursTab({distributeurs,save,uid}){
               {(active.prenom[0]||"?").toUpperCase()}
             </div>
             <div style={{flex:1}}>
-              <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.blanc}}>{active.prenom} {active.nom}</div>
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.blanc}}>{active.prenom||active.nom ? `${active.prenom||""} ${active.nom||""}`.trim() : fmtNom(active.uid||"")}</div>
               {active.auto?(
                 <div style={{fontSize:".62rem",color:C.pale,opacity:.8}}>📱 Connectée à l'application</div>
               ):(
@@ -7332,13 +7336,22 @@ function AssiduiteTab({uid}){
 const ESPACE_CHEF_SECTIONS=[
   {id:"membres",icon:"⚙️",label:"Accès équipe",desc:"Gérer les membres, chefs, et assigner les marraines",chefOnly:true},
   {id:"assiduite",icon:"📊",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true},
+  {id:"distributeurs",icon:"👑",label:"Distributeurs",desc:"Voir et naviguer dans l'arborescence de ton équipe",chefOnly:false},
   {id:"monequipe",icon:"👥",label:"Mon équipe",desc:"Naviguer dans l'arborescence de ton équipe",chefOnly:false},
   {id:"nouveaux",icon:"📋",label:"Nouveaux Distri",desc:"Suivi onboarding des filleules récentes",chefOnly:false},
 ];
 
 function EspaceChefTab({uid, isChef}){
   const[section,setSection]=useState("");
+  const[distrib,setDistrib]=useState([]);
   const sections = ESPACE_CHEF_SECTIONS.filter(s=>!s.chefOnly||isChef);
+
+  // Charge les distributeurs manuels depuis Firebase quand on entre dans cette section
+  const loadDistrib=async()=>{
+    const data=await sgAll(uid);
+    if(data["db-distributeurs"]){try{setDistrib(JSON.parse(data["db-distributeurs"]));}catch{}}
+  };
+  const saveDistrib=(d)=>{setDistrib(d);ss(uid,"db-distributeurs",JSON.stringify(d));};
 
   if(section){
     const s=sections.find(x=>x.id===section);
@@ -7350,6 +7363,7 @@ function EspaceChefTab({uid, isChef}){
         </button>
         {section==="membres"&&<MembresTab uid={uid}/>}
         {section==="assiduite"&&<AssiduiteTab uid={uid}/>}
+        {section==="distributeurs"&&<DistributeursTab distributeurs={distrib} save={saveDistrib} uid={uid}/>}
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
         {section==="nouveaux"&&<SuiviRecruTab uid={uid}/>}
       </div>
@@ -7365,7 +7379,7 @@ function EspaceChefTab({uid, isChef}){
         Toutes tes fonctions de cheffe d'équipe, au même endroit.
       </p>
       {sections.map(s=>(
-        <div key={s.id} onClick={()=>setSection(s.id)}
+        <div key={s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
           style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
           <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
             <div style={{width:38,height:38,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{s.icon}</div>
