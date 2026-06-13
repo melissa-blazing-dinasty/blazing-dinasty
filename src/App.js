@@ -1952,6 +1952,7 @@ export default function App(){
             <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
               Mindset, leadership, objectifs — travaille sur toi pour franchir tes propres limites.
             </p>
+            <AdminContentBlock onglet="devperso" items={adminItems}/>
 
             <div style={{background:"linear-gradient(135deg,rgba(196,154,138,.12),rgba(168,155,181,.08))",border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem 1rem",marginBottom:"1rem",fontSize:".76rem",color:C.texte,lineHeight:1.65}}>
               💡 <strong>6 formations disponibles.</strong> D'autres modules seront ajoutés progressivement par Melissa.
@@ -1987,6 +1988,7 @@ export default function App(){
         {tab==="formation"&&formationSubTab==="outils"&&(
           <div>
             <SecTitle title="Outils" em="indispensables" desc="Les bases de Canva, CapCut et Linktree — ce qu'il faut savoir et pas plus."/>
+            <AdminContentBlock onglet="outils" items={adminItems}/>
 
             <Card title="Canva — Créer ses visuels" sub="Les bases pour des posts professionnels" icon="🎨" color={C.rose} defaultOpen>
               <Info>Canva c'est l'outil n°1 pour créer tes visuels sans être graphiste. Gratuit, sur mobile et desktop.</Info>
@@ -2054,6 +2056,7 @@ export default function App(){
             <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
               Tout savoir sur les produits Mihi pour mieux les vendre et les recommander.
             </p>
+            <AdminContentBlock onglet="formaproduits" items={adminItems}/>
             <div style={{background:C.brun,borderRadius:14,padding:"1.4rem",textAlign:"center"}}>
               <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".2em",color:C.or,marginBottom:".5rem"}}>✦ À VENIR ✦</div>
               <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:C.blanc,fontWeight:300,lineHeight:1.4}}>
@@ -2159,7 +2162,7 @@ export default function App(){
         {tab==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")}/>}
         {tab==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name}/>}
         {tab==="espacechef"&&(isChefApp||hasTeamApp)&&<EspaceChefTab uid={userId} isChef={isChefApp}/>}
-        {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab/>}
+        {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab adminItems={adminItems}/>}
         {tab==="objectifs"&&<ObjectifsTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")}/>}
         {tab==="calendrier"&&<CalendrierTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")} isChef={false}/>}
 
@@ -3758,25 +3761,37 @@ function DistributeursTab({distributeurs,save,uid}){
         )}
         {enfants.map(m=>{
           const count=sousEquipeCount(m.uid);
+          const isExpanded=sel===("path-"+m.uid);
           return(
-            <div key={m.uid} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".7rem 1rem",marginBottom:".5rem",display:"flex",alignItems:"center",gap:".6rem"}}>
-              <div style={{width:34,height:34,borderRadius:"50%",background:C.rose+"20",color:C.rose,fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
-                {fmtNom(m.uid)[0]}
+            <div key={m.uid} style={{background:C.blanc,border:`1px solid ${isExpanded?C.rose:C.pale}`,borderRadius:12,padding:".7rem 1rem",marginBottom:".5rem"}}>
+              <div style={{display:"flex",alignItems:"center",gap:".6rem"}}>
+                <div style={{width:34,height:34,borderRadius:"50%",background:C.rose+"20",color:C.rose,fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
+                  {fmtNom(m.uid)[0]}
+                  {count>0&&(
+                    <div style={{position:"absolute",top:-4,right:-4,background:C.lilas,color:"white",borderRadius:"50%",minWidth:16,height:16,fontSize:".58rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>
+                      {count}
+                    </div>
+                  )}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.brun}}>{fmtNom(m.uid)}</div>
+                  <div style={{fontSize:".62rem",color:C.gris}}>{m.palier||"2%"}{m.ca?` · ${m.ca}€`:""}</div>
+                </div>
                 {count>0&&(
-                  <div style={{position:"absolute",top:-4,right:-4,background:C.lilas,color:"white",borderRadius:"50%",minWidth:16,height:16,fontSize:".58rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>
-                    {count}
-                  </div>
+                  <button onClick={()=>setPath([...path,m.uid])}
+                    style={{display:"flex",alignItems:"center",gap:".3rem",background:C.lilas+"15",border:`1px solid ${C.lilas}50`,borderRadius:8,padding:".35rem .6rem",fontSize:".68rem",fontWeight:600,color:C.lilas,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+                    📁 Équipe
+                  </button>
                 )}
-              </div>
-              <div style={{flex:1}}>
-                <div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.brun}}>{fmtNom(m.uid)}</div>
-                <div style={{fontSize:".62rem",color:C.gris}}>{m.palier||"2%"}{m.ca?` · ${m.ca}€`:""}</div>
-              </div>
-              {count>0&&(
-                <button onClick={()=>setPath([...path,m.uid])}
-                  style={{display:"flex",alignItems:"center",gap:".3rem",background:C.lilas+"15",border:`1px solid ${C.lilas}50`,borderRadius:8,padding:".35rem .6rem",fontSize:".68rem",fontWeight:600,color:C.lilas,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
-                  📁 Voir l'équipe
+                <button onClick={()=>setSel(isExpanded?null:"path-"+m.uid)}
+                  style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".35rem .55rem",fontSize:".68rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+                  {isExpanded?"▲":"▼"}
                 </button>
+              </div>
+              {isExpanded&&(
+                <div style={{marginTop:".6rem",paddingTop:".6rem",borderTop:`1px solid ${C.pale}`}}>
+                  <MembreStatsCard m={m} expanded={true} onToggleExpand={()=>setSel(null)}/>
+                </div>
               )}
             </div>
           );
@@ -3822,103 +3837,91 @@ function DistributeursTab({distributeurs,save,uid}){
       )}
 
       {/* Liste */}
-      <div style={{display:"flex",flexWrap:"wrap",gap:".4rem",marginBottom:"1rem"}}>
-        {filtered.map(d=>{
-          const isActive=sel===d.id;
-          const palierIdx=PALIERS.indexOf(d.palier||"2%");
-          const dUid=d.uid||((d.prenom||"")+"-"+(d.nom||"")).toLowerCase().replace(/\s+/g,"-");
-          const teamCount=sousEquipeCount(dUid);
-          return(
-            <div key={d.id} onClick={()=>setSel(isActive?null:d.id)}
-              style={{background:isActive?C.brun:C.blanc,border:`2px solid ${isActive?C.rose:C.pale}`,borderRadius:10,padding:".42rem .75rem",cursor:"pointer",flexShrink:0,transition:"all .2s",position:"relative"}}>
-              <div style={{fontSize:".78rem",fontWeight:600,color:isActive?C.blanc:C.brun}}>{d.prenom||d.nom ? `${d.prenom||""} ${d.nom||""}`.trim() : fmtNom(d.uid||"")}{d.auto&&<span title="Connectée à l'app" style={{marginLeft:".3rem"}}>📱</span>}</div>
-              <div style={{fontSize:".58rem",color:isActive?C.pale:C.gris}}>{d.palier||"2%"} · {palierIdx+1}/{PALIERS.length}</div>
+      {filtered.length===0&&<div style={{fontSize:".76rem",color:C.gris,padding:".5rem"}}>Aucun distributeur trouvé.</div>}
+
+      {filtered.map(d=>{
+        const isActive=sel===d.id;
+        const dUid=d.uid||((d.prenom||"")+"-"+(d.nom||"")).toLowerCase().replace(/\s+/g,"-");
+        const teamCount=sousEquipeCount(dUid);
+        const nom=d.prenom||d.nom?`${d.prenom||""} ${d.nom||""}`.trim():fmtNom(d.uid||"");
+        return(
+          <div key={d.id} style={{background:C.blanc,border:`1.5px solid ${isActive?C.rose:C.pale}`,borderRadius:12,marginBottom:".45rem",overflow:"hidden",transition:"border-color .2s"}}>
+            <div style={{display:"flex",alignItems:"center",gap:".6rem",padding:".6rem .85rem"}}>
+              <div style={{width:34,height:34,borderRadius:"50%",background:isActive?C.rose+"20":C.creme,color:isActive?C.rose:C.brun,fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {(nom[0]||"?").toUpperCase()}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:".82rem",fontWeight:600,color:C.brun,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {nom}{d.auto&&<span style={{marginLeft:".3rem",fontSize:".65rem"}}>📱</span>}
+                </div>
+                <div style={{fontSize:".6rem",color:C.gris}}>{d.palier||"2%"}{d.ca?` · ${d.ca}€`:""}</div>
+              </div>
               {teamCount>0&&(
-                <div onClick={(e)=>{e.stopPropagation();setPath([dUid]);}}
-                  title="Voir son équipe"
-                  style={{position:"absolute",top:-7,right:-7,background:C.lilas,color:"white",borderRadius:"50%",minWidth:18,height:18,fontSize:".6rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.15)"}}>
-                  {teamCount}
-                </div>
+                <button onClick={(e)=>{e.stopPropagation();setPath([dUid]);}}
+                  style={{background:C.lilas+"15",border:`1px solid ${C.lilas}50`,borderRadius:8,padding:".3rem .55rem",fontSize:".65rem",fontWeight:700,color:C.lilas,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+                  📁 {teamCount}
+                </button>
               )}
+              <button onClick={()=>setSel(isActive?null:d.id)}
+                style={{background:isActive?C.rose:C.creme,border:`1px solid ${isActive?C.rose:C.pale}`,borderRadius:8,padding:".3rem .55rem",fontSize:".7rem",color:isActive?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0,transition:"all .2s"}}>
+                {isActive?"▲":"▼"}
+              </button>
             </div>
-          );
-        })}
-        {filtered.length===0&&<div style={{fontSize:".76rem",color:C.gris,padding:".5rem"}}>Aucun distributeur trouvé.</div>}
-      </div>
 
-      {/* Fiche distributeur */}
-      {active&&(
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,overflow:"hidden"}}>
-          <div style={{background:C.brun,padding:"1rem 1.1rem",display:"flex",alignItems:"center",gap:".8rem"}}>
-            <div style={{width:40,height:40,borderRadius:"50%",background:C.or,color:C.brun,fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              {(active.prenom[0]||"?").toUpperCase()}
-            </div>
-            <div style={{flex:1}}>
-              <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.blanc}}>{active.prenom||active.nom ? `${active.prenom||""} ${active.nom||""}`.trim() : fmtNom(active.uid||"")}</div>
-              {active.auto?(
-                <div style={{fontSize:".62rem",color:C.pale,opacity:.8}}>📱 Connectée à l'application</div>
-              ):(
-                <div style={{fontSize:".62rem",color:C.pale,opacity:.8}}>{active.tel}{active.email&&` · ${active.email}`}</div>
-              )}
-              {active.dateEnreg&&<div style={{fontSize:".6rem",color:C.or}}>📅 Enregistrée le {new Date(active.dateEnreg).toLocaleDateString("fr-FR")}</div>}
-            </div>
-            {!active.auto&&(
-              <button onClick={()=>del(active.id)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:6,padding:".3rem .5rem",color:C.pale,cursor:"pointer",fontSize:".7rem",fontFamily:"inherit"}}>✕</button>
-            )}
-          </div>
-
-          <div style={{padding:"1rem"}}>
-            {/* Stats live (entrées auto uniquement) */}
-            {active.auto&&(
-              <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
-                <div style={{flex:1,background:C.creme,borderRadius:9,padding:".6rem",textAlign:"center"}}>
-                  <div style={{fontSize:".58rem",color:C.gris,marginBottom:".15rem"}}>💰 CA (période)</div>
-                  <div style={{fontSize:"1rem",fontWeight:700,color:C.rose}}>{active.ca||"—"}{active.ca?"€":""}{active.caObj?` / ${active.caObj}€`:""}</div>
-                </div>
-                <div style={{flex:1,background:C.creme,borderRadius:9,padding:".6rem",textAlign:"center"}}>
-                  <div style={{fontSize:".58rem",color:C.gris,marginBottom:".15rem"}}>👥 Recrues (période)</div>
-                  <div style={{fontSize:"1rem",fontWeight:700,color:C.lilas}}>{active.recruesReal||"0"}{active.recruesObj&&active.recruesObj!=="0"?` / ${active.recruesObj}`:""}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Plan de rémunération */}
-            <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>
-              💰 Plan de rémunération{active.auto&&<span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:C.gris}}> (mis à jour automatiquement)</span>}
-            </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:".35rem",marginBottom:"1rem"}}>
-              {PALIERS.map((p,i)=>{
-                const current=active.palier===p;
-                const passed=PALIERS.indexOf(active.palier||"2%")>i;
-                const col=PALIER_COLORS[p]||C.gris;
-                return(
-                  <div key={p} onClick={()=>!active.auto&&updatePalier(active.id,p)}
-                    style={{padding:".28rem .65rem",borderRadius:20,fontSize:".68rem",fontWeight:600,cursor:active.auto?"default":"pointer",border:`2px solid ${current?col:passed?col+"60":C.pale}`,background:current?col:passed?col+"15":"transparent",color:current?"white":passed?col:C.gris,transition:"all .2s",flexShrink:0}}>
-                    {passed&&!current?"✓ ":""}{p}
+            {isActive&&(
+              <div style={{borderTop:`1px solid ${C.pale}`,padding:"1rem"}}>
+                {d.auto&&(
+                  <div style={{display:"flex",gap:".5rem",marginBottom:".75rem"}}>
+                    <div style={{flex:1,background:C.creme,borderRadius:9,padding:".6rem",textAlign:"center"}}>
+                      <div style={{fontSize:".58rem",color:C.gris,marginBottom:".15rem"}}>💰 CA</div>
+                      <div style={{fontSize:"1rem",fontWeight:700,color:C.rose}}>{d.ca||"—"}{d.ca?"€":""}{d.caObj?` / ${d.caObj}€`:""}</div>
+                    </div>
+                    <div style={{flex:1,background:C.creme,borderRadius:9,padding:".6rem",textAlign:"center"}}>
+                      <div style={{fontSize:".58rem",color:C.gris,marginBottom:".15rem"}}>👥 Recrues</div>
+                      <div style={{fontSize:"1rem",fontWeight:700,color:C.lilas}}>{d.recruesReal||"0"}{d.recruesObj&&d.recruesObj!=="0"?` / ${d.recruesObj}`:""}</div>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
+                )}
 
-            {/* Barre progression */}
-            <div style={{marginBottom:"1rem"}}>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>
-                <span>Progression</span>
-                <span style={{fontWeight:700,color:C.brun}}>{PALIERS.indexOf(active.palier||"2%")+1}/{PALIERS.length}</span>
-              </div>
-              <div style={{height:6,background:C.pale,borderRadius:10,overflow:"hidden"}}>
-                <div style={{height:"100%",background:C.or,width:(((PALIERS.indexOf(active.palier||"2%")+1)/PALIERS.length)*100)+"%",borderRadius:10,transition:"width .4s"}}/>
-              </div>
-            </div>
+                <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>💰 Plan de rémunération</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:".3rem",marginBottom:".85rem"}}>
+                  {PALIERS.map((p,i)=>{
+                    const current=d.palier===p;
+                    const passed=PALIERS.indexOf(d.palier||"2%")>i;
+                    const col=PALIER_COLORS[p]||C.gris;
+                    return(
+                      <div key={p} onClick={()=>!d.auto&&updatePalier(d.id,p)}
+                        style={{padding:".22rem .55rem",borderRadius:20,fontSize:".65rem",fontWeight:600,cursor:d.auto?"default":"pointer",border:`2px solid ${current?col:passed?col+"60":C.pale}`,background:current?col:passed?col+"15":"transparent",color:current?"white":passed?col:C.gris}}>
+                        {passed&&!current?"✓ ":""}{p}
+                      </div>
+                    );
+                  })}
+                </div>
 
-            {/* Notes */}
-            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".4rem"}}>📝 Notes</div>
-            <textarea value={active.notes||""} onChange={e=>active.auto?updateAutoNotes(active.uid,e.target.value):updateNotes(active.id,e.target.value)}
-              placeholder="Objectifs, blocages, points de suivi, formations suivies..."
-              style={{width:"100%",minHeight:90,border:`1px solid ${C.pale}`,borderRadius:8,padding:".6rem",fontFamily:"inherit",fontSize:".77rem",color:C.texte,background:C.creme,resize:"vertical",outline:"none",lineHeight:1.6}}/>
+                {d.auto&&dUid&&(
+                  <MembreStatsCard
+                    m={{...d, uid:dUid, historique:d.historique||[]}}
+                    expanded={false}
+                    onToggleExpand={()=>{}}
+                  />
+                )}
+
+                <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".4rem",marginTop:".75rem"}}>📝 Notes</div>
+                <textarea value={d.notes||""} onChange={e=>d.auto?updateAutoNotes(dUid,e.target.value):updateNotes(d.id,e.target.value)}
+                  placeholder="Objectifs, blocages, points de suivi..."
+                  style={{width:"100%",minHeight:80,border:`1px solid ${C.pale}`,borderRadius:8,padding:".6rem",fontFamily:"inherit",fontSize:".76rem",color:C.texte,background:C.creme,resize:"vertical",outline:"none",lineHeight:1.6}}/>
+
+                {!d.auto&&(
+                  <button onClick={()=>del(d.id)}
+                    style={{marginTop:".5rem",background:"none",border:`1px solid #B0404040`,borderRadius:8,padding:".3rem .7rem",fontSize:".68rem",color:"#B04040",fontFamily:"inherit",cursor:"pointer"}}>
+                    Supprimer
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -5496,7 +5499,7 @@ function ObjectifsPopup({uid}){
 
       {/* Mini tabs */}
       <div style={{display:"flex",borderBottom:`1px solid ${C.pale}`}}>
-        {[{id:"perso",label:"🎯 Mes objectifs"},{id:"equipe",label:"👥 Équipe"}].map(t=>(
+        {[{id:"perso",label:"🎯 Mes objectifs"},{id:"ca",label:"💰 CA Équipe"}].map(t=>(
           <button key={t.id} onClick={()=>setPtab(t.id)}
             style={{flex:1,padding:".5rem",fontSize:".65rem",fontWeight:600,border:"none",borderBottom:`2px solid ${ptab===t.id?C.rose:"transparent"}`,background:"none",color:ptab===t.id?C.brun:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
             {t.label}
@@ -5552,31 +5555,26 @@ function ObjectifsPopup({uid}){
         )}
 
         {/* ÉQUIPE */}
-        {ptab==="equipe"&&(
-          !obj
-          ? <div style={{textAlign:"center",padding:"1rem",fontSize:".75rem",color:C.gris}}>Chargement...</div>
+        {ptab==="ca"&&(
+          !perso||!perso.caObj
+          ? <div style={{textAlign:"center",padding:"1rem",fontSize:".74rem",color:C.gris}}>
+              Définis ton objectif CA dans<br/><strong>Tableau de bord → Mes objectifs</strong>
+            </div>
           : <>
-            {obj.msg&&<div style={{background:C.creme,borderRadius:8,padding:".5rem .75rem",marginBottom:".65rem",fontSize:".72rem",color:C.brun,lineHeight:1.5,fontStyle:"italic",borderLeft:`3px solid ${C.or}`}}>"{obj.msg}"</div>}
-            {[{key:"ventes",icon:"🛍️",label:"Ventes",color:C.rose},{key:"recrues",icon:"👥",label:"Recrues",color:C.lilas},{key:"ca",icon:"💰",label:"CA (€)",color:C.or}].map(({key,icon,label,color})=>{
-              const p=pct(obj[key+"Real"],obj[key+"Obj"]);
-              return(
-                <div key={key} style={{marginBottom:".65rem"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".25rem"}}>
-                    <div style={{fontSize:".74rem",fontWeight:600,color:C.brun}}>{icon} {label}</div>
-                    <div style={{display:"flex",gap:".3rem",alignItems:"center"}}>
-                      <span style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:p>=100?C.vert:color}}>{obj[key+"Real"]||"—"}</span>
-                      <span style={{fontSize:".6rem",color:C.gris}}>/ {obj[key+"Obj"]||"—"}</span>
-                      <span style={{background:color+"20",color:color,fontSize:".58rem",fontWeight:700,padding:".1rem .35rem",borderRadius:20}}>{p}%</span>
-                    </div>
-                  </div>
-                  <div style={{height:5,background:C.pale,borderRadius:10,overflow:"hidden"}}>
-                    <div style={{height:"100%",background:p>=100?C.vert:color,width:p+"%",borderRadius:10,transition:"width .5s"}}/>
-                  </div>
-                </div>
-              );
-            })}
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>💰 Mon CA cette période</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:".5rem"}}>
+              <div style={{fontFamily:"Georgia,serif",fontSize:"2rem",fontWeight:600,color:C.brun}}>{perso.ca||0}€</div>
+              <div style={{fontSize:".78rem",color:C.gris}}>objectif : <strong style={{color:C.brun}}>{perso.caObj}€</strong></div>
+            </div>
+            <div style={{height:10,background:C.pale,borderRadius:10,overflow:"hidden",marginBottom:".4rem"}}>
+              <div style={{height:"100%",background:pct(perso.ca,perso.caObj)>=100?C.vert:C.rose,width:pct(perso.ca,perso.caObj)+"%",borderRadius:10,transition:"width .5s"}}/>
+            </div>
+            <div style={{textAlign:"right",fontSize:".72rem",fontWeight:700,color:pct(perso.ca,perso.caObj)>=100?C.vert:C.rose}}>
+              {pct(perso.ca,perso.caObj)}%{pct(perso.ca,perso.caObj)>=100?" 🎉 Objectif atteint !":""}
+            </div>
           </>
         )}
+
       </div>
     </div>
   );
@@ -7125,9 +7123,41 @@ function MembreStatsCard({m, expanded, onToggleExpand}){
   const hist = m.historique || [];
   const compCA = comparaisonPeriode(hist, m.ca, "ca");
   const compR = comparaisonPeriode(hist, m.recruesReal, "recruesReal");
+  const[extra,setExtra]=useState(null);
+  const[loadingExtra,setLoadingExtra]=useState(false);
+  const fmt=(id)=>id.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+
+  // Charge les données complètes depuis Firebase quand on ouvre la fiche
+  useEffect(()=>{
+    if(!expanded||extra||!m.uid)return;
+    setLoadingExtra(true);
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",m.uid));
+        if(snap.exists()){
+          const d=snap.data();
+          setExtra({
+            streak:+d["db-streak"]||0,
+            lastLogin:d["db-last-login"]||null,
+            actions:d["db-actions"]?JSON.parse(d["db-actions"]):{},
+            totalCA:+d["db-actions-cumul"]||0,
+            recrues:d["recrues"]?JSON.parse(d["recrues"]):[],
+            badges:d["db-badges-unlocked"]?JSON.parse(d["db-badges-unlocked"]):[],
+            notes:d["db-distributeurs-notes"]||"",
+            fastStart:d["db-fast-start"]?JSON.parse(d["db-fast-start"]):null,
+          });
+        }
+      }catch{}
+      setLoadingExtra(false);
+    })();
+  },[expanded,m.uid]);
+
+  const today=new Date().toISOString().slice(0,10);
+  const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
 
   return(
     <div>
+      {/* ── RÉSUMÉ RAPIDE ── */}
       {[
         {label:"💰 CA",val:m.ca,goal:m.caObj,unit:"€",color:C.rose},
         {label:"👥 Recrues",val:m.recruesReal,goal:m.recruesObj,unit:"",color:C.lilas},
@@ -7149,34 +7179,144 @@ function MembreStatsCard({m, expanded, onToggleExpand}){
 
       {(compCA||compR)&&(
         <div style={{display:"flex",gap:".6rem",marginTop:".5rem",flexWrap:"wrap"}}>
-          {compCA&&(
-            <span style={{fontSize:".64rem",color:compCA.diff>=0?C.vert:"#B04040"}}>
-              {compCA.diff>=0?"📈":"📉"} CA {compCA.diff>=0?"+":""}{compCA.diff}€ vs avant
-            </span>
-          )}
-          {compR&&(
-            <span style={{fontSize:".64rem",color:compR.diff>=0?C.vert:"#B04040"}}>
-              {compR.diff>=0?"📈":"📉"} Recrues {compR.diff>=0?"+":""}{compR.diff} vs avant
-            </span>
-          )}
+          {compCA&&<span style={{fontSize:".64rem",color:compCA.diff>=0?C.vert:"#B04040"}}>{compCA.diff>=0?"📈":"📉"} CA {compCA.diff>=0?"+":""}{compCA.diff}€ vs avant</span>}
+          {compR&&<span style={{fontSize:".64rem",color:compR.diff>=0?C.vert:"#B04040"}}>{compR.diff>=0?"📈":"📉"} Recrues {compR.diff>=0?"+":""}{compR.diff} vs avant</span>}
         </div>
       )}
 
       <button onClick={onToggleExpand}
         style={{width:"100%",background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".3rem",fontSize:".66rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",marginTop:".5rem"}}>
-        {expanded?"▲ Masquer la fiche détaillée":"▼ Voir la fiche détaillée"}
+        {expanded?"▲ Masquer la fiche complète":"▼ Voir la fiche complète"}
       </button>
+
+      {/* ── FICHE COMPLÈTE ── */}
       {expanded&&(
         <div style={{marginTop:".6rem",paddingTop:".6rem",borderTop:`1px solid ${C.pale}`}}>
-          {hist.length>=2?(
-            <>
-              <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".3rem"}}>📈 CA</div>
-              <MiniChart data={hist} dataKey="ca" objKey="caObj" color={C.rose} unit="€"/>
-              <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".3rem",marginTop:".6rem"}}>📈 Recrues</div>
-              <MiniChart data={hist} dataKey="recruesReal" objKey="recruesObj" color={C.lilas}/>
-            </>
-          ):(
-            <div style={{fontSize:".68rem",color:C.gris,textAlign:"center"}}>Pas encore d'historique pour cette personne.</div>
+          {loadingExtra&&<div style={{textAlign:"center",fontSize:".72rem",color:C.gris,padding:".5rem"}}>Chargement...</div>}
+
+          {extra&&(
+            <div>
+              {/* Connexion & Streak */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:".4rem",marginBottom:".75rem"}}>
+                <div style={{background:C.creme,borderRadius:9,padding:".5rem",textAlign:"center"}}>
+                  <div style={{fontSize:".58rem",color:C.gris,marginBottom:".15rem"}}>🔥 Streak</div>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:700,color:extra.streak>=5?C.or:C.brun}}>{extra.streak}j</div>
+                </div>
+                <div style={{background:C.creme,borderRadius:9,padding:".5rem",textAlign:"center"}}>
+                  <div style={{fontSize:".58rem",color:C.gris,marginBottom:".15rem"}}>📅 Connexion</div>
+                  <div style={{fontSize:".62rem",fontWeight:700,color:extra.lastLogin===today?C.vert:extra.lastLogin===yesterday?C.or:"#C0504D"}}>
+                    {extra.lastLogin===today?"Aujourd'hui":extra.lastLogin===yesterday?"Hier":extra.lastLogin?new Date(extra.lastLogin).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"Jamais"}
+                  </div>
+                </div>
+                <div style={{background:C.creme,borderRadius:9,padding:".5rem",textAlign:"center"}}>
+                  <div style={{fontSize:".58rem",color:C.gris,marginBottom:".15rem"}}>⚡ Actions/j</div>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:700,color:C.brun}}>
+                    {Object.values(extra.actions).filter(Boolean).length}/5
+                  </div>
+                </div>
+              </div>
+
+              {/* Barre actions du jour */}
+              <div style={{marginBottom:".75rem"}}>
+                <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem"}}>Actions du jour</div>
+                <div style={{display:"flex",gap:"3px"}}>
+                  {Array.from({length:5}).map((_,i)=>(
+                    <div key={i} style={{flex:1,height:6,borderRadius:3,background:i<Object.values(extra.actions).filter(Boolean).length?C.rose:C.pale}}/>
+                  ))}
+                </div>
+              </div>
+
+              {/* Objectifs détaillés */}
+              <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:10,padding:".75rem",marginBottom:".75rem"}}>
+                <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".5rem"}}>🎯 Objectifs période</div>
+                {[
+                  {label:"💰 CA",val:m.ca,goal:m.caObj,unit:"€",color:C.rose},
+                  {label:"👥 Recrues",val:m.recruesReal,goal:m.recruesObj,unit:"",color:C.lilas},
+                ].map(({label,val,goal,unit,color})=>{
+                  const p=pct(val,goal);
+                  return(
+                    <div key={label} style={{marginBottom:".5rem"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.pale,marginBottom:".2rem"}}>
+                        <span>{label}</span>
+                        <span style={{fontWeight:700,color:p>=100?C.vert:color}}>{val||0}{unit} / {goal||"—"}{unit} · {p}%</span>
+                      </div>
+                      <div style={{height:5,background:"rgba(255,255,255,.1)",borderRadius:10,overflow:"hidden"}}>
+                        <div style={{height:"100%",background:p>=100?C.vert:color,width:p+"%",borderRadius:10}}/>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.pale,marginTop:".3rem"}}>
+                  <span>Palier visé</span>
+                  <span style={{fontWeight:700,color:C.or}}>{m.palier||"2%"}</span>
+                </div>
+              </div>
+
+              {/* Recrues en suivi */}
+              {extra.recrues.length>0&&(
+                <div style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".75rem"}}>
+                  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".4rem"}}>
+                    📋 Recrues en suivi ({extra.recrues.length})
+                  </div>
+                  {extra.recrues.map(r=>{
+                    const{pct:p}=getProgress(r);
+                    return(
+                      <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:".3rem 0",borderBottom:`1px solid ${C.pale}`,fontSize:".7rem"}}>
+                        <span style={{color:C.brun,fontWeight:600}}>{r.name}</span>
+                        <span style={{color:p>=100?C.vert:C.rose,fontWeight:700}}>{p}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Fast Start */}
+              {extra.fastStart&&(
+                <div style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".75rem"}}>
+                  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".3rem"}}>🚀 Fast Start</div>
+                  {(()=>{
+                    const totalTaches=FAST_START_DAYS.reduce((s,d)=>s+d.taches.length,0);
+                    const done=Object.values(extra.fastStart.doneTasks||{}).filter(Boolean).length;
+                    const p=Math.round(done/totalTaches*100);
+                    return(
+                      <>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.gris,marginBottom:".25rem"}}>
+                          <span>Progression</span><span style={{fontWeight:700,color:p>=100?C.vert:C.brun}}>{done}/{totalTaches} ({p}%)</span>
+                        </div>
+                        <div style={{height:5,background:C.pale,borderRadius:10,overflow:"hidden"}}>
+                          <div style={{height:"100%",background:p>=100?C.vert:C.rose,width:p+"%",borderRadius:10}}/>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Badges */}
+              {extra.badges.length>0&&(
+                <div style={{marginBottom:".75rem"}}>
+                  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>🏅 Badges débloqués</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:".3rem"}}>
+                    {BADGES_DEF.filter(b=>extra.badges.includes(b.id)).map(b=>(
+                      <div key={b.id} title={b.desc} style={{background:C.or+"20",border:`1px solid ${C.or}40`,borderRadius:8,padding:".3rem .5rem",fontSize:".65rem",color:C.brun,fontWeight:600}}>
+                        {b.icon} {b.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Courbes historique */}
+              {hist.length>=2&&(
+                <>
+                  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".3rem"}}>📈 CA</div>
+                  <MiniChart data={hist} dataKey="ca" objKey="caObj" color={C.rose} unit="€"/>
+                  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".3rem",marginTop:".6rem"}}>📈 Recrues</div>
+                  <MiniChart data={hist} dataKey="recruesReal" objKey="recruesObj" color={C.lilas}/>
+                </>
+              )}
+              {hist.length<2&&<div style={{fontSize:".68rem",color:C.gris,textAlign:"center"}}>Pas encore d'historique pour cette personne.</div>}
+            </div>
           )}
         </div>
       )}
@@ -7338,15 +7478,253 @@ const ESPACE_CHEF_SECTIONS=[
   {id:"admin",icon:"🔧",label:"Administration",desc:"Gérer les contenus, citations, scripts, annonces et produits",melissaOnly:true},
 ];
 
+// ── MESSAGERIE ÉQUIPE ────────────────────────────────────────────────────────
+// Popup pour envoyer un message perso ou groupé à son équipe
+function MessageEquipePopup({uid, userName, annuaire, onClose}){
+  const[mode,setMode]=useState("choix"); // choix | perso | groupe
+  const[destinataire,setDestinataire]=useState(null);
+  const[texte,setTexte]=useState("");
+  const[sending,setSending]=useState(false);
+  const[sent,setSent]=useState(false);
+
+  const fmt=(id)=>id.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+
+  // Récupère tous les descendants directs
+  const getDescendants=(rootUid)=>{
+    const result=new Set();
+    const queue=[rootUid];
+    while(queue.length){
+      const current=queue.pop();
+      Object.values(annuaire).forEach(m=>{
+        if(m.marraine===current&&!result.has(m.uid)){
+          result.add(m.uid);
+          queue.push(m.uid);
+        }
+      });
+    }
+    return [...result];
+  };
+
+  const equipe=getDescendants(uid);
+  const directes=Object.values(annuaire).filter(m=>m.marraine===uid);
+
+  const envoyerMsg=async(destinataires)=>{
+    if(!texte.trim()||destinataires.length===0)return;
+    setSending(true);
+    const msg={
+      id:`msg${Date.now()}`,
+      de:uid,
+      deNom:userName,
+      texte:texte.trim(),
+      ts:Date.now(),
+      lu:false,
+    };
+    try{
+      await Promise.all(destinataires.map(async(destUid)=>{
+        const ref=doc(db,"messages",destUid);
+        const snap=await getDoc(ref);
+        const existing=snap.exists()?snap.data().msgs||[]:[];
+        await setDoc(ref,{msgs:[msg,...existing].slice(0,100)},{merge:false});
+      }));
+      setSent(true);
+      setTexte("");
+      setTimeout(()=>{setSent(false);setMode("choix");setDestinataire(null);},2000);
+    }catch{}
+    setSending(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:"16px 16px 0 0",padding:"1.4rem",width:"100%",maxWidth:480,boxShadow:"0 -8px 32px rgba(0,0,0,.2)",maxHeight:"80vh",overflowY:"auto"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>
+            {mode==="choix"?"💬 Envoyer un message":mode==="groupe"?"👥 Message groupé":"💬 Message personnel"}
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer",padding:".2rem"}}>✕</button>
+        </div>
+
+        {/* CHOIX */}
+        {mode==="choix"&&(
+          <div>
+            <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.6}}>
+              Tu as <strong style={{color:C.brun}}>{equipe.length}</strong> personne{equipe.length>1?"s":""} dans ton équipe.
+            </p>
+            <div onClick={()=>setMode("groupe")}
+              style={{background:C.brun,borderRadius:12,padding:"1rem",marginBottom:".6rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".75rem"}}>
+              <div style={{fontSize:"1.5rem"}}>👥</div>
+              <div>
+                <div style={{fontSize:".88rem",fontWeight:600,color:C.blanc}}>Message groupé</div>
+                <div style={{fontSize:".68rem",color:C.pale}}>Envoyer à toute ton équipe ({equipe.length} personnes)</div>
+              </div>
+            </div>
+            <div onClick={()=>setMode("perso")}
+              style={{background:C.rose+"15",border:`1px solid ${C.rose}`,borderRadius:12,padding:"1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".75rem"}}>
+              <div style={{fontSize:"1.5rem"}}>💌</div>
+              <div>
+                <div style={{fontSize:".88rem",fontWeight:600,color:C.brun}}>Message personnel</div>
+                <div style={{fontSize:".68rem",color:C.gris}}>Choisir une personne spécifique</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MESSAGE GROUPÉ */}
+        {mode==="groupe"&&(
+          <div>
+            <button onClick={()=>setMode("choix")} style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:"1rem"}}>← Retour</button>
+            <div style={{background:C.creme,borderRadius:10,padding:".7rem",marginBottom:"1rem",fontSize:".72rem",color:C.gris}}>
+              📤 Sera envoyé à : <strong style={{color:C.brun}}>{equipe.map(fmt).join(", ")}</strong>
+            </div>
+            <textarea
+              placeholder="Écris ton message ici... ex: Bravo à toutes pour cette semaine ! 🔥 On continue sur cette lancée !"
+              value={texte} onChange={e=>setTexte(e.target.value)}
+              style={{width:"100%",minHeight:120,border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem",fontFamily:"inherit",fontSize:".82rem",color:C.texte,background:C.blanc,resize:"vertical",outline:"none",lineHeight:1.65,marginBottom:"1rem"}}/>
+            <button onClick={()=>envoyerMsg(equipe)} disabled={!texte.trim()||sending||sent}
+              style={{width:"100%",background:sent?C.vert:texte.trim()?C.brun:C.pale,color:texte.trim()?C.blanc:C.gris,border:"none",borderRadius:10,padding:".7rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:texte.trim()?"pointer":"default",transition:"all .2s"}}>
+              {sent?"✅ Envoyé !":sending?"Envoi...":"Envoyer à toute l'équipe →"}
+            </button>
+          </div>
+        )}
+
+        {/* MESSAGE PERSONNEL — CHOIX DESTINATAIRE */}
+        {mode==="perso"&&!destinataire&&(
+          <div>
+            <button onClick={()=>setMode("choix")} style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:"1rem"}}>← Retour</button>
+            <p style={{fontSize:".74rem",color:C.gris,marginBottom:".75rem"}}>Choisis la destinataire :</p>
+            {equipe.map(mUid=>(
+              <div key={mUid} onClick={()=>setDestinataire(mUid)}
+                style={{display:"flex",alignItems:"center",gap:".65rem",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:10,padding:".65rem .85rem",marginBottom:".4rem",cursor:"pointer"}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:C.rose+"20",color:C.rose,fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {fmt(mUid)[0]}
+                </div>
+                <div>
+                  <div style={{fontSize:".82rem",fontWeight:600,color:C.brun}}>{fmt(mUid)}</div>
+                  <div style={{fontSize:".62rem",color:C.gris}}>
+                    {annuaire[mUid]?.marraine===uid?"Filleule directe":"Filleule indirecte"}
+                  </div>
+                </div>
+                <span style={{marginLeft:"auto",color:C.pale}}>›</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* MESSAGE PERSONNEL — SAISIE */}
+        {mode==="perso"&&destinataire&&(
+          <div>
+            <button onClick={()=>setDestinataire(null)} style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:"1rem"}}>← Retour</button>
+            <div style={{display:"flex",alignItems:"center",gap:".6rem",background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:"1rem"}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:C.rose+"20",color:C.rose,fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {fmt(destinataire)[0]}
+              </div>
+              <div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.brun}}>{fmt(destinataire)}</div>
+            </div>
+            <textarea
+              placeholder={`Écris ton message pour ${fmt(destinataire)}...`}
+              value={texte} onChange={e=>setTexte(e.target.value)}
+              style={{width:"100%",minHeight:120,border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem",fontFamily:"inherit",fontSize:".82rem",color:C.texte,background:C.blanc,resize:"vertical",outline:"none",lineHeight:1.65,marginBottom:"1rem"}}/>
+            <button onClick={()=>envoyerMsg([destinataire])} disabled={!texte.trim()||sending||sent}
+              style={{width:"100%",background:sent?C.vert:texte.trim()?C.brun:C.pale,color:texte.trim()?C.blanc:C.gris,border:"none",borderRadius:10,padding:".7rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:texte.trim()?"pointer":"default",transition:"all .2s"}}>
+              {sent?"✅ Envoyé !":sending?"Envoi...":`Envoyer à ${fmt(destinataire)} →`}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Affichage des messages reçus (popup sur le tableau de bord)
+function MessagesRecusPopup({uid, onClose}){
+  const[msgs,setMsgs]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const fmt=(id)=>id.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"messages",uid));
+        if(snap.exists()) setMsgs(snap.data().msgs||[]);
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  const marquerLus=async()=>{
+    const next=msgs.map(m=>({...m,lu:true}));
+    setMsgs(next);
+    try{await setDoc(doc(db,"messages",uid),{msgs:next});}catch{}
+  };
+
+  useEffect(()=>{
+    if(msgs.length>0) marquerLus();
+  },[msgs.length]);
+
+  const nonLus=msgs.filter(m=>!m.lu).length;
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:"16px 16px 0 0",padding:"1.4rem",width:"100%",maxWidth:480,boxShadow:"0 -8px 32px rgba(0,0,0,.2)",maxHeight:"80vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>
+            💬 Mes messages {nonLus>0&&<span style={{background:C.rose,color:"white",borderRadius:20,fontSize:".6rem",padding:".1rem .45rem",marginLeft:".3rem"}}>{nonLus}</span>}
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer"}}>✕</button>
+        </div>
+        {loading&&<div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".78rem"}}>Chargement...</div>}
+        {!loading&&msgs.length===0&&(
+          <div style={{textAlign:"center",padding:"2rem",color:C.gris}}>
+            <div style={{fontSize:"2rem",marginBottom:".5rem"}}>📭</div>
+            <div style={{fontSize:".76rem"}}>Aucun message pour l'instant.</div>
+          </div>
+        )}
+        {msgs.map(m=>(
+          <div key={m.id} style={{background:m.lu?C.creme:C.rose+"10",border:`1px solid ${m.lu?C.pale:C.rose+"40"}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".6rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".4rem"}}>
+              <div style={{fontSize:".78rem",fontWeight:700,color:C.brun}}>{fmt(m.de)}</div>
+              <div style={{fontSize:".6rem",color:C.gris}}>{new Date(m.ts).toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>
+            </div>
+            <div style={{fontSize:".78rem",color:C.texte,lineHeight:1.65}}>{m.texte}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function EspaceChefTab({uid, isChef}){
   const[section,setSection]=useState("");
   const[distrib,setDistrib]=useState([]);
+  const[annuaire,setAnnuaire]=useState({});
+  const[showMsg,setShowMsg]=useState(false);
+  const[showMsgsRecus,setShowMsgsRecus]=useState(false);
+  const[nbMsgsNonLus,setNbMsgsNonLus]=useState(0);
+  const userName=uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
   const isMelissaChef = uid==="melissa"||uid==="melissa-da-silveira";
   const sections = ESPACE_CHEF_SECTIONS.filter(s=>{
     if(s.melissaOnly) return isMelissaChef;
     if(s.chefOnly) return isChef;
     return true;
   });
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"equipe","annuaire"));
+        setAnnuaire(snap.exists()?snap.data().membres||{}:{});
+      }catch{}
+      try{
+        const snap2=await getDoc(doc(db,"messages",uid));
+        if(snap2.exists()){
+          const msgs=snap2.data().msgs||[];
+          setNbMsgsNonLus(msgs.filter(m=>!m.lu).length);
+        }
+      }catch{}
+    })();
+  },[uid]);
 
   // Charge les distributeurs manuels depuis Firebase quand on entre dans cette section
   const loadDistrib=async()=>{
@@ -7377,12 +7755,32 @@ function EspaceChefTab({uid, isChef}){
 
   return(
     <div>
+      {showMsg&&<MessageEquipePopup uid={uid} userName={userName} annuaire={annuaire} onClose={()=>setShowMsg(false)}/>}
+      {showMsgsRecus&&<MessagesRecusPopup uid={uid} onClose={()=>{setShowMsgsRecus(false);setNbMsgsNonLus(0);}}/>}
+
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
         Espace <em style={{fontStyle:"italic",color:C.rose}}>Chef</em>
       </div>
       <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
         Toutes tes fonctions de cheffe d'équipe, au même endroit.
       </p>
+
+      {/* Boutons messagerie */}
+      <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
+        <button onClick={()=>setShowMsg(true)}
+          style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:".4rem",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".76rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          💬 Envoyer un message
+        </button>
+        <button onClick={()=>setShowMsgsRecus(true)}
+          style={{position:"relative",background:nbMsgsNonLus>0?C.rose+"15":C.creme,border:`1px solid ${nbMsgsNonLus>0?C.rose:C.pale}`,borderRadius:10,padding:".6rem .9rem",fontSize:".76rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",color:nbMsgsNonLus>0?C.rose:C.gris}}>
+          📭 Reçus
+          {nbMsgsNonLus>0&&(
+            <span style={{position:"absolute",top:-6,right:-6,background:C.rose,color:"white",borderRadius:"50%",minWidth:18,height:18,fontSize:".6rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>
+              {nbMsgsNonLus}
+            </span>
+          )}
+        </button>
+      </div>
       {sections.map(s=>(
         <div key={s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
           style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
@@ -7526,7 +7924,7 @@ function MonEquipeTab({uid}){
             </div>
             {expanded===m.uid&&(
               <div style={{marginTop:".6rem",paddingTop:".6rem",borderTop:`1px solid ${C.pale}`}}>
-                <MembreStatsCard m={m} expanded={false} onToggleExpand={()=>{}}/>
+                <MembreStatsCard m={m} expanded={true} onToggleExpand={()=>setExpanded(null)}/>
               </div>
             )}
           </div>
@@ -7552,6 +7950,7 @@ function AdminTab(){
     {id:"devperso",label:"🧠 Dév. Personnel"},
     {id:"outils",label:"🛠️ Outils"},
     {id:"formaproduits",label:"🧴 Formation Produits"},
+    {id:"formationapp",label:"🎬 Formation App"},
   ];
 
   const TYPES=[
@@ -8100,6 +8499,8 @@ const THEMES_IMAGES=[
   {id:"parfums",icon:"🌸",label:"Parfums"},
   {id:"corps",icon:"🧴",label:"Soin corps"},
   {id:"home",icon:"🏠",label:"HOME"},
+  {id:"recrutement",icon:"👑",label:"Recrutement"},
+  {id:"outils",icon:"🛠️",label:"Outils équipe"},
 ];
 
 function BanqueImagesTab({isMelissa}){
@@ -8762,7 +9163,7 @@ const FORMATION_APP_CATEGORIES=[
   {id:"outils", num:"3", icon:"🛠️", title:"Outils généraux", desc:"Les bases de l'application : navigation, recherche produits, diagnostics, idées de posts.", url:""},
 ];
 
-function FormationAppTab(){
+function FormationAppTab({adminItems=[]}){
   const[openFolder,setOpenFolder]=useState(null);
 
   if(openFolder){
@@ -8777,6 +9178,7 @@ function FormationAppTab(){
           {cat.icon} {cat.title}
         </div>
         <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>{cat.desc}</p>
+        <AdminContentBlock onglet="formationapp" items={adminItems}/>
 
         {cat.url
           ? <DriveBtn href={cat.url} label={`Vidéo — ${cat.title}`}/>
