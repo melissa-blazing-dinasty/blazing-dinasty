@@ -2162,7 +2162,6 @@ export default function App(){
         {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab/>}
         {tab==="objectifs"&&<ObjectifsTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")}/>}
         {tab==="calendrier"&&<CalendrierTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")} isChef={false}/>}
-        {tab==="admin"&&userId==="melissa"||userId==="melissa-da-silveira"&&<AdminTab/>}
 
       </div>
 
@@ -2475,6 +2474,7 @@ function SuiviRecruTab({uid}){
   const[loaded,setLoaded]=useState(false);
   const[filleulesRecentes,setFilleulesRecentes]=useState([]);
   const[sortieDemarrage,setSortieDemarrage]=useState([]);
+  const[search,setSearch]=useState("");
 
   useEffect(()=>{
     sgAll(uid).then(data=>{
@@ -2625,8 +2625,10 @@ function SuiviRecruTab({uid}){
           <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".5rem"}}>
             Mes recrues ({recrues.length})
           </div>
+          <input placeholder="🔍 Rechercher une recrue..." value={search} onChange={e=>setSearch(e.target.value)}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem",boxSizing:"border-box"}}/>
           <div style={{display:"flex",flexWrap:"wrap",gap:".4rem",marginBottom:"1rem"}}>
-            {recrues.map(r=>{
+            {recrues.filter(r=>!search||r.name.toLowerCase().includes(search.toLowerCase())).map(r=>{
               const{pct}=getProgress(r);
               const isActive=activeId===r.id;
               return(
@@ -2894,12 +2896,6 @@ function DashboardTab({uid, goToFormation}){
             </div>
           )}
           <CitationDuJour uid={uid}/>
-          {(uid==="melissa"||uid==="melissa-da-silveira")&&(
-            <button onClick={()=>{window.location.href=window.location.pathname+"?testcard=1";}}
-              style={{width:"100%",background:"none",border:`1px dashed ${C.pale}`,borderRadius:8,padding:".35rem",fontSize:".62rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",marginBottom:"1rem",marginTop:"-.5rem"}}>
-              🧪 [Test] Réinitialiser la carte du jour
-            </button>
-          )}
           <MoodCheck uid={uid} onMoodChange={setMood}/>
           <div style={{background:C.brun,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
             <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:C.or,marginBottom:".4rem"}}>
@@ -6964,6 +6960,7 @@ function MembresTab({uid}){
   const[newMembre,setNewMembre]=useState({prenom:"",nom:""});
   const[loading,setLoading]=useState(true);
   const[saving,setSaving]=useState(false);
+  const[search,setSearch]=useState("");
   const[annuaire,setAnnuaire]=useState({});
 
   useEffect(()=>{
@@ -7039,17 +7036,6 @@ function MembresTab({uid}){
         Gère les membres et les chefs d'équipe. Code d'accès : <strong style={{color:C.brun}}>BD-2025-FIRE</strong>
       </p>
 
-      {/* ── SECTION ANNUAIRE DISTRIBUTEURS ── */}
-      {(uid==="melissa"||uid==="melissa-da-silveira")&&(
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-          <div style={{fontSize:".7rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>👑 Annuaire Distributeurs</div>
-          <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.6,marginBottom:"1rem"}}>
-            L'onglet Distributeurs se met à jour automatiquement à chaque connexion d'un membre. Clique ici pour ajouter immédiatement tous les membres déjà autorisés (même s'ils ne se sont pas encore reconnectés depuis cette mise à jour).
-          </p>
-          <AdminAnnuaireSync/>
-        </div>
-      )}
-
       {/* Ajouter */}
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
         <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>➕ Ajouter un membre</div>
@@ -7066,11 +7052,15 @@ function MembresTab({uid}){
         </button>
       </div>
 
+      {/* Barre de recherche */}
+      <input placeholder="🔍 Rechercher un membre..." value={search} onChange={e=>setSearch(e.target.value)}
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".75rem",boxSizing:"border-box"}}/>
+
       {/* Liste */}
       <div style={{fontSize:".62rem",color:C.gris,marginBottom:".5rem"}}>
         {membres.length} membre{membres.length>1?"s":""} · {chefs.length} chef{chefs.length>1?"s":""} d'équipe
       </div>
-      {membres.map(m=>{
+      {membres.filter(m=>!search||m.toLowerCase().includes(search.toLowerCase())).map(m=>{
         const isChef=chefs.includes(m);
         const mUid = m.toLowerCase().replace(/\s+/g,"-");
         const currentMarraine = annuaire[mUid]?.marraine || "";
@@ -7201,6 +7191,7 @@ function AssiduiteTab({uid}){
   const[loading,setLoading]=useState(true);
   const[isAuthorized,setIsAuthorized]=useState(false);
   const[membres,setMembres]=useState([]);
+  const[search,setSearch]=useState("");
 
   const fmtUid=(u)=>u.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
 
@@ -7284,11 +7275,14 @@ function AssiduiteTab({uid}){
         Connexions et actions du jour de ton équipe. {membres.length} personne{membres.length>1?"s":""}.
       </p>
 
-      {membres.length===0&&(
-        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>Aucune donnée d'équipe pour l'instant.</div>
+      <input placeholder="🔍 Rechercher un membre..." value={search} onChange={e=>setSearch(e.target.value)}
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".75rem",boxSizing:"border-box"}}/>
+
+      {membres.filter(m=>!search||fmtUid(m.uid).toLowerCase().includes(search.toLowerCase())).length===0&&(
+        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>{membres.length===0?"Aucune donnée d'équipe pour l'instant.":"Aucun membre ne correspond à la recherche."}</div>
       )}
 
-      {membres.map(m=>{
+      {membres.filter(m=>!search||fmtUid(m.uid).toLowerCase().includes(search.toLowerCase())).map(m=>{
         const connectedToday = m.lastLogin===today;
         const connectedYesterday = m.lastLogin===yesterday;
         let statusColor, statusLabel;
@@ -7336,15 +7330,23 @@ function AssiduiteTab({uid}){
 const ESPACE_CHEF_SECTIONS=[
   {id:"membres",icon:"⚙️",label:"Accès équipe",desc:"Gérer les membres, chefs, et assigner les marraines",chefOnly:true},
   {id:"assiduite",icon:"📊",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true},
+  {id:"defi",icon:"🚀",label:"Défi Flash",desc:"Lancer un défi collectif pour toute l'équipe",chefOnly:true},
+  {id:"powerhour",icon:"⏱️",label:"Power Hour",desc:"Sprint collectif synchrone de 20 minutes",chefOnly:true},
   {id:"distributeurs",icon:"👑",label:"Distributeurs",desc:"Voir et naviguer dans l'arborescence de ton équipe",chefOnly:false},
   {id:"monequipe",icon:"👥",label:"Mon équipe",desc:"Naviguer dans l'arborescence de ton équipe",chefOnly:false},
   {id:"nouveaux",icon:"📋",label:"Nouveaux Distri",desc:"Suivi onboarding des filleules récentes",chefOnly:false},
+  {id:"admin",icon:"🔧",label:"Administration",desc:"Gérer les contenus, citations, scripts, annonces et produits",melissaOnly:true},
 ];
 
 function EspaceChefTab({uid, isChef}){
   const[section,setSection]=useState("");
   const[distrib,setDistrib]=useState([]);
-  const sections = ESPACE_CHEF_SECTIONS.filter(s=>!s.chefOnly||isChef);
+  const isMelissaChef = uid==="melissa"||uid==="melissa-da-silveira";
+  const sections = ESPACE_CHEF_SECTIONS.filter(s=>{
+    if(s.melissaOnly) return isMelissaChef;
+    if(s.chefOnly) return isChef;
+    return true;
+  });
 
   // Charge les distributeurs manuels depuis Firebase quand on entre dans cette section
   const loadDistrib=async()=>{
@@ -7363,9 +7365,12 @@ function EspaceChefTab({uid, isChef}){
         </button>
         {section==="membres"&&<MembresTab uid={uid}/>}
         {section==="assiduite"&&<AssiduiteTab uid={uid}/>}
+        {section==="defi"&&<DefisTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={isChef}/>}
+        {section==="powerhour"&&<PowerHourTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={isChef}/>}
         {section==="distributeurs"&&<DistributeursTab distributeurs={distrib} save={saveDistrib} uid={uid}/>}
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
         {section==="nouveaux"&&<SuiviRecruTab uid={uid}/>}
+        {section==="admin"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<AdminTab/>}
       </div>
     );
   }
@@ -7402,7 +7407,7 @@ function MonEquipeTab({uid}){
   const[isChef,setIsChef]=useState(false);
   const[authorized,setAuthorized]=useState(false);
   const[expanded,setExpanded]=useState(null);
-  // Chemin de navigation : liste d'uids, le dernier = dossier actuellement ouvert
+  const[search,setSearch]=useState(""); // Chemin de navigation : liste d'uids, le dernier = dossier actuellement ouvert
   const[path,setPath]=useState([]);
 
   useEffect(()=>{
@@ -7482,7 +7487,7 @@ function MonEquipeTab({uid}){
         </div>
       )}
 
-      {enfants.length===0&&(
+      {enfants.length===0&&!search&&(
         <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>
           {path.length===0
             ?<>Aucune fille ne t'a encore choisie comme marraine.<br/>Elles apparaîtront ici dès qu'elles t'auront sélectionnée à l'inscription ou via le pop-up.</>
@@ -7490,7 +7495,12 @@ function MonEquipeTab({uid}){
         </div>
       )}
 
-      {enfants.map(m=>{
+      {enfants.length>0&&(
+        <input placeholder="🔍 Rechercher dans l'équipe..." value={search} onChange={e=>setSearch(e.target.value)}
+          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".75rem",boxSizing:"border-box"}}/>
+      )}
+
+      {enfants.filter(m=>!search||fmt(m.uid).toLowerCase().includes(search.toLowerCase())).map(m=>{
         const sousEquipeCount = countEquipeSafe(annuaire, m.uid);
         const hasTeam = sousEquipeCount>0;
         return(
