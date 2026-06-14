@@ -8026,6 +8026,24 @@ function AdminTab(){
             </select>
           </div>
 
+          {/* Sous-section Formation App */}
+          {form.onglet==="formationapp"&&(
+            <div style={{marginBottom:".45rem"}}>
+              <div style={{fontSize:".62rem",color:C.gris,marginBottom:".2rem"}}>Section exacte dans Formation App</div>
+              <select value={form.onglet} onChange={e=>setForm(p=>({...p,onglet:e.target.value}))}
+                style={{width:"100%",border:`1px solid ${C.rose}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.rose+"10",outline:"none",fontWeight:600}}>
+                <option value="formationapp">👑 Formation Chef d'équipe</option>
+                <option value="dashboard">⚡ Tableau de bord (général)</option>
+                <option value="fa-dashboard-general">⚡ Tableau de bord — Général</option>
+                <option value="fa-objectifs">🎯 Tableau de bord — Objectifs</option>
+                <option value="fa-clients">🛍️ Tableau de bord — Clients</option>
+                <option value="fa-distributeurs">👑 Tableau de bord — Distributeurs</option>
+                <option value="fa-prospects">👥 Tableau de bord — Prospects</option>
+                <option value="outils">🛠️ Outils généraux</option>
+              </select>
+            </div>
+          )}
+
           <div style={{marginBottom:".45rem"}}>
             <div style={{fontSize:".62rem",color:C.gris,marginBottom:".2rem"}}>Type de contenu</div>
             <div style={{display:"flex",gap:".3rem",flexWrap:"wrap"}}>
@@ -9149,81 +9167,125 @@ const QUESTIONS = {
 
 // Onglet "Formation App" — vidéos de prise en main de l'application, par catégorie
 const FORMATION_APP_DASHBOARD_SUBS=[
-  {id:"objectifs", num:"1", icon:"🎯", title:"Mes Objectifs", desc:"CA, recrues, paliers de qualification, primes — comment suivre et faire évoluer tes objectifs personnels.", url:""},
-  {id:"clients", num:"2", icon:"🛍️", title:"Clients", desc:"Fiches clientes, commandes multi-produits, alertes fin de flacon, scripts de relance et objections.", url:""},
-  {id:"distributeurs", num:"3", icon:"👑", title:"Distributeurs", desc:"Annuaire automatique, suivi des nouveaux distributeurs, plan de rémunération et onboarding.", url:""},
-  {id:"prospects", num:"4", icon:"👥", title:"Prospects", desc:"Organiser tes prospects par catégorie (clients/distributeurs potentiels), statuts et relances.", url:""},
-  {id:"equipe", num:"5", icon:"🏆", title:"Équipe", desc:"Wall of Fame, Défi Flash, Power Hour et navigation dans Mon Équipe (pour les chefs).", url:""},
+  {id:"fa-dashboard-general", num:"1", icon:"⚡", title:"Tableau de bord général", desc:"Mood-check, actions du jour, citation du jour, annonces."},
+  {id:"fa-objectifs", num:"2", icon:"🎯", title:"Mes Objectifs", desc:"CA, recrues, paliers de qualification, primes."},
+  {id:"fa-clients", num:"3", icon:"🛍️", title:"Clients", desc:"Fiches clientes, commandes, alertes fin de flacon."},
+  {id:"fa-distributeurs", num:"4", icon:"👑", title:"Distributeurs", desc:"Annuaire, suivi nouveaux distributeurs, plan de rémunération."},
+  {id:"fa-prospects", num:"5", icon:"👥", title:"Prospects", desc:"Organiser tes prospects par catégorie, statuts et relances."},
 ];
 
 const FORMATION_APP_CATEGORIES=[
-  {id:"formationchef", num:"1", icon:"👑", title:"Formation Chef d'équipe", desc:"Espace Chef, Accès équipe, Assiduité, Mon équipe — pour les cheffes d'équipe.", url:""},
-  {id:"dashboard", num:"2", icon:"⚡", title:"Tableau de bord & Aujourd'hui", desc:"Mood-check, actions du jour, citation du jour, annonces — et tous les sous-dossiers (objectifs, clients, distributeurs, prospects, équipe).", url:"", folder:FORMATION_APP_DASHBOARD_SUBS},
-  {id:"outils", num:"3", icon:"🛠️", title:"Outils généraux", desc:"Les bases de l'application : navigation, recherche produits, diagnostics, idées de posts.", url:""},
+  {id:"formationchef", num:"1", icon:"👑", title:"Formation Chef d'équipe", desc:"Espace Chef, Accès équipe, Assiduité — pour les cheffes d'équipe."},
+  {id:"dashboard", num:"2", icon:"⚡", title:"Tableau de bord", desc:"Tout sur le tableau de bord et ses sous-sections.", folder:FORMATION_APP_DASHBOARD_SUBS},
+  {id:"outils", num:"3", icon:"🛠️", title:"Outils généraux", desc:"Les bases de l'application : navigation, recherche produits, diagnostics."},
 ];
 
 function FormationAppTab({adminItems=[]}){
   const[openFolder,setOpenFolder]=useState(null);
+  const[openSub,setOpenSub]=useState(null);
 
-  if(openFolder){
+  const itemsPour=(onglet)=>adminItems.filter(i=>i.onglet===onglet);
+
+  const renderItem=(item)=>{
+    const cfg={video:{icon:"▶",color:"#8B1A1A"},youtube:{icon:"▶",color:"#8B1A1A"},drive:{icon:"📄",color:C.brun2},doc:{icon:"📝",color:"#1a4a8b"},info:{icon:"💡",color:"#5C8A60"}}[item.type]||{icon:"▶",color:C.brun};
+    return(
+      <div key={item.id} style={{background:"rgba(196,154,138,.08)",border:`1px solid ${C.pale}`,borderRadius:10,padding:".65rem .85rem",marginBottom:".5rem"}}>
+        <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,marginBottom:item.description?".2rem":item.url?".35rem":0}}>{item.titre}</div>
+        {item.description&&<div style={{fontSize:".72rem",color:C.gris,lineHeight:1.5,marginBottom:item.url?".4rem":0}}>{item.description}</div>}
+        {item.url&&<a href={item.url} target="_blank" rel="noopener noreferrer"
+          style={{display:"flex",alignItems:"center",gap:".5rem",background:cfg.color,borderRadius:8,padding:".45rem .8rem",textDecoration:"none"}}>
+          <span style={{fontSize:".8rem"}}>{cfg.icon}</span>
+          <span style={{fontSize:".72rem",fontWeight:600,color:"white"}}>Ouvrir</span>
+        </a>}
+      </div>
+    );
+  };
+
+  const aVenir=(
+    <div style={{display:"flex",alignItems:"center",gap:".5rem",background:C.creme,borderRadius:9,padding:".6rem .9rem",fontSize:".74rem",color:C.gris,fontStyle:"italic"}}>
+      🎬 Vidéo à venir — disponible prochainement
+    </div>
+  );
+
+  // Vue sous-section
+  if(openFolder&&openSub){
     const cat=FORMATION_APP_CATEGORIES.find(c=>c.id===openFolder);
+    const sub=cat?.folder?.find(s=>s.id===openSub);
+    if(!sub)return null;
+    const items=itemsPour(sub.id);
     return(
       <div>
-        <button onClick={()=>setOpenFolder(null)}
-          style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>
-          ← Retour
-        </button>
-        <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".2rem"}}>
-          {cat.icon} {cat.title}
+        <div style={{display:"flex",gap:".3rem",alignItems:"center",fontSize:".7rem",marginBottom:".75rem",flexWrap:"wrap"}}>
+          <button onClick={()=>{setOpenFolder(null);setOpenSub(null);}} style={{background:"none",border:"none",color:C.rose,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:".2rem"}}>Formation App</button>
+          <span style={{color:C.pale}}>›</span>
+          <button onClick={()=>setOpenSub(null)} style={{background:"none",border:"none",color:C.rose,fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:".2rem"}}>{cat.title}</button>
+          <span style={{color:C.pale}}>›</span>
+          <span style={{color:C.brun,fontWeight:700}}>{sub.title}</span>
         </div>
-        <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>{cat.desc}</p>
-        <AdminContentBlock onglet="formationapp" items={adminItems}/>
-
-        {cat.url
-          ? <DriveBtn href={cat.url} label={`Vidéo — ${cat.title}`}/>
-          : (
-            <div style={{display:"flex",alignItems:"center",gap:".5rem",background:C.creme,borderRadius:9,padding:".6rem .9rem",fontSize:".74rem",color:C.gris,fontStyle:"italic",marginBottom:cat.folder?"1rem":0}}>
-              🎬 Vidéo à venir — disponible prochainement
-            </div>
-          )}
-
-        {cat.folder&&cat.folder.map(sub=>(
-          <Card key={sub.id} title={`${sub.num}. ${sub.title}`} sub={sub.desc} icon={sub.icon} color={C.rose} defaultOpen={false}>
-            {sub.url
-              ? <DriveBtn href={sub.url} label={`Vidéo — ${sub.title}`}/>
-              : (
-                <div style={{display:"flex",alignItems:"center",gap:".5rem",background:C.creme,borderRadius:9,padding:".6rem .9rem",fontSize:".74rem",color:C.gris,fontStyle:"italic"}}>
-                  🎬 Vidéo à venir — disponible prochainement
-                </div>
-              )}
-          </Card>
-        ))}
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>{sub.icon} {sub.title}</div>
+        <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>{sub.desc}</p>
+        {items.length>0?items.map(renderItem):aVenir}
       </div>
     );
   }
 
+  // Vue dossier principal
+  if(openFolder){
+    const cat=FORMATION_APP_CATEGORIES.find(c=>c.id===openFolder);
+    const items=itemsPour(openFolder);
+    return(
+      <div>
+        <button onClick={()=>setOpenFolder(null)} style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>
+          ← Formation App
+        </button>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".2rem"}}>{cat.icon} {cat.title}</div>
+        <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>{cat.desc}</p>
+        {items.length>0&&<div style={{marginBottom:"1rem"}}>{items.map(renderItem)}</div>}
+        {cat.folder?cat.folder.map(sub=>{
+          const subItems=itemsPour(sub.id);
+          return(
+            <div key={sub.id} onClick={()=>setOpenSub(sub.id)}
+              style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem 1rem",marginBottom:".45rem",cursor:"pointer"}}>
+              <div style={{display:"flex",alignItems:"center",gap:".6rem"}}>
+                <div style={{width:34,height:34,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1rem",flexShrink:0}}>{sub.icon}</div>
+                <div>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:".88rem",fontWeight:600,color:C.brun}}>{sub.num}. {sub.title}</div>
+                  <div style={{fontSize:".62rem",color:C.gris}}>{subItems.length>0?`${subItems.length} vidéo${subItems.length>1?"s":""}`:sub.desc}</div>
+                </div>
+              </div>
+              <span style={{color:C.pale}}>›</span>
+            </div>
+          );
+        }):(items.length===0&&aVenir)}
+      </div>
+    );
+  }
+
+  // Vue liste principale
   return(
     <div>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
         Formation <em style={{fontStyle:"italic",color:C.rose}}>Application</em>
       </div>
       <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Une vidéo par grande catégorie pour découvrir toutes les fonctionnalités de l'application Blazing Dynasty. Clique sur une catégorie pour l'ouvrir 🎬
+        Clique sur une catégorie pour accéder aux vidéos de formation 🎬
       </p>
-
-      {FORMATION_APP_CATEGORIES.map(cat=>(
-        <div key={cat.id} onClick={()=>setOpenFolder(cat.id)}
-          style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
-          <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
-            <div style={{width:38,height:38,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{cat.icon}</div>
-            <div>
-              <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:C.brun}}>{cat.num}. {cat.title}</div>
-              <div style={{fontSize:".66rem",color:C.gris}}>{cat.desc}</div>
+      {FORMATION_APP_CATEGORIES.map(cat=>{
+        const totalItems=itemsPour(cat.id).length+(cat.folder?cat.folder.reduce((s,sub)=>s+itemsPour(sub.id).length,0):0);
+        return(
+          <div key={cat.id} onClick={()=>setOpenFolder(cat.id)}
+            style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
+            <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
+              <div style={{width:38,height:38,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{cat.icon}</div>
+              <div>
+                <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:C.brun}}>{cat.num}. {cat.title}</div>
+                <div style={{fontSize:".66rem",color:C.gris}}>{totalItems>0?`${totalItems} vidéo${totalItems>1?"s":""}`:cat.desc}</div>
+              </div>
             </div>
+            <span style={{color:C.pale}}>›</span>
           </div>
-          <span style={{color:C.pale}}>›</span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
