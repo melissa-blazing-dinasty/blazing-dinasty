@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Recommandation — Blazing Dynasty</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;background:#F7F2EE;display:flex;justify-content:center;}
+    .page{width:100%;max-width:460px;min-height:100vh;display:flex;flex-direction:column;}
+    .hero{background:linear-gradient(135deg,#3D1F0E,#C49A8A);padding:2.5rem 1.5rem;text-align:center;color:white;}
+    .hero h1{font-family:Georgia,serif;font-size:1.4rem;font-weight:600;margin-bottom:.5rem;}
+    .hero p{font-size:.82rem;opacity:.85;line-height:1.6;}
+    .gift-badge{background:rgba(255,255,255,.15);border-radius:14px;padding:.75rem 1rem;margin-top:1rem;font-size:.85rem;font-weight:600;}
+    .form-section{background:white;border-radius:20px 20px 0 0;padding:1.5rem;margin-top:-20px;flex:1;}
+    label{font-size:.72rem;font-weight:600;color:#6A5A54;display:block;margin-bottom:.25rem;margin-top:.7rem;}
+    label:first-child{margin-top:0;}
+    input{width:100%;border:1px solid #E8D5CC;border-radius:10px;padding:.6rem .85rem;font-size:.88rem;font-family:inherit;outline:none;background:#FBF8F6;}
+    input:focus{border-color:#C49A8A;}
+    .section-title{font-size:.68rem;font-weight:700;color:#C49A8A;text-transform:uppercase;letter-spacing:.08em;margin-top:1.2rem;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center;}
+    .btn-submit{width:100%;border:none;border-radius:12px;padding:.8rem;font-size:.9rem;font-weight:700;color:white;background:#C49A8A;cursor:pointer;font-family:inherit;margin-top:1.5rem;}
+    .btn-submit:disabled{background:#ccc;cursor:default;}
+    .success{text-align:center;padding:2.5rem 1rem;display:none;}
+    .success.show{display:block;}
+    .form-body.hidden{display:none;}
+    .personne-card{background:#FBF8F6;border:1px solid #E8D5CC;border-radius:12px;padding:.85rem;margin-bottom:.65rem;position:relative;}
+    .personne-num{font-size:.62rem;font-weight:700;color:#C49A8A;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;}
+    .btn-remove{position:absolute;top:.6rem;right:.6rem;background:none;border:none;color:#C44B1A;font-size:.85rem;cursor:pointer;padding:.2rem;}
+    .btn-add{width:100%;border:1.5px dashed #C49A8A;border-radius:10px;padding:.55rem;font-size:.78rem;font-weight:600;color:#C49A8A;background:none;cursor:pointer;font-family:inherit;margin-top:.4rem;}
+    .btn-add:disabled{opacity:.4;cursor:default;}
+    .counter{font-size:.65rem;color:#8A7A74;font-weight:400;}
+    .progress-bar{height:5px;background:#E8D5CC;border-radius:10px;overflow:hidden;margin-bottom:1rem;}
+    .progress-fill{height:100%;background:#C49A8A;border-radius:10px;transition:width .3s;}
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="hero">
+    <h1 id="titre">Recommande tes amies 🌸</h1>
+    <p id="sous-titre">Recommande entre 3 et 5 personnes et reçois ton cadeau !</p>
+    <div class="gift-badge" id="gift-badge">Chargement...</div>
+  </div>
+  <div class="form-section">
+    <div class="form-body" id="form-body">
+      <div class="section-title">Tes informations</div>
+      <label>Ton prénom</label>
+      <input id="parrain-prenom" placeholder="Ton prénom"/>
+
+      <div class="section-title">
+        <span>Personnes recommandées</span>
+        <span class="counter" id="counter">0/3 minimum</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+
+      <div id="personnes-container"></div>
+
+      <button class="btn-add" id="btn-add" onclick="ajouterPersonne()">+ Ajouter une personne</button>
+
+      <button class="btn-submit" id="btn-submit" onclick="soumettre()" disabled>→ Envoyer mes recommandations (0/3)</button>
+    </div>
+    <div class="success" id="success-msg">
+      <div style="font-size:2.5rem;margin-bottom:1rem">🎉</div>
+      <h2 style="font-family:Georgia,serif;font-size:1.2rem;color:#3D1F0E;margin-bottom:.5rem">Merci !</h2>
+      <p style="font-size:.82rem;color:#8A7A74;line-height:1.7" id="success-text">Tes recommandations ont bien été envoyées. Ton cadeau sera remis à ta prochaine commande !</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import{getFirestore,doc,getDoc,setDoc,arrayUnion}from"https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const app=initializeApp({apiKey:"AIzaSyBjTZNbOvJhVuqesBkK6MCbQ6DlWUJ5eMo",authDomain:"blazing-dinasty-1fad9.firebaseapp.com",projectId:"blazing-dinasty-1fad9",storageBucket:"blazing-dinasty-1fad9.appspot.com",messagingSenderId:"499869328828",appId:"1:499869328828:web:ce4b8b67b92c4b5f5e4f87"});
+const db=getFirestore(app);
+
+const params=new URLSearchParams(location.search);
+const parts=location.pathname.split('/').filter(Boolean);
+const ownerUid=parts[1]||"";
+const clienteRecommandeur=params.get("cliente")||"";
+
+let cadeauTexte="Un cadeau de remerciement";
+const MIN_PERSONNES=3;
+const MAX_PERSONNES=5;
+let nbPersonnes=0;
+
+function majCompteur(){
+  const valides=compterValides();
+  document.getElementById("counter").textContent=`${valides}/${MIN_PERSONNES} minimum`+(nbPersonnes>=MAX_PERSONNES?" (max atteint)":"");
+  const pct=Math.min(100,(valides/MIN_PERSONNES)*100);
+  document.getElementById("progress-fill").style.width=pct+"%";
+  const btn=document.getElementById("btn-submit");
+  btn.disabled=valides<MIN_PERSONNES;
+  btn.textContent=valides<MIN_PERSONNES?`→ Envoyer mes recommandations (${valides}/${MIN_PERSONNES})`:"→ Envoyer mes recommandations";
+  document.getElementById("btn-add").disabled=nbPersonnes>=MAX_PERSONNES;
+}
+
+function compterValides(){
+  let count=0;
+  for(let i=1;i<=nbPersonnes;i++){
+    const prenom=document.getElementById("p"+i+"-prenom");
+    const contact=document.getElementById("p"+i+"-contact");
+    if(prenom&&contact&&prenom.value.trim()&&contact.value.trim())count++;
+  }
+  return count;
+}
+
+window.ajouterPersonne=()=>{
+  if(nbPersonnes>=MAX_PERSONNES)return;
+  nbPersonnes++;
+  const div=document.createElement("div");
+  div.className="personne-card";
+  div.id="carte-"+nbPersonnes;
+  div.innerHTML=`
+    ${nbPersonnes>MIN_PERSONNES?`<button class="btn-remove" onclick="retirerPersonne(${nbPersonnes})">✕</button>`:""}
+    <div class="personne-num">Personne ${nbPersonnes}</div>
+    <label>Prénom *</label>
+    <input id="p${nbPersonnes}-prenom" placeholder="Son prénom" oninput="majCompteurGlobal()"/>
+    <label>Nom</label>
+    <input id="p${nbPersonnes}-nom" placeholder="Son nom"/>
+    <label>Téléphone ou Email *</label>
+    <input id="p${nbPersonnes}-contact" placeholder="06... ou email@..." oninput="majCompteurGlobal()"/>
+  `;
+  document.getElementById("personnes-container").appendChild(div);
+  majCompteur();
+};
+
+window.retirerPersonne=(num)=>{
+  const el=document.getElementById("carte-"+num);
+  if(el)el.remove();
+  majCompteur();
+};
+
+window.majCompteurGlobal=majCompteur;
+
+async function init(){
+  try{
+    const snap=await getDoc(doc(db,"users",ownerUid));
+    if(snap.exists()&&snap.data()["db-recommandation-config"]){
+      const cfg=JSON.parse(snap.data()["db-recommandation-config"]);
+      cadeauTexte=cfg.cadeau||cadeauTexte;
+    }
+    document.getElementById("gift-badge").textContent="🎁 "+cadeauTexte;
+    if(clienteRecommandeur){
+      document.getElementById("parrain-prenom").value=clienteRecommandeur;
+    }
+  }catch(e){console.error(e);}
+  // Pré-remplir avec 3 cartes minimum
+  for(let i=0;i<MIN_PERSONNES;i++) ajouterPersonne();
+}
+
+window.soumettre=async()=>{
+  const parrainPrenom=document.getElementById("parrain-prenom").value.trim()||clienteRecommandeur;
+  const personnes=[];
+  for(let i=1;i<=nbPersonnes;i++){
+    const prenomEl=document.getElementById("p"+i+"-prenom");
+    if(!prenomEl)continue;
+    const prenom=prenomEl.value.trim();
+    const nom=document.getElementById("p"+i+"-nom").value.trim();
+    const contact=document.getElementById("p"+i+"-contact").value.trim();
+    if(prenom&&contact) personnes.push({prenom,nom,contact});
+  }
+  if(personnes.length<MIN_PERSONNES){alert(`Merci de recommander au moins ${MIN_PERSONNES} personnes`);return;}
+
+  const btn=document.getElementById("btn-submit");
+  btn.textContent="Envoi...";btn.disabled=true;
+
+  try{
+    const recommandation={
+      parrain:parrainPrenom,
+      personnes,
+      cadeau:cadeauTexte,
+      date:new Date().toISOString(),
+    };
+    // Enregistrer dans une liste SÉPARÉE de recommandations
+    await setDoc(doc(db,"recommandations",ownerUid),{liste:arrayUnion(recommandation)},{merge:true});
+
+    // Ajouter chaque personne dans la liste prospects du dashboard
+    const snap=await getDoc(doc(db,"users",ownerUid));
+    if(snap.exists()){
+      const d=snap.data();
+      const existingProspects=d["db-prospects"]?JSON.parse(d["db-prospects"]):[];
+      const nouveauxProspects=personnes.map((p,i)=>{
+        const isEmail=p.contact.includes("@");
+        return{
+          id:Date.now()+i,
+          name:p.prenom+(p.nom?" "+p.nom:""),
+          statut:"Nouveau",
+          note:"Recommandé(e) par "+parrainPrenom,
+          interet:"Recommandation",
+          tel:isEmail?"":p.contact,
+          email:isEmail?p.contact:"",
+          source:"recommandation",
+        };
+      });
+      await setDoc(doc(db,"users",ownerUid),{"db-prospects":JSON.stringify([...existingProspects,...nouveauxProspects])},{merge:true});
+    }
+
+    document.getElementById("success-text").textContent=`Tes ${personnes.length} recommandations ont bien été envoyées. Ton cadeau sera remis à ta prochaine commande !`;
+    document.getElementById("form-body").classList.add("hidden");
+    document.getElementById("success-msg").classList.add("show");
+  }catch(e){
+    btn.textContent="→ Réessayer";btn.disabled=false;
+    alert("Une erreur s'est produite. Réessayez.");
+  }
+};
+
+init();
+</script>
+</body>
+</html>

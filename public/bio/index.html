@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Blazing Dynasty × Mihi"/>
+  <title>Blazing Dynasty</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;display:flex;justify-content:center;background:#F7F2EE;}
+    .page{width:100%;max-width:480px;min-height:100vh;position:relative;}
+
+    /* HEADER */
+    .header{padding:0 0 1.5rem;position:relative;overflow:hidden;}
+    .header-bg{position:absolute;inset:0;background:linear-gradient(160deg,#3D1F0E 0%,#6B3A26 60%,#C49A8A 100%);}
+    .header-pattern{position:absolute;inset:0;opacity:.05;background-image:repeating-linear-gradient(45deg,#fff,#fff 1px,transparent 1px,transparent 10px);}
+    .header-content{position:relative;padding:2.5rem 1.5rem 2rem;text-align:center;}
+    .avatar-wrap{position:relative;display:inline-block;margin-bottom:1rem;}
+    .avatar{width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,.4);display:block;}
+    .avatar-initiale{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:2.2rem;font-family:Georgia,serif;color:white;font-weight:600;backdrop-filter:blur(10px);border:3px solid rgba(255,255,255,.3);}
+    .badge-live{position:absolute;bottom:4px;right:4px;background:#FF4444;color:white;font-size:.5rem;font-weight:800;padding:.15rem .4rem;border-radius:20px;letter-spacing:.05em;border:2px solid white;}
+    .nom{font-family:Georgia,serif;font-size:1.45rem;font-weight:600;color:white;margin-bottom:.3rem;text-shadow:0 2px 8px rgba(0,0,0,.3);}
+    .slogan{font-size:.82rem;color:rgba(255,255,255,.85);line-height:1.6;max-width:280px;margin:0 auto .8rem;}
+    .stats-bar{display:flex;justify-content:center;gap:1.5rem;margin-bottom:.8rem;}
+    .stat{text-align:center;}
+    .stat-num{font-size:1.1rem;font-weight:800;color:white;}
+    .stat-label{font-size:.55rem;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.08em;}
+
+    /* CTA PRINCIPAL */
+    .cta-principal{display:block;background:linear-gradient(135deg,#C49A8A,#E8B4A0);color:white;border:none;border-radius:14px;padding:.9rem 1.5rem;text-align:center;text-decoration:none;font-size:.92rem;font-weight:700;cursor:pointer;font-family:inherit;width:calc(100% - 2.4rem);margin:0 1.2rem .5rem;box-shadow:0 4px 16px rgba(196,154,138,.4);transition:transform .1s,box-shadow .1s;}
+    .cta-principal:active{transform:scale(.98);box-shadow:0 2px 8px rgba(196,154,138,.3);}
+    .cta-sous-texte{text-align:center;font-size:.65rem;color:rgba(255,255,255,.6);margin-bottom:1rem;}
+
+    /* BODY */
+    .body{background:white;border-radius:20px 20px 0 0;margin-top:-20px;position:relative;padding:0 0 2rem;}
+
+    /* SECTION HISTOIRE / PREUVE */
+    .section{padding:1.25rem 1.4rem;border-bottom:1px solid #F0EAE6;}
+    .section-title{font-family:Georgia,serif;font-size:.95rem;font-weight:600;color:#3D1F0E;margin-bottom:.6rem;display:flex;align-items:center;gap:.4rem;}
+    .section p{font-size:.8rem;color:#6A5A54;line-height:1.75;}
+
+    /* RÉSULTATS CLIENTS */
+    .resultats{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:.5rem 0;}
+    .resultat-card{background:linear-gradient(135deg,#FBF8F6,#F5EEE9);border-radius:10px;padding:.75rem;text-align:center;border:1px solid #E8D5CC;}
+    .resultat-chiffre{font-family:Georgia,serif;font-size:1.4rem;font-weight:700;color:#C49A8A;}
+    .resultat-label{font-size:.6rem;color:#8A7A74;line-height:1.4;margin-top:.15rem;}
+
+    /* TEMOIGNAGES */
+    .temoignages{display:flex;gap:.5rem;overflow-x:auto;padding:.5rem 1.4rem;margin:0 -1.4rem;scrollbar-width:none;}
+    .temoignages::-webkit-scrollbar{display:none;}
+    .temoignage{background:#FBF8F6;border:1px solid #E8D5CC;border-radius:12px;padding:.85rem;min-width:200px;flex-shrink:0;}
+    .tem-texte{font-size:.74rem;color:#5A4A44;line-height:1.6;font-style:italic;margin-bottom:.5rem;}
+    .tem-auteur{font-size:.65rem;font-weight:700;color:#C49A8A;}
+    .etoiles{color:#F5A623;font-size:.7rem;margin-bottom:.2rem;}
+
+    /* PRODUITS PHARES */
+    .produit-card{display:flex;gap:.75rem;align-items:center;background:#FBF8F6;border-radius:12px;padding:.75rem;margin-bottom:.4rem;border:1px solid #E8D5CC;}
+    .produit-img{width:52px;height:52px;border-radius:8px;object-fit:cover;background:#E8D5CC;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.5rem;}
+    .produit-nom{font-size:.78rem;font-weight:600;color:#3D1F0E;margin-bottom:.15rem;}
+    .produit-desc{font-size:.65rem;color:#8A7A74;line-height:1.4;}
+    .produit-prix{font-size:.72rem;font-weight:700;color:#C49A8A;margin-top:.2rem;}
+
+    /* LIENS CTA */
+    .liens{padding:.75rem 1.4rem;display:flex;flex-direction:column;gap:.5rem;}
+    .btn{display:flex;align-items:center;justify-content:center;gap:.5rem;border-radius:12px;padding:.72rem 1rem;text-align:center;text-decoration:none;font-size:.85rem;font-weight:700;transition:all .15s;font-family:inherit;border:none;cursor:pointer;}
+    .btn-primary{background:linear-gradient(135deg,#3D1F0E,#5C3020);color:white;box-shadow:0 3px 10px rgba(61,31,14,.25);}
+    .btn-secondary{background:white;color:#3D1F0E;border:1.5px solid #C49A8A;}
+    .btn:hover{opacity:.9;transform:translateY(-1px);}
+    .btn:active{transform:scale(.98);}
+    .btn-icon{font-size:1rem;}
+    .btn-img{width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0;}
+
+    /* ACCORDION FAQ */
+    .faq-item{border-bottom:1px solid #F0EAE6;}
+    .faq-q{display:flex;justify-content:space-between;align-items:center;padding:.85rem 0;cursor:pointer;font-size:.82rem;font-weight:600;color:#3D1F0E;}
+    .faq-arrow{font-size:.75rem;color:#C49A8A;transition:transform .2s;}
+    .faq-a{font-size:.76rem;color:#6A5A54;line-height:1.7;padding-bottom:.85rem;display:none;}
+    .faq-item.open .faq-arrow{transform:rotate(180deg);}
+    .faq-item.open .faq-a{display:block;}
+
+    /* URGENCE */
+    .urgence{background:linear-gradient(135deg,#FFF3E0,#FFE0B2);border:1px solid #FFB74D;border-radius:12px;padding:.85rem 1rem;margin:.75rem 1.4rem;display:flex;gap:.65rem;align-items:flex-start;}
+    .urgence-icon{font-size:1.3rem;flex-shrink:0;}
+    .urgence-texte{font-size:.75rem;color:#E65100;line-height:1.6;}
+    .urgence-texte strong{font-weight:700;}
+
+    /* SCROLL TO TOP */
+    .scroll-top{position:fixed;bottom:1.5rem;right:1.5rem;width:42px;height:42px;background:#3D1F0E;color:white;border-radius:50%;border:none;font-size:1rem;cursor:pointer;box-shadow:0 4px 12px rgba(61,31,14,.4);display:none;z-index:100;}
+
+    /* FOOTER */
+    .footer{padding:1.5rem;text-align:center;font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:#B0A0A0;border-top:1px solid #F0EAE6;}
+
+    /* ANIMATIONS */
+    @keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+    .animate{animation:slideUp .5s ease forwards;}
+    .delay1{animation-delay:.1s;opacity:0;}
+    .delay2{animation-delay:.2s;opacity:0;}
+    .delay3{animation-delay:.3s;opacity:0;}
+
+    .loading{text-align:center;padding:5rem 2rem;color:#8A7A74;font-size:.88rem;}
+    .section-tag{display:inline-flex;align-items:center;gap:.3rem;background:#FBF8F6;border:1px solid #E8D5CC;border-radius:20px;padding:.25rem .65rem;font-size:.62rem;font-weight:700;color:#C49A8A;margin-bottom:.65rem;}
+  </style>
+</head>
+<body>
+<div class="page">
+  <div id="app"><div class="loading">🌸 Chargement...</div></div>
+</div>
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import{getFirestore,doc,getDoc}from"https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const app=initializeApp({apiKey:"AIzaSyBjTZNbOvJhVuqesBkK6MCbQ6DlWUJ5eMo",authDomain:"blazing-dinasty-1fad9.firebaseapp.com",projectId:"blazing-dinasty-1fad9",storageBucket:"blazing-dinasty-1fad9.appspot.com",messagingSenderId:"499869328828",appId:"1:499869328828:web:ce4b8b67b92c4b5f5e4f87"});
+const db=getFirestore(app);
+
+const slug=location.pathname.split("/").filter(Boolean).pop()||"";
+
+async function init(){
+  try{
+    // Chercher par slug ou uid
+    let profil=null;
+    const snap=await getDoc(doc(db,"linkbio",slug));
+    if(snap.exists()) profil=snap.data();
+
+    if(!profil){
+      document.getElementById("app").innerHTML='<div class="loading">🌸 Profil introuvable</div>';
+      return;
+    }
+
+    const th={
+      bg:"linear-gradient(160deg,#3D1F0E 0%,#6B3A26 60%,#C49A8A 100%)",
+      accent:"#C49A8A", accent2:"#E8B4A0", brun:"#3D1F0E", creme:"#FBF8F6",
+      texte:"#3D1F0E", gris:"#6A5A54",
+    };
+
+    const nom=profil.prenom||profil.nom||"";
+    const avatar=profil.photo?"<img src='"+profil.photo+"' class='avatar' alt='"+nom+"'/>":"<div class='avatar-initiale'>"+((nom[0]||"B").toUpperCase())+"</div>";
+    const liens=profil.liensBonusLabel||[];
+    const urls=profil.liensBonusUrl||[];
+    const photos=profil.photos||[];
+    const temoignages=profil.temoignages||[];
+    const histoire=profil.histoire||"";
+    const diagUrl=profil.lienDiag||"";
+    const lienBoutique=profil.lienBoutique||"";
+    const lienRecrut=profil.lienRecrutement||"";
+    const faq=profil.faq||[];
+    const produitsStar=profil.produitsStar||[];
+    const urgenceTexte=profil.urgence||"";
+    const ctaLabel=profil.ctaLabel||"✨ Faire mon diagnostic gratuit";
+    const ctaUrl=profil.ctaUrl||diagUrl;
+    const nbClientes=profil.nbClientes||"";
+    const nbDiags=profil.nbDiags||"";
+    const nbEquipe=profil.nbEquipe||"";
+    const accroche=profil.accroche||"";
+    const banniere=profil.banniere||"";
+    const banniereUrl=profil.banniereUrl||"";
+
+    // CONSTRUIRE LA PAGE
+    let html=`
+    <div class='header'>
+      <div class='header-bg'></div>
+      <div class='header-pattern'></div>
+      <div class='header-content animate'>
+        <div class='avatar-wrap'>
+          ${avatar}
+          ${profil.badge?"<span class='badge-live'>"+profil.badge+"</span>":""}
+        </div>
+        <div class='nom'>${nom}</div>
+        ${profil.slogan?`<div class='slogan'>${profil.slogan}</div>`:""}
+        ${(nbClientes||nbDiags||nbEquipe)?`<div class='stats-bar delay1'>
+          ${nbClientes?`<div class='stat'><div class='stat-num'>${nbClientes}</div><div class='stat-label'>Clientes</div></div>`:""}
+          ${nbDiags?`<div class='stat'><div class='stat-num'>${nbDiags}</div><div class='stat-label'>Diagnostics</div></div>`:""}
+          ${nbEquipe?`<div class='stat'><div class='stat-num'>${nbEquipe}</div><div class='stat-label'>Équipe</div></div>`:""}
+        </div>`:""}
+        ${ctaUrl?`<a href="${ctaUrl}" class="cta-principal delay2">${ctaLabel}</a><div class='cta-sous-texte'>Gratuit · Sans engagement · 2 minutes</div>`:""}
+      </div>
+    </div>
+
+    <div class='body'>`;
+
+    // Bannière urgence
+    if(banniere) html+=`<a href='${banniereUrl||"#"}' style='display:block;background:#C49A8A;color:white;text-align:center;padding:.75rem 1rem;font-size:.78rem;font-weight:700;text-decoration:none;'>🎉 ${banniere}</a>`;
+
+    // Accroche / histoire
+    if(accroche||histoire) html+=`
+    <div class='section animate delay1'>
+      <div class='section-title'>🌸 Mon histoire</div>
+      ${accroche?`<p style='font-size:.88rem;font-weight:600;color:#3D1F0E;margin-bottom:.5rem;'>"${accroche}"</p>`:""}
+      ${histoire?`<p>${histoire}</p>`:""}
+    </div>`;
+
+    // Résultats chiffrés
+    if(nbClientes||nbDiags) html+=`
+    <div class='section'>
+      <div class='section-tag'>📊 En chiffres</div>
+      <div class='resultats'>
+        ${nbClientes?`<div class='resultat-card'><div class='resultat-chiffre'>${nbClientes}</div><div class='resultat-label'>Clientes satisfaites</div></div>`:""}
+        ${nbDiags?`<div class='resultat-card'><div class='resultat-chiffre'>${nbDiags}</div><div class='resultat-label'>Diagnostics réalisés</div></div>`:""}
+        ${nbEquipe?`<div class='resultat-card'><div class='resultat-chiffre'>${nbEquipe}</div><div class='resultat-label'>Membres dans l'équipe</div></div>`:""}
+        ${profil.nbAnnees?`<div class='resultat-card'><div class='resultat-chiffre'>${profil.nbAnnees}</div><div class='resultat-label'>Années d'expérience</div></div>`:""}
+      </div>
+    </div>`;
+
+    // Témoignages
+    if(temoignages.length>0) html+=`
+    <div class='section'>
+      <div class='section-tag'>💬 Elles en parlent</div>
+      <div class='temoignages'>
+        ${temoignages.map(t=>`
+        <div class='temoignage'>
+          <div class='etoiles'>⭐⭐⭐⭐⭐</div>
+          <div class='tem-texte'>"${t.texte}"</div>
+          <div class='tem-auteur'>— ${t.auteur||"Cliente"}</div>
+        </div>`).join("")}
+      </div>
+    </div>`;
+
+    // Photos galerie
+    const photosValides=photos.filter(Boolean);
+    if(photosValides.length>0) html+=`
+    <div class='section'>
+      <div class='section-tag'>📸 Résultats & Produits</div>
+      <div style='display:flex;gap:.4rem;overflow-x:auto;margin:0 -1.4rem;padding:.4rem 1.4rem;'>
+        ${photosValides.map(p=>`<img src='${p}' style='width:110px;height:110px;border-radius:12px;object-fit:cover;flex-shrink:0;' />`).join("")}
+      </div>
+    </div>`;
+
+    // Produits stars
+    if(produitsStar.length>0) html+=`
+    <div class='section'>
+      <div class='section-tag'>⭐ Mes produits coups de cœur</div>
+      ${produitsStar.map(p=>`
+      <div class='produit-card'>
+        ${p.image?`<img src='${p.image}' class='produit-img'/>`:p.emoji?`<div class='produit-img'>${p.emoji}</div>`:"<div class='produit-img'>🌿</div>"}
+        <div style='flex:1;'>
+          <div class='produit-nom'>${p.nom||""}</div>
+          <div class='produit-desc'>${p.desc||""}</div>
+          ${p.prix?`<div class='produit-prix'>${p.prix}€</div>`:""}
+        </div>
+      </div>`).join("")}
+    </div>`;
+
+    // Urgence
+    if(urgenceTexte) html+=`
+    <div class='urgence'>
+      <div class='urgence-icon'>⏰</div>
+      <div class='urgence-texte'>${urgenceTexte}</div>
+    </div>`;
+
+    // CTA Diagnostic
+    if(diagUrl) html+=`
+    <div class='liens'>
+      <a href='${diagUrl}' class='btn btn-primary'>
+        <span class='btn-icon'>🔬</span> Faire mon diagnostic personnalisé
+      </a>
+      <div style='text-align:center;font-size:.65rem;color:#8A7A74;'>Gratuit • Résultats immédiats • Sans engagement</div>
+    </div>`;
+
+    // FAQ
+    if(faq.length>0) html+=`
+    <div class='section'>
+      <div class='section-title'>❓ Questions fréquentes</div>
+      ${faq.map((f,i)=>`
+      <div class='faq-item' id='faq${i}'>
+        <div class='faq-q' onclick='toggleFaq(${i})'>
+          <span>${f.q}</span>
+          <span class='faq-arrow' id='arrow${i}'>▼</span>
+        </div>
+        <div class='faq-a' id='faqA${i}'>${f.a}</div>
+      </div>`).join("")}
+    </div>`;
+
+    // Liens bonus
+    const liensValides=liens.map((l,i)=>({label:l,url:urls[i]})).filter(l=>l.label&&l.url);
+    if(liensValides.length>0||lienBoutique||lienRecrut) html+=`
+    <div class='liens'>
+      ${lienBoutique?`<a href='${lienBoutique}' class='btn btn-primary'><span>🛍️</span> Voir la boutique Mihi</a>`:""}
+      ${liensValides.map(l=>`<a href='${l.url}' class='btn btn-secondary' target='_blank'>${l.label}</a>`).join("")}
+      ${lienRecrut?`<a href='${lienRecrut}' class='btn btn-secondary' style='border-color:#3D1F0E;'><span>👑</span> Rejoindre l'équipe Blazing Dynasty</a>`:""}
+    </div>`;
+
+    html+=`<div class='footer'>Blazing Dynasty × Mihi · ${nom} · Distributrice indépendante</div></div>`;
+
+    document.getElementById("app").innerHTML=html;
+
+    // Scroll to top btn
+    window.addEventListener("scroll",()=>{
+      document.getElementById("scrollTop").style.display=window.scrollY>300?"flex":"none";
+    });
+
+  }catch(e){
+    console.error(e);
+    document.getElementById("app").innerHTML='<div class="loading">❌ Une erreur est survenue</div>';
+  }
+}
+
+window.toggleFaq=(i)=>{
+  const item=document.getElementById("faq"+i);
+  item.classList.toggle("open");
+};
+
+init();
+</script>
+</body>
+</html>

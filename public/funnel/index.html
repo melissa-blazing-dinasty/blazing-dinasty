@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Blazing Dynasty</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;background:#F7F2EE;display:flex;justify-content:center;}
+    .page{width:100%;max-width:480px;min-height:100vh;}
+    .hero{min-height:55vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2.5rem 1.5rem;text-align:center;position:relative;overflow:hidden;}
+    .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.35;}
+    .hero-content{position:relative;z-index:2;}
+    h1{font-family:Georgia,serif;font-size:1.6rem;font-weight:600;color:white;margin-bottom:.75rem;line-height:1.35;text-shadow:0 2px 8px rgba(0,0,0,.3);}
+    .accroche{font-size:.88rem;color:rgba(255,255,255,.85);line-height:1.7;margin-bottom:1.5rem;text-shadow:0 1px 4px rgba(0,0,0,.2);}
+    .btn-main{background:white;border:none;border-radius:14px;padding:.85rem 2rem;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit;transition:transform .15s,opacity .15s;}
+    .btn-main:hover{opacity:.9;transform:scale(.98);}
+    .form-section{background:white;border-radius:20px 20px 0 0;padding:1.5rem;margin-top:-20px;position:relative;z-index:3;}
+    .form-title{font-family:Georgia,serif;font-size:1.1rem;font-weight:600;margin-bottom:.3rem;}
+    .form-sub{font-size:.78rem;color:#8A7A74;margin-bottom:1.25rem;line-height:1.6;}
+    input,textarea{width:100%;border:1px solid #E8D5CC;border-radius:10px;padding:.6rem .85rem;font-size:.88rem;font-family:inherit;outline:none;margin-bottom:.6rem;background:#FBF8F6;transition:border-color .2s;}
+    input:focus,textarea:focus{border-color:#C49A8A;}
+    textarea{resize:vertical;min-height:70px;}
+    .btn-submit{width:100%;border:none;border-radius:12px;padding:.75rem;font-size:.9rem;font-weight:700;color:white;cursor:pointer;font-family:inherit;margin-top:.25rem;}
+    .garantie{font-size:.68rem;color:#aaa;text-align:center;margin-top:.75rem;line-height:1.5;}
+    .success{text-align:center;padding:2rem;display:none;}
+    .success.show{display:block;}
+    .form-body.hidden{display:none;}
+    label{font-size:.72rem;font-weight:600;color:#6A5A54;display:block;margin-bottom:.2rem;}
+    .benefits{padding:1.25rem 1.5rem;background:#FBF8F6;border-bottom:1px solid #F0E8E4;}
+    .benefit{display:flex;align-items:flex-start;gap:.65rem;margin-bottom:.85rem;}
+    .benefit:last-child{margin-bottom:0;}
+    .benefit-icon{font-size:1.4rem;flex-shrink:0;margin-top:-.1rem;}
+    .benefit-text strong{display:block;font-size:.82rem;color:#3D1F0E;margin-bottom:.1rem;}
+    .benefit-text span{font-size:.73rem;color:#8A7A74;line-height:1.5;}
+    .footer{text-align:center;padding:.75rem;font-size:.6rem;color:#C4A882;letter-spacing:.08em;text-transform:uppercase;}
+  </style>
+</head>
+<body>
+<div class="page">
+  <div id="hero" class="hero" style="background:linear-gradient(135deg,#3D1F0E,#C49A8A)">
+    <div class="hero-content">
+      <div id="prenom-badge" style="display:none;background:rgba(255,255,255,.15);border-radius:20px;padding:.3rem .85rem;font-size:.72rem;color:rgba(255,255,255,.9);margin-bottom:.75rem;display:inline-block;"></div>
+      <h1 id="hero-titre">Chargement...</h1>
+      <p class="accroche" id="hero-accroche"></p>
+      <button class="btn-main" id="btn-cta" onclick="scrollToForm()">→</button>
+    </div>
+  </div>
+
+  <div id="benefits-section" class="benefits" style="display:none">
+    <div class="benefit">
+      <div class="benefit-icon">✨</div>
+      <div class="benefit-text"><strong>100% personnalisé</strong><span>Des recommandations adaptées à votre profil et vos besoins uniques</span></div>
+    </div>
+    <div class="benefit">
+      <div class="benefit-icon">🌿</div>
+      <div class="benefit-text"><strong>Produits naturels premium</strong><span>Formulés par des experts, sans compromis sur la qualité</span></div>
+    </div>
+    <div class="benefit">
+      <div class="benefit-icon">💬</div>
+      <div class="benefit-text"><strong>Accompagnement humain</strong><span>Une vraie conseillère à votre écoute, pas un robot</span></div>
+    </div>
+  </div>
+
+  <div class="form-section" id="form-section">
+    <div class="form-body" id="form-body">
+      <h2 class="form-title" id="form-titre">Recevez votre recommandation</h2>
+      <p class="form-sub" id="form-sub">Laissez vos coordonnées — je vous contacte personnellement dans les 24h.</p>
+      <div>
+        <label>Prénom *</label>
+        <input id="f-prenom" placeholder="Votre prénom" required/>
+        <label>Nom</label>
+        <input id="f-nom" placeholder="Votre nom"/>
+        <label>Email *</label>
+        <input id="f-email" type="email" placeholder="votre@email.com" required/>
+        <label>Téléphone / WhatsApp</label>
+        <input id="f-tel" type="tel" placeholder="+33 6 ..."/>
+        <label id="message-label">Votre besoin principal</label>
+        <textarea id="f-message" placeholder="Ex: Je cherche à perdre 5kg durablement, j'ai la peau mixte..."></textarea>
+        <button class="btn-submit" id="btn-submit" onclick="soumettre()">→ Recevoir mes recommandations</button>
+        <p class="garantie" id="garantie-text">🔒 Vos informations restent confidentielles. Vous ne recevrez aucun spam.</p>
+      </div>
+    </div>
+    <div class="success" id="success-msg">
+      <div style="font-size:2.5rem;margin-bottom:1rem">🎉</div>
+      <h2 style="font-family:Georgia,serif;font-size:1.2rem;color:#3D1F0E;margin-bottom:.5rem">Merci !</h2>
+      <p style="font-size:.82rem;color:#8A7A74;line-height:1.7" id="success-text">Je vous contacte très vite !</p>
+      <a id="btn-boutique" href="#" target="_blank" style="display:none;margin-top:1.25rem;background:#C49A8A;color:white;border-radius:12px;padding:.65rem 1.5rem;font-size:.85rem;font-weight:700;text-decoration:none;display:inline-block">🛍️ Voir la boutique</a>
+    </div>
+  </div>
+
+  <div class="footer" id="footer">Blazing Dynasty × Mihi · Beauté & bien-être naturels</div>
+</div>
+
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import{getFirestore,doc,getDoc,setDoc,arrayUnion}from"https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const app=initializeApp({apiKey:"AIzaSyBjTZNbOvJhVuqesBkK6MCbQ6DlWUJ5eMo",authDomain:"blazing-dinasty-1fad9.firebaseapp.com",projectId:"blazing-dinasty-1fad9",storageBucket:"blazing-dinasty-1fad9.appspot.com",messagingSenderId:"499869328828",appId:"1:499869328828:web:ce4b8b67b92c4b5f5e4f87"});
+const db=getFirestore(app);
+
+const parts=location.pathname.split('/').filter(Boolean);
+const slug=parts[1]||"";
+const type=parts[2]||"vente";
+let ownerUid="";
+
+async function init(){
+  try{
+    const{collection,query,where,getDocs}=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+    const q=query(collection(db,"tunnels"),where("slug","==",slug));
+    const snap=await getDocs(q);
+    if(snap.empty){document.getElementById("hero-titre").textContent="Page introuvable";return;}
+    const cfg=snap.docs[0].data();
+    ownerUid=cfg.uid||snap.docs[0].id;
+    const couleur=cfg.couleurPrincipale||"#C49A8A";
+
+    if(type==="recrutement"&&!cfg.recrutActif){document.getElementById("hero-titre").textContent="Cette page n'est pas disponible";return;}
+    if(type==="vente"&&!cfg.venteActif){document.getElementById("hero-titre").textContent="Cette page n'est pas disponible";return;}
+
+    const isRecrut=type==="recrutement";
+    document.getElementById("hero").style.background=isRecrut?`linear-gradient(135deg,#3D1F0E,${couleur})`:`linear-gradient(135deg,${couleur},#C4A882)`;
+    document.getElementById("hero-titre").textContent=isRecrut?cfg.recrutTitre:cfg.venteTitre;
+    document.getElementById("hero-accroche").textContent=isRecrut?cfg.recrutAccroche:cfg.venteAccroche;
+    document.getElementById("btn-cta").textContent=(isRecrut?cfg.recrutCTA:cfg.venteCTA)||"Commencer →";
+    document.getElementById("btn-cta").style.color=couleur;
+    document.getElementById("btn-submit").style.background=couleur;
+
+    if(isRecrut){
+      document.getElementById("message-label").textContent="Pourquoi vous intéressez-vous à cette opportunité ?";
+      document.getElementById("f-message").placeholder="Ex: Je cherche un complément de revenus, j'aime les produits naturels...";
+      document.getElementById("form-titre").textContent="Faisons connaissance";
+      document.getElementById("form-sub").textContent="Laissez vos coordonnées — nous échangeons sans engagement.";
+      document.getElementById("success-text").textContent="Je reviendrai vers vous très vite pour en discuter !";
+    } else {
+      document.getElementById("benefits-section").style.display="block";
+      const boutique=cfg.venteLienBoutique;
+      if(boutique){
+        const btn=document.getElementById("btn-boutique");
+        btn.href=boutique;btn.style.display="inline-block";
+      }
+    }
+    if(cfg.venteImage||cfg.recrutImage){
+      const img=document.createElement("img");
+      img.src=isRecrut?cfg.recrutImage:cfg.venteImage;
+      img.className="hero-img";
+      document.getElementById("hero").prepend(img);
+    }
+  }catch(e){console.error(e);}
+}
+
+window.scrollToForm=()=>document.getElementById("form-section").scrollIntoView({behavior:"smooth"});
+
+window.soumettre=async()=>{
+  const prenom=document.getElementById("f-prenom").value.trim();
+  const email=document.getElementById("f-email").value.trim();
+  if(!prenom||!email){alert("Prénom et email obligatoires");return;}
+  const btn=document.getElementById("btn-submit");
+  btn.textContent="Envoi...";btn.disabled=true;
+  const prospect={
+    prenom,nom:document.getElementById("f-nom").value.trim(),
+    email,tel:document.getElementById("f-tel").value.trim(),
+    message:document.getElementById("f-message").value.trim(),
+    type,date:new Date().toISOString(),slug
+  };
+  try{
+    // Enregistrer dans tunnel-prospects du propriétaire
+    await setDoc(doc(db,"tunnel-prospects",ownerUid),{liste:arrayUnion(prospect)},{merge:true});
+    // Ajouter aussi dans la liste prospects du dashboard
+    const snap=await getDoc(doc(db,"users",ownerUid));
+    if(snap.exists()){
+      const d=snap.data();
+      const existingProspects=d["db-prospects"]?JSON.parse(d["db-prospects"]):[];
+      const newProspect={id:Date.now(),name:prenom+(prospect.nom?" "+prospect.nom:""),statut:"Nouveau",note:prospect.message,interet:type==="vente"?"Produits":"Opportunité",tel:prospect.tel,email:prospect.email};
+      await setDoc(doc(db,"users",ownerUid),{"db-prospects":JSON.stringify([...existingProspects,newProspect])},{merge:true});
+    }
+    document.getElementById("form-body").classList.add("hidden");
+    document.getElementById("success-msg").classList.add("show");
+  }catch(e){
+    btn.textContent="→ Réessayer";btn.disabled=false;
+    alert("Une erreur s'est produite. Réessayez.");
+  }
+};
+
+init();
+</script>
+</body>
+</html>

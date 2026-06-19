@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, createContext, useContext } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
@@ -14,6 +15,7 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
+const storage = getStorage(fbApp);
 let messaging = null;
 try { messaging = getMessaging(fbApp); } catch {}
 
@@ -71,6 +73,7 @@ async function syncAnnuaire(uid, displayName, objPerso, marraineUid){
       nom: rest.join(" ")||"",
       palier: objPerso?.palier||"2%",
       ca: objPerso?.ca||"",
+      caPerso: objPerso?.caPerso||"",
       caObj: objPerso?.caObj||"",
       recruesReal: objPerso?.recruesReal||"0",
       recruesObj: objPerso?.recruesObj||"0",
@@ -100,6 +103,20 @@ function buildEquipeTree(annuaire, uid){
 // Compte récursivement le nombre total de personnes dans une équipe (sous-arbre)
 function countEquipe(node){
   return (node.enfants||[]).reduce((sum,e)=>sum+1+countEquipe(e), 0);
+}
+
+// Remonte la chaîne de marraines pour trouver tous les "chefs" au-dessus d'un membre (jusqu'à la racine)
+function getLigneeChefs(annuaire, uid, chefsUids){
+  const lignee=[];
+  let current=uid;
+  const visited=new Set();
+  while(current&&!visited.has(current)){
+    visited.add(current);
+    if(chefsUids.includes(current)) lignee.push(current);
+    const m=annuaire[current];
+    current=m?.marraine;
+  }
+  return lignee;
 }
 
 // Compte toute la descendance d'un uid dans l'annuaire, avec protection anti-cycle
@@ -197,76 +214,269 @@ function SearchSelect({value, onChange, options, placeholder, compact}){
 
 
 // ── PALETTE ───────────────────────────────────────────────────────────────────
+const APP_VERSION = "2.6.0";
+
 const C={brun:"#3D1F0E",brun2:"#5C3020",rose:"#C49A8A",pale:"#E8D5CC",lilas:"#A89BB5",or:"#C4A882",creme:"#F7F2EE",blanc:"#FDFAF7",texte:"#2E1F17",gris:"#8A7A74",vert:"#7FAF8A"};
 
-// ── TRADUCTION À LA VOLÉE (FR ↔ PT) ──────────────────────────────────────────
-const LangContext = createContext({ lang: "fr" });
-
-const translationMemCache = {};
-
-async function translateText(text, targetLang){
-  if(!text || !text.trim()) return text;
-  if(targetLang==="fr") return text;
-
-  const cacheKey = targetLang+"::"+text;
-  if(translationMemCache[cacheKey]) return translationMemCache[cacheKey];
-
+// Forcer la mise à jour de l'application
+async function forcerMiseAJour(){
   try{
-    const docId = btoa(unescape(encodeURIComponent(cacheKey))).replace(/[\/+=]/g,"_").slice(0,500);
-    const ref = doc(db,"traductions",docId);
-    const snap = await getDoc(ref);
-    if(snap.exists() && snap.data().translated){
-      translationMemCache[cacheKey] = snap.data().translated;
-      return snap.data().translated;
+    // Vider tous les caches du service worker
+    if("caches" in window){
+      const keys=await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
     }
-  } catch {}
-
-  try{
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": "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",
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 500,
-        messages: [{ role: "user", content: `Traduis ce texte du français vers le portugais (portugais du Portugal). Réponds UNIQUEMENT avec la traduction, sans aucun commentaire, sans guillemets, sans markdown:\n\n${text}` }]
-      })
-    });
-    const data = await response.json();
-    if(data.error) return text;
-    const translated = (data.content?.map(i=>i.text||"").join("")||"").trim();
-    if(!translated) return text;
-
-    translationMemCache[cacheKey] = translated;
-    try{
-      const docId = btoa(unescape(encodeURIComponent(cacheKey))).replace(/[\/+=]/g,"_").slice(0,500);
-      await setDoc(doc(db,"traductions",docId),{original:text,translated,lang:targetLang});
-    } catch {}
-
-    return translated;
-  } catch {
-    return text;
-  }
+    // Demander au service worker de se mettre à jour
+    if("serviceWorker" in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.update()));
+    }
+  }catch{}
+  // Recharger depuis le serveur (bypass cache)
+  window.location.reload(true);
 }
 
-function T({children}){
-  const ctx = useContext(LangContext);
-  const lang = ctx.lang;
-  const [display, setDisplay] = useState(children);
+function BoutonMiseAJour({style={}}){
+  const[loading,setLoading]=useState(false);
+  const[version,setVersion]=useState(null);
 
   useEffect(()=>{
-    if(lang==="fr"){ setDisplay(children); return; }
-    let cancelled=false;
-    translateText(children, lang).then(t=>{ if(!cancelled) setDisplay(t); });
-    return ()=>{ cancelled=true; };
-  },[lang, children]);
+    try{
+      const v=localStorage.getItem("bd-app-version");
+      setVersion(v);
+      localStorage.setItem("bd-app-version",APP_VERSION);
+    }catch{}
+  },[]);
 
-  return display;
+  const handleUpdate=async()=>{
+    setLoading(true);
+    await forcerMiseAJour();
+  };
+
+  const nouvelleVersion=version&&version!==APP_VERSION;
+
+  return(
+    <button onClick={handleUpdate} disabled={loading}
+      style={{display:"flex",alignItems:"center",gap:".4rem",background:nouvelleVersion?C.rose:C.creme,border:`1px solid ${nouvelleVersion?C.rose:C.pale}`,borderRadius:10,padding:".5rem .85rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:loading?"default":"pointer",color:nouvelleVersion?C.blanc:C.gris,transition:"all .2s",...style}}>
+      {loading?"⏳ Mise à jour...":nouvelleVersion?"🆕 Nouvelle version disponible !":"🔄 Mettre à jour l'app"}
+    </button>
+  );
 }
+
+// ── TRADUCTION À LA VOLÉE (FR ↔ PT) ──────────────────────────────────────────
+const LangContext = createContext({ lang:"fr", translations:{}, t:(s)=>s });
+function useLang(){ return useContext(LangContext); }
+
+// Cache mémoire global
+const transCache = {};
+
+// Traduit un array de strings en portugais européen - chunks de 20
+async function translateBatch(texts, targetLang){
+  if(!texts||!texts.length||targetLang==="fr") return texts;
+  const results=[...texts];
+  const toTr=[];const idxs=[];
+  texts.forEach((t,i)=>{
+    if(!t||!t.trim()||t.length<2){return;}
+    const k=`${targetLang}::${t}`;
+    if(transCache[k])results[i]=transCache[k];
+    else{toTr.push(t);idxs.push(i);}
+  });
+  if(!toTr.length) return results;
+  const CHUNK=20;
+  for(let c=0;c<toTr.length;c+=CHUNK){
+    const chunk=toTr.slice(c,c+CHUNK);
+    const cIdx=idxs.slice(c,c+CHUNK);
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:`Traduz do francês para português europeu (Portugal). Responde APENAS com JSON array na mesma ordem:\n${JSON.stringify(chunk)}`}]})
+      });
+      const data=await res.json();
+      const raw=data.content?.map(x=>x.text||"").join("").trim()||"[]";
+      const m=raw.match(/\[[\s\S]*\]/);
+      if(!m)continue;
+      JSON.parse(m[0]).forEach((t,i)=>{
+        if(i>=chunk.length)return;
+        transCache[`${targetLang}::${chunk[i]}`]=t;
+        results[cIdx[i]]=t;
+      });
+    }catch(e){console.error("translateBatch:",e);}
+  }
+  return results;
+}
+
+// ── TRADUCTION DOM COMPLÈTE ───────────────────────────────────────────────────
+// Traduit tous les noeuds texte du DOM en une fois, comme Google Translate
+let domOriginals=new Map(); // node → texte original FR
+
+async function translateDOM(targetLang){
+  try{
+    const root=document.getElementById("root")||document.body;
+    if(!root) return;
+
+    const walker=document.createTreeWalker(
+      root,
+      4,
+      {acceptNode:(node)=>{
+        const p=node.parentElement;
+        if(!p) return 2;
+        const tag=p.tagName;
+        if(["SCRIPT","STYLE","NOSCRIPT","META","TITLE"].includes(tag)) return 2;
+        if(p.closest("[data-no-translate]")) return 2;
+        const txt=node.textContent.trim();
+        if(!txt||txt.length<2) return 2;
+        if(/^[\d\s€%.,/:→←↑↓+\-×÷=🎯🛍️👥🩺🔍📱🏆⚡👑🚀]*$/.test(txt)) return 2;
+        if(/^https?:\/\//.test(txt)) return 2;
+        return 1;
+      }}
+    );
+
+    const nodes=[];
+    let node;
+    while((node=walker.nextNode())) nodes.push(node);
+
+    if(targetLang==="fr"){
+      domOriginals.forEach((orig,n)=>{ if(n.parentElement) n.textContent=orig; });
+      return;
+    }
+
+    // Sauvegarder les originaux
+    nodes.forEach(n=>{ if(!domOriginals.has(n)) domOriginals.set(n,n.textContent); });
+
+    const texts=nodes.map(n=>domOriginals.get(n)||n.textContent);
+    const translated=await translateBatch(texts,targetLang);
+    nodes.forEach((n,i)=>{ if(n.parentElement&&translated[i]) n.textContent=translated[i]; });
+  }catch(e){ console.error("translateDOM error:",e); }
+}
+
+// Hook déclencheur de traduction DOM - sécurisé
+function useTranslation(){
+  const {lang}=useLang();
+  useEffect(()=>{
+    if(!lang||lang==="fr") return;
+    const timer=setTimeout(()=>{
+      try{ translateDOM(lang); }catch(e){ console.error("translateDOM:",e); }
+    },500);
+    return()=>clearTimeout(timer);
+  },[lang]);
+}
+
+
+// Hook pour traduire dynamiquement du contenu chargé depuis Firebase
+function useTranslatedContent(texts){
+  const {lang} = useLang();
+  const[translated,setTranslated]=useState(texts);
+
+  useEffect(()=>{
+    if(lang==="fr"||!texts||texts.length===0){setTranslated(texts);return;}
+    let cancelled=false;
+    translateBatch(texts,lang).then(res=>{
+      if(!cancelled) setTranslated(res);
+    });
+    return()=>{cancelled=true;};
+  },[lang, JSON.stringify(texts)]);
+
+  return translated;
+}
+
+// Traduit un objet produit
+function useTranslatedProduit(produit){
+  const {lang} = useLang();
+  const[tr,setTr]=useState(produit);
+
+  useEffect(()=>{
+    if(lang==="fr"||!produit){setTr(produit);return;}
+    const toTranslate=[produit.titre||"",produit.description||"",produit.titreVideo||""];
+    translateBatch(toTranslate,lang).then(res=>{
+      setTr({...produit,titre:res[0],description:res[1],titreVideo:res[2]});
+    });
+  },[lang,produit?.id]);
+
+  return tr;
+}
+
+// Composant T — traduit un texte string
+function T({children, k}){
+  const {lang,translations} = useContext(LangContext);
+  if(lang==="fr") return children;
+  const key = k||children;
+  return translations?.[key]||children;
+}
+
+// Collecte tous les textes d'interface à traduire (clé → texte FR)
+const UI_TEXTS = {
+  // Navigation
+  "nav.dashboard": "Tableau de bord",
+  "nav.formation": "Formation",
+  "nav.linkbio": "Link-in-Bio",
+  "nav.tunnel": "Mon Tunnel",
+  // Dashboard onglets
+  "dtab.today": "⚡ Aujourd'hui",
+  "dtab.objperso": "🎯 Mes objectifs",
+  "dtab.faststart": "🚀 Fast Start",
+  "dtab.clients": "🛍️ Clients",
+  "dtab.distributeurs": "👑 Distributeurs",
+  "dtab.prospects": "👥 Prospects",
+  "dtab.diagnostics": "🩺 Mes diagnostics",
+  "dtab.produits": "🔍 Produits",
+  "dtab.posts": "📱 Posts",
+  "dtab.equipe": "🏆 Équipe",
+  // Objectifs
+  "obj.ca_total": "CA total = ventes équipe (€)",
+  "obj.objectif": "Objectif (€)",
+  "obj.ventes_perso": "🛍️ Dont mes ventes perso",
+  "obj.periode": "Période en cours",
+  "obj.palier": "Palier à atteindre",
+  "obj.reste": "📊 Calcul du Reste",
+  "obj.directeurs": "Directeurs dans ma structure",
+  // Fast Start
+  "fs.module": "Module",
+  "fs.valider": "Valider le module",
+  "fs.verrouille": "Verrouillé — complète le module précédent",
+  "fs.exercice": "📝 Exercice pratique",
+  // Clients
+  "clients.ajouter": "Ajouter une cliente",
+  "clients.nom": "Nom",
+  "clients.statut": "Statut",
+  "clients.notes": "Notes",
+  "clients.commande": "Commande",
+  // Prospects
+  "prospects.ajouter": "Ajouter un prospect",
+  "prospects.statut": "Statut",
+  "prospects.interet": "Intérêt",
+  // Actions
+  "btn.sauvegarder": "Sauvegarder",
+  "btn.annuler": "Annuler",
+  "btn.modifier": "Modifier",
+  "btn.supprimer": "Supprimer",
+  "btn.ajouter": "Ajouter",
+  "btn.retour": "← Retour",
+  "btn.copier": "Copier",
+  // Classement
+  "rank.ventes": "🛍️ Ventes perso",
+  "rank.equipe": "👥 Équipe",
+  "rank.recrues": "🤝 Recrues",
+  "rank.progression": "📈 Progression",
+  // Diagnostics
+  "diag.commencer": "Commencer le diagnostic",
+  "diag.suivant": "Question suivante →",
+  "diag.voir_resultats": "Voir mes résultats",
+  // Power Hour
+  "ph.lancer": "🚀 Lancer une Power Hour",
+  "ph.participe": "Je participe à cette Power Hour",
+  "ph.en_cours": "⚡ POWER HOUR EN COURS",
+  // Formation
+  "form.demarrage": "Démarrage",
+  "form.vente": "Vente",
+  "form.recrutement": "Recrutement",
+  "form.contenu": "Contenu",
+  "form.devperso": "Développement Personnel",
+  "form.outils": "Outils",
+  "form.produits": "Formation Produits",
+};
+
+
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 function Btn({href,label,color=C.brun,icon="🔗"}){
@@ -782,12 +992,254 @@ function getCitationDuJour(citations){
 }
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
+// ── CHALLENGE DÉCOUVERTE APP — 7 JOURS ───────────────────────────────────────
+const CHALLENGE_APP_JOURS = [
+  {
+    jour: 1,
+    titre: "Crée ta première fiche prospect",
+    emoji: "👤",
+    description: "Va dans Tableau de bord → Prospects. Ajoute une vraie personne que tu as en tête. Note son prénom, son intérêt (cliente ou distributrice) et une note sur ce que tu sais d'elle.",
+    action: "Ajouter 1 fiche prospect",
+    tip: "💡 C'est là que tout commence. Chaque personne à qui tu penses est un futur résultat.",
+    section: "prospects",
+  },
+  {
+    jour: 2,
+    titre: "Envoie ton premier diagnostic",
+    emoji: "🔬",
+    description: "Va dans Diagnostics. Choisis un type (Skincare, Makeup, Cheveux...), entre le prénom d'une connaissance et copie le lien à lui envoyer. Envoie-lui aujourd'hui.",
+    action: "Envoyer 1 lien diagnostic",
+    tip: "💡 Le diagnostic est ton meilleur outil de vente — il crée une conversation naturelle.",
+    section: "diagnostics",
+  },
+  {
+    jour: 3,
+    titre: "Configure ton Link-in-Bio",
+    emoji: "🔗",
+    description: "Va dans Link-in-Bio. Ajoute ta photo, ton slogan, et au moins 3 liens (Instagram, Facebook, catalogue...). Copie le lien et mets-le dans ta bio Instagram.",
+    action: "Compléter son Link-in-Bio",
+    tip: "💡 Ton link-in-bio remplace les 10 liens que tu ne peux pas mettre ailleurs.",
+    section: "linkbio",
+  },
+  {
+    jour: 4,
+    titre: "Ajoute ta première cliente",
+    emoji: "🛍️",
+    description: "Va dans Tableau de bord → Clients. Ajoute une vraie cliente avec sa date de naissance. Enregistre une commande qu'elle a déjà passée — même ancienne.",
+    action: "Ajouter 1 cliente avec 1 commande",
+    tip: "💡 Les rappels automatiques te préviendront quand ses produits seront bientôt terminés.",
+    section: "clients",
+  },
+  {
+    jour: 5,
+    titre: "Lance un challenge dans ton équipe",
+    emoji: "⚡",
+    description: "Va dans Tableau de bord → Équipe → Challenges. Crée un Challenge Flash de 48h avec un objectif simple et un cadeau sympa. Partage-le avec ton équipe.",
+    action: "Créer 1 challenge équipe",
+    tip: "💡 Un challenge actif = toute l'équipe motivée au même moment.",
+    section: "equipe-fun",
+  },
+  {
+    jour: 6,
+    titre: "Pose tes objectifs de période",
+    emoji: "🎯",
+    description: "Va dans Tableau de bord → Objectifs. Remplis ton CA cible, ton palier visé et ton nombre de recrues. Clique sur 'Mes objectifs sont posés'. C'est ton engagement envers toi-même.",
+    action: "Fixer ses objectifs de période",
+    tip: "💡 Ce qu'on mesure, on l'améliore. Ce qu'on écrit, on l'atteint.",
+    section: "objperso",
+  },
+  {
+    jour: 7,
+    titre: "Explore ton espace chef (ou ton Dream Board)",
+    emoji: "✨",
+    description: "Si tu as une équipe : explore Espace Chef → Statistiques pour voir le tableau de bord de ton équipe. Sinon : va dans Dream Board et ajoute 3 rêves avec des photos.",
+    action: "Explorer Espace Chef ou Dream Board",
+    tip: "💡 Tu viens de découvrir les fondations de l'app. Maintenant, utilise-la chaque jour.",
+    section: "dreamboard",
+  },
+];
+
+function ChallengeAppPopup({uid, onClose, setTab}){
+  const[etat,setEtat]=useState(null); // null=chargement
+  const[jourActuel,setJourActuel]=useState(null);
+  const[valide,setValide]=useState(false);
+  const[saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        const data=snap.exists()?snap.data():{};
+        const ca=data["db-challenge-app"]?JSON.parse(data["db-challenge-app"]):null;
+        if(!ca){
+          // Pas encore commencé → montrer l'annonce "ça commence demain"
+          setEtat("annonce");
+        } else {
+          const startDate=new Date(ca.startDate);
+          const today=new Date();
+          today.setHours(0,0,0,0);
+          const diffJours=Math.floor((today-startDate)/(1000*60*60*24));
+          const jour=Math.min(diffJours+1,7); // J1 à J7
+          if(diffJours>=7){setEtat("termine");return;}
+          const joursValides=ca.joursValides||[];
+          setEtat("actif");
+          setJourActuel(jour);
+          setValide(joursValides.includes(jour));
+        }
+      }catch{setEtat("annonce");}
+    })();
+  },[uid]);
+
+  const demarrer=async()=>{
+    setSaving(true);
+    try{
+      const tomorrow=new Date();
+      tomorrow.setDate(tomorrow.getDate()+1);
+      tomorrow.setHours(0,0,0,0);
+      const ca={startDate:tomorrow.toISOString().slice(0,10),joursValides:[]};
+      await setDoc(doc(db,"users",uid),{"db-challenge-app":JSON.stringify(ca)},{merge:true});
+      setEtat("confirme");
+    }catch{}
+    setSaving(false);
+  };
+
+  const validerJour=async()=>{
+    setSaving(true);
+    try{
+      const snap=await getDoc(doc(db,"users",uid));
+      const ca=JSON.parse(snap.data()["db-challenge-app"]||"{}");
+      const joursValides=[...(ca.joursValides||[])];
+      if(!joursValides.includes(jourActuel)) joursValides.push(jourActuel);
+      const next={...ca,joursValides};
+      await setDoc(doc(db,"users",uid),{"db-challenge-app":JSON.stringify(next)},{merge:true});
+      setValide(true);
+    }catch{}
+    setSaving(false);
+  };
+
+  const allerSection=(section)=>{
+    if(section==="prospects"||section==="clients"||section==="equipe-fun"||section==="objperso"){
+      setTab("dashboard");
+    } else if(section==="diagnostics"){ setTab("diagnostics"); }
+    else if(section==="linkbio"){ setTab("linkbio"); }
+    else if(section==="dreamboard"){ setTab("dreamboard"); }
+    onClose();
+  };
+
+  const jour=jourActuel?CHALLENGE_APP_JOURS[jourActuel-1]:null;
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:999,display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+      onClick={onClose}>
+      <div style={{background:C.blanc,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",padding:"1.5rem"}}
+        onClick={e=>e.stopPropagation()}>
+
+        {/* Annonce de lancement */}
+        {etat==="annonce"&&(
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:"2.5rem",marginBottom:".75rem"}}>🚀</div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",fontWeight:600,color:C.brun,marginBottom:".4rem"}}>
+              Challenge Découverte App
+            </div>
+            <div style={{fontSize:".82rem",color:C.gris,lineHeight:1.7,marginBottom:"1rem"}}>
+              Pendant <strong>7 jours</strong>, une action courte chaque jour pour maîtriser l'application Blazing Dynasty.<br/>
+              <strong>Ça commence demain matin.</strong> Prête ?
+            </div>
+            <div style={{background:C.creme,borderRadius:12,padding:".85rem",marginBottom:"1rem"}}>
+              {CHALLENGE_APP_JOURS.map((j,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",borderBottom:i<6?`1px solid ${C.pale}`:"none"}}>
+                  <span style={{width:24,height:24,borderRadius:"50%",background:C.brun,color:"white",fontSize:".65rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{j.jour}</span>
+                  <span style={{fontSize:".72rem",color:C.gris}}>{j.emoji} {j.titre}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={demarrer} disabled={saving}
+              style={{width:"100%",background:`linear-gradient(135deg,${C.brun},${C.brun2})`,color:"white",border:"none",borderRadius:12,padding:".8rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+              {saving?"...":"🚀 Je relève le défi !"}
+            </button>
+            <button onClick={onClose}
+              style={{width:"100%",background:"none",border:"none",color:C.gris,fontSize:".75rem",fontFamily:"inherit",cursor:"pointer",padding:".4rem"}}>
+              Pas maintenant
+            </button>
+          </div>
+        )}
+
+        {/* Confirmation démarrage */}
+        {etat==="confirme"&&(
+          <div style={{textAlign:"center",padding:"1rem 0"}}>
+            <div style={{fontSize:"2rem",marginBottom:".5rem"}}>✅</div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:C.brun,marginBottom:".5rem"}}>C'est noté !</div>
+            <div style={{fontSize:".8rem",color:C.gris,lineHeight:1.7}}>Le challenge commence demain. Chaque jour, une action dans l'app pour progresser. On compte sur toi 🌟</div>
+            <button onClick={onClose}
+              style={{marginTop:"1rem",background:C.brun,color:"white",border:"none",borderRadius:10,padding:".6rem 1.5rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+              Super, à demain !
+            </button>
+          </div>
+        )}
+
+        {/* Jour actif */}
+        {etat==="actif"&&jour&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+              <div style={{fontSize:".62rem",fontWeight:700,color:C.rose,textTransform:"uppercase",letterSpacing:".1em"}}>Challenge App — Jour {jourActuel}/7</div>
+              <button onClick={onClose} style={{background:"none",border:"none",color:C.gris,fontSize:"1rem",cursor:"pointer"}}>✕</button>
+            </div>
+            {/* Barre progression */}
+            <div style={{height:5,background:C.pale,borderRadius:10,marginBottom:"1rem",overflow:"hidden"}}>
+              <div style={{height:"100%",background:`linear-gradient(90deg,${C.rose},${C.or})`,width:`${Math.round((jourActuel/7)*100)}%`,borderRadius:10}}/>
+            </div>
+            <div style={{textAlign:"center",marginBottom:"1rem"}}>
+              <div style={{fontSize:"3rem",marginBottom:".4rem"}}>{jour.emoji}</div>
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun}}>{jour.titre}</div>
+            </div>
+            <div style={{background:C.creme,borderRadius:12,padding:".9rem 1rem",marginBottom:"1rem"}}>
+              <div style={{fontSize:".78rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>{jour.description}</div>
+              <div style={{fontSize:".72rem",color:C.brun,fontStyle:"italic",background:"white",borderRadius:8,padding:".45rem .65rem"}}>{jour.tip}</div>
+            </div>
+            <button onClick={()=>allerSection(jour.section)}
+              style={{width:"100%",background:`linear-gradient(135deg,${C.rose},${C.lilas})`,color:"white",border:"none",borderRadius:12,padding:".75rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+              → Y aller maintenant
+            </button>
+            {!valide
+              ?<button onClick={validerJour} disabled={saving}
+                style={{width:"100%",background:C.creme,border:`1.5px solid ${C.or}`,borderRadius:12,padding:".65rem",fontSize:".8rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+                {saving?"...":"✅ J'ai fait l'action du jour !"}
+              </button>
+              :<div style={{textAlign:"center",fontSize:".8rem",color:C.vert,fontWeight:700,padding:".5rem",marginBottom:".5rem"}}>✓ Action du jour validée 🎉</div>
+            }
+            <button onClick={onClose}
+              style={{width:"100%",background:"none",border:"none",color:C.gris,fontSize:".72rem",fontFamily:"inherit",cursor:"pointer",padding:".3rem"}}>
+              Fermer
+            </button>
+          </div>
+        )}
+
+        {/* Terminé */}
+        {etat==="termine"&&(
+          <div style={{textAlign:"center",padding:"1rem 0"}}>
+            <div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>🏆</div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",color:C.brun,marginBottom:".5rem"}}>Challenge terminé !</div>
+            <div style={{fontSize:".8rem",color:C.gris,lineHeight:1.7}}>Tu as découvert les 7 piliers de l'application. Maintenant tu sais tout — utilise-la chaque jour pour des résultats concrets ✨</div>
+            <button onClick={onClose}
+              style={{marginTop:"1rem",background:C.or,color:"white",border:"none",borderRadius:10,padding:".6rem 1.5rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+              Merci ! 🌟
+            </button>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const[screen,setScreen]=useState("login");
   const[loginStep,setLoginStep]=useState(1); // 1=identité, 2=chef équipe
   const[userId,setUserId]=useState("");
   const[isChefApp,setIsChefApp]=useState(false);
   const[hasTeamApp,setHasTeamApp]=useState(false);
+  const[fastStartDone,setFastStartDone]=useState(false);
+  const[hasFastStart,setHasFastStart]=useState(false);
 
   useEffect(()=>{
     if(!userId)return;
@@ -831,7 +1283,7 @@ export default function App(){
         const{uid,n,codeOk}=JSON.parse(saved);
         if(uid&&n&&codeOk===true){
           setUserId(uid);setName(n);
-          setScreen("app");load(uid);
+          setScreen("app");load(uid);verifierChangementPeriode(uid);
         } else {
           // Session invalide - effacer et forcer reconnexion
           localStorage.removeItem("bd-user");
@@ -897,7 +1349,24 @@ export default function App(){
 
       // Connexion directe
       try{localStorage.setItem("bd-user",JSON.stringify({uid,n:displayName,codeOk:true}));}catch{}
-      setUserId(uid);setName(displayName);setScreen("app");load(uid);
+      // Popup bienvenue si première connexion
+      try{
+        const isFirst=!localStorage.getItem("bd-welcome-shown-"+uid);
+        if(isFirst){ setShowWelcome(true); localStorage.setItem("bd-welcome-shown-"+uid,"1"); }
+      }catch{}
+      setUserId(uid);setName(displayName);setScreen("app");load(uid);verifierChangementPeriode(uid);
+      // Afficher le challenge app après 2s
+      setTimeout(()=>setShowChallengeApp(true), 2000);
+      // Démarrer automatiquement le challenge app si première connexion
+      try{
+        const snap2=await getDoc(doc(db,"users",uid));
+        if(snap2.exists()&&!snap2.data()["db-challenge-app"]){
+          const tomorrow=new Date();
+          tomorrow.setDate(tomorrow.getDate()+1);
+          const ca={startDate:tomorrow.toISOString().slice(0,10),joursValides:[],auto:true};
+          await setDoc(doc(db,"users",uid),{"db-challenge-app":JSON.stringify(ca)},{merge:true});
+        }
+      }catch{}
       // Enregistrer token FCM pour les notifications
       saveFCMToken(uid);
       // Synchroniser l'annuaire global des distributeurs
@@ -931,7 +1400,7 @@ export default function App(){
         await setDoc(doc(db,"users",pendingUid),{"marraine":marraineUid},{merge:true});
       }
       try{localStorage.setItem("bd-user",JSON.stringify({uid:pendingUid,n:pendingName,codeOk:true}));}catch{}
-      setUserId(pendingUid);setName(pendingName);setScreen("app");load(pendingUid);
+      setUserId(pendingUid);setName(pendingName);setScreen("app");load(pendingUid);verifierChangementPeriode(pendingUid);
       saveFCMToken(pendingUid);
       sg(pendingUid,"db-obj-perso").then(data=>{
         syncAnnuaire(pendingUid, pendingName, data?JSON.parse(data):null, marraineUid);
@@ -943,6 +1412,32 @@ export default function App(){
   const[formationSubTab,setFormationSubTab]=useState("");
   const[showObjectifs,setShowObjectifs]=useState(false);
   const[lang,setLang]=useState("fr");
+  const[translations,setTranslations]=useState({});
+  const[translating,setTranslating]=useState(false);
+
+  // Re-traduire le DOM à chaque changement d'onglet si en mode PT
+  useEffect(()=>{
+    if(lang==="pt"){
+      const t=setTimeout(()=>{ try{translateDOM("pt");}catch{} },400);
+      return()=>clearTimeout(t);
+    }
+  },[tab, lang]);
+
+  const toggleLang=async()=>{
+    const newLang=lang==="fr"?"pt":"fr";
+    if(newLang==="fr"){
+      setLang("fr");
+      setTranslations({});
+      try{ await translateDOM("fr"); }catch{}
+      domOriginals.clear();
+      return;
+    }
+    setTranslating(true);
+    try{ await translateDOM(newLang); }catch(e){ console.error(e); }
+    setLang(newLang);
+    setTranslating(false);
+  };
+  const[showWelcome,setShowWelcome]=useState(false);
   const[checks,setChecks]=useState({});
   const[tasks,setTasks]=useState({});
   const[posts,setPosts]=useState({});
@@ -963,6 +1458,87 @@ export default function App(){
     }catch{}
     setLoading(false);
   },[]);
+
+  // Vérifie si la période a changé et remet à zéro les objectifs si oui
+  const verifierChangementPeriode=useCallback(async(uid)=>{
+    try{
+      const periodeCourante=getPeriodeActuelle();
+      const snap=await getDoc(doc(db,"users",uid));
+      if(!snap.exists()) return;
+      const d=snap.data();
+      const lastPeriode=d["last_periode"];
+      // Si jamais enregistré, juste stocker la période actuelle sans reset
+      if(!lastPeriode){
+        await setDoc(doc(db,"users",uid),{"last_periode":periodeCourante},{merge:true});
+        return;
+      }
+      if(lastPeriode===periodeCourante) return; // Même période — rien à faire
+
+      // Période différente → clôturer automatiquement
+      const objRaw=d["db-obj-perso"];
+      if(objRaw){
+        const obj=JSON.parse(objRaw);
+        // Sauvegarder dans l'historique
+        const hist=obj.historique||[];
+        const entry={
+          date:new Date().toISOString().slice(0,10),
+          periode:lastPeriode,
+          ca:parseFloat(obj.ca)||0,
+          caObj:parseFloat(obj.caObj)||0,
+          caPerso:parseFloat(obj.caPerso)||0,
+          recruesReal:parseFloat(obj.recruesReal)||0,
+          recruesObj:parseFloat(obj.recruesObj)||0,
+          palier:obj.palier||"2%",
+        };
+        const newHist=[...hist,entry].slice(-24); // garder 24 périodes max
+        const totalCaCumul=(parseFloat(obj.totalCaCumul)||0)+(parseFloat(obj.ca)||0);
+        const totalRecruesCumul=(parseFloat(obj.totalRecruesCumul)||0)+(parseFloat(obj.recruesReal)||0);
+
+        // Remettre à zéro les compteurs courants, conserver objectifs et palier
+        const nextObj={
+          ...obj,
+          ca:"",
+          caPerso:"",
+          caEquipe:"",
+          recruesReal:"0",
+          // Vider le calcul du reste (directeurs) pour la nouvelle période
+          nbDirecteurs:0,
+          caDirecteurs:{},
+          dirSelectionnes:{},
+          historique:newHist,
+          totalCaCumul:String(totalCaCumul),
+          totalRecruesCumul:String(totalRecruesCumul),
+        };
+        await setDoc(doc(db,"users",uid),{"db-obj-perso":JSON.stringify(nextObj),"last_periode":periodeCourante},{merge:true});
+        // Sync annuaire avec les nouvelles valeurs vides
+        await syncAnnuaire(uid, name||uid, nextObj);
+
+        // Remettre à zéro les badges sauf régularité or
+        try{
+          const badgesSnap=await getDoc(doc(db,"users",uid));
+          if(badgesSnap.exists()){
+            const bd=badgesSnap.data();
+            const badgesRaw=bd["db-badges-unlocked"];
+            if(badgesRaw){
+              const badges=JSON.parse(badgesRaw);
+              // Garder les badges permanents (régularité, recrutement, suivi)
+              const garder=["regularite_or","streak_or","gold_streak","recruteur-elite","king-suivi","top-vendeur","fidelite-or","ambassador"].filter(k=>badges[k]);
+              const nextBadges={};
+              garder.forEach(k=>nextBadges[k]=badges[k]);
+              await setDoc(doc(db,"users",uid),{"db-badges-unlocked":JSON.stringify(nextBadges)},{merge:true});
+            }
+          }
+        }catch(e){console.error("reset badges:",e);}
+        console.log(`Période ${lastPeriode}→${periodeCourante} : objectifs et badges remis à zéro`);
+      } else {
+        // Pas encore d'objectifs, juste enregistrer la période
+        await setDoc(doc(db,"users",uid),{"last_periode":periodeCourante},{merge:true});
+      }
+
+      // Mettre à jour aussi l'annuaire
+      syncAnnuaire(uid, name||"");
+    }catch(e){ console.error("verifierChangementPeriode:",e); }
+  },[name]);
 
   const save=useCallback(async(uid,c,t,_s,p,k,n)=>{
     if(!uid)return;
@@ -995,11 +1571,13 @@ export default function App(){
   const isDebutPeriodeInit=periodeInfoInit.pctElapsed<=10;
   const bannerKeyInit=`bd-banner-${periodeInfoInit.periodEnd.toISOString().slice(0,10)}`;
   const[showBanner,setShowBanner]=useState(()=>{try{return isDebutPeriodeInit&&!localStorage.getItem(bannerKeyInit);}catch{return false;}});
+  const[showChallengeApp,setShowChallengeApp]=useState(false);
   const[dismissedPeriode,setDismissedPeriode]=useState(false);
 
   // ── Admin items ──
   const[adminItems,setAdminItems]=useState([]);
   const[adminPosts,setAdminPosts]=useState([]);
+  const[adminVideosFastStart,setAdminVideosFastStart]=useState({});
   const[homeObjPerso,setHomeObjPerso]=useState(null);
   const[homeTextes,setHomeTextes]=useState(null);
   useEffect(()=>{
@@ -1008,6 +1586,10 @@ export default function App(){
       try{
         const snap=await getDoc(doc(db,"admin","contenus"));
         if(snap.exists())setAdminItems((snap.data().items||[]).filter(i=>i.actif));
+      }catch{}
+      try{
+        const snapVFS=await getDoc(doc(db,"admin","videos_faststart"));
+        if(snapVFS.exists())setAdminVideosFastStart(snapVFS.data().videos||{});
       }catch{}
       try{
         const snap2=await getDoc(doc(db,"admin","posts_extra"));
@@ -1024,6 +1606,17 @@ export default function App(){
     })();
   },[screen]);
 
+  // Rafraîchir homeObjPerso à chaque retour sur le tableau de bord (pour la bannière période)
+  useEffect(()=>{
+    if(tab==="dashboard"&&userId){
+      getDoc(doc(db,"users",userId)).then(snap=>{
+        if(snap.exists()&&snap.data()["db-obj-perso"]){
+          try{ setHomeObjPerso(JSON.parse(snap.data()["db-obj-perso"])); }catch{}
+        }
+      }).catch(()=>{});
+    }
+  },[tab,userId]);
+
   // ── Protection clavier ──
   useEffect(()=>{
     const block=(e)=>{
@@ -1039,21 +1632,21 @@ export default function App(){
     {id:"home",label:"🏠"},
     {id:"dashboard",label:"📊 Tableau de bord"},
     {id:"calendrier",label:"📅 Calendrier"},
-    {id:"communaute",label:"🌟 Communauté"},
-    {id:"blazing",label:"🔥 BD"},
-    {id:"mihi",label:"🏢 Mihi"},
     {id:"formation",label:"🎓 Formation"},
-    {id:"sprint",label:"⚡ Sprint 7 jours"},
+    {id:"sprint",label:"⚡ Sprint"},
     {id:"scripts",label:"📝 Scripts"},
-    {id:"banqueimages",label:"🖼️ Banque Images"},
+    {id:"banqueimages",label:"🖼️ Images"},
     {id:"diagnostics",label:"🩺 Diagnostics"},
+    {id:"linkbio",label:"🔗 Link-in-Bio"},
     ...(isChefApp||hasTeamApp?[{id:"espacechef",label:"👑 Espace Chef"}]:[]),
+    {id:"dreamboard",label:"✨ Dream Board"},
   ];
 
   // Sous-onglets du menu Formation
   const FORMATION_TABS=[
     {id:"demarrage",label:"📚 Démarrage",icon:"📚",col:C.rose,desc:"8 parties — étape par étape pour bien démarrer"},
     {id:"formationapp",label:"🎬 Formation App",icon:"🎬",col:C.lilas,desc:"Comment utiliser l'application Blazing Dynasty"},
+    {id:"mihibd",label:"🔥 Mihi & Blazing Dynasty",icon:"🔥",col:C.or,desc:"Qui on est, la marque, l'équipe — pour comprendre et en parler"},
     {id:"vente",label:"🎯 Vente",icon:"🎯",col:C.or,desc:"Stratégies, scripts et objections pour booster tes ventes"},
     {id:"recrutement",label:"👥 Recrutement",icon:"👥",col:C.rose,desc:"Recrutement, affiliation et stratégies d'équipe"},
     {id:"contenu",label:"📱 Contenu",icon:"📱",col:C.lilas,desc:"Posts, storytelling, contenu qui attire"},
@@ -1061,6 +1654,26 @@ export default function App(){
     {id:"devperso",label:"🧠 Dév. Personnel",icon:"🧠",col:C.lilas,desc:"Mindset et développement personnel"},
     {id:"formaproduits",label:"🧴 Formation Produits",icon:"🧴",col:C.rose,desc:"Tout savoir sur les produits Mihi"},
   ];
+
+  // ── MODE DIAGNOSTIC EXTERNE (cliente sans login) ──
+  const urlParams = new URLSearchParams(window.location.search);
+  const diagMode = urlParams.has("diag");
+  const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||"";
+  if(diagMode){
+    return(
+      <div style={{minHeight:"100vh",background:C.creme,fontFamily:"'Trebuchet MS',sans-serif"}}>
+        <div style={{maxWidth:480,margin:"0 auto",padding:"1rem"}}>
+          <div style={{textAlign:"center",padding:"1.5rem 0 .5rem"}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1.6rem",fontWeight:300,color:C.brun,letterSpacing:".04em"}}>
+              Blazing <em style={{fontStyle:"italic",color:C.rose}}>Dynasty</em>
+            </div>
+            <div style={{fontSize:".7rem",color:C.gris,marginTop:".2rem"}}>Diagnostic personnalisé ✨</div>
+          </div>
+          <DiagnosticsTab uid={diagDistrib||"external"} userName={diagDistrib} externalMode={true} initialType={urlParams.get("diag")||""} initialClient={urlParams.get("client")||""}/>
+        </div>
+      </div>
+    );
+  }
 
   // ── LOGIN ────────────────────────────────────────────────────────────────────
   if(screen==="login")return(
@@ -1130,13 +1743,16 @@ export default function App(){
   const actionsToday=dailyActions.filter(id=>checks[`${todayKey}-${id}`]||checks[id]).length;
   const actionsIncomplete=actionsToday<5;
   const periodeInfo=getPeriodeInfo();
-  const isDebutPeriode=periodeInfo.pctElapsed<=10;
-  const bannerKey=`bd-banner-${periodeInfo.periodEnd.toISOString().slice(0,10)}`;
+  // J1 seulement = moins de 24h depuis le début de la période
+  const isJ1Periode = periodeInfo.pctElapsed<=Math.round(100/21);
+  const periodeCourante = getPeriodeActuelle();
+  const objPeriodeRemplis = homeObjPerso?.objectifsPosesPeriode===periodeCourante;
+  const showPeriodeBanner = isJ1Periode && !objPeriodeRemplis;
+  const bannerKey=`bd-banner-p${periodeCourante}`;
   const closeBanner=()=>{try{localStorage.setItem(bannerKey,"1");}catch{}setShowBanner(false);};
-  const showPeriodeBanner=isDebutPeriode&&!dismissedPeriode;
 
   return(
-    <LangContext.Provider value={{lang}}>
+    <LangContext.Provider value={{lang, translations, t:(k)=>translations[k]||UI_TEXTS[k]||k}}>
     <div
       style={{minHeight:"100vh",background:C.creme,fontFamily:"'DM Sans',system-ui,sans-serif",color:C.texte,userSelect:"none"}}
       onContextMenu={e=>e.preventDefault()}
@@ -1155,15 +1771,24 @@ export default function App(){
             <div style={{fontSize:".7rem",color:"rgba(255,255,255,.85)",lineHeight:1.5}}>
               Une nouvelle période de 21 jours vient de commencer. Prends 2 minutes pour définir ton CA cible, ton palier et ton objectif de recrues.
             </div>
-            <button onClick={()=>{setTab("dashboard");setDismissedPeriode(true);}}
-              style={{marginTop:".5rem",background:"white",color:"#C44B1A",border:"none",borderRadius:8,padding:".3rem .75rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
-              → Définir mes objectifs
-            </button>
+            <div style={{display:"flex",gap:".4rem",marginTop:".5rem",flexWrap:"wrap"}}>
+              <button onClick={()=>{setTab("dashboard");}}
+                style={{background:"white",color:"#C44B1A",border:"none",borderRadius:8,padding:".3rem .75rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                → Définir mes objectifs
+              </button>
+              <button onClick={async()=>{
+                const newObj={...(homeObjPerso||{}),objectifsPosesPeriode:periodeCourante};
+                setHomeObjPerso(newObj);
+                const existingRaw=JSON.stringify(newObj);
+                try{
+                  await setDoc(doc(db,"users",userId),{"db-obj-perso":existingRaw},{merge:true});
+                }catch(e){console.warn(e);}
+              }}
+                style={{background:"rgba(255,255,255,.2)",color:"white",border:"1px solid rgba(255,255,255,.5)",borderRadius:8,padding:".3rem .75rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                ✅ Mes objectifs sont posés
+              </button>
+            </div>
           </div>
-          <button onClick={()=>setDismissedPeriode(true)}
-            style={{background:"none",border:"none",color:"rgba(255,255,255,.6)",cursor:"pointer",fontSize:".9rem",padding:".1rem",flexShrink:0,fontFamily:"inherit"}}>
-            ✕
-          </button>
         </div>
       )}
 
@@ -1179,9 +1804,10 @@ export default function App(){
           </div>
           <div style={{display:"flex",alignItems:"center",gap:".5rem"}}>
             {/* Langue */}
-            <button onClick={()=>setLang(l=>l==="fr"?"pt":"fr")}
-              style={{background:"rgba(196,168,130,.15)",border:`1px solid ${C.or}40`,borderRadius:20,padding:".22rem .55rem",cursor:"pointer",fontFamily:"inherit",fontSize:".62rem",fontWeight:700,color:C.or}}>
-              {lang==="fr"?"🇵🇹":"🇫🇷"}
+            <button onClick={toggleLang} disabled={translating}
+              style={{background:"rgba(196,168,130,.15)",border:`1px solid ${C.or}40`,borderRadius:20,padding:".22rem .55rem",cursor:translating?"default":"pointer",fontFamily:"inherit",fontSize:".62rem",fontWeight:700,color:C.or,opacity:translating?.6:1}}
+              title={lang==="fr"?"Traduzir para português":"Revenir en français"}>
+              {translating?"⏳":lang==="fr"?"🇵🇹":"🇫🇷"}
             </button>
             {/* Notification actions du jour */}
             {actionsIncomplete&&(
@@ -1292,8 +1918,7 @@ export default function App(){
               ))}
             </div>
             {[
-              {id:"blazing",sub:null,icon:"🔥",col:C.rose,label:"Blazing Dynasty — La vision"},
-              {id:"mihi",sub:null,icon:"🏢",col:C.or,label:"Comprendre Mihi & gagner de l'argent"},
+              {id:"formation",sub:"mihibd",icon:"🔥",col:C.rose,label:"Mihi & Blazing Dynasty — Qui on est"},
               {id:"formation",sub:"demarrage",icon:"📚",col:C.rose,label:"Formation Démarrage Rapide — 8 parties"},
               {id:"formation",sub:"vente",icon:"🎯",col:C.or,label:"Vente · Stratégies · Booster ses ventes"},
               {id:"formation",sub:"recrutement",icon:"👥",col:C.rose,label:"Recrutement · Affiliation · Diagnostique"},
@@ -1314,7 +1939,41 @@ export default function App(){
         )}
 
         {/* ── BLAZING DYNASTY ── */}
-        {tab==="blazing"&&(
+
+        {/* ── DÉMARRAGE RAPIDE ── */}
+        {/* ── FORMATION : LISTE DE DOSSIERS ── */}
+        {tab==="formation"&&!formationSubTab&&(
+          <div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
+              Centre de <em style={{fontStyle:"italic",color:C.rose}}>Formation</em>
+            </div>
+            <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
+              Choisis une catégorie pour accéder à ses formations, vidéos et ressources.
+            </p>
+            {FORMATION_TABS.map(f=>{
+              const formationDebloquee = fastStartDone || isChefApp || hasTeamApp;
+              // Onglets bloqués si Fast Start non terminé (sauf formationapp et demarrage)
+              const bloque = !formationDebloquee && f.id!=="formationapp" && f.id!=="demarrage";
+              return(
+                <div key={f.id} onClick={()=>!bloque&&setFormationSubTab(f.id)}
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:bloque?C.creme:C.blanc,border:`1px solid ${bloque?"#ddd":C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:bloque?"default":"pointer",opacity:bloque?.6:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
+                    <div style={{width:38,height:38,borderRadius:"50%",background:bloque?"#ddd":f.col+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>
+                      {bloque?"🔒":f.icon}
+                    </div>
+                    <div>
+                      <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:bloque?C.gris:C.brun}}>{f.label.replace(/^\S+\s/,"")}</div>
+                      <div style={{fontSize:".66rem",color:bloque?"#bbb":C.gris}}>{bloque?"Se débloque après le Fast Start":f.desc}</div>
+                    </div>
+                  </div>
+                  <span style={{color:bloque?"#ccc":C.pale}}>{bloque?"🔒":"›"}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab==="formation"&&formationSubTab==="mihibd"&&(<>
           <div>
             <div style={{background:C.brun,borderRadius:16,padding:"2rem 1.4rem",marginBottom:"1rem",textAlign:"center",position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:200,height:200,borderRadius:"50%",background:"rgba(196,154,138,.05)"}}/>
@@ -1351,10 +2010,6 @@ export default function App(){
               <div style={{fontSize:".63rem",color:C.gris,marginTop:".4rem"}}>— Blazing Dynasty</div>
             </div>
           </div>
-        )}
-
-        {/* ── MIHI ── */}
-        {tab==="mihi"&&(
           <div>
             <SecTitle title="Comprendre" em="Mihi" desc="L'essentiel sur la marque, les gammes et comment construire ton revenu."/>
             <Card title="Qui est Mihi ?" sub="Histoire · Valeurs · Forces" icon="🏢" color={C.or} defaultOpen>
@@ -1498,121 +2153,97 @@ export default function App(){
               ))}
             </Card>
           </div>
-        )}
+        </>)}
 
-        {/* ── DÉMARRAGE RAPIDE ── */}
-        {/* ── FORMATION : LISTE DE DOSSIERS ── */}
-        {tab==="formation"&&!formationSubTab&&(
-          <div>
-            <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-              Centre de <em style={{fontStyle:"italic",color:C.rose}}>Formation</em>
-            </div>
-            <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-              Choisis une catégorie pour accéder à ses formations, vidéos et ressources.
-            </p>
-            {FORMATION_TABS.map(f=>(
-              <div key={f.id} onClick={()=>setFormationSubTab(f.id)}
-                style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
-                <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
-                  <div style={{width:38,height:38,borderRadius:"50%",background:f.col+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{f.icon}</div>
-                  <div>
-                    <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:C.brun}}>{f.label.replace(/^\S+\s/,"")}</div>
-                    <div style={{fontSize:".66rem",color:C.gris}}>{f.desc}</div>
-                  </div>
-                </div>
-                <span style={{color:C.pale}}>›</span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {tab==="formation"&&formationSubTab==="demarrage"&&(
           <div>
-            <SecTitle title="Formation" em="Démarrage Rapide" desc="8 parties — étape par étape ce qu'il faut faire pour réussir. Court, efficace, actionnable."/>
-            <div onClick={()=>setTab("dashboard")}
-              style={{background:`linear-gradient(135deg, ${C.brun}, ${C.brun2})`,borderRadius:12,padding:".9rem 1rem",marginBottom:"1rem",cursor:"pointer"}}>
-              <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:C.or,marginBottom:".3rem"}}>🚀 NOUVELLE ICI ?</div>
-              <div style={{fontSize:".78rem",color:"white",fontWeight:600,lineHeight:1.5}}>
-                Découvre ton parcours <strong>Fast Start J1-J7</strong> dans le Tableau de bord — des petites tâches guidées chaque jour pour bien démarrer 💪
-              </div>
-            </div>
-            <Info>💡 Commence par la Partie 1 et avance dans l'ordre. Chaque partie a ses ressources et ses exercices.</Info>
+            <SecTitle title="Formation" em="Démarrage Rapide" desc="7 modules — le même parcours que le Fast Start, avec les scripts complets pour chaque étape."/>
             <AdminContentBlock onglet="demarrage" items={adminItems}/>
 
-            {[
-              {num:"1",title:"Les bases — Par où commencer",desc:"Comprendre l'environnement, les outils essentiels et poser les premières fondations.",links:[
-                {type:"drive",label:"Vidéo — Les bases partie 1",url:"https://drive.google.com/file/d/1R0tOp4vVBULqHWE8W8vkUDIZ3g03vXYl/view"},
-                {type:"drive",label:"Vidéo — Les bases partie 2",url:"https://drive.google.com/file/d/1lJN37k3pwtvz5h7Hx_9PLATq9t00__sn/view"},
-                {type:"drive",label:"Vidéo — Les bases partie 3",url:"https://drive.google.com/file/d/1A3N676HlNI0WL07xzNLLnZTnJaxazEP6/view"},
-              ],ex:["Configure ta boutique Mihi personnelle","Fais ta liste des 20 premiers contacts","Prends en main les outils de base"]},
-              {num:"2",title:"Le post de lancement",desc:"Comment créer et publier ton premier post d'annonce — le moment clé de ton démarrage.",links:[
-                {type:"drive",label:"Vidéo — Le post de lancement partie 1",url:"https://drive.google.com/file/d/1Y6HDL3sieUjISsmPCr45rUHSPgQlva4G/view"},
-                {type:"drive",label:"Vidéo — Le post de lancement partie 2",url:"https://drive.google.com/file/d/1pGuFpiVhUaVwReo4iuZGJYSSJjepG1uA/view"},
-              ],ex:["Rédige ton post de lancement (authentique, pas copié-collé)","Publie-le sur Instagram ET Facebook","Note les personnes qui interagissent — ce sont tes premiers prospects"]},
-              {num:"3",title:"Ton profil et ta stratégie de contenu",desc:"Comment optimiser ton profil et structurer ton contenu pour attirer naturellement.",links:[
-                {type:"drive",label:"Vidéo — Profil et contenu",url:"https://drive.google.com/file/d/1-KohFYBfAhXQwrGRYJ3RxOOoryONttOb/view"},
-                {type:"doc",label:"Document — Stratégie contenu",url:"https://docs.google.com/document/d/16sNdKx-lE77hGHb8lPdGsN7gUwIScIHTPVXkBDj_FsA/edit"},
-                {type:"drive",label:"Vidéo complémentaire",url:"https://drive.google.com/file/d/1xVrfvzzIyeqoUQjeBkJv5c2YnzOt0Wdw/view"},
-              ],ex:["Optimise ta bio (photo pro + description + lien)",
-"Planifie tes 3 premiers posts de la semaine","Mets en place ta routine de stories quotidiennes"]},
-              {num:"4",title:"La prospection et le suivi",desc:"Comment approcher les gens, relancer sans être relou, et convertir les curieuses.",links:[
-                {type:"drive",label:"Vidéo — Prospection partie 1",url:"https://drive.google.com/file/d/1Psoqrqxw9-xZKIcmLKCBwc7Jn3KD-Zys/view"},
-                {type:"drive",label:"Vidéo — Prospection partie 2",url:"https://drive.google.com/file/d/1WA_42brh1YzCfnLM2p32NsiNOSlHDGLN/view"},
-                {type:"doc",label:"Document — Scripts de prospection",url:"https://docs.google.com/document/d/12mT8rwV0q8L8hqEe27lsRyeMG-lO0P4fOzaZxwKsQlc/edit"},
-              ],ex:["Envoie 3 messages personnels à tes contacts chauds","Utilise les scripts du document en les adaptant à ta voix","Note toutes tes conversations dans un tableau de suivi"]},
-              {num:"5",title:"Les présentations et le closing",desc:"Comment présenter l'opportunité et les produits pour déclencher la décision.",links:[
-                {type:"drive",label:"Vidéo — Présentation et closing 1",url:"https://drive.google.com/file/d/1dwWb4ti6DOo7wKj23baLnDgyOU4U4QYL/view"},
-                {type:"drive",label:"Vidéo — Présentation et closing 2",url:"https://drive.google.com/file/d/1mgtSJqfTZv8_qJhyLRIF01SFqzyApA8-.view"},
-              ],ex:["Pratique le pitch express (30 sec) jusqu'à ce que ce soit naturel","Prépare ta présentation complète de 15 min","Fais une présentation test avec une amie avant la vraie"]},
-              {num:"6",title:"Les réseaux sociaux en profondeur",desc:"Algorithmes, stratégies de visibilité, ce qui marche vraiment en 2024/2025.",links:[
-                {type:"drive",label:"Vidéo — Réseaux sociaux 1",url:"https://drive.google.com/file/d/1bQXLCCw3Ztz-JqEeYF2lPurC2XnfCjNp/view"},
-                {type:"drive",label:"Vidéo — Réseaux sociaux 2",url:"https://drive.google.com/file/d/1yLaBkGy_Vu_nMjO54QgG7F2xRjZPXuf8/view"},
-              ],ex:["Identifie 3 types de contenus qui fonctionnent sur ton profil","Mets en place ton planning editorial hebdomadaire","Teste un nouveau format cette semaine (Reel, carrousel, story sondage)"]},
-              {num:"7",title:"Développer son équipe",desc:"Comment recruter, accueillir et dupliquer — construire une vraie organisation.",links:[
-                {type:"drive",label:"Vidéo — Développement équipe 1",url:"https://drive.google.com/file/d/1X4IwW_9jLY0NjTAzKbu79q57KXw1Psqw/view"},
-                {type:"drive",label:"Vidéo — Développement équipe 2",url:"https://drive.google.com/file/d/1khEwcug2I_oU4W29_ZIZ-p3uXYgme9J-.view"},
-              ],ex:["Identifie 3 personnes dans ta liste pour qui l'opportunité Blazing Dynasty serait parfaite","Prépare ton message d'approche personnalisé pour chacune","Mets en place la checklist d'accueil pour ta première recrue"]},
-              {num:"8",title:"Passer à la vitesse supérieure",desc:"Leadership, duplication, construire une organisation qui tourne même quand tu n'es pas là.",links:[
-                {type:"drive",label:"Vidéo — Leadership et duplication 1",url:"https://drive.google.com/file/d/1Qyv57Lb6ogn-RPiptlfUnXAaOa8spdMf/view"},
-                {type:"drive",label:"Vidéo — Leadership et duplication 2",url:"https://drive.google.com/file/d/1eKJCfgcQbDN5Tqqv9_skMzB3qYVo-lZj/view"},
-              ],ex:["Forme ta première recrue en lui faisant suivre ce même parcours","Délègue une tâche à un membre de ton équipe cette semaine","Fixe ton objectif de qualification Mihi pour les 90 prochains jours"]},
-            ].map(part=>{
-              const checkId=`forma-part-${part.num}`;
+            {FAST_START_DAYS.map(d=>{
+              const checkId=`demarrage-module-${d.jour}`;
               const done=checks[checkId];
+              const quiz=FAST_START_QUIZ.find(q=>q.jour===d.jour);
               return(
-              <Card key={part.num} title={`Partie ${part.num} — ${part.title}`} sub={part.desc} icon={done?"✅":part.num} color={done?C.vert:C.rose}>
-                {/* Case à cocher formation validée */}
-                <div onClick={()=>tog("checks",checkId)}
-                  style={{display:"flex",alignItems:"center",gap:".6rem",background:done?C.vert+"15":C.creme,borderRadius:9,padding:".55rem .8rem",marginBottom:".75rem",cursor:"pointer",border:`1px solid ${done?C.vert:C.pale}`}}>
-                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${done?C.vert:C.gris}`,background:done?C.vert:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
-                    {done&&<span style={{fontSize:".65rem",color:"white",fontWeight:700}}>✓</span>}
+                <Card key={d.jour} title={d.titre} sub={quiz?.exercice||""} icon={done?"✅":`${d.jour}`} color={done?C.vert:C.rose}>
+                  <div onClick={()=>tog("checks",checkId)}
+                    style={{display:"flex",alignItems:"center",gap:".6rem",background:done?C.vert+"15":C.creme,borderRadius:9,padding:".55rem .8rem",marginBottom:".75rem",cursor:"pointer",border:`1px solid ${done?C.vert:C.pale}`}}>
+                    <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${done?C.vert:C.gris}`,background:done?C.vert:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {done&&<span style={{fontSize:".65rem",color:"white",fontWeight:700}}>✓</span>}
+                    </div>
+                    <span style={{fontSize:".75rem",fontWeight:600,color:done?C.vert:C.gris}}>{done?"✅ Module terminé !":"Cocher quand le module est terminé"}</span>
                   </div>
-                  <span style={{fontSize:".75rem",fontWeight:600,color:done?C.vert:C.gris}}>{done?"✅ Formation validée !":"Cocher quand la formation est terminée"}</span>
-                </div>
-                <p style={{fontSize:".76rem",color:C.texte,lineHeight:1.65,marginBottom:".75rem"}}>{part.desc}</p>
-                <div style={{marginBottom:".75rem"}}>
-                  <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".4rem"}}>📹 Ressources</div>
-                  {part.links.map(l=>l.type==="drive"?<DriveBtn key={l.url} href={l.url} label={l.label}/>:<DocBtn key={l.url} href={l.url} label={l.label}/>)}
-                </div>
-                <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.lilas,marginBottom:".4rem"}}>✦ Exercices</div>
-                {part.ex.map((ex,i)=>(
-                  <div key={i} style={{display:"flex",gap:".55rem",padding:".42rem 0",borderBottom:`1px solid rgba(232,213,204,.3)`}}>
-                    <div style={{width:19,height:19,borderRadius:"50%",background:C.rose+"22",color:C.rose,fontSize:".58rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{i+1}</div>
-                    <div style={{fontSize:".75rem",color:C.texte,lineHeight:1.45,flex:1}}>{ex}</div>
-                  </div>
-                ))}
-              </Card>
-            );})}
 
-            <Card title="Vidéos formation — À utiliser dans tes formations" sub="4 vidéos essentielles" icon="📹" color={C.or}>
-              <Info color={C.or}>Ces vidéos complètent ta formation. Regarde-les dans l'ordre et applique immédiatement.</Info>
-              <DriveBtn href="https://drive.google.com/file/d/1Qit_DVf9bNHqX7Kh188J6B0PYGda8w15/view" label="1 · Parler des produits pour vendre"/>
-              <Btn href="https://us06web.zoom.us/rec/share/hnDWdngAPCK_SGVTYzVhgk70t_nqqfesUvZF7hme8CaEgL-CpszXoantB-d2MSPZ.Yl7wHQ7KV9pZJnCL" label="2 · Communiquer différemment pour passer au niveau supérieur" icon="▶" color={C.brun}/>
-              <DriveBtn href="https://drive.google.com/file/d/1TOxUHEMeNXQepUGlYcaoAVaW7c4MdLfA/view" label="3 · Tips pour créer un Reel"/>
-              <DriveBtn href="https://drive.google.com/file/d/1kBWsarJ0SDW8tc3UpLC0UBKRMUffO8p1/view" label="4 · Faire ses premières vidéos"/>
-            </Card>
+                  {/* Vidéo du module */}
+                  {(()=>{
+                    const vKey=`module${d.jour}`;
+                    const vData=adminVideosFastStart[vKey];
+                    return(
+                      <div style={{marginBottom:".75rem"}}>
+                        {vData?.url
+                          ? <a href={vData.url} target="_blank" rel="noopener noreferrer"
+                              style={{display:"flex",alignItems:"center",gap:".6rem",background:C.brun,borderRadius:10,padding:".6rem .9rem",textDecoration:"none"}}>
+                              <span style={{fontSize:"1rem"}}>▶</span>
+                              <div>
+                                <div style={{fontSize:".78rem",fontWeight:700,color:C.blanc}}>Regarder la vidéo</div>
+                                <div style={{fontSize:".62rem",color:C.pale}}>Module {d.jour} — {vData.type==="youtube"?"YouTube":vData.type==="drive"?"Drive":"Vidéo"}</div>
+                              </div>
+                            </a>
+                          : <div style={{display:"flex",alignItems:"center",gap:".5rem",background:C.creme,borderRadius:9,padding:".55rem .8rem",fontSize:".72rem",color:C.gris,fontStyle:"italic",border:`1px solid ${C.pale}`}}>
+                              🎬 Vidéo à venir — disponible prochainement
+                            </div>
+                        }
+                      </div>
+                    );
+                  })()}
+
+                  {/* Tâches du module */}
+                  <div style={{marginBottom:".75rem"}}>
+                    <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".4rem"}}>📋 Tâches</div>
+                    {d.taches.map((t,i)=>{
+                      const label=typeof t==="object"?t.t:t;
+                      return(
+                        <div key={i} style={{display:"flex",gap:".55rem",padding:".42rem 0",borderBottom:`1px solid rgba(232,213,204,.3)`}}>
+                          <div style={{width:19,height:19,borderRadius:"50%",background:C.rose+"22",color:C.rose,fontSize:".58rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{i+1}</div>
+                          <div style={{fontSize:".75rem",color:C.texte,lineHeight:1.45,flex:1}}>{label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Exercice */}
+                  {quiz?.exercice&&(
+                    <div style={{marginBottom:".75rem"}}>
+                      <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.lilas,marginBottom:".4rem"}}>✦ Exercice de validation</div>
+                      <div style={{background:C.lilas+"15",border:`1px solid ${C.lilas}30`,borderRadius:9,padding:".6rem .85rem",fontSize:".76rem",color:C.texte,lineHeight:1.55}}>
+                        {quiz.exercice}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quiz */}
+                  {quiz?.quiz&&(
+                    <div>
+                      <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginBottom:".4rem"}}>📊 Quiz de validation ({quiz.quiz.length} questions)</div>
+                      {quiz.quiz.map((q,i)=>(
+                        <div key={i} style={{padding:".4rem 0",borderBottom:`1px solid ${C.pale}`}}>
+                          <div style={{fontSize:".74rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>{i+1}. {q.q}</div>
+                          {q.options.map((opt,j)=>(
+                            <div key={j} style={{fontSize:".7rem",color:j===q.rep?C.vert:C.gris,padding:".15rem 0",paddingLeft:".5rem",fontWeight:j===q.rep?700:400}}>
+                              {j===q.rep?"✓ ":"○ "}{opt}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         )}
+
 
         {/* ── VENTE ── */}
         {tab==="formation"&&formationSubTab==="vente"&&(
@@ -1717,6 +2348,26 @@ export default function App(){
               <Btn href="https://us06web.zoom.us/rec/share/viyM_OY-wZkKDCyLj-qhIEbIiDv1Yl7j06l9WctzEbvdOS6YPyNJ8RbKKINR5wcO.m5X0v3XgsWBn0ymc" label="Outils de démarrage & recrutement" icon="▶" color={C.brun}/>
               <Btn href="https://us06web.zoom.us/rec/share/hnDWdngAPCK_SGVTYzVhgk70t_nqqfesUvZF7hme8CaEgL-CpszXoantB-d2MSPZ.Yl7wHQ7KV9pZJnCL" label="Communiquer différemment pour passer au niveau supérieur" icon="▶" color={C.brun}/>
               <Btn href="https://us06web.zoom.us/rec/share/Ifld2R1bAsLQ1bJKuj0mr80yNxPt5kPOKAapDNv5jJundkKNIXrdr7de0H0Cn_qR.Yqhq_7quf10A7wtw?startTime=1774984148000" label="Stratégie — Je ne dois pas te le dire mais... 🔥" icon="▶" color={C.brun}/>
+            </Card>
+
+            <Card title="Parler de Mihi & Blazing Dynasty" sub="Comment présenter l'opportunité sans mentir ni survendre" icon="🔥" color={C.brun} defaultOpen>
+              <Info color={C.brun}>Ne vends pas un rêve — partage une réalité concrète. Les gens sentent le baratin à 10km. Sois précise, honnête, et laisse l'opportunité parler d'elle-même.</Info>
+              {[
+                ["🏢","Mihi, c'est quoi exactement","Mihi est une marque française de beauté et bien-être (parfums, skincare, compléments, minceur) lancée en 2022, fabriquée par ElfaPharm — un vrai laboratoire pharmaceutique présent dans 62 pays. Ce n'est pas une startup fantôme : derrière les produits, il y a une vraie expertise pharmaceutique. Dis-le simplement : \"Je vends une marque française fabriquée par un laboratoire pharma, pas un produit fabriqué dans un garage.\""],
+                ["🌟","Pourquoi Blazing Dynasty et pas une autre équipe","Blazing Dynasty, c'est l'équipe que tu rejoins, pas juste un statut de distributrice isolée. Tu n'es jamais seule : formation complète (cette appli en est la preuve), accompagnement personnalisé par ta marraine, communauté de femmes qui s'entraident. Le discours : \"Tu ne rejoins pas juste Mihi, tu rejoins une équipe qui te forme et t'accompagne vraiment.\""],
+                ["💰","Le modèle économique honnête","Sois transparente sur le modèle : tu gagnes sur tes propres ventes ET sur celles de l'équipe que tu formes. Ce n'est ni un système pyramidal (pas de gain juste à recruter sans vendre) ni un emploi salarié classique. C'est de la vente directe avec effet de levier d'équipe. Dis : \"Plus tu vends et plus tu aides ton équipe à vendre, plus tu gagnes — c'est aussi simple que ça.\""],
+                ["🎯","Pour qui c'est fait","Sois honnête sur le profil idéal : quelqu'un qui veut un complément de revenu flexible, qui aime le contact humain, et qui est prête à apprendre. Ce n'est pas pour quelqu'un qui cherche un revenu garanti sans effort. \"Si tu cherches 2-10h par semaine pour développer un vrai revenu complémentaire avec un vrai accompagnement, on devrait parler.\""],
+                ["🙅","Ce qu'il ne faut JAMAIS dire","Jamais de promesse de revenu garanti, jamais \"deviens riche vite\", jamais cacher que c'est un investissement de départ (kit) et de temps. La confiance se construit sur l'honnêteté, pas sur le rêve qui s'effondre au premier mois difficile."],
+                ["💬","La phrase d'accroche qui fonctionne","\"Je fais partie d'une équipe qui vend les produits Mihi, une marque française fabriquée par un vrai labo pharmaceutique. On est plusieurs femmes à se former et s'entraider pour développer une activité flexible à côté. Si jamais ça t'intéresse de voir comment ça marche, je peux t'expliquer sans pression.\""],
+              ].map(([icon,title,desc])=>(
+                <div key={title} style={{background:C.creme,borderRadius:9,padding:".7rem .85rem",marginBottom:".55rem",border:`1px solid ${C.pale}`}}>
+                  <div style={{display:"flex",gap:".5rem",marginBottom:".3rem",alignItems:"flex-start"}}>
+                    <span style={{fontSize:"1rem",flexShrink:0}}>{icon}</span>
+                    <div style={{fontSize:".8rem",fontWeight:600,color:C.brun}}>{title}</div>
+                  </div>
+                  <div style={{fontSize:".72rem",color:C.gris,lineHeight:1.65}}>{desc}</div>
+                </div>
+              ))}
             </Card>
 
             <Card title="Stratégies pour attirer" sub="Comment attirer les bonnes personnes naturellement" icon="🧲" color={C.or}>
@@ -1945,44 +2596,7 @@ export default function App(){
 
         {/* ── OUTILS ── */}
         {tab==="formation"&&formationSubTab==="devperso"&&(
-          <div>
-            <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-              Développement <em style={{fontStyle:"italic",color:C.rose}}>Personnel</em>
-            </div>
-            <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-              Mindset, leadership, objectifs — travaille sur toi pour franchir tes propres limites.
-            </p>
-            <AdminContentBlock onglet="devperso" items={adminItems}/>
-
-            <div style={{background:"linear-gradient(135deg,rgba(196,154,138,.12),rgba(168,155,181,.08))",border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem 1rem",marginBottom:"1rem",fontSize:".76rem",color:C.texte,lineHeight:1.65}}>
-              💡 <strong>6 formations disponibles.</strong> D'autres modules seront ajoutés progressivement par Melissa.
-            </div>
-
-            {[
-              {icon:"🧠",title:"Dégommer son plafond de verre",desc:"Identifier les croyances limitantes qui t'empêchent d'avancer et les transformer en force.",video:"https://us06web.zoom.us/rec/share/XzuZHzXLLZdVOz2rQmBb-7nomO9qxTj92_xluvzizpzlSaYfxRdmTARqoDTdatzs.EHObmbNT1mpbo0Ad",tag:"dispo"},
-              {icon:"🎯",title:"Fixer ses objectifs — méthode complète",desc:"Des objectifs qui fonctionnent vraiment. La méthode pour les poser et les tenir dans le temps.",video:"https://us06web.zoom.us/rec/share/E1JtWx4furUdNFt4wKKCJYcfD4ScYwhJZ3BfUnHZYOnbUzcRYLzdLq5WuoyJSjw.MsevJMjQXIrzr1rp?startTime=1771357741000",tag:"dispo"},
-              {icon:"👑",title:"Développer son leadership",desc:"Comment inspirer, guider et faire grandir son équipe. La posture du leader que les autres veulent suivre.",video:"https://us06web.zoom.us/rec/share/hnDWdngAPCK_SGVTYzVhgk70t_nqqfesUvZF7hme8CaEgL-CpszXoantB-d2MSPZ.Yl7wHQ7KV9pZJnCL",tag:"dispo"},
-              {icon:"📱",title:"Personal branding — Construire son image",desc:"Qui tu es en ligne = qui tu attires. Comment construire une image authentique et cohérente.",video:"https://youtu.be/j5EUiKmUSgM",tag:"dispo"},
-              {icon:"🤝",title:"Humaniser son contenu",desc:"Pourquoi les gens achètent à des personnes, pas à des marques. Comment montrer ta vraie personnalité.",video:"https://youtu.be/WxJFBnigjpw",tag:"dispo"},
-              {icon:"📖",title:"Le storytelling",desc:"Raconter pour vendre, pour convaincre, pour recruter. La puissance de l'histoire vraie.",video:"https://youtu.be/dgylHebkai4",tag:"dispo"},
-            ].map(item=>(
-              <div key={item.title} style={{background:C.blanc,border:`1px solid ${item.tag==="dispo"?C.pale:C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".6rem",opacity:item.tag==="soon"?.65:1}}>
-                <div style={{display:"flex",gap:".6rem",alignItems:"flex-start",marginBottom:item.video?".6rem":0}}>
-                  <span style={{fontSize:"1.1rem",flexShrink:0}}>{item.icon}</span>
-                  <div style={{flex:1}}>
-                    <div style={{display:"flex",gap:".5rem",alignItems:"center",marginBottom:".15rem"}}>
-                      <div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.brun}}>{item.title}</div>
-                      <span style={{background:item.tag==="dispo"?C.vert+"25":C.pale,color:item.tag==="dispo"?C.vert:C.gris,fontSize:".52rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",padding:".12rem .4rem",borderRadius:20,flexShrink:0}}>
-                        {item.tag==="dispo"?"Disponible":"Bientôt"}
-                      </span>
-                    </div>
-                    <div style={{fontSize:".72rem",color:C.gris,lineHeight:1.55}}>{item.desc}</div>
-                  </div>
-                </div>
-                {item.video&&<YTBtn href={item.video} label="▶ Voir la formation"/>}
-              </div>
-            ))}
-          </div>
+          <DevPersoSection adminItems={adminItems}/>
         )}
 
         {tab==="formation"&&formationSubTab==="outils"&&(
@@ -2049,21 +2663,7 @@ export default function App(){
 
         {/* ── FORMATION PRODUITS ── */}
         {tab==="formation"&&formationSubTab==="formaproduits"&&(
-          <div>
-            <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-              Formation <em style={{fontStyle:"italic",color:C.rose}}>Produits</em>
-            </div>
-            <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-              Tout savoir sur les produits Mihi pour mieux les vendre et les recommander.
-            </p>
-            <AdminContentBlock onglet="formaproduits" items={adminItems}/>
-            <div style={{background:C.brun,borderRadius:14,padding:"1.4rem",textAlign:"center"}}>
-              <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".2em",color:C.or,marginBottom:".5rem"}}>✦ À VENIR ✦</div>
-              <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:C.blanc,fontWeight:300,lineHeight:1.4}}>
-                Les formations produits<br/><em style={{fontStyle:"italic",color:C.pale}}>arrivent bientôt</em>
-              </div>
-            </div>
-          </div>
+          <FormationProduitsTab adminItems={adminItems}/>
         )}
 
         {/* ── SPRINT / ACCÉLÈRE ── */}
@@ -2153,18 +2753,25 @@ export default function App(){
         )}
 
         {/* ── SUIVI RECRUES ── */}
-        {tab==="suivi"&&<SuiviRecruTab uid={userId}/>}
+        {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}}/>}
-        {tab==="communaute"&&<CommunauteTab uid={userId} userName={name}/>}
+        {tab==="dashboard"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso}/>}
         {tab==="scripts"&&<ScriptsTab/>}
-        {tab==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")}/>}
+        {tab==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp}/>}
         {tab==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name}/>}
+        {tab==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
+        {tab==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="espacechef"&&(isChefApp||hasTeamApp)&&<EspaceChefTab uid={userId} isChef={isChefApp}/>}
         {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab adminItems={adminItems}/>}
         {tab==="objectifs"&&<ObjectifsTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")}/>}
-        {tab==="calendrier"&&<CalendrierTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")} isChef={false}/>}
+        {tab==="calendrier"&&<CalendrierTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")} isChef={isChefApp}/>}
+
+        {/* Bouton mise à jour */}
+        <div style={{padding:"1.5rem 0 .5rem",textAlign:"center"}}>
+          <BoutonMiseAJour/>
+          <div style={{fontSize:".58rem",color:C.pale,marginTop:".3rem"}}>v{APP_VERSION}</div>
+        </div>
 
       </div>
 
@@ -2189,6 +2796,24 @@ export default function App(){
           : <span style={{fontSize:"1.4rem"}}>👑</span>
         }
       </button>
+
+      {/* ── POPUP BIENVENUE ── */}
+      {showWelcome&&(
+        <WelcomePopup userName={name} onClose={()=>{
+          setShowWelcome(false);
+          setTab("formation");
+          setFormationSubTab("faststart");
+        }}/>
+      )}
+
+      {/* ── POPUP CHALLENGE APP ── */}
+      {showChallengeApp&&userId&&(
+        <ChallengeAppPopup
+          uid={userId}
+          onClose={()=>setShowChallengeApp(false)}
+          setTab={setTab}
+        />
+      )}
 
       {/* ── POPUP OBJECTIFS ── */}
       {showObjectifs&&(
@@ -2469,219 +3094,371 @@ function RecrueFiche({recrue,onToggle,onRemove,uid,userName}){
   );
 }
 
-function SuiviRecruTab({uid}){
-  const[recrues,setRecrues]=useState([]);
-  const[activeId,setActiveId]=useState(null);
-  const[newName,setNewName]=useState("");
-  const[newDate,setNewDate]=useState("");
-  const[loaded,setLoaded]=useState(false);
-  const[filleulesRecentes,setFilleulesRecentes]=useState([]);
-  const[sortieDemarrage,setSortieDemarrage]=useState([]);
-  const[search,setSearch]=useState("");
+function SuiviRecruTab({uid, isChef=false}){
+  const[filleules,setFilleules]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[sel,setSel]=useState(null);
+  const[extras,setExtras]=useState({}); // uid -> {fastStart, caPerso, premiere_commande}
+  const[loadingExtra,setLoadingExtra]=useState({});
+  const[voirToute,setVoirToute]=useState(isChef);
+
+  // Une recrue est "nouvelle" si inscrite il y a moins de 14 jours
+  const estNouvelle=(f)=>{
+    if(!f.dateEnreg)return false;
+    const jours=(Date.now()-new Date(f.dateEnreg).getTime())/(1000*60*60*24);
+    return jours<=14;
+  };
 
   useEffect(()=>{
-    sgAll(uid).then(data=>{
-      if(data["recrues"]){
-        const d=JSON.parse(data["recrues"]);
-        setRecrues(d);
-        if(d.length>0)setActiveId(d[0].id);
-      }
-      if(data["sortie-demarrage"]){
-        try{setSortieDemarrage(JSON.parse(data["sortie-demarrage"]));}catch{}
-      }
-      setLoaded(true);
-    });
-    // Filleules directes inscrites depuis moins de 2 mois (annuaire/marraine)
     (async()=>{
       try{
         const snap=await getDoc(doc(db,"equipe","annuaire"));
-        const annuaire=snap.exists()?snap.data().membres||{}:{};
-        const seuil = Date.now() - 60*86400000;
-        const recentes = Object.values(annuaire).filter(m=>
-          m.marraine===uid && m.dateEnreg && new Date(m.dateEnreg).getTime()>=seuil
-        );
-        setFilleulesRecentes(recentes);
+        if(snap.exists()){
+          const membres=snap.data().membres||{};
+          let liste;
+          if(voirToute){
+            // Chef d'équipe : toute la lignée (filleules + sous-filleules, récursif)
+            const tree=buildEquipeTree(membres,uid);
+            const aplatir=(nodes,niveau=1)=>nodes.flatMap(n=>[{...n,niveau},...aplatir(n.enfants||[],niveau+1)]);
+            liste=aplatir(tree).sort((a,b)=>new Date(b.dateEnreg||0)-new Date(a.dateEnreg||0));
+          } else {
+            // Distributrice simple : filleules directes uniquement
+            liste=Object.entries(membres)
+              .filter(([,m])=>m.marraine===uid)
+              .map(([mUid,m])=>({uid:mUid,...m,niveau:1}))
+              .sort((a,b)=>new Date(b.dateEnreg||0)-new Date(a.dateEnreg||0));
+          }
+          setFilleules(liste);
+        }
       }catch{}
+      setLoading(false);
     })();
-  },[uid]);
+  },[uid,voirToute]);
 
-  const sortirDuDemarrage=(mUid)=>{
-    const next=[...sortieDemarrage, mUid];
-    setSortieDemarrage(next);
-    ss(uid,"sortie-demarrage",JSON.stringify(next));
+  const chargerExtra=async(mUid)=>{
+    if(extras[mUid])return;
+    setLoadingExtra(p=>({...p,[mUid]:true}));
+    try{
+      const snap=await getDoc(doc(db,"users",mUid));
+      if(snap.exists()){
+        const d=snap.data();
+        const obj=d["db-obj-perso"]?JSON.parse(d["db-obj-perso"]):{};
+        setExtras(p=>({...p,[mUid]:{
+          fastStart:d["db-fast-start"]?JSON.parse(d["db-fast-start"]):null,
+          caPerso:parseFloat(obj.caPerso)||0,
+          premiereCommande:!!obj.caPerso&&parseFloat(obj.caPerso)>0,
+          premiereCommandeManuelle:d["premiere_commande_validee"]||false,
+        }}));
+      }
+    }catch{}
+    setLoadingExtra(p=>({...p,[mUid]:false}));
   };
 
-  const saveRecrues=(r)=>{setRecrues(r);ss(uid,"recrues",JSON.stringify(r));};
-
-  const addRecrue=()=>{
-    if(!newName.trim()||recrues.length>=MAX_RECRUES)return;
-    const r={id:Date.now(),name:newName.trim(),date:newDate||new Date().toLocaleDateString("fr-FR"),checks:{}};
-    const next=[...recrues,r];
-    saveRecrues(next);
-    setActiveId(r.id);
-    setNewName("");setNewDate("");
+  const validerPremiereCommande=async(mUid,val)=>{
+    try{
+      await setDoc(doc(db,"users",mUid),{premiere_commande_validee:val},{merge:true});
+      setExtras(p=>({...p,[mUid]:{...p[mUid],premiereCommandeManuelle:val}}));
+    }catch{}
   };
 
-  const toggleCheck=(rid,tid)=>{
-    const next=recrues.map(r=>{
-      if(r.id!==rid)return r;
-      const checks={...r.checks,[tid]:!r.checks[tid]};
-      return{...r,checks};
-    });
-    saveRecrues(next);
+  const assignerFastStart=async(mUid,nom)=>{
+    try{
+      const ref=doc(db,"users",mUid);
+      const snap=await getDoc(ref);
+      const existing=snap.exists()&&snap.data()["db-fast-start"]?JSON.parse(snap.data()["db-fast-start"]):{};
+      if(!existing.startDate){
+        await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+        alert("✅ Fast Start assigné à "+nom);
+        chargerExtra(mUid);
+      } else {
+        if(window.confirm(nom+" a déjà un Fast Start. Relancer ?")){
+          await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+          setExtras(p=>({...p,[mUid]:{...p[mUid],fastStart:{startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}}}}));
+        }
+      }
+    }catch{alert("Erreur.");}
   };
 
-  const removeRecrue=(rid)=>{
-    const next=recrues.filter(r=>r.id!==rid);
-    saveRecrues(next);
-    setActiveId(next.length>0?next[0].id:null);
-  };
+  if(loading)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
 
-  // Démarre le suivi d'onboarding d'une filleule auto-détectée (si pas déjà présente)
-  const fmtUid=(u)=>u.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
-  const startTrackingFilleule=(m)=>{
-    const name=fmtUid(m.uid);
-    const existing=recrues.find(r=>r.name.toLowerCase()===name.toLowerCase());
-    if(existing){setActiveId(existing.id);return;}
-    if(recrues.length>=MAX_RECRUES)return;
-    const r={id:Date.now(),name,date:m.dateEnreg?new Date(m.dateEnreg).toLocaleDateString("fr-FR"):new Date().toLocaleDateString("fr-FR"),checks:{}};
-    const next=[...recrues,r];
-    saveRecrues(next);
-    setActiveId(r.id);
-  };
-
-  const active=recrues.find(r=>r.id===activeId)||null;
-
-  if(!loaded)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
+  if(filleules.length===0)return(
+    <div style={{textAlign:"center",padding:"2rem",color:C.gris}}>
+      <div style={{fontSize:"2rem",marginBottom:".5rem"}}>👑</div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",color:C.brun,marginBottom:".3rem"}}>Aucune recrue pour l'instant</div>
+      <div style={{fontSize:".72rem"}}>Tes filleules apparaîtront ici dès qu'elles s'inscrivent avec toi comme marraine.</div>
+    </div>
+  );
 
   return(
     <div>
-      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        Suivi <em style={{fontStyle:"italic",color:C.rose}}>Nouveaux Distributeurs</em>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".5rem"}}>
+        Suivi <em style={{fontStyle:"italic",color:C.rose}}>nouvelles distributrices</em>
       </div>
-      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Jusqu'à {MAX_RECRUES} recrues simultanées. Sélectionne une recrue pour voir et cocher ses étapes.
-      </p>
 
-      {/* Filleules récentes auto-détectées (<2 mois) */}
-      {filleulesRecentes.filter(m=>!sortieDemarrage.includes(m.uid)).length>0&&(
-        <div style={{background:"rgba(168,155,181,.08)",border:`1px solid ${C.lilas}40`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-          <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".5rem"}}>
-            🌸 Tes nouvelles filleules (moins de 2 mois)
-          </div>
-          {filleulesRecentes.filter(m=>!sortieDemarrage.includes(m.uid)).map(m=>{
-            const name=fmtUid(m.uid);
-            const dejaSuivie=recrues.some(r=>r.name.toLowerCase()===name.toLowerCase());
-            return(
-              <div key={m.uid} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:".4rem 0",borderBottom:`1px solid ${C.pale}`,gap:".4rem"}}>
-                <div>
-                  <div style={{fontSize:".78rem",fontWeight:600,color:C.brun}}>{name}</div>
-                  <div style={{fontSize:".6rem",color:C.gris}}>Inscrite le {new Date(m.dateEnreg).toLocaleDateString("fr-FR")}</div>
-                </div>
-                <div style={{display:"flex",gap:".35rem",flexShrink:0}}>
-                  <button onClick={()=>startTrackingFilleule(m)}
-                    style={{background:dejaSuivie?C.vert+"20":C.lilas,color:dejaSuivie?C.vert:"white",border:"none",borderRadius:8,padding:".35rem .65rem",fontSize:".68rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                    {dejaSuivie?"✓ Suivie":"Suivre l'onboarding"}
-                  </button>
-                  <button onClick={()=>sortirDuDemarrage(m.uid)} title="Cette personne est déjà bien installée — la sortir du démarrage"
-                    style={{background:"none",border:`1px solid ${C.pale}`,color:C.gris,borderRadius:8,padding:".35rem .55rem",fontSize:".64rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>
-                    → Sortir du démarrage
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          <div style={{fontSize:".6rem",color:C.gris,marginTop:".4rem",fontStyle:"italic"}}>
-            Après 2 mois, ou si tu cliques "Sortir du démarrage", elles n'apparaîtront plus que dans l'onglet Distributeurs.
-          </div>
-        </div>
-      )}
-
-      {/* Ajouter */}
-      {recrues.length<MAX_RECRUES&&(
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-          <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>
-            ➕ Ajouter une recrue ({recrues.length}/{MAX_RECRUES})
-          </div>
-          <div style={{display:"flex",gap:".5rem",marginBottom:".5rem"}}>
-            <input placeholder="Prénom" value={newName} onChange={e=>setNewName(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&addRecrue()}
-              style={{flex:2,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-            <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)}
-              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-          </div>
-          <button onClick={addRecrue} disabled={!newName.trim()}
-            style={{width:"100%",background:newName.trim()?C.brun:C.pale,color:newName.trim()?C.blanc:C.gris,border:"none",borderRadius:8,padding:".52rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:newName.trim()?"pointer":"default",transition:"all .2s"}}>
-            Ajouter
+      {isChef&&(
+        <div style={{display:"flex",gap:".3rem",marginBottom:".5rem"}}>
+          <button onClick={()=>setVoirToute(true)}
+            style={{flex:1,padding:".4rem",fontSize:".68rem",fontWeight:600,borderRadius:9,border:`1px solid ${voirToute?C.rose:C.pale}`,background:voirToute?C.rose:C.blanc,color:voirToute?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+            👑 Toute mon équipe ({filleules.length})
+          </button>
+          <button onClick={()=>setVoirToute(false)}
+            style={{flex:1,padding:".4rem",fontSize:".68rem",fontWeight:600,borderRadius:9,border:`1px solid ${!voirToute?C.rose:C.pale}`,background:!voirToute?C.rose:C.blanc,color:!voirToute?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+            Mes filleules directes
           </button>
         </div>
       )}
-      {recrues.length>=MAX_RECRUES&&(
-        <div style={{background:"rgba(196,154,138,.1)",border:`1px solid ${C.rose}`,borderRadius:10,padding:".65rem 1rem",marginBottom:"1rem",fontSize:".74rem",color:C.brun}}>
-          ✨ 15 recrues suivies — maximum atteint. Supprime-en une pour en ajouter une nouvelle.
+
+      {filleules.filter(estNouvelle).length>0&&(
+        <div style={{display:"flex",alignItems:"center",gap:".4rem",background:C.or+"10",border:`1px solid ${C.or}40`,borderRadius:9,padding:".5rem .75rem",marginBottom:".75rem"}}>
+          <span style={{fontSize:"1rem"}}>🆕</span>
+          <span style={{fontSize:".72rem",color:C.brun,fontWeight:600}}>{filleules.filter(estNouvelle).length} nouvelle{filleules.filter(estNouvelle).length>1?"s":""} recrue{filleules.filter(estNouvelle).length>1?"s":""} (- de 14 jours)</span>
         </div>
       )}
 
-      {/* Sélecteur recrues */}
-      {recrues.length>0&&(
-        <>
-          <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".5rem"}}>
-            Mes recrues ({recrues.length})
-          </div>
-          <input placeholder="🔍 Rechercher une recrue..." value={search} onChange={e=>setSearch(e.target.value)}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem",boxSizing:"border-box"}}/>
-          <div style={{display:"flex",flexWrap:"wrap",gap:".4rem",marginBottom:"1rem"}}>
-            {recrues.filter(r=>!search||r.name.toLowerCase().includes(search.toLowerCase())).map(r=>{
-              const{pct}=getProgress(r);
-              const isActive=activeId===r.id;
-              return(
-                <div key={r.id} onClick={()=>setActiveId(r.id)}
-                  style={{display:"flex",alignItems:"center",gap:".45rem",background:isActive?C.brun:C.blanc,border:`2px solid ${isActive?C.rose:C.pale}`,borderRadius:10,padding:".42rem .7rem",cursor:"pointer",transition:"all .2s",flexShrink:0}}>
-                  <div style={{width:28,height:28,borderRadius:"50%",background:isActive?"rgba(255,255,255,.12)":C.creme,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
-                    <svg width="28" height="28" style={{position:"absolute",top:0,left:0,transform:"rotate(-90deg)"}}>
-                      <circle cx="14" cy="14" r="11" fill="none" stroke={isActive?"rgba(255,255,255,.18)":C.pale} strokeWidth="2.5"/>
-                      <circle cx="14" cy="14" r="11" fill="none" stroke={pct===100?C.vert:C.rose} strokeWidth="2.5"
-                        strokeDasharray={`${2*Math.PI*11*pct/100} ${2*Math.PI*11*(1-pct/100)}`} strokeLinecap="round"/>
-                    </svg>
-                    <span style={{fontSize:".55rem",fontWeight:700,color:isActive?C.blanc:C.brun,position:"relative",zIndex:1}}>{pct}%</span>
-                  </div>
-                  <div>
-                    <div style={{fontSize:".77rem",fontWeight:600,color:isActive?C.blanc:C.brun}}>{r.name}</div>
-                    <div style={{fontSize:".57rem",color:isActive?C.pale:C.gris}}>{r.date}</div>
-                  </div>
+      {filleules.map(f=>{
+        const isOpen=sel===f.uid;
+        const ex=extras[f.uid];
+        const fs=ex?.fastStart;
+        const modulesValides=fs?Object.values(fs.modulesValides||{}).filter(Boolean).length:0;
+        const totalTaches=fs?FAST_START_DAYS.reduce((s,d2)=>s+d2.taches.length,0):0;
+        const done=fs?FAST_START_DAYS.reduce((s,d2)=>s+d2.taches.filter((_,i)=>fs.doneTasks?.[`${d2.jour}-${i}`]).length,0):0;
+        const pctGlobal=totalTaches?Math.round(done/totalTaches*100):0;
+        const aPremiereCommande=ex?.premiereCommandeManuelle||(ex?.caPerso>0);
+
+        return(
+          <div key={f.uid} style={{background:C.blanc,border:`1.5px solid ${isOpen?C.rose:C.pale}`,borderRadius:12,marginBottom:".5rem",overflow:"hidden"}}>
+            {/* Ligne résumé */}
+            <div onClick={()=>{setSel(isOpen?null:f.uid);if(!isOpen&&!ex)chargerExtra(f.uid);}}
+              style={{display:"flex",alignItems:"center",gap:".6rem",padding:".65rem .9rem",cursor:"pointer",background:estNouvelle(f)?C.or+"08":"transparent"}}>
+              <div style={{width:36,height:36,borderRadius:"50%",background:estNouvelle(f)?C.or+"25":C.rose+"20",color:estNouvelle(f)?C.or:C.rose,fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:estNouvelle(f)?`2px solid ${C.or}`:"none"}}>
+                {(f.prenom||"?")[0].toUpperCase()}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:".4rem",flexWrap:"wrap"}}>
+                  <div style={{fontSize:".82rem",fontWeight:600,color:C.brun}}>{f.prenom} {f.nom}</div>
+                  {estNouvelle(f)&&(
+                    <span style={{fontSize:".55rem",fontWeight:700,color:"white",background:C.or,borderRadius:20,padding:".1rem .45rem"}}>🆕 Nouvelle</span>
+                  )}
+                  {voirToute&&f.niveau>1&&(
+                    <span style={{fontSize:".55rem",fontWeight:700,color:C.lilas,background:C.lilas+"15",borderRadius:20,padding:".1rem .4rem"}}>N{f.niveau}</span>
+                  )}
                 </div>
-              );
-            })}
+                <div style={{fontSize:".6rem",color:C.gris,display:"flex",gap:".5rem",alignItems:"center",marginTop:".1rem"}}>
+                  {f.dateEnreg&&<span>📅 {new Date(f.dateEnreg).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"})}</span>}
+                  {fs&&<span style={{color:pctGlobal>=100?C.vert:C.rose}}>🚀 {modulesValides}/7 modules</span>}
+                  {!fs&&<span style={{color:C.pale}}>Pas de Fast Start</span>}
+                </div>
+              </div>
+              {/* Badge première commande */}
+              <div style={{display:"flex",flexDirection:"column",gap:".2rem",alignItems:"flex-end"}}>
+                <div style={{fontSize:".58rem",fontWeight:700,color:aPremiereCommande?C.vert:C.pale,background:aPremiereCommande?C.vert+"15":"transparent",borderRadius:20,padding:".1rem .35rem",border:`1px solid ${aPremiereCommande?C.vert:C.pale}`}}>
+                  {aPremiereCommande?"✅ 1ère cmd":"⏳ pas de cmd"}
+                </div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:".25rem",alignItems:"flex-end"}}>
+                <button onClick={e=>{e.stopPropagation();if(window.confirm("Retirer "+f.prenom+" de cette liste de suivi ?")){setFilleules(fl=>fl.filter(x=>x.uid!==f.uid));if(sel===f.uid)setSel(null);}}}
+                  style={{background:"none",border:`1px solid #E0C0C0`,borderRadius:6,padding:".15rem .4rem",fontSize:".58rem",color:"#B04040",cursor:"pointer",fontFamily:"inherit"}}>
+                  ✕ Retirer
+                </button>
+              </div>
+              <div style={{fontSize:".75rem",color:C.gris,transform:isOpen?"rotate(90deg)":"none",transition:"transform .2s",flexShrink:0}}>›</div>
+            </div>
+
+            {/* Détail déplié */}
+            {isOpen&&(
+              <div style={{borderTop:`1px solid ${C.pale}`,padding:".85rem 1rem"}}>
+                {loadingExtra[f.uid]&&<div style={{textAlign:"center",color:C.gris,fontSize:".75rem",padding:".5rem"}}>Chargement...</div>}
+
+                {ex&&(
+                  <div>
+                    {/* Première commande */}
+                    <div style={{background:aPremiereCommande?C.vert+"10":"#FFF8E1",border:`1px solid ${aPremiereCommande?C.vert+"30":"#E6A817"}`,borderRadius:10,padding:".6rem .85rem",marginBottom:".75rem"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div>
+                          <div style={{fontSize:".7rem",fontWeight:700,color:aPremiereCommande?C.vent:"#856404"}}>🛍️ Première commande</div>
+                          {ex.caPerso>0&&<div style={{fontSize:".62rem",color:C.gris,marginTop:".1rem"}}>CA perso détecté : {ex.caPerso}€</div>}
+                        </div>
+                        <label style={{display:"flex",alignItems:"center",gap:".4rem",cursor:"pointer"}}>
+                          <input type="checkbox" checked={!!aPremiereCommande}
+                            onChange={e=>validerPremiereCommande(f.uid,e.target.checked)}/>
+                          <span style={{fontSize:".7rem",color:C.brun,fontWeight:600}}>Valider manuellement</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Fast Start */}
+                    {fs
+                      ?<div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+                          <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose}}>🚀 Suivi Fast Start</div>
+                          <div style={{display:"flex",gap:".4rem",alignItems:"center"}}>
+                            <span style={{fontSize:".6rem",color:C.gris}}>J1 : {fs.startDate?new Date(fs.startDate).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"-"}</span>
+                            <button onClick={()=>assignerFastStart(f.uid,f.prenom+" "+f.nom)}
+                              style={{background:C.rose+"15",border:`1px solid ${C.rose}40`,borderRadius:6,padding:".15rem .45rem",fontSize:".6rem",color:C.rose,cursor:"pointer",fontFamily:"inherit"}}>🔄 Relancer</button>
+                          </div>
+                        </div>
+
+                        {/* Barre globale */}
+                        <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:9,padding:".55rem .75rem",marginBottom:".6rem"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:".25rem"}}>
+                            <span style={{fontSize:".62rem",color:C.or,fontWeight:700}}>{modulesValides}/7 modules validés</span>
+                            <span style={{fontSize:".62rem",color:C.pale}}>{done}/{totalTaches} tâches · {pctGlobal}%</span>
+                          </div>
+                          <div style={{height:5,background:"rgba(255,255,255,.15)",borderRadius:10,overflow:"hidden"}}>
+                            <div style={{height:"100%",background:pctGlobal>=100?C.vert:C.or,width:pctGlobal+"%",borderRadius:10}}/>
+                          </div>
+                        </div>
+
+                        {/* Les 7 modules — interface Fast Start */}
+                        {FAST_START_DAYS.map(d2=>{
+                          const moduleValide=fs.modulesValides?.[d2.jour];
+                          const prevValide=d2.jour===1?true:!!fs.modulesValides?.[d2.jour-1];
+                          const isLocked=!prevValide&&!moduleValide;
+                          const tachesDone=d2.taches.filter((_,i)=>fs.doneTasks?.[`${d2.jour}-${i}`]).length;
+                          const total2=d2.taches.length;
+                          return(
+                            <div key={d2.jour} style={{background:moduleValide?C.vert+"08":C.blanc,border:`1.5px solid ${moduleValide?C.vert:isLocked?C.pale:tachesDone>0?C.or:C.pale}`,borderRadius:11,padding:".65rem .85rem",marginBottom:".4rem",opacity:isLocked?.5:1}}>
+                              <div style={{display:"flex",alignItems:"center",gap:".55rem"}}>
+                                <div style={{width:26,height:26,borderRadius:"50%",background:moduleValide?C.vert:isLocked?C.pale:tachesDone>0?C.or+"30":C.creme,color:moduleValide?"white":isLocked?C.pale:C.brun,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".7rem",fontWeight:700,flexShrink:0}}>
+                                  {moduleValide?"✓":isLocked?"🔒":d2.jour}
+                                </div>
+                                <div style={{flex:1}}>
+                                  <div style={{fontSize:".75rem",fontWeight:700,color:moduleValide?C.vent:isLocked?C.gris:C.brun,lineHeight:1.3}}>{d2.titre}</div>
+                                  <div style={{height:3,background:C.pale,borderRadius:10,overflow:"hidden",marginTop:".2rem"}}>
+                                    <div style={{height:"100%",background:moduleValide?C.vent:C.rose,width:(tachesDone/total2*100)+"%",borderRadius:10}}/>
+                                  </div>
+                                </div>
+                                <div style={{fontSize:".62rem",fontWeight:700,color:moduleValide?C.vent:C.gris,flexShrink:0,textAlign:"right"}}>
+                                  {moduleValide?"✅":isLocked?"🔒":`${tachesDone}/${total2}`}
+                                </div>
+                              </div>
+                              {/* Tâches */}
+                              {!isLocked&&tachesDone>0&&(
+                                <div style={{paddingLeft:".5rem",marginTop:".35rem"}}>
+                                  {d2.taches.map((tache,i)=>{
+                                    const fait=!!fs.doneTasks?.[`${d2.jour}-${i}`];
+                                    const txt=typeof tache==="string"?tache:tache.t;
+                                    return fait?(
+                                      <div key={i} style={{display:"flex",alignItems:"center",gap:".4rem",padding:".18rem 0",fontSize:".68rem",color:C.vent}}>
+                                        <span style={{color:C.vert,fontWeight:700,flexShrink:0}}>✓</span>
+                                        <span style={{textDecoration:"line-through",color:C.gris}}>{txt}</span>
+                                      </div>
+                                    ):null;
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      :<div style={{background:C.creme,borderRadius:9,padding:".75rem",textAlign:"center"}}>
+                        <div style={{fontSize:".72rem",color:C.gris,marginBottom:".5rem"}}>🚀 Pas de Fast Start assigné</div>
+                        <button onClick={()=>assignerFastStart(f.uid,f.prenom+" "+f.nom)}
+                          style={{background:C.rose,color:"white",border:"none",borderRadius:8,padding:".42rem .85rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                          Assigner le Fast Start
+                        </button>
+                      </div>
+                    }
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* Fiche de la recrue active */}
-          {active&&(
-            <RecrueFiche
-              recrue={active}
-              onToggle={toggleCheck}
-              onRemove={removeRecrue}
-              uid={uid}
-              userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")}
-            />
-          )}
-        </>
-      )}
-
-      {recrues.length===0&&(
-        <div style={{textAlign:"center",padding:"3rem 1rem",color:C.gris}}>
-          <div style={{fontSize:"2rem",marginBottom:".75rem"}}>👥</div>
-          <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:C.brun,marginBottom:".4rem"}}>Aucune recrue pour l'instant</div>
-          <div style={{fontSize:".75rem",lineHeight:1.6}}>Ajoute ta première recrue ci-dessus pour commencer à suivre son parcours.</div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
-function DashboardTab({uid, goToFormation}){
+
+function ConversionPopup({prospect:p, clients, distributeurs, saveClients, saveDistributeurs, saveProspects, prospects, onClose}){
+  const prenom = p.name.split(" ")[0]||p.name;
+  const nom = p.name.split(" ").slice(1).join(" ")||"";
+  const[tel,setTel]=useState(p.tel||"");
+  const[email,setEmail]=useState(p.email||"");
+  const[vers,setVers]=useState(null);
+
+  const doublon = vers==="distributrice" ? distributeurs.find(d=>
+    (d.prenom?.toLowerCase()===prenom.toLowerCase()&&d.nom?.toLowerCase()===nom.toLowerCase())||(tel&&d.tel===tel)
+  ) : null;
+
+  const confirmer=()=>{
+    if(vers==="client"){
+      const newClient={id:`c${Date.now()}`,prenom,nom,tel,email,notes:p.note||"",commandes:[],dateAjout:new Date().toISOString().slice(0,10)};
+      saveClients([...clients,newClient]);
+    } else if(vers==="distributrice"){
+      if(doublon){
+        saveDistributeurs(distributeurs.map(d=>d.id===doublon.id?{...d,tel:tel||d.tel,email:email||d.email,prospectId:p.id}:d));
+      } else {
+        const newDistrib={id:`d${Date.now()}`,prenom,nom,tel,email,palier:"2%",notes:p.note||"",dateEnreg:new Date().toISOString().slice(0,10),prospectId:p.id};
+        saveDistributeurs([...distributeurs,newDistrib]);
+      }
+    }
+    onClose();
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9999}}>
+      <div style={{background:C.blanc,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:480,padding:"1.5rem",boxShadow:"0 -8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun,marginBottom:".25rem"}}>✅ {p.name} est convertie !</div>
+        <div style={{fontSize:".72rem",color:C.gris,marginBottom:"1.2rem"}}>Elle est retirée des prospects. Où veux-tu l'ajouter ?</div>
+        <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
+          {[{v:"client",icon:"🛍️",label:"Cliente",color:C.vert},{v:"distributrice",icon:"👑",label:"Distributrice",color:C.or}].map(opt=>(
+            <button key={opt.v} onClick={()=>setVers(opt.v)}
+              style={{flex:1,background:vers===opt.v?opt.color:opt.color+"15",color:vers===opt.v?"white":opt.color,border:`2px solid ${opt.color}`,borderRadius:10,padding:".6rem",fontSize:".82rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+              {opt.icon} {opt.label}
+            </button>
+          ))}
+        </div>
+        {vers&&(
+          <div style={{background:C.creme,borderRadius:10,padding:".85rem",marginBottom:"1rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>Coordonnées</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".4rem",marginBottom:".4rem"}}>
+              <div style={{fontSize:".65rem",color:C.gris}}>Prénom : <strong style={{color:C.brun}}>{prenom}</strong></div>
+              <div style={{fontSize:".65rem",color:C.gris}}>Nom : <strong style={{color:C.brun}}>{nom||"—"}</strong></div>
+            </div>
+            <input value={tel} onChange={e=>setTel(e.target.value)} placeholder="Téléphone / WhatsApp"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".4rem"}}/>
+            <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+            {doublon&&(
+              <div style={{background:C.or+"20",border:`1px solid ${C.or}`,borderRadius:8,padding:".45rem .65rem",marginTop:".4rem",fontSize:".68rem",color:C.brun}}>
+                ⚠️ Fiche existante : <strong>{doublon.prenom} {doublon.nom}</strong> — sera mise à jour sans doublon.
+              </div>
+            )}
+          </div>
+        )}
+        <div style={{display:"flex",gap:".5rem"}}>
+          <button onClick={onClose}
+            style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:9,padding:".6rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
+            Ignorer
+          </button>
+          <button onClick={confirmer} disabled={!vers}
+            style={{flex:2,background:vers?C.brun:C.pale,color:vers?C.blanc:C.gris,border:"none",borderRadius:9,padding:".6rem",fontSize:".82rem",fontWeight:700,fontFamily:"inherit",cursor:vers?"pointer":"default"}}>
+            {vers?"✓ Confirmer le transfert":"Choisir une destination"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}}){
   const[dtab,setDtab]=useState("today");
+
+  // Rafraîchir automatiquement les prospects à chaque ouverture de l'onglet
+  useEffect(()=>{
+    if(dtab==="prospects"&&uid){
+      getDoc(doc(db,"users",uid)).then(snap=>{
+        if(snap.exists()&&snap.data()["db-prospects"]){
+          try{setProspects(JSON.parse(snap.data()["db-prospects"]));}catch{}
+        }
+      }).catch(()=>{});
+    }
+  },[dtab,uid]);
   const[actions,setActions]=useState({});
   const[prospects,setProspects]=useState([]);
   const[newP,setNewP]=useState({name:"",statut:"Nouveau",note:"",interet:""});
+  const[conversionPopup,setConversionPopup]=useState(null); // {prospect, vers: 'client'|'distributrice'}
   const[prospectSearch,setProspectSearch]=useState("");
   const[prospectFiltre,setProspectFiltre]=useState("Tous");
   const[prospectInteretFiltre,setProspectInteretFiltre]=useState("");
@@ -2694,19 +3471,36 @@ function DashboardTab({uid, goToFormation}){
   const[isChefDash,setIsChefDash]=useState(false);
   const[loaded,setLoaded]=useState(false);
   const[totalRecrues,setTotalRecrues]=useState(0);
+  const[cmdPeriode,setCmdPeriode]=useState({count:0,montant:0});
   const[streak,setStreak]=useState(0);
   const[totalActionsValidees,setTotalActionsValidees]=useState(0);
   const[confettiTrigger,setConfettiTrigger]=useState(0);
   const[equipeFunTab,setEquipeFunTab]=useState("wall");
   const[clientsSubTab,setClientsSubTab]=useState("clients");
   const[distriSubTab,setDistriSubTab]=useState("distributeurs");
-  const[fastStartDone,setFastStartDone]=useState(false);
   const[mood,setMood]=useState(null);
   const userName = uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
 
   useEffect(()=>{
+    let cancelled=false;
     sgAll(uid).then(data=>{
-      if(data["db-actions"])       setActions(JSON.parse(data["db-actions"]));
+      if(cancelled) return;
+      if(data["db-actions"]){
+        try{
+          const parsed = JSON.parse(data["db-actions"]);
+          const today = new Date().toISOString().slice(0,10);
+          // Si les actions ont été sauvegardées aujourd'hui → les charger
+          // Sinon → repartir à zéro (nouveau jour)
+          if(parsed._date === today){
+            const {_date, ...actionsSeules} = parsed;
+            setActions(actionsSeules);
+          } else {
+            // Nouveau jour → actions vides
+            setActions({});
+            ss(uid,"db-actions",JSON.stringify({_date:today}));
+          }
+        }catch{ setActions({}); }
+      }
       if(data["db-prospects"])     setProspects(JSON.parse(data["db-prospects"]));
       if(data["db-posts"])         setPosts(JSON.parse(data["db-posts"]));
       if(data["db-stats"])         setStats(JSON.parse(data["db-stats"]));
@@ -2717,12 +3511,26 @@ function DashboardTab({uid, goToFormation}){
         try{ setTotalRecrues(JSON.parse(data["recrues"]).length); }catch{}
       }
       if(data["db-actions-cumul"]) setTotalActionsValidees(+data["db-actions-cumul"]||0);
+      if(data["db-actions-custom"]){
+        try{ setActionsCustomRaw(JSON.parse(data["db-actions-custom"])); }catch{}
+      }
+      if(data["db-cmd-periode"]){
+        try{
+          const raw = JSON.parse(data["db-cmd-periode"]);
+          const periodeNum = getPeriodeActuelle ? getPeriodeActuelle() : 0;
+          const p = raw[`p${periodeNum}`]||{count:0,montant:0};
+          setCmdPeriode(p);
+        }catch{}
+      }
       if(data["db-fast-start"]){
         try{
           const fs=JSON.parse(data["db-fast-start"]);
-          const totalTaches=FAST_START_DAYS.reduce((s,d)=>s+d.taches.length,0);
-          const totalDone=Object.values(fs.doneTasks||{}).filter(Boolean).length;
-          setFastStartDone(fs.startDate && totalDone>=totalTaches);
+          // Fast Start "fait" = tous les 7 modules validés par la marraine
+          const nbModulesValides=Object.values(fs.modulesValides||{}).filter(Boolean).length;
+          const done=fs.startDate && nbModulesValides>=FAST_START_DAYS.length;
+          onFastStartDone(done);
+          // Visible seulement si assigné ET pas tous les modules validés
+          onHasFastStart(!!fs.startDate && !done);
         }catch{}
       }
 
@@ -2748,15 +3556,35 @@ function DashboardTab({uid, goToFormation}){
         setIsChefDash(chefs.includes(uid.replace(/-/g," ")));
       }catch{}
     })();
+    return()=>{cancelled=true;};
   },[uid]);
 
   const saveActions=(a, justChecked)=>{
-    setActions(a);ss(uid,"db-actions",JSON.stringify(a));
+    const today = new Date().toISOString().slice(0,10);
+    setActions(a);
+    ss(uid,"db-actions",JSON.stringify({...a, _date:today}));
+
+    // Compter ce jour comme actif dans l'historique d'assiduité
+    if(justChecked){
+      const periodeNum = getPeriodeActuelle ? getPeriodeActuelle() : 0;
+      const periodeKey = `p${periodeNum}`;
+      sgAll(uid).then(data=>{
+        try{
+          const hist = data["db-assiduite"] ? JSON.parse(data["db-assiduite"]) : {};
+          const periode = hist[periodeKey] || {jours:[]};
+          if(!periode.jours.includes(today)){
+            periode.jours = [...periode.jours, today];
+            hist[periodeKey] = periode;
+            ss(uid,"db-assiduite",JSON.stringify(hist));
+          }
+        }catch{}
+      });
+    }
     if(justChecked){
       const newCumul = totalActionsValidees+1;
       setTotalActionsValidees(newCumul);
       ss(uid,"db-actions-cumul",String(newCumul));
-      const newDone = todayActions.filter(act=>a[act.id]).length;
+      const newDone = allTodayActions.filter(act=>a[act.id]).length;
       if(newDone===5) setConfettiTrigger(t=>t+1);
     }
   };
@@ -2765,7 +3593,7 @@ function DashboardTab({uid, goToFormation}){
   const saveStats=s=>{setStats(s);ss(uid,"db-stats",JSON.stringify(s));};
   const saveClients=c=>{setClients(c);ss(uid,"db-clients",JSON.stringify(c));};
   const saveDistributeurs=d=>{setDistributeurs(d);ss(uid,"db-distributeurs",JSON.stringify(d));};
-  const saveObjPerso=o=>{setObjPerso(o);ss(uid,"db-obj-perso",JSON.stringify(o));syncAnnuaire(uid,userName,o);};
+  const saveObjPerso=o=>{setObjPerso(o);ss(uid,"db-obj-perso",JSON.stringify(o));syncAnnuaire(uid,userName,o);onObjPersoChange(o);};
 
   const todayActions=[
     {id:"a1",icon:"📝",label:"Publier mon post du jour",sub:"1 contenu fort — photo, Reel ou carrousel"},
@@ -2774,10 +3602,19 @@ function DashboardTab({uid, goToFormation}){
     {id:"a4",icon:"❓",label:'Story "question du jour"',sub:"Une question simple pour générer des réponses en DM"},
     {id:"a5",icon:"📋",label:"Mettre à jour mes prospects",sub:"Relances, nouveaux contacts, statuts à jour"},
   ];
-  const doneCount=todayActions.filter(a=>actions[a.id]).length;
-  const displayedActions = (mood==="depasse")
-    ? todayActions.filter(a=>!actions[a.id]).slice(0,1).concat(todayActions.filter(a=>actions[a.id]))
-    : todayActions;
+  const[actionsCustom,setActionsCustomRaw]=useState([]);
+  const setActionsCustom=(updater)=>{
+    setActionsCustomRaw(prev=>{
+      const next=typeof updater==="function"?updater(prev):updater;
+      ss(uid,"db-actions-custom",JSON.stringify(next));
+      return next;
+    });
+  };
+  const[showBiblio,setShowBiblio]=useState(false);
+  const allTodayActions=[...todayActions,...actionsCustom];
+  const doneCount=allTodayActions.filter(a=>actions[a.id]).length;
+  const totalActions=allTodayActions.length;
+  const displayedActions = allTodayActions;
 
   const pctCAGauge = (()=>{
     if(!objPerso.caObj||!objPerso.ca)return 0;
@@ -2797,9 +3634,27 @@ function DashboardTab({uid, goToFormation}){
   const todayStr = new Date().toISOString().slice(0,10);
   const aRecontacterAujourdhui = prospects.filter(p=>p.relance && p.relance<=todayStr);
 
+  // Anniversaires clients dans les 7 prochains jours
+  const anniversairesProches = (clients||[]).filter(c=>{
+    if(!c.ddn)return false;
+    const ddn=new Date(c.ddn);
+    const today=new Date();
+    const thisYearBday=new Date(today.getFullYear(),ddn.getMonth(),ddn.getDate());
+    if(thisYearBday<today.setHours(0,0,0,0)) thisYearBday.setFullYear(today.getFullYear()+1);
+    const diffJours=Math.ceil((thisYearBday-new Date().setHours(0,0,0,0))/(1000*60*60*24));
+    return diffJours>=0&&diffJours<=7;
+  }).map(c=>{
+    const ddn=new Date(c.ddn);
+    const today=new Date();
+    const thisYearBday=new Date(today.getFullYear(),ddn.getMonth(),ddn.getDate());
+    if(thisYearBday<new Date(today.getFullYear(),today.getMonth(),today.getDate())) thisYearBday.setFullYear(today.getFullYear()+1);
+    const diffJours=Math.ceil((thisYearBday-new Date(today.getFullYear(),today.getMonth(),today.getDate()))/(1000*60*60*24));
+    return{...c,joursAvant:diffJours};
+  }).sort((a,b)=>a.joursAvant-b.joursAvant);
+
   const ordreInteret={client:0, distributeur:1, "":2};
   const prospectsFiltres = prospects
-    .filter(p=>prospectFiltre==="Tous"||p.statut===prospectFiltre)
+    .filter(p=>prospectFiltre==="Tous"||(prospectFiltre==="🤝 Recommandés"?p.source==="recommandation":p.statut===prospectFiltre))
     .filter(p=>{
       if(!prospectInteretFiltre)return true;
       if(prospectInteretFiltre==="none")return !p.interet;
@@ -2844,17 +3699,20 @@ function DashboardTab({uid, goToFormation}){
   const STATUTS=["Nouveau","Contact fait","🔥 Chaud","🌡️ Tiède","❄️ Froid","📅 Invité présentation","👀 En réflexion","✅ Converti","❌ Pas intéressé"];
   const statusColor={"Nouveau":C.gris,"Contact fait":C.lilas,"🔥 Chaud":"#C44B1A","🌡️ Tiède":C.or,"❄️ Froid":"#5B8DB8","📅 Invité présentation":C.rose,"👀 En réflexion":"#8B5E00","✅ Converti":C.vert,"❌ Pas intéressé":"#B04040"};
 
+  const {t} = useLang();
   const DTABS=[
-    {id:"today",label:"⚡ Aujourd'hui"},
-    {id:"objperso",label:"🎯 Mes objectifs"},
-    ...(!fastStartDone?[{id:"faststart",label:"🚀 Fast Start"}]:[]),
-    {id:"clients",label:"🛍️ Clients"},
+    {id:"today",        label:"⚡ Aujourd'hui"},
+    // Fast Start — visible seulement si assigné ET pas encore terminé
+    ...((hasFastStart&&!fastStartDone)?[{id:"faststart",label:"🚀 Fast Start"}]:[]),
+    {id:"objperso",     label:"🎯 Objectifs"},
+    {id:"clients",      label:"🛍️ Clients"},
     {id:"distributeurs",label:"👑 Distributeurs"},
-    {id:"prospects",label:"👥 Prospects"},
-    {id:"diagnostics",label:"🩺 Mes diagnostics"},
-    {id:"produits",label:"🔍 Produits"},
-    {id:"posts",label:"📱 Posts"},
-    {id:"equipe-fun",label:"🏆 Équipe"},
+    {id:"prospects",    label:"👥 Prospects"},
+    // Suivi CA — visible seulement pour les chefs
+    {id:"suivica",label:"📊 Suivi CA"},
+    {id:"diagnostics",  label:"🩺 Diagnostics"},
+    {id:"posts",        label:"📱 Posts"},
+    {id:"equipe-fun",   label:"🏆 Équipe"},
   ];
 
   return(
@@ -2880,6 +3738,20 @@ function DashboardTab({uid, goToFormation}){
           <Confetti trigger={confettiTrigger}/>
           <MarrainePopup uid={uid} userName={userName}/>
           <AnnonceBanner uid={uid}/>
+
+          {/* POPUP CONVERSION PROSPECT */}
+          {conversionPopup&&(
+            <ConversionPopup
+              prospect={conversionPopup.prospect}
+              clients={clients}
+              distributeurs={distributeurs}
+              saveClients={saveClients}
+              saveDistributeurs={saveDistributeurs}
+              saveProspects={saveProspects}
+              prospects={prospects}
+              onClose={()=>setConversionPopup(null)}
+            />
+          )}
           {aRecontacterAujourdhui.length>0&&(
             <div onClick={()=>setDtab("prospects")}
               style={{background:"linear-gradient(135deg,#C44B1A,#C49A8A)",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",cursor:"pointer"}}>
@@ -2890,6 +3762,19 @@ function DashboardTab({uid, goToFormation}){
               <div style={{fontSize:".62rem",color:"rgba(255,255,255,.85)",marginTop:".2rem"}}>Touche pour voir tes prospects →</div>
             </div>
           )}
+          {anniversairesProches.length>0&&(
+            <div onClick={()=>setDtab("clients")}
+              style={{background:"linear-gradient(135deg,#C49A8A,#E8B4A8)",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",cursor:"pointer"}}>
+              <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"white",marginBottom:".3rem"}}>🎂 Anniversaires à venir</div>
+              {anniversairesProches.slice(0,3).map(c=>(
+                <div key={c.id} style={{fontSize:".75rem",color:"white",fontWeight:600,marginBottom:".15rem"}}>
+                  {c.joursAvant===0?"🎉 Aujourd'hui":c.joursAvant===1?"Demain":`Dans ${c.joursAvant}j`} — {c.prenom} {c.nom}
+                </div>
+              ))}
+              <div style={{fontSize:".62rem",color:"rgba(255,255,255,.85)",marginTop:".2rem"}}>Touche pour voir tes clientes →</div>
+            </div>
+          )}
+          <AssistanteIATab uid={uid} userName={userName}/>
           <JaugeSucces pctCA={pctCAGauge} pctRecrues={pctRecruesGauge}/>
           <BadgesPanel badges={badges}/>
           {streak>=2&&(
@@ -2899,16 +3784,32 @@ function DashboardTab({uid, goToFormation}){
             </div>
           )}
           <CitationDuJour uid={uid}/>
-          <MoodCheck uid={uid} onMoodChange={setMood}/>
+          <DreamBoardWidget uid={uid}/>
+          {showBiblio&&<BiblioActionsPopup
+            onClose={()=>setShowBiblio(false)}
+            actionsCustom={actionsCustom}
+            onAjouter={(a)=>{
+              if(!actionsCustom.some(x=>x.id===a.id)){
+                setActionsCustom(prev=>[...prev,a]);
+              }
+            }}
+          />}
+
           <div style={{background:C.brun,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
-            <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:C.or,marginBottom:".4rem"}}>
-              ⚡ {mood==="depasse"?"AUJOURD'HUI, UNE SEULE ACTION":"MES 5 ACTIONS DU JOUR"}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".4rem"}}>
+              <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:C.or}}>
+                ⚡ MES ACTIONS DU JOUR
+              </div>
+              <button onClick={()=>setShowBiblio(true)}
+                style={{background:C.or+"25",border:`1px solid ${C.or}50`,borderRadius:8,padding:".2rem .55rem",fontSize:".62rem",fontWeight:700,color:C.or,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+                + Actions
+              </button>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:".62rem",color:C.pale,marginBottom:".35rem"}}>
-              <span>Progression</span><span style={{fontWeight:700,color:doneCount===5?C.vert:C.or}}>{doneCount} / 5</span>
+              <span>Progression</span><span style={{fontWeight:700,color:doneCount===totalActions?C.vert:C.or}}>{doneCount} / {totalActions}</span>
             </div>
             <div style={{height:5,background:"rgba(255,255,255,.1)",borderRadius:10,overflow:"hidden",marginBottom:".75rem"}}>
-              <div style={{height:"100%",background:doneCount===5?C.vert:C.rose,width:(doneCount/5*100)+"%",borderRadius:10,transition:"width .3s"}}/>
+              <div style={{height:"100%",background:doneCount===totalActions?C.vert:C.rose,width:(doneCount/Math.max(totalActions,1)*100)+"%",borderRadius:10,transition:"width .3s"}}/>
             </div>
             {displayedActions.map(a=>(
               <div key={a.id} onClick={()=>saveActions({...actions,[a.id]:!actions[a.id]}, !actions[a.id])}
@@ -2922,11 +3823,6 @@ function DashboardTab({uid, goToFormation}){
                 </div>
               </div>
             ))}
-            {mood==="depasse"&&doneCount<5&&(
-              <div style={{fontSize:".66rem",color:C.pale,opacity:.8,marginTop:".5rem",fontStyle:"italic"}}>
-                Les autres actions reviendront demain — concentre-toi sur celle-ci, c'est déjà énorme 💛
-              </div>
-            )}
           </div>
 
 
@@ -2939,6 +3835,12 @@ function DashboardTab({uid, goToFormation}){
             </div>
           </div>
 
+          <TodoPerso uid={uid}/>
+          <ClassementEquipe uid={uid}/>
+
+          {/* Compteur commandes période */}
+          <CmdPeriodeBlock cmdPeriode={cmdPeriode}/>
+
           <div style={{background:`linear-gradient(135deg,rgba(196,154,138,.1),rgba(196,168,130,.08))`,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",textAlign:"center"}}>
             <div style={{fontSize:".75rem",color:C.brun,fontStyle:"italic",lineHeight:1.65}}>
               💡 <strong>"Posts = attirer. Actions quotidiennes = convertir.<br/>Les deux ensemble, c'est là que ça décolle."</strong>
@@ -2950,6 +3852,21 @@ function DashboardTab({uid, goToFormation}){
       {/* PROSPECTS */}
       {dtab==="prospects"&&(
         <div>
+          <button onClick={async()=>{
+            try{
+              const snap=await getDoc(doc(db,"users",uid));
+              if(snap.exists()&&snap.data()["db-prospects"]){
+                const liste=JSON.parse(snap.data()["db-prospects"]);
+                setProspects(liste);
+                alert(`✅ ${liste.length} prospects chargés (dont ${liste.filter(p=>p.source==="recommandation").length} recommandations)`);
+              } else {
+                alert("Aucun prospect trouvé dans Firebase pour ce compte.");
+              }
+            }catch(e){alert("Erreur : "+e.message);}
+          }}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:9,padding:".4rem",fontSize:".68rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+            🔄 Rafraîchir (pour voir les nouvelles recommandations)
+          </button>
           <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
             <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".65rem"}}>➕ Ajouter un prospect ({prospects.length})</div>
             <input placeholder="Prénom" value={newP.name} onChange={e=>setNewP(p=>({...p,name:e.target.value}))}
@@ -2982,9 +3899,12 @@ function DashboardTab({uid, goToFormation}){
               {[
                 ["client","🛍️ Clients potentiels",C.rose],
                 ["distributeur","👑 Distributeurs potentiels",C.lilas],
+                ["Recommandation","🤝 Recommandations",C.or],
                 ["none","📌 Non classé",C.gris],
               ].map(([val,label,col])=>{
-                const count = prospects.filter(p=>(p.interet||"none")===val).length;
+                const count = val==="none"
+                  ?prospects.filter(p=>!p.interet||p.interet==="none").length
+                  :prospects.filter(p=>p.interet===val).length;
                 return(
                   <div key={val} onClick={()=>setProspectInteretFiltre(val)}
                     style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
@@ -3006,15 +3926,15 @@ function DashboardTab({uid, goToFormation}){
             ← Retour aux catégories
           </button>
           <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.brun,marginBottom:".6rem"}}>
-            {prospectInteretFiltre==="client"?"🛍️ Clients potentiels":prospectInteretFiltre==="distributeur"?"👑 Distributeurs potentiels":"📌 Non classé"}
+            {prospectInteretFiltre==="client"?"🛍️ Clients potentiels":prospectInteretFiltre==="distributeur"?"👑 Distributeurs potentiels":prospectInteretFiltre==="Recommandation"?"🤝 Recommandations":"📌 Non classé"}
           </div>
 
           {/* Recherche et filtres */}
           <input placeholder="🔍 Rechercher par nom ou note..." value={prospectSearch} onChange={e=>setProspectSearch(e.target.value)}
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".5rem"}}/>
           <div style={{display:"flex",gap:".3rem",marginBottom:".75rem",overflowX:"auto",paddingBottom:".2rem"}}>
-            {["Tous",...STATUTS].map(s=>(
-              <button key={s} onClick={()=>setProspectFiltre(s)}
+            {["🤝 Recommandés","Tous",...STATUTS].map(s=>(
+              <button key={s} onClick={()=>{setProspectFiltre(s);setProspectInteretFiltre("");}}
                 style={{flex:"none",padding:".3rem .65rem",fontSize:".64rem",fontWeight:600,borderRadius:20,border:`1px solid ${prospectFiltre===s?C.rose:C.pale}`,background:prospectFiltre===s?C.rose:C.blanc,color:prospectFiltre===s?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                 {s}
               </button>
@@ -3030,6 +3950,9 @@ function DashboardTab({uid, goToFormation}){
                 <div style={{flex:1}}>
                   <div style={{display:"flex",gap:".5rem",alignItems:"center",marginBottom:".2rem",flexWrap:"wrap"}}>
                     <div style={{fontSize:".82rem",fontWeight:600,color:C.brun}}>{p.name}</div>
+                    {p.source==="recommandation"&&(
+                      <span style={{fontSize:".58rem",fontWeight:700,padding:".1rem .4rem",borderRadius:20,background:C.lilas+"20",color:C.lilas}}>🤝 Recommandé(e)</span>
+                    )}
                     <select value={p.statut} onChange={e=>{
                       const next=prospects.map(x=>x.id===p.id?{...x,statut:e.target.value}:x);
                       saveProspects(next);
@@ -3067,6 +3990,58 @@ function DashboardTab({uid, goToFormation}){
                   </button>
                 )}
               </div>
+
+              {/* Bouton conversion si statut Converti */}
+              {p.statut==="✅ Converti"&&(
+                <div style={{marginTop:".5rem",paddingTop:".5rem",borderTop:`1px solid ${C.pale}`}}>
+                  <button onClick={()=>{
+                    saveProspects(prospects.filter(x=>x.id!==p.id));
+                    setConversionPopup({prospect:p, vers:null});
+                  }}
+                    style={{width:"100%",background:`linear-gradient(135deg,${C.vert},#4a9a5a)`,color:"white",border:"none",borderRadius:9,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:".4rem"}}>
+                    ✅ Convertir et transférer →
+                  </button>
+                </div>
+              )}
+
+              {/* Boutons conversion rapide pour diagnostics et recommandations */}
+              {(p.source==="diagnostic"||p.source==="recommandation")&&p.statut!=="✅ Converti"&&!p.convertiVers&&(
+                <div style={{marginTop:".5rem",paddingTop:".5rem",borderTop:`1px solid ${C.pale}`}}>
+                  <div style={{fontSize:".58rem",color:C.gris,marginBottom:".3rem",fontWeight:600}}>
+                    {p.source==="diagnostic"?"🔬 Issu d'un diagnostic":"🤝 Issu d'une recommandation"} — Marquer la conversion :
+                  </div>
+                  <div style={{display:"flex",gap:".3rem"}}>
+                    <button onClick={()=>{
+                      const next=prospects.map(x=>x.id===p.id?{...x,convertiVers:"client",statut:"✅ Converti",dateConversion:new Date().toISOString().slice(0,10)}:x);
+                      saveProspects(next);
+                    }}
+                      style={{flex:1,background:C.vert+"20",border:`1px solid ${C.vert}`,borderRadius:8,padding:".35rem",fontSize:".66rem",fontWeight:700,color:C.vert,cursor:"pointer",fontFamily:"inherit"}}>
+                      🛍️ Convertie en cliente
+                    </button>
+                    <button onClick={()=>{
+                      const next=prospects.map(x=>x.id===p.id?{...x,convertiVers:"distributrice",statut:"✅ Converti",dateConversion:new Date().toISOString().slice(0,10)}:x);
+                      saveProspects(next);
+                    }}
+                      style={{flex:1,background:C.or+"20",border:`1px solid ${C.or}`,borderRadius:8,padding:".35rem",fontSize:".66rem",fontWeight:700,color:C.or,cursor:"pointer",fontFamily:"inherit"}}>
+                      👑 Convertie en distributrice
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Badge conversion réussie */}
+              {p.convertiVers&&(
+                <div style={{marginTop:".5rem",paddingTop:".5rem",borderTop:`1px solid ${C.pale}`,display:"flex",alignItems:"center",gap:".4rem"}}>
+                  <span style={{fontSize:".65rem",fontWeight:700,color:p.convertiVers==="client"?C.vert:C.or,background:(p.convertiVers==="client"?C.vert:C.or)+"20",borderRadius:20,padding:".2rem .55rem"}}>
+                    {p.convertiVers==="client"?"✅ Convertie en cliente":"✅ Convertie en distributrice"}
+                  </span>
+                  {p.dateConversion&&<span style={{fontSize:".58rem",color:C.gris}}>le {new Date(p.dateConversion).toLocaleDateString("fr-FR")}</span>}
+                  <button onClick={()=>{
+                    const next=prospects.map(x=>x.id===p.id?{...x,convertiVers:undefined,statut:"Nouveau",dateConversion:undefined}:x);
+                    saveProspects(next);
+                  }} style={{marginLeft:"auto",background:"none",border:"none",fontSize:".58rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}>annuler</button>
+                </div>
+              )}
             </div>
           );})}
           {prospectsFiltres.length===0&&<div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".78rem"}}>{prospects.length===0?<>Aucun prospect pour l'instant.<br/>Ajoute ta 1ʳᵉ personne ci-dessus.</>:"Aucun prospect ne correspond à ta recherche/filtre."}</div>}
@@ -3076,7 +4051,7 @@ function DashboardTab({uid, goToFormation}){
       )}
 
       {/* PRODUITS */}
-      {dtab==="produits"&&<ProduitsSearchTab/>}
+      {/* Suppression onglet Produits — remplacé par IA Conseillère */}
 
       {/* CLIENTS (+ sous-onglet Objections) */}
       {dtab==="clients"&&(
@@ -3086,22 +4061,23 @@ function DashboardTab({uid, goToFormation}){
               style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${clientsSubTab==="clients"?C.rose:C.pale}`,background:clientsSubTab==="clients"?C.rose:C.blanc,color:clientsSubTab==="clients"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
               🛍️ Clients
             </button>
+            <button onClick={()=>setClientsSubTab("relance")}
+              style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${clientsSubTab==="relance"?"#5B8DB8":C.pale}`,background:clientsSubTab==="relance"?"#5B8DB8":C.blanc,color:clientsSubTab==="relance"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+              ❄️ Relance
+            </button>
             <button onClick={()=>setClientsSubTab("objections")}
               style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${clientsSubTab==="objections"?C.rose:C.pale}`,background:clientsSubTab==="objections"?C.rose:C.blanc,color:clientsSubTab==="objections"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
               💬 Objections
             </button>
           </div>
-          {clientsSubTab==="clients"&&<ClientsTab clients={clients} save={saveClients}/>}
+          {clientsSubTab==="clients"&&<ClientsTab clients={clients} save={saveClients} uid={uid}/>}
+          {clientsSubTab==="relance"&&<ClientsRelanceTab clients={clients} save={saveClients} uid={uid}/>}
           {clientsSubTab==="objections"&&<ObjectionsTab/>}
         </div>
       )}
       {dtab==="objperso"&&(
         <div>
-          <ObjPersoTab obj={objPerso} save={saveObjPerso} uid={uid} userName={userName}/>
-          <button onClick={()=>setDtab("stats")}
-            style={{width:"100%",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".7rem",fontSize:".8rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginTop:".5rem"}}>
-            📊 Voir mes statistiques détaillées
-          </button>
+          <ObjPersoTab obj={objPerso} save={saveObjPerso} uid={uid} userName={userName} distributeurs={distributeurs}/>
         </div>
       )}
 
@@ -3115,7 +4091,7 @@ function DashboardTab({uid, goToFormation}){
             </button>
             <button onClick={()=>setEquipeFunTab("defi")}
               style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${equipeFunTab==="defi"?C.rose:C.pale}`,background:equipeFunTab==="defi"?C.rose:C.blanc,color:equipeFunTab==="defi"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
-              🚀 Défi Flash
+              ⚡ Challenge Flash
             </button>
             <button onClick={()=>setEquipeFunTab("powerhour")}
               style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${equipeFunTab==="powerhour"?C.rose:C.pale}`,background:equipeFunTab==="powerhour"?C.rose:C.blanc,color:equipeFunTab==="powerhour"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
@@ -3123,10 +4099,11 @@ function DashboardTab({uid, goToFormation}){
             </button>
           </div>
           {equipeFunTab==="wall"&&<WallOfFameTab uid={uid} userName={userName}/>}
-          {equipeFunTab==="defi"&&<DefisTab uid={uid} userName={userName} canCreate={isChefDash||uid===MELISSA||uid==="melissa-da-silveira"}/>}
+          {equipeFunTab==="defi"&&<DefisTab uid={uid} userName={userName} canCreate={true} isChef={isChefDash}/>}
           {equipeFunTab==="powerhour"&&<PowerHourTab uid={uid} userName={userName} canCreate={isChefDash||uid===MELISSA||uid==="melissa-da-silveira"}/>}
         </div>
       )}
+      {dtab==="suivica"&&<SuiviCATab uid={uid}/>}
       {dtab==="diagnostics"&&<DiagResultsTab uid={uid}/>}
 
       {/* DISTRIBUTEURS (+ sous-onglet Nouveaux Distributeurs) */}
@@ -3143,7 +4120,7 @@ function DashboardTab({uid, goToFormation}){
             </button>
           </div>
           {distriSubTab==="distributeurs"&&<DistributeursTab distributeurs={distributeurs} save={saveDistributeurs} uid={uid}/>}
-          {distriSubTab==="nouveaux"&&<SuiviRecruTab uid={uid}/>}
+          {distriSubTab==="nouveaux"&&<SuiviRecruTab uid={uid} isChef={isChef}/>}
         </div>
       )}
 
@@ -3298,19 +4275,822 @@ function genererScriptRelance(ligne, prenomClient){
 }
 
 
-function ClientsTab({clients,save}){
+// Formulaire édition client avec state local pour éviter le re-render de la liste
+// Fiche cliente complète — composant isolé pour éviter le re-render de la liste
+function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, TYPES_PRODUITS_DUREE, getPeriodeActuelle, sgAll, ss, daysDiff}){
+  const isActive = sel===c.id;
+  const[showCmd,setShowCmd]=useState(false);
+  const[showRappel,setShowRappel]=useState(false);
+  const[editMode,setEditMode]=useState(false);
+  const[cmdDetailOuverte,setCmdDetailOuverte]=useState(null);
+  const[cmdForm,setCmdForm]=useState({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:new Date().toISOString().slice(0,10)});
+  const[catalogue,setCatalogue]=useState(null);
+
+  // Charger le catalogue Mihi une seule fois quand on ouvre le formulaire commande
+  useEffect(()=>{
+    if(!showCmd||catalogue)return;
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","catalogue_mihi"));
+        if(snap.exists()){
+          const cat=snap.data();
+          // Grouper par catégorie avec label lisible
+          const ORDRE=[
+            {key:"face",label:"✨ Visage"},
+            {key:"corps",label:"🧴 Corps"},
+            {key:"hair",label:"💇 Cheveux"},
+            {key:"makeup",label:"💄 Makeup"},
+            {key:"parfums",label:"🌸 Parfums"},
+            {key:"health",label:"💊 Santé"},
+            {key:"hommes",label:"👨 Hommes"},
+            {key:"enfants",label:"👶 Enfants"},
+            {key:"home",label:"🏠 Home"},
+            {key:"sets",label:"🎁 Sets"},
+          ];
+          const tousLesProduits=[];
+          ORDRE.forEach(({key,label})=>{
+            (cat[key]||[]).forEach(p=>{
+              if(p.nom) tousLesProduits.push({...p,categorie:label});
+            });
+          });
+          // Tri alphabétique dans chaque catégorie (l'ordre par catégorie est conservé)
+          setCatalogue(tousLesProduits);
+          console.log(`Catalogue chargé: ${tousLesProduits.length} produits`);
+        } else {
+          setCatalogue([]);
+          console.warn("Catalogue Mihi vide en Firebase — importez-le depuis Admin");
+        }
+      }catch(e){
+        setCatalogue([]);
+        console.error("Erreur chargement catalogue:", e);
+      }
+    })();
+  },[showCmd]);
+
+  // Devine le type de produit (durée d'utilisation) selon des mots-clés du nom
+  const deviinerType=(nomProduit)=>{
+    const n=(nomProduit||"").toLowerCase();
+    if(n.includes("shampoo")||n.includes("shampoing"))return"shampoing";
+    if(n.includes("hair")||n.includes("cheveux")||n.includes("mask")&&n.includes("hair"))return"soin-cheveux";
+    if(n.includes("shower")||n.includes("douche")||n.includes("gel"))return"gel-douche";
+    if(n.includes("face cream")||n.includes("crème visage")||n.includes("day cream")||n.includes("night cream"))return"creme-visage";
+    if(n.includes("serum")||n.includes("sérum"))return"serum";
+    if(n.includes("eye")||n.includes("yeux"))return"contour-yeux";
+    if(n.includes("body")||n.includes("corps")||n.includes("lotion"))return"baume-corps";
+    if(n.includes("deo")||n.includes("déodorant"))return"deodorant";
+    if(n.includes("perfume")||n.includes("parfum")||n.includes("eau de"))return"parfum";
+    if(n.includes("capsule")||n.includes("complement")||n.includes("complément")||n.includes("vitamin"))return"complement";
+    if(n.includes("makeup")||n.includes("lipstick")||n.includes("mascara")||n.includes("foundation"))return"maquillage";
+    return"autre";
+  };
+
+  const lastCmdDate=(cl)=>{
+    if(!cl.commandes||cl.commandes.length===0)return null;
+    return cl.commandes.reduce((best,cmd)=>new Date(cmd.date)>new Date(best.date)?cmd:best).date;
+  };
+  const lastD=lastCmdDate(c);
+  const overdue=lastD&&daysDiff(lastD)>=60;
+  const s=c.statut?STATUTS_CLIENT.find(x=>x.id===c.statut):null;
+
+  const updateStatut=(statut)=>save(clients.map(cl=>cl.id===c.id?{...cl,statut}:cl));
+  const updateNotes=(v)=>save(clients.map(cl=>cl.id===c.id?{...cl,notes:v}:cl));
+  const delClient=()=>{if(!window.confirm("Supprimer cette cliente ?"))return;save(clients.filter(cl=>cl.id!==c.id));setSel(null);};
+
+  const updateLigne=(idx,field,val)=>setCmdForm(p=>({...p,lignes:p.lignes.map((l,i)=>i===idx?{...l,[field]:val}:l)}));
+  const addLigne=()=>setCmdForm(p=>({...p,lignes:[...p.lignes,{nom:"",typeProduit:"shampoing"}]}));
+  const removeLigne=(idx)=>setCmdForm(p=>({...p,lignes:p.lignes.filter((_,i)=>i!==idx)}));
+
+  const addCmd=()=>{
+    const lignesValides=cmdForm.lignes.filter(l=>(l.nom==="__autre__"?l.nomLibre:l.nom)?.trim());
+    if(!lignesValides.length)return;
+    const lignes=lignesValides.map(l=>{
+      const t=TYPES_PRODUITS_DUREE.find(t=>t.id===l.typeProduit)||TYPES_PRODUITS_DUREE[5];
+      const nomFinal=l.nom==="__autre__"?l.nomLibre.trim():l.nom;
+      const produitCatalogue=catalogue?.find(p=>p.nom===l.nom);
+      return{nom:nomFinal,typeProduit:l.typeProduit,typeLabel:t.label,dureeJours:t.jours,prix:produitCatalogue?.prix||null};
+    });
+    // Si le montant est vide, calculer automatiquement la somme des prix du catalogue
+    const montantFinal=cmdForm.montant||(lignes.some(l=>l.prix)?lignes.reduce((s,l)=>s+(parseFloat(l.prix)||0),0):"");
+    const cmd={id:Date.now(),date:cmdForm.date,lignes,produits:lignes.map(l=>l.nom).join(", "),montant:montantFinal,suivi8:false,suivi21:false};
+    save(clients.map(cl=>cl.id===c.id?{...cl,commandes:[...(cl.commandes||[]),cmd]}:cl));
+    if(getPeriodeActuelle&&sgAll&&ss){
+      const periodeKey=`p${getPeriodeActuelle()}`;
+      sgAll(uid).then(data=>{
+        try{
+          const cp=data["db-cmd-periode"]?JSON.parse(data["db-cmd-periode"]):{};
+          const cur=cp[periodeKey]||{count:0,montant:0};
+          cp[periodeKey]={count:cur.count+1,montant:cur.montant+(parseFloat(montantFinal)||0)};
+          ss(uid,"db-cmd-periode",JSON.stringify(cp));
+        }catch{}
+      });
+    }
+    setCmdForm({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:new Date().toISOString().slice(0,10)});
+    setShowCmd(false);
+  };
+
+  const addRappel=(texte,date)=>{
+    const r={id:Date.now(),texte,date,fait:false};
+    save(clients.map(cl=>cl.id===c.id?{...cl,rappels:[...(cl.rappels||[]),r]}:cl));
+  };
+  const delRappel=(rid)=>save(clients.map(cl=>cl.id===c.id?{...cl,rappels:(cl.rappels||[]).filter(r=>r.id!==rid)}:cl));
+
+  return(
+    <div>
+      {/* Ligne cliente */}
+      <div style={{display:"flex",alignItems:"center",gap:".6rem",background:isActive?C.brun+"08":C.creme,border:`1.5px solid ${overdue?"#E6A817":isActive?C.rose:C.pale}`,borderRadius:isActive?"10px 10px 0 0":10,padding:".5rem .75rem",cursor:"pointer"}}
+        onClick={()=>setSel(isActive?null:c.id)}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:".35rem"}}>
+            <div style={{fontSize:".8rem",fontWeight:600,color:isActive?C.rose:C.brun}}>{c.prenom} {c.nom}</div>
+            {s&&<span style={{fontSize:".55rem",fontWeight:700,color:s.color,background:s.bg,borderRadius:10,padding:".05rem .3rem",border:`1px solid ${s.color}30`}}>{s.icon} {s.label}</span>}
+          </div>
+          <div style={{fontSize:".6rem",color:C.gris}}>
+            {lastD?`Dernière cmd : ${new Date(lastD).toLocaleDateString("fr-FR")}`:c.commandes?.length===0?"Aucune commande":""}
+            {overdue?" ⚠️ À relancer":""}
+          </div>
+        </div>
+        <button onClick={e=>{e.stopPropagation();setSel(c.id);setEditMode(true);}}
+          style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .45rem",fontSize:".62rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+          ✏️
+        </button>
+        <div style={{fontSize:".75rem",color:isActive?C.rose:C.pale,flexShrink:0,transform:isActive?"rotate(90deg)":"none",transition:"transform .2s"}}>›</div>
+      </div>
+
+      {/* Fiche dépliée */}
+      {isActive&&(
+        <div style={{border:`1.5px solid ${C.rose}`,borderTop:"none",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
+          {/* Header */}
+          <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:".75rem 1rem",display:"flex",gap:".65rem",alignItems:"flex-start"}}>
+            <div style={{width:36,height:36,borderRadius:"50%",background:C.rose,color:"white",fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {((c.prenom&&c.prenom[0])||(c.nom&&c.nom[0])||"?").toUpperCase()}
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.blanc}}>{c.prenom} {c.nom}{c.statut==="vip"?" ⭐":""}</div>
+              {c.tel&&<div style={{fontSize:".62rem",color:C.pale}}>📞 {c.tel}</div>}
+              {c.email&&<div style={{fontSize:".62rem",color:C.pale}}>✉️ {c.email}</div>}
+              {c.adresse&&<div style={{fontSize:".62rem",color:C.pale}}>📍 {c.adresse}</div>}
+              {c.ddn&&<div style={{fontSize:".6rem",color:C.or}}>🎂 {new Date(c.ddn).toLocaleDateString("fr-FR")}</div>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:".25rem",alignItems:"flex-end"}}>
+              <select value={c.statut||""} onChange={e=>updateStatut(e.target.value)}
+                style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",borderRadius:7,padding:".22rem .4rem",fontSize:".58rem",fontFamily:"inherit",color:C.blanc,cursor:"pointer",outline:"none"}}>
+                <option value="">Statut...</option>
+                {STATUTS_CLIENT.map(st=><option key={st.id} value={st.id}>{st.icon} {st.label}</option>)}
+              </select>
+              <button onClick={delClient} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:5,padding:".18rem .4rem",color:C.pale,cursor:"pointer",fontSize:".58rem",fontFamily:"inherit"}}>✕ Supprimer</button>
+            </div>
+          </div>
+
+          {/* Formulaire édition */}
+          {editMode&&<EditClientForm client={c} onSave={(f)=>{save(clients.map(cl=>cl.id===c.id?{...cl,...f}:cl));setEditMode(false);}} onCancel={()=>setEditMode(false)}/>}
+
+          <div style={{padding:".85rem 1rem"}}>
+            {/* Commandes */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+              <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose}}>📦 Commandes ({c.commandes?.length||0})</div>
+              <button onClick={()=>setShowCmd(p=>!p)} style={{background:C.brun,color:C.blanc,border:"none",borderRadius:6,padding:".2rem .55rem",fontSize:".63rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Commande</button>
+            </div>
+            {showCmd&&(
+              <div style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".65rem",border:`1px solid ${C.pale}`}}>
+                {!catalogue&&<div style={{fontSize:".68rem",color:C.gris,marginBottom:".4rem"}}>Chargement du catalogue...</div>}
+                {cmdForm.lignes.map((ligne,idx)=>(
+                  <div key={idx} style={{marginBottom:".5rem",background:C.blanc,borderRadius:8,padding:".5rem",border:`1px solid ${C.pale}`}}>
+                    <div style={{display:"flex",gap:".3rem",marginBottom:".3rem",alignItems:"center"}}>
+                      <div style={{flex:1,position:"relative"}}>
+                        <input
+                          value={ligne.recherche!==undefined?ligne.recherche:(ligne.nom==="__autre__"?"":ligne.nom)}
+                          onChange={e=>{
+                            updateLigne(idx,"recherche",e.target.value);
+                            updateLigne(idx,"rechercheOuverte",true);
+                            updateLigne(idx,"nom","");
+                          }}
+                          onFocus={()=>updateLigne(idx,"rechercheOuverte",true)}
+                          placeholder="🔍 Rechercher un produit Mihi..."
+                          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .4rem",fontSize:".74rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none"}}/>
+                        {ligne.rechercheOuverte&&(
+                          <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:20,background:"white",border:`1px solid ${C.pale}`,borderRadius:8,marginTop:".2rem",maxHeight:200,overflowY:"auto",boxShadow:"0 4px 12px rgba(0,0,0,.1)"}}>
+                        {!catalogue&&<div style={{padding:".5rem",fontSize:".68rem",color:C.gris}}>Chargement du catalogue...</div>}
+                            {catalogue&&catalogue.length===0&&<div style={{padding:".5rem .65rem",fontSize:".68rem",color:"#B04040"}}>⚠️ Catalogue vide — importez-le depuis Admin → 📦 Import Catalogue</div>}
+                            {catalogue&&catalogue.length>0&&(()=>{
+                              const recherche=(ligne.recherche||"").toLowerCase().trim();
+                              const filtres=recherche
+                                ?catalogue.filter(p=>p.nom.toLowerCase().includes(recherche)||p.categorie.toLowerCase().includes(recherche))
+                                :catalogue;
+                              if(filtres.length===0) return <div style={{padding:".5rem .65rem",fontSize:".68rem",color:C.gris}}>Aucun produit trouvé</div>;
+                              // Grouper par catégorie
+                              const grouped={};
+                              filtres.forEach(p=>{
+                                const cat=p.categorie||"Autre";
+                                if(!grouped[cat]) grouped[cat]=[];
+                                grouped[cat].push(p);
+                              });
+                              return Object.entries(grouped).map(([cat,prods])=>(
+                                <div key={cat}>
+                                  <div style={{padding:".25rem .6rem",fontSize:".58rem",fontWeight:700,color:C.gris,background:C.creme,letterSpacing:".06em"}}>{cat} ({prods.length})</div>
+                                  {prods.slice(0,recherche?50:10).map((p,pi)=>(
+                                    <div key={pi} onClick={()=>{
+                                        const typeAuto=deviinerType(p.nom);
+                                        updateLigne(idx,"nom",p.nom);
+                                        updateLigne(idx,"recherche",p.nom);
+                                        updateLigne(idx,"typeProduit",typeAuto);
+                                        updateLigne(idx,"rechercheOuverte",false);
+                                      }}
+                                      style={{padding:".38rem .6rem",fontSize:".72rem",color:C.texte,cursor:"pointer",borderBottom:`1px solid ${C.pale}20`,display:"flex",justifyContent:"space-between"}}
+                                      onMouseDown={e=>e.preventDefault()}>
+                                      <span>{p.nom}</span>
+                                      <span style={{color:C.brun,fontWeight:600,flexShrink:0,marginLeft:".5rem"}}>{p.prix}€</span>
+                                    </div>
+                                  ))}
+                                  {!recherche&&prods.length>10&&<div style={{padding:".2rem .6rem",fontSize:".6rem",color:C.gris,fontStyle:"italic"}}>+ {prods.length-10} autres — tape pour filtrer</div>}
+                                </div>
+                              ));
+                            })()}
+                            <div onClick={()=>{
+                                updateLigne(idx,"nom","__autre__");
+                                updateLigne(idx,"rechercheOuverte",false);
+                              }}
+                              style={{padding:".4rem .6rem",fontSize:".7rem",color:C.gris,cursor:"pointer",fontStyle:"italic"}}
+                              onMouseDown={e=>e.preventDefault()}>
+                              ✏️ Autre (saisie libre)
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {cmdForm.lignes.length>1&&<button onClick={()=>removeLigne(idx)} style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem",flexShrink:0}}>✕</button>}
+                    </div>
+                    {ligne.nom&&ligne.nom!=="__autre__"&&!ligne.rechercheOuverte&&(
+                      <div style={{fontSize:".62rem",color:C.vert,marginBottom:".3rem"}}>✓ {ligne.nom}</div>
+                    )}
+                    {ligne.nom==="__autre__"&&(
+                      <input placeholder="Nom du produit" value={ligne.nomLibre||""} onChange={e=>updateLigne(idx,"nomLibre",e.target.value)}
+                        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".32rem .5rem",fontSize:".73rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".3rem"}}/>
+                    )}
+                    <div style={{display:"flex",alignItems:"center",gap:".4rem"}}>
+                      <span style={{fontSize:".62rem",color:C.gris,flexShrink:0}}>⏱️ Durée d'utilisation :</span>
+                      <select value={ligne.typeProduit} onChange={e=>updateLigne(idx,"typeProduit",e.target.value)}
+                        style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:6,padding:".25rem .35rem",fontSize:".66rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none"}}>
+                        {TYPES_PRODUITS_DUREE.map(t=><option key={t.id} value={t.id}>{t.label} — {t.jours}j</option>)}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+                <button onClick={addLigne} style={{background:"none",border:`1px dashed ${C.pale}`,borderRadius:7,padding:".28rem .55rem",fontSize:".66rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",marginBottom:".4rem"}}>+ Produit</button>
+                {(()=>{
+                  const totalCatalogue=cmdForm.lignes.reduce((s,l)=>{
+                    const p=catalogue?.find(x=>x.nom===l.nom);
+                    return s+(p?parseFloat(p.prix)||0:0);
+                  },0);
+                  return totalCatalogue>0&&!cmdForm.montant&&(
+                    <div style={{fontSize:".64rem",color:C.vert,marginBottom:".4rem"}}>💡 Total catalogue détecté : {totalCatalogue}€ (sera utilisé si tu laisses le montant vide)</div>
+                  );
+                })()}
+                <div style={{display:"flex",gap:".4rem"}}>
+                  <input placeholder="Montant (€) — auto si vide" value={cmdForm.montant} onChange={e=>setCmdForm(p=>({...p,montant:e.target.value}))}
+                    style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .55rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+                  <input type="date" value={cmdForm.date} onChange={e=>setCmdForm(p=>({...p,date:e.target.value}))}
+                    style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .55rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+                </div>
+                <div style={{display:"flex",gap:".4rem",marginTop:".4rem"}}>
+                  <button onClick={addCmd} style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".42rem",fontSize:".73rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Enregistrer</button>
+                  <button onClick={()=>setShowCmd(false)} style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:7,padding:".42rem",fontSize:".73rem",fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
+                </div>
+              </div>
+            )}
+            {c.commandes&&c.commandes.length>0?[...c.commandes].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(cmd=>{
+              const dd=daysDiff(cmd.date);
+              const typeInfo=cmd.lignes?.[0]?TYPES_PRODUITS_DUREE.find(t=>t.id===cmd.lignes[0].typeProduit):null;
+              const dureeRappel=typeInfo?.jours||cmd.lignes?.[0]?.dureeJours||30;
+              const dateRappel=new Date(new Date(cmd.date).getTime()+dureeRappel*24*60*60*1000);
+              const joursAvantRappel=Math.ceil((dateRappel-new Date())/(1000*60*60*24));
+              const cmdOuverte=cmdDetailOuverte===cmd.id;
+              return(
+                <div key={cmd.id} style={{background:!cmd.rappelFait&&((dd>=8&&!cmd.suivi8)||(dd>=21&&!cmd.suivi21))?"#FFF8E1":C.creme,border:`1px solid ${!cmd.rappelFait&&((dd>=8&&!cmd.suivi8)||(dd>=21&&!cmd.suivi21))?"#E6A817":C.pale}`,borderRadius:9,padding:".55rem .8rem",marginBottom:".4rem",cursor:"pointer"}}
+                  onClick={()=>setCmdDetailOuverte(cmdOuverte?null:cmd.id)}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:".2rem"}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:".74rem",fontWeight:600,color:C.brun}}>{cmd.produits||cmd.lignes?.map(l=>l.nom).join(", ")||"Produit"}</div>
+                      <div style={{fontSize:".6rem",color:C.gris}}>{new Date(cmd.date).toLocaleDateString("fr-FR")} · il y a {dd}j</div>
+                      {cmd.lignes?.[0]?.typeLabel&&(
+                        <div style={{fontSize:".58rem",color:C.lilas,fontWeight:600,marginTop:".1rem"}}>🏷️ {cmd.lignes.map(l=>l.typeLabel).join(", ")}</div>
+                      )}
+                      <div style={{fontSize:".58rem",color:cmd.rappelFait?C.vert:joursAvantRappel<=0?"#C44B1A":C.gris,marginTop:".1rem",fontWeight:cmd.rappelFait||joursAvantRappel<=0?700:400}}>
+                        {cmd.rappelFait?"✅ Rappel effectué":joursAvantRappel<=0?`⏰ Rappel dépassé (prévu le ${dateRappel.toLocaleDateString("fr-FR")})`:`🔔 Prochain rappel dans ${joursAvantRappel}j (${dateRappel.toLocaleDateString("fr-FR")})`}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:".4rem",flexShrink:0}}>
+                      {cmd.montant&&<div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.brun}}>{cmd.montant}€</div>}
+                      <span style={{fontSize:".7rem",color:C.gris,transform:cmdOuverte?"rotate(90deg)":"none",transition:"transform .2s"}}>›</span>
+                    </div>
+                  </div>
+
+                  {/* Détail complet dépliable */}
+                  {cmdOuverte&&(
+                    <div style={{marginTop:".5rem",paddingTop:".5rem",borderTop:`1px solid ${C.pale}`}} onClick={e=>e.stopPropagation()}>
+                      <div style={{fontSize:".62rem",fontWeight:700,color:C.brun,marginBottom:".35rem",textTransform:"uppercase",letterSpacing:".06em"}}>📋 Détail de la commande</div>
+                      {cmd.lignes&&cmd.lignes.length>0?cmd.lignes.map((l,i)=>(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:".7rem",color:C.texte,padding:".25rem 0",borderBottom:i<cmd.lignes.length-1?`1px solid ${C.pale}30`:"none"}}>
+                          <span>{l.nom}</span>
+                          <span style={{color:C.lilas,fontSize:".62rem"}}>{l.typeLabel}</span>
+                        </div>
+                      )):<div style={{fontSize:".7rem",color:C.gris}}>{cmd.produits}</div>}
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.gris,marginTop:".4rem"}}>
+                        <span>Date de commande</span><span style={{fontWeight:600,color:C.brun}}>{new Date(cmd.date).toLocaleDateString("fr-FR")}</span>
+                      </div>
+                      {cmd.montant&&(
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.gris,marginTop:".2rem"}}>
+                          <span>Montant</span><span style={{fontWeight:700,color:C.brun}}>{cmd.montant}€</span>
+                        </div>
+                      )}
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".68rem",color:C.gris,marginTop:".2rem",marginBottom:".5rem"}}>
+                        <span>Date de rappel prévue</span><span style={{fontWeight:600,color:joursAvantRappel<=0?"#C44B1A":C.brun}}>{dateRappel.toLocaleDateString("fr-FR")}</span>
+                      </div>
+
+                      {/* Case à cocher rappel fait */}
+                      <div onClick={()=>save(clients.map(cl=>cl.id===c.id?{...cl,commandes:cl.commandes.map(cm=>cm.id===cmd.id?{...cm,rappelFait:!cm.rappelFait}:cm)}:cl))}
+                        style={{display:"flex",alignItems:"center",gap:".5rem",background:cmd.rappelFait?"#E8F5E9":C.creme,border:`1.5px solid ${cmd.rappelFait?C.vert:C.pale}`,borderRadius:8,padding:".45rem .6rem",cursor:"pointer",marginBottom:".4rem"}}>
+                        <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${cmd.rappelFait?C.vert:C.pale}`,background:cmd.rappelFait?C.vert:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          {cmd.rappelFait&&<span style={{color:"white",fontSize:".6rem",fontWeight:700}}>✓</span>}
+                        </div>
+                        <span style={{fontSize:".7rem",fontWeight:600,color:cmd.rappelFait?C.vert:C.brun}}>
+                          {cmd.rappelFait?"✓ Rappel effectué":"Marquer le rappel comme fait"}
+                        </span>
+                      </div>
+
+                      <button onClick={()=>{if(window.confirm("Supprimer cette commande ?"))save(clients.map(cl=>cl.id===c.id?{...cl,commandes:cl.commandes.filter(cm=>cm.id!==cmd.id)}:cl));}}
+                        style={{background:"none",border:"1px solid #E0C0C0",borderRadius:6,padding:".25rem .5rem",fontSize:".62rem",color:"#B04040",cursor:"pointer",fontFamily:"inherit"}}>
+                        ✕ Supprimer cette commande
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Boutons suivi — toujours visibles, désactivés avant échéance */}
+                  <div style={{display:"flex",gap:".3rem",marginTop:".4rem"}} onClick={e=>e.stopPropagation()}>
+                    <button onClick={()=>dd>=8&&save(clients.map(cl=>cl.id===c.id?{...cl,commandes:cl.commandes.map(cm=>cm.id===cmd.id?{...cm,suivi8:true}:cm)}:cl))}
+                      disabled={dd<8}
+                      style={{background:cmd.suivi8?"#E8F5E9":dd>=8?C.pale:"#f5f5f5",color:cmd.suivi8?C.vert:dd>=8?C.gris:"#bbb",border:"none",borderRadius:6,padding:".18rem .45rem",fontSize:".6rem",fontWeight:600,fontFamily:"inherit",cursor:dd>=8?"pointer":"default"}}>
+                      {cmd.suivi8?"✓ J+8":dd>=8?"Suivi J+8":`J+8 (dans ${8-dd}j)`}
+                    </button>
+                    <button onClick={()=>dd>=21&&save(clients.map(cl=>cl.id===c.id?{...cl,commandes:cl.commandes.map(cm=>cm.id===cmd.id?{...cm,suivi21:true}:cm)}:cl))}
+                      disabled={dd<21}
+                      style={{background:cmd.suivi21?"#E8F5E9":dd>=21?C.pale:"#f5f5f5",color:cmd.suivi21?C.vert:dd>=21?C.gris:"#bbb",border:"none",borderRadius:6,padding:".18rem .45rem",fontSize:".6rem",fontWeight:600,fontFamily:"inherit",cursor:dd>=21?"pointer":"default"}}>
+                      {cmd.suivi21?"✓ J+21":dd>=21?"Suivi J+21":`J+21 (dans ${21-dd}j)`}
+                    </button>
+                  </div>
+                </div>
+              );
+            }):<div style={{fontSize:".7rem",color:C.gris,padding:".3rem 0"}}>Aucune commande.</div>}
+
+            {/* Notes — defaultValue + onBlur pour éviter re-render */}
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,margin:".75rem 0 .35rem"}}>📝 Notes</div>
+            <textarea key={`notes-${c.id}`} defaultValue={c.notes||""} onBlur={e=>updateNotes(e.target.value)}
+              placeholder="Notes personnelles..." style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:9,padding:".55rem .75rem",fontSize:".74rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",minHeight:60,lineHeight:1.5}}/>
+
+            {/* Rappels */}
+            <RappelsSection clientId={c.id} rappels={c.rappels||[]} clients={clients} save={save}/>
+
+            {/* Carte de fidélité */}
+            <CarteFideliteSection client={c} clients={clients} save={save} uid={uid}/>
+
+            {/* Recommandation */}
+            <RecommandationSection client={c} uid={uid}/>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Carte de fidélité interactive — tampons + cadeau configurable
+function CarteFideliteSection({client, clients, save, uid}){
+  const[showConfig,setShowConfig]=useState(false);
+  const[nbTampons,setNbTampons]=useState(10);
+  const[cadeau,setCadeau]=useState("Un produit offert au choix");
+  const[configChargee,setConfigChargee]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(snap.exists()&&snap.data()["db-fidelite-config"]){
+          const cfg=JSON.parse(snap.data()["db-fidelite-config"]);
+          setNbTampons(cfg.nbTampons||10);
+          setCadeau(cfg.cadeau||"Un produit offert au choix");
+        }
+      }catch{}
+      setConfigChargee(true);
+    })();
+  },[uid]);
+
+  const sauverConfig=async(next)=>{
+    try{await setDoc(doc(db,"users",uid),{"db-fidelite-config":JSON.stringify(next)},{merge:true});}catch{}
+  };
+
+  const tampons=client.fideliteTampons||0;
+  const tamponsArray=Array.from({length:nbTampons},(_,i)=>i<tampons);
+  const carteComplete=tampons>=nbTampons;
+
+  const toggleTampon=(idx)=>{
+    const newTampons=idx<tampons?idx:idx+1;
+    save(clients.map(cl=>cl.id===client.id?{...cl,fideliteTampons:Math.min(newTampons,nbTampons)}:cl));
+  };
+
+  const reinitialiser=()=>{
+    if(!window.confirm("Réinitialiser la carte de fidélité de cette cliente (cadeau remis) ?"))return;
+    save(clients.map(cl=>cl.id===client.id?{...cl,fideliteTampons:0,fideliteHistorique:[...(cl.fideliteHistorique||[]),{date:new Date().toISOString(),cadeau}]}:cl));
+  };
+
+  const envoyerCarte=()=>{
+    const texte=`🎁 Voici ta carte de fidélité !\n\n${"⭐".repeat(tampons)}${"☆".repeat(nbTampons-tampons)}\n\n${tampons}/${nbTampons} tampons collectés\n\n${carteComplete?`🎉 Félicitations ! Tu as débloqué : ${cadeau}`:`Plus que ${nbTampons-tampons} achat${nbTampons-tampons>1?"s":""} pour débloquer : ${cadeau}`}`;
+    navigator.clipboard?.writeText(texte);
+    alert("✅ Carte copiée ! Colle-la dans ta conversation avec la cliente.");
+  };
+
+  if(!configChargee)return null;
+
+  return(
+    <div style={{marginTop:".85rem",paddingTop:".75rem",borderTop:`1px solid ${C.pale}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or}}>🎁 Carte de fidélité</div>
+        <button onClick={()=>setShowConfig(p=>!p)} style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".18rem .45rem",fontSize:".6rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
+          ⚙️ Configurer
+        </button>
+      </div>
+
+      {showConfig&&(
+        <div style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".6rem",border:`1px solid ${C.pale}`}}>
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600}}>Nombre de tampons pour débloquer le cadeau</div>
+          <input type="number" min="3" max="30" value={nbTampons} onChange={e=>{const v=parseInt(e.target.value)||10;setNbTampons(v);sauverConfig({nbTampons:v,cadeau});}}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",marginBottom:".4rem"}}/>
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600}}>Cadeau offert</div>
+          <input value={cadeau} onChange={e=>setCadeau(e.target.value)} onBlur={()=>sauverConfig({nbTampons,cadeau})}
+            placeholder="Ex: Un parfum offert, -20% sur la prochaine commande..."
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+          <div style={{fontSize:".58rem",color:C.gris,marginTop:".3rem",fontStyle:"italic"}}>💡 Cette config s'applique à toutes tes clientes</div>
+        </div>
+      )}
+
+      {/* Carte visuelle */}
+      <div style={{background:carteComplete?`linear-gradient(135deg,${C.or},#E6C158)`:C.creme,borderRadius:12,padding:".75rem",border:`1.5px solid ${carteComplete?C.or:C.pale}`}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:".35rem",justifyContent:"center",marginBottom:".5rem"}}>
+          {tamponsArray.map((rempli,i)=>(
+            <div key={i} onClick={()=>toggleTampon(i)}
+              style={{width:28,height:28,borderRadius:"50%",background:rempli?C.or:carteComplete?"rgba(255,255,255,.3)":"white",border:`2px solid ${rempli?C.or:C.pale}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".85rem",cursor:"pointer",transition:"all .15s"}}>
+              {rempli?"⭐":""}
+            </div>
+          ))}
+        </div>
+        <div style={{textAlign:"center",fontSize:".72rem",fontWeight:600,color:carteComplete?"white":C.brun,marginBottom:".3rem"}}>
+          {tampons}/{nbTampons} tampons
+        </div>
+        <div style={{textAlign:"center",fontSize:".68rem",color:carteComplete?"white":C.gris,fontWeight:carteComplete?700:400}}>
+          {carteComplete?`🎉 Cadeau débloqué : ${cadeau}`:`🎁 Récompense : ${cadeau}`}
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:".4rem",marginTop:".5rem"}}>
+        <button onClick={envoyerCarte}
+          style={{flex:1,background:C.brun,color:"white",border:"none",borderRadius:8,padding:".42rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          📤 Envoyer la carte
+        </button>
+        {carteComplete&&(
+          <button onClick={reinitialiser}
+            style={{flex:1,background:C.vert,color:"white",border:"none",borderRadius:8,padding:".42rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            ✓ Cadeau remis — Reset
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Système de recommandation — lien à envoyer, cadeau configurable, prospects auto
+function RecommandationSection({client, uid}){
+  const[showConfig,setShowConfig]=useState(false);
+  const[cadeauRecommandation,setCadeauRecommandation]=useState("Un produit offert dès la 1ère recommandation");
+  const[configChargee,setConfigChargee]=useState(false);
+  const[copied,setCopied]=useState(false);
+
+  const slug=uid;
+  const lienRecommandation=`https://blazing-dinasty-1fad9.web.app/recommande/${slug}?cliente=${encodeURIComponent(client.nom||client.prenom||"")}`;
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(snap.exists()&&snap.data()["db-recommandation-config"]){
+          const cfg=JSON.parse(snap.data()["db-recommandation-config"]);
+          setCadeauRecommandation(cfg.cadeau||"Un produit offert dès la 1ère recommandation");
+        }
+      }catch{}
+      setConfigChargee(true);
+    })();
+  },[uid]);
+
+  const sauverConfig=async(cadeau)=>{
+    try{await setDoc(doc(db,"users",uid),{"db-recommandation-config":JSON.stringify({cadeau})},{merge:true});}catch{}
+  };
+
+  const copierLien=()=>{
+    const texte=`🌸 Tu aimes mes produits ? Recommande-moi à 3 à 5 amies et reçois : ${cadeauRecommandation} !\n\n👉 ${lienRecommandation}`;
+    navigator.clipboard?.writeText(texte);
+    setCopied(true);
+    setTimeout(()=>setCopied(false),2500);
+  };
+
+  if(!configChargee)return null;
+
+  return(
+    <div style={{marginTop:".85rem",paddingTop:".75rem",borderTop:`1px solid ${C.pale}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas}}>🤝 Recommandation</div>
+        <button onClick={()=>setShowConfig(p=>!p)} style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".18rem .45rem",fontSize:".6rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
+          ⚙️ Configurer
+        </button>
+      </div>
+
+      {showConfig&&(
+        <div style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".6rem",border:`1px solid ${C.pale}`}}>
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600}}>Cadeau offert (dès 3 personnes recommandées, jusqu'à 5)</div>
+          <input value={cadeauRecommandation} onChange={e=>setCadeauRecommandation(e.target.value)} onBlur={()=>sauverConfig(cadeauRecommandation)}
+            placeholder="Ex: -15% sur ta prochaine commande, un échantillon offert..."
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+          <div style={{fontSize:".58rem",color:C.gris,marginTop:".3rem",fontStyle:"italic"}}>💡 S'applique à toutes tes clientes</div>
+        </div>
+      )}
+
+      <div style={{background:C.creme,borderRadius:10,padding:".65rem .75rem",border:`1px solid ${C.pale}`}}>
+        <div style={{fontSize:".7rem",color:C.brun,lineHeight:1.6,marginBottom:".5rem"}}>
+          🎁 Récompense : <strong>{cadeauRecommandation}</strong>
+        </div>
+        <div style={{fontSize:".62rem",color:C.gris,wordBreak:"break-all",marginBottom:".5rem"}}>{lienRecommandation}</div>
+        <button onClick={copierLien}
+          style={{width:"100%",background:copied?C.vert:C.lilas,color:"white",border:"none",borderRadius:8,padding:".45rem",fontSize:".74rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          {copied?"✓ Copié — colle-le dans ta conversation !":"📤 Copier le lien à envoyer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Rappels en composant isolé
+function RappelsSection({clientId, rappels, clients, save}){
+  const[show,setShow]=useState(false);
+  const[texte,setTexte]=useState("");
+  const[date,setDate]=useState("");
+  const ajouter=()=>{
+    if(!texte.trim()||!date)return;
+    const r={id:Date.now(),texte,date,fait:false};
+    save(clients.map(c=>c.id===clientId?{...c,rappels:[...(c.rappels||[]),r]}:c));
+    setTexte("");setDate("");setShow(false);
+  };
+  const supprimer=(rid)=>save(clients.map(c=>c.id===clientId?{...c,rappels:(c.rappels||[]).filter(r=>r.id!==rid)}:c));
+  const toggle=(rid)=>save(clients.map(c=>c.id===clientId?{...c,rappels:(c.rappels||[]).map(r=>r.id===rid?{...r,fait:!r.fait}:r)}:c));
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:".75rem 0 .35rem"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris}}>🔔 Rappels</div>
+        <button onClick={()=>setShow(p=>!p)} style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".18rem .45rem",fontSize:".63rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>+ Rappel</button>
+      </div>
+      {show&&(
+        <div style={{background:C.creme,borderRadius:9,padding:".6rem",marginBottom:".4rem",border:`1px solid ${C.pale}`}}>
+          <input placeholder="Note de rappel..." value={texte} onChange={e=>setTexte(e.target.value)}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".74rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".35rem"}}/>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".74rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".35rem"}}/>
+          <div style={{display:"flex",gap:".35rem"}}>
+            <button onClick={ajouter} style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Ajouter</button>
+            <button onClick={()=>setShow(false)} style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:7,padding:".4rem",fontSize:".72rem",fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
+          </div>
+        </div>
+      )}
+      {rappels.map(r=>(
+        <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:r.fait?"#E8F5E9":C.creme,borderRadius:8,padding:".4rem .7rem",marginBottom:".3rem",border:`1px solid ${r.fait?C.vert:C.pale}`}}>
+          <div>
+            <div style={{fontSize:".73rem",color:C.texte,textDecoration:r.fait?"line-through":"none"}}>{r.texte}</div>
+            <div style={{fontSize:".58rem",color:C.gris}}>{r.date&&new Date(r.date).toLocaleDateString("fr-FR")}</div>
+          </div>
+          <div style={{display:"flex",gap:".25rem"}}>
+            <button onClick={()=>toggle(r.id)} style={{background:r.fait?C.vert:"none",border:`1px solid ${r.fait?C.vert:C.pale}`,borderRadius:5,padding:".15rem .38rem",fontSize:".6rem",color:r.fait?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>{r.fait?"✓":"Fait"}</button>
+            <button onClick={()=>supprimer(r.id)} style={{background:"none",border:"none",color:C.pale,cursor:"pointer",fontSize:".68rem"}}>✕</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Input global — JAMAIS défini dans un composant pour éviter la perte de focus
+const GInput=({type="text",value,onChange,placeholder,style={}})=>(
+  <input type={type} value={value} onChange={onChange} placeholder={placeholder}
+    style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".35rem",...style}}/>
+);
+
+function EditClientForm({client, onSave, onCancel}){
+  const[f,setF]=useState({
+    prenom:client.prenom||"",nom:client.nom||"",
+    tel:client.tel||"",email:client.email||"",
+    ddn:client.ddn||"",adresse:client.adresse||"",
+    notes:client.notes||""
+  });
+  return(
+    <div style={{background:C.creme,padding:".75rem 1rem",borderBottom:`1px solid ${C.pale}`}}>
+      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>✏️ Modifier</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".35rem"}}>
+        <GInput value={f.prenom} onChange={e=>setF(p=>({...p,prenom:e.target.value}))} placeholder="Prénom"/>
+        <GInput value={f.nom} onChange={e=>setF(p=>({...p,nom:e.target.value}))} placeholder="Nom"/>
+      </div>
+      <GInput value={f.tel} onChange={e=>setF(p=>({...p,tel:e.target.value}))} placeholder="Téléphone"/>
+      <GInput value={f.email} onChange={e=>setF(p=>({...p,email:e.target.value}))} placeholder="Email"/>
+      <GInput type="date" value={f.ddn} onChange={e=>setF(p=>({...p,ddn:e.target.value}))}/>
+      <GInput value={f.adresse} onChange={e=>setF(p=>({...p,adresse:e.target.value}))} placeholder="Adresse"/>
+      <textarea value={f.notes} onChange={e=>setF(p=>({...p,notes:e.target.value}))} placeholder="Notes"
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",resize:"vertical",minHeight:50,marginBottom:".4rem"}}/>
+      <div style={{display:"flex",gap:".4rem"}}>
+        <button onClick={()=>onSave(f)} style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".42rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>✓ Enregistrer</button>
+        <button onClick={onCancel} style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:8,padding:".42rem",fontSize:".75rem",fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
+      </div>
+    </div>
+  );
+}
+
+const ACTIONS_RELANCE=[
+  {id:"a1",label:"Envoyer un message personnalisé pour prendre des nouvelles"},
+  {id:"a2",label:"Partager un résultat client ou avant/après pertinent"},
+  {id:"a3",label:"Proposer un nouveau produit adapté à son profil"},
+  {id:"a4",label:"Offrir un conseil beauté/bien-être gratuit"},
+  {id:"a5",label:"Inviter à un live, event ou dégustation"},
+];
+
+const TEXTES_RELANCE=[
+  {id:"t1",label:"Relance douce",texte:`Coucou [Prénom] ! 🌸\n\nJe pensais à toi en voyant les nouveautés Mihi. Tu m'avais dit que [rappel besoin/produit]... Je me demandais si tu avais eu l'occasion de le tester ?\n\nJe suis là si tu as des questions 😊`},
+  {id:"t2",label:"Partage de résultat",texte:`Bonjour [Prénom] ! ✨\n\nJe voulais partager avec toi le témoignage d'une cliente qui avait le même besoin que toi : [résultat client].\n\nÇa m'a fait penser à toi — est-ce que tu serais tentée d'essayer ? Je t'offre mes conseils personnalisés 💛`},
+  {id:"t3",label:"Offre exclusive",texte:`Hello [Prénom] ! 👋\n\nJ'ai une petite surprise pour mes clientes fidèles — [offre/nouveauté]. Je pense que ça pourrait vraiment t'intéresser vu [raison personnalisée].\n\nDis-moi si tu veux qu'on en parle ! 🌿`},
+];
+
+function ClientsRelanceTab({clients,save,uid}){
+  const[openClient,setOpenClient]=useState(null);
+  const[openTexte,setOpenTexte]=useState(null);
+  const[copied,setCopied]=useState(null);
+
+  const clientsCibles=(clients||[]).filter(c=>c.statut==="inactif"||c.statut==="consolider");
+  const inactifs=clientsCibles.filter(c=>c.statut==="inactif");
+  const consolider=clientsCibles.filter(c=>c.statut==="consolider");
+
+  const toggleAction=(clientId,actionId)=>{
+    const c=clients.find(x=>x.id===clientId);
+    if(!c)return;
+    const actions=c.actionsRelance||{};
+    const next={...actions,[actionId]:!actions[actionId]};
+    save(clients.map(x=>x.id===clientId?{...x,actionsRelance:next}:x));
+  };
+
+  const copyTexte=(texte)=>{
+    navigator.clipboard?.writeText(texte);
+    setCopied(texte);
+    setTimeout(()=>setCopied(null),2000);
+  };
+
+  const renderSection=(titre,liste,couleur,icon)=>{
+    if(liste.length===0)return null;
+    return(
+      <div style={{marginBottom:"1rem"}}>
+        <div style={{display:"flex",alignItems:"center",gap:".5rem",marginBottom:".5rem"}}>
+          <span style={{fontSize:"1rem"}}>{icon}</span>
+          <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",color:couleur,fontWeight:600}}>{titre}</div>
+          <div style={{background:couleur+"20",color:couleur,borderRadius:20,padding:".1rem .5rem",fontSize:".65rem",fontWeight:700}}>{liste.length}</div>
+        </div>
+        {liste.map(c=>{
+          const isOpen=openClient===c.id;
+          const actions=c.actionsRelance||{};
+          const done=ACTIONS_RELANCE.filter(a=>actions[a.id]).length;
+          return(
+            <div key={c.id} style={{background:C.blanc,border:`1.5px solid ${isOpen?couleur:C.pale}`,borderRadius:12,marginBottom:".4rem",overflow:"hidden"}}>
+              <div onClick={()=>setOpenClient(isOpen?null:c.id)}
+                style={{display:"flex",alignItems:"center",gap:".6rem",padding:".55rem .85rem",cursor:"pointer"}}>
+                <div style={{width:34,height:34,borderRadius:"50%",background:couleur+"20",color:couleur,fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {(c.nom||"?")[0].toUpperCase()}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:".82rem",fontWeight:600,color:C.brun}}>{c.nom}</div>
+                  <div style={{fontSize:".6rem",color:C.gris}}>
+                    {done}/{ACTIONS_RELANCE.length} actions · {c.statut==="inactif"?"Inactive":"À consolider"}
+                  </div>
+                </div>
+                {done===ACTIONS_RELANCE.length
+                  ?<div style={{fontSize:".65rem",color:C.vert,fontWeight:700}}>✅ Complet</div>
+                  :<div style={{width:36,height:6,background:C.pale,borderRadius:10,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:couleur,width:(done/ACTIONS_RELANCE.length*100)+"%",borderRadius:10}}/>
+                  </div>
+                }
+                <div style={{fontSize:".75rem",color:C.gris,transform:isOpen?"rotate(90deg)":"none",transition:"transform .2s"}}>›</div>
+              </div>
+
+              {isOpen&&(
+                <div style={{borderTop:`1px solid ${C.pale}`,padding:".75rem .85rem"}}>
+                  {/* 5 actions */}
+                  <div style={{fontSize:".6rem",fontWeight:700,color:couleur,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".45rem"}}>
+                    ✅ 5 actions pour réactiver ce contact
+                  </div>
+                  {ACTIONS_RELANCE.map(a=>(
+                    <div key={a.id} onClick={()=>toggleAction(c.id,a.id)}
+                      style={{display:"flex",alignItems:"flex-start",gap:".5rem",padding:".35rem 0",cursor:"pointer",borderBottom:`1px solid ${C.pale}20`}}>
+                      <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${actions[a.id]?C.vert:C.pale}`,background:actions[a.id]?C.vert:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:".1rem"}}>
+                        {actions[a.id]&&<span style={{color:"white",fontSize:".6rem",fontWeight:700}}>✓</span>}
+                      </div>
+                      <span style={{fontSize:".75rem",color:actions[a.id]?C.vert:C.texte,textDecoration:actions[a.id]?"line-through":"none",lineHeight:1.5}}>{a.label}</span>
+                    </div>
+                  ))}
+
+                  {/* 3 textes de relance */}
+                  <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginTop:".75rem",marginBottom:".45rem"}}>
+                    💬 Idées de message de relance
+                  </div>
+                  {TEXTES_RELANCE.map(t=>(
+                    <div key={t.id} style={{background:C.creme,borderRadius:9,padding:".55rem .75rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".3rem"}}>
+                        <div style={{fontSize:".68rem",fontWeight:700,color:C.brun}}>{t.label}</div>
+                        <button onClick={()=>copyTexte(t.texte.replace(/\[Prénom\]/g,c.nom.split(" ")[0]))}
+                          style={{background:copied===t.texte?C.vert:C.brun,color:"white",border:"none",borderRadius:6,padding:".18rem .5rem",fontSize:".62rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                          {copied===t.texte?"✓ Copié":"📋 Copier"}
+                        </button>
+                      </div>
+                      <div onClick={()=>setOpenTexte(openTexte===t.id+"_"+c.id?null:t.id+"_"+c.id)}
+                        style={{fontSize:".7rem",color:C.gris,lineHeight:1.6,cursor:"pointer",maxHeight:openTexte===t.id+"_"+c.id?"none":"2.5rem",overflow:"hidden",whiteSpace:"pre-line"}}>
+                        {t.texte.replace(/\[Prénom\]/g,c.nom.split(" ")[0])}
+                      </div>
+                      {openTexte!==t.id+"_"+c.id&&(
+                        <div style={{fontSize:".6rem",color:C.rose,marginTop:".2rem",cursor:"pointer"}} onClick={()=>setOpenTexte(t.id+"_"+c.id)}>Voir tout →</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:300,color:C.brun,marginBottom:".25rem"}}>
+        Stratégie de <em style={{fontStyle:"italic",color:"#5B8DB8"}}>Relance</em>
+      </div>
+      <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.65,marginBottom:"1rem"}}>
+        Clients inactifs et à consolider — 5 actions et 3 messages de relance pour chaque contact.
+      </p>
+
+      {clientsCibles.length===0&&(
+        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem",fontStyle:"italic"}}>
+          🎉 Aucun client inactif ou à consolider pour l'instant !
+        </div>
+      )}
+      {renderSection("❄️ Clients gelés",inactifs,"#5B8DB8","❄️")}
+      {renderSection("🔔 À consolider",consolider,C.or,"🔔")}
+    </div>
+  );
+}
+
+function ClientsTab({clients,save,uid}){
   const[sel,setSel]=useState(null);
   const[form,setForm]=useState({nom:"",prenom:"",tel:"",email:"",ddn:"",adresse:"",notes:""});
+  const[editMode,setEditMode]=useState(false);
+  const[editForm,setEditForm]=useState({});
   const[cmdForm,setCmdForm]=useState({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:new Date().toISOString().slice(0,10)});
   const[rappelForm,setRappelForm]=useState({texte:"",date:"",fait:false});
   const[showAdd,setShowAdd]=useState(false);
   const[showCmd,setShowCmd]=useState(false);
   const[showRappel,setShowRappel]=useState(false);
-  const[search,setSearch]=useState("");
+  const[searches,setSearches]=useState({});
+  const[groupesOuverts,setGroupesOuverts]=useState({});
   const[confettiTrigger,setConfettiTrigger]=useState(0);
 
   const today=new Date();
   const daysDiff=(d)=>Math.floor((today-new Date(d))/(1000*60*60*24));
+  const lastCmdDate=(c)=>{
+    if(!c.commandes||c.commandes.length===0) return null;
+    return c.commandes.reduce((best,cmd)=>new Date(cmd.date)>new Date(best.date)?cmd:best).date;
+  };
+
+  const STATUTS_CLIENT=[
+    {id:"vip",label:"VIP",icon:"⭐",color:"#C4A832",bg:"#FFF8E1"},
+    {id:"fidele",label:"Fidèle",icon:"💚",color:C.vert,bg:C.vert+"15"},
+    {id:"consolider",label:"À consolider",icon:"🔔",color:C.or,bg:C.or+"15"},
+    {id:"inactif",label:"Inactif",icon:"❄️",color:"#5B8DB8",bg:"#E8F0FA"},
+  ];
+  const STATUTS_ORDRE=["vip","fidele","consolider","inactif",null];
+  const TYPES_PRODUITS_DUREE=[
+    {id:"shampoing",label:"Shampoing",jours:30},
+    {id:"soin_visage",label:"Soin Visage",jours:45},
+    {id:"complement",label:"Complément",jours:30},
+    {id:"maquillage",label:"Maquillage",jours:90},
+    {id:"parfum",label:"Parfum",jours:120},
+    {id:"autre",label:"Autre",jours:60},
+  ];
+
+  const updateStatut=(cid,statut)=>save(clients.map(c=>c.id===cid?{...c,statut}:c));
+  const updateNotes=(cid,v)=>save(clients.map(c=>c.id===cid?{...c,notes:v}:c));
 
   const addClient=()=>{
     if(!form.nom.trim()&&!form.prenom.trim())return;
@@ -3320,119 +5100,92 @@ function ClientsTab({clients,save}){
     setConfettiTrigger(t=>t+1);
   };
 
+  const saveEdit=(formData)=>{
+    save(clients.map(c=>c.id===sel?{...c,...formData}:c));
+    setEditMode(false);
+  };
+
+  const delClient=(cid)=>{
+    if(!window.confirm("Supprimer cette cliente ?"))return;
+    save(clients.filter(c=>c.id!==cid));setSel(null);
+  };
+
   const addCmd=(cid)=>{
-    const lignesValides = cmdForm.lignes.filter(l=>l.nom.trim());
+    const lignesValides=cmdForm.lignes.filter(l=>l.nom.trim());
     if(lignesValides.length===0)return;
-    const lignes = lignesValides.map(l=>{
-      const typeInfo = TYPES_PRODUITS_DUREE.find(t=>t.id===l.typeProduit)||TYPES_PRODUITS_DUREE[TYPES_PRODUITS_DUREE.length-1];
-      return {nom:l.nom.trim(), typeProduit:l.typeProduit, typeLabel:typeInfo.label, dureeJours:typeInfo.jours};
+    const lignes=lignesValides.map(l=>{
+      const typeInfo=TYPES_PRODUITS_DUREE.find(t=>t.id===l.typeProduit)||TYPES_PRODUITS_DUREE[5];
+      return{nom:l.nom.trim(),typeProduit:l.typeProduit,typeLabel:typeInfo.label,dureeJours:typeInfo.jours};
     });
-    const cmd={id:Date.now(),date:cmdForm.date,lignes,produits:lignes.map(l=>l.nom).join(", "),montant:cmdForm.montant,suivi7:false,suivi21:false};
+    const cmd={id:Date.now(),date:cmdForm.date,lignes,produits:lignes.map(l=>l.nom).join(", "),montant:cmdForm.montant,suivi8:false,suivi21:false};
     save(clients.map(c=>c.id===cid?{...c,commandes:[...(c.commandes||[]),cmd]}:c));
+    // Compteur période
+    const periodeNum=getPeriodeActuelle?getPeriodeActuelle():0;
+    const periodeKey=`p${periodeNum}`;
+    sgAll(uid).then(data=>{
+      try{
+        const cp=data["db-cmd-periode"]?JSON.parse(data["db-cmd-periode"]):{};
+        const cur=cp[periodeKey]||{count:0,montant:0};
+        const montantCmd=parseFloat(cmdForm.montant)||0;
+        cp[periodeKey]={count:cur.count+1,montant:cur.montant+montantCmd};
+        ss(uid,"db-cmd-periode",JSON.stringify(cp));
+      }catch{}
+    });
     setCmdForm({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:new Date().toISOString().slice(0,10)});setShowCmd(false);
   };
 
-  const updateLigne=(idx,field,val)=>{
-    setCmdForm(p=>({...p,lignes:p.lignes.map((l,i)=>i===idx?{...l,[field]:val}:l)}));
-  };
+  const updateLigne=(idx,field,val)=>setCmdForm(p=>({...p,lignes:p.lignes.map((l,i)=>i===idx?{...l,[field]:val}:l)}));
   const addLigne=()=>setCmdForm(p=>({...p,lignes:[...p.lignes,{nom:"",typeProduit:"shampoing"}]}));
   const removeLigne=(idx)=>setCmdForm(p=>({...p,lignes:p.lignes.filter((_,i)=>i!==idx)}));
-
   const addRappel=(cid)=>{
     if(!rappelForm.texte.trim()||!rappelForm.date)return;
-    const r={id:Date.now(),texte:rappelForm.texte.trim(),date:rappelForm.date,fait:false};
+    const r={id:Date.now(),...rappelForm};
     save(clients.map(c=>c.id===cid?{...c,rappels:[...(c.rappels||[]),r]}:c));
     setRappelForm({texte:"",date:"",fait:false});setShowRappel(false);
   };
-
-  const toggleRappel=(cid,rid)=>{
-    save(clients.map(c=>c.id===cid?{...c,rappels:(c.rappels||[]).map(r=>r.id===rid?{...r,fait:!r.fait}:r)}:c));
-  };
-
-  const delRappel=(cid,rid)=>{
-    save(clients.map(c=>c.id===cid?{...c,rappels:(c.rappels||[]).filter(r=>r.id!==rid)}:c));
-  };
-
-  const toggleSuivi=(cid,cmdId,type)=>{
-    save(clients.map(c=>c.id===cid?{...c,commandes:(c.commandes||[]).map(cm=>cm.id===cmdId?{...cm,[type]:!cm[type]}:cm)}:c));
-  };
-
-  const updateNotes=(cid,v)=>save(clients.map(c=>c.id===cid?{...c,notes:v}:c));
-  const delClient=(id)=>{save(clients.filter(c=>c.id!==id));if(sel===id)setSel(null);};
-
-  // Alertes
-  const alerts=clients.filter(c=>{
-    if(!c.commandes||c.commandes.length===0)return false;
-    const last=c.commandes.sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
-    return daysDiff(last.date)>=60;
-  });
-
-  // Clientes dont au moins un produit arrive à "fin de flacon" (J-7 à J+0)
-  const flaconAlerts=clients.filter(c=>{
-    if(!c.commandes)return false;
-    return c.commandes.some(cmd=>{
-      const lignes = cmd.lignes || (cmd.dureeJours ? [cmd] : []);
-      return lignes.some(l=>{
-        if(!l.dureeJours)return false;
-        const reste=l.dureeJours-daysDiff(cmd.date);
-        return reste<=7&&reste>=0;
-      });
-    });
-  });
-
-  const filtered=clients.filter(c=>{
-    const q=search.toLowerCase();
-    return !q||(c.nom+c.prenom+c.tel+c.email).toLowerCase().includes(q);
-  });
+  const delRappel=(cid,rid)=>save(clients.map(c=>c.id===cid?{...c,rappels:(c.rappels||[]).filter(r=>r.id!==rid)}:c));
 
   const active=clients.find(c=>c.id===sel);
+
+  // Grouper par statut, triées par dernière commande DESC dans chaque groupe
+  const groupes = STATUTS_ORDRE.map(statut=>{
+    const statutInfo = statut ? STATUTS_CLIENT.find(s=>s.id===statut) : null;
+    const membres = clients
+      .filter(c=>(c.statut||null)===statut)
+      .sort((a,b)=>{
+        const da=lastCmdDate(a);const db=lastCmdDate(b);
+        if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;
+        return new Date(db)-new Date(da);
+      });
+    return {statut, statutInfo, membres};
+  }).filter(g=>g.membres.length>0);
 
   return(
     <div>
       <Confetti trigger={confettiTrigger}/>
-      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        Suivi <em style={{fontStyle:"italic",color:C.rose}}>Clients</em>
-      </div>
-      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        {clients.length} client{clients.length>1?"s":""} · Coordonnées, commandes, suivis et rappels.
-      </p>
 
-      {/* Alertes 2 mois */}
-      {alerts.length>0&&(
-        <div style={{background:"#FFF3E0",border:"1px solid #E6A817",borderRadius:10,padding:".75rem 1rem",marginBottom:"1rem",fontSize:".75rem",color:"#8B5E00"}}>
-          ⚠️ <strong>{alerts.length} client{alerts.length>1?"s":""} sans commande depuis 2 mois :</strong> {alerts.map(c=>`${c.prenom} ${c.nom}`).join(", ")}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun}}>
+          Mes <em style={{fontStyle:"italic",color:C.rose}}>Clientes</em>
         </div>
-      )}
-
-      {/* Alertes fin de flacon */}
-      {flaconAlerts.length>0&&(
-        <div style={{background:"rgba(196,74,26,.08)",border:"1px solid #C44B1A60",borderRadius:10,padding:".75rem 1rem",marginBottom:"1rem",fontSize:".75rem",color:"#C44B1A"}}>
-          🔔 <strong>{flaconAlerts.length} client{flaconAlerts.length>1?"s":""} bientôt à sec :</strong> {flaconAlerts.map(c=>`${c.prenom} ${c.nom}`).join(", ")} — bon moment pour prendre des nouvelles !
-        </div>
-      )}
-
-      {/* Barre actions */}
-      <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
-        <input placeholder="🔍 Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}
-          style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
         <button onClick={()=>setShowAdd(p=>!p)}
-          style={{background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".42rem .85rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
-          ➕ Client
+          style={{background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".45rem .85rem",fontSize:".76rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          + Nouvelle cliente
         </button>
       </div>
 
       {/* Formulaire ajout */}
       {showAdd&&(
         <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-          <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouveau client</div>
+          <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouvelle cliente</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".4rem"}}>
-            <INP placeholder="Prénom" value={form.prenom} onChange={e=>setForm(p=>({...p,prenom:e.target.value}))}/>
-            <INP placeholder="Nom" value={form.nom} onChange={e=>setForm(p=>({...p,nom:e.target.value}))}/>
+            <GInput placeholder="Prénom" value={form.prenom} onChange={e=>setForm(p=>({...p,prenom:e.target.value}))}/>
+            <GInput placeholder="Nom" value={form.nom} onChange={e=>setForm(p=>({...p,nom:e.target.value}))}/>
           </div>
-          <INP placeholder="Téléphone / WhatsApp" value={form.tel} onChange={e=>setForm(p=>({...p,tel:e.target.value}))}/>
-          <INP placeholder="Email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
-          <INP type="date" placeholder="Date de naissance" value={form.ddn} onChange={e=>setForm(p=>({...p,ddn:e.target.value}))} style={{marginBottom:".45rem"}}/>
-          <INP placeholder="Adresse (optionnel)" value={form.adresse} onChange={e=>setForm(p=>({...p,adresse:e.target.value}))}/>
+          <GInput placeholder="Téléphone / WhatsApp" value={form.tel} onChange={e=>setForm(p=>({...p,tel:e.target.value}))}/>
+          <GInput placeholder="Email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
+          <GInput type="date" value={form.ddn} onChange={e=>setForm(p=>({...p,ddn:e.target.value}))} style={{marginBottom:".45rem"}}/>
+          <GInput placeholder="Adresse (optionnel)" value={form.adresse} onChange={e=>setForm(p=>({...p,adresse:e.target.value}))}/>
           <textarea placeholder="Notes" value={form.notes} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",minHeight:60,marginBottom:".65rem"}}/>
           <div style={{display:"flex",gap:".5rem"}}>
@@ -3442,191 +5195,119 @@ function ClientsTab({clients,save}){
         </div>
       )}
 
-      {/* Liste clients */}
-      <div style={{display:"flex",flexWrap:"wrap",gap:".4rem",marginBottom:"1rem"}}>
-        {filtered.map(c=>{
-          const isActive=sel===c.id;
-          const lastCmd=c.commandes&&c.commandes.length>0?c.commandes.sort((a,b)=>new Date(b.date)-new Date(a.date))[0]:null;
-          const overdue=lastCmd&&daysDiff(lastCmd.date)>=60;
-          return(
-            <div key={c.id} onClick={()=>setSel(isActive?null:c.id)}
-              style={{background:isActive?C.brun:C.blanc,border:`2px solid ${overdue?"#E6A817":isActive?C.rose:C.pale}`,borderRadius:10,padding:".42rem .75rem",cursor:"pointer",flexShrink:0,transition:"all .2s"}}>
-              <div style={{fontSize:".78rem",fontWeight:600,color:isActive?C.blanc:C.brun}}>{c.prenom} {c.nom}</div>
-              <div style={{fontSize:".58rem",color:isActive?C.pale:C.gris}}>{c.commandes?.length||0} cmd{c.commandes?.length>1?"s":""}{overdue?" ⚠️":""}</div>
-            </div>
-          );
-        })}
-        {filtered.length===0&&<div style={{fontSize:".76rem",color:C.gris,padding:".5rem"}}>Aucun client trouvé.</div>}
-      </div>
+      {/* Groupes par statut */}
+      {groupes.map(({statut, statutInfo, membres})=>{
+        const searchKey = statut||"sans";
+        const searchVal = searches[searchKey]||"";
+        const isOpen = !!groupesOuverts[searchKey];
+        const filtered = membres.filter(c=>{
+          if(!searchVal) return true;
+          const s=searchVal.toLowerCase();
+          return (c.prenom+c.nom+c.tel+c.email).toLowerCase().includes(s);
+        });
 
-      {/* Fiche client */}
-      {active&&(
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,overflow:"hidden"}}>
-          {/* Header */}
-          <div style={{background:C.brun,padding:"1rem 1.1rem",display:"flex",alignItems:"center",gap:".8rem"}}>
-            <div style={{width:40,height:40,borderRadius:"50%",background:C.rose,color:"white",fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              {(active.prenom[0]||active.nom[0]||"?").toUpperCase()}
-            </div>
-            <div style={{flex:1}}>
-              <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.blanc}}>{active.prenom} {active.nom}</div>
-              <div style={{fontSize:".62rem",color:C.pale,opacity:.8}}>{active.tel} {active.email&&`· ${active.email}`}</div>
-              {active.ddn&&<div style={{fontSize:".6rem",color:C.or}}>🎂 {new Date(active.ddn).toLocaleDateString("fr-FR")}</div>}
-            </div>
-            <button onClick={()=>delClient(active.id)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:6,padding:".3rem .5rem",color:C.pale,cursor:"pointer",fontSize:".7rem",fontFamily:"inherit"}}>✕</button>
-          </div>
-
-          <div style={{padding:"1rem"}}>
-            {/* Commandes */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".6rem"}}>
-              <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose}}>📦 Commandes ({active.commandes?.length||0})</div>
-              <button onClick={()=>setShowCmd(p=>!p)} style={{background:C.brun,color:C.blanc,border:"none",borderRadius:6,padding:".2rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Commande</button>
-            </div>
-
-            {showCmd&&(
-              <div style={{background:C.creme,borderRadius:9,padding:".75rem",marginBottom:".75rem",border:`1px solid ${C.pale}`}}>
-                <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>Produits commandés</div>
-                {cmdForm.lignes.map((ligne,idx)=>(
-                  <div key={idx} style={{display:"flex",gap:".35rem",marginBottom:".35rem",alignItems:"center"}}>
-                    <select value={ligne.typeProduit} onChange={e=>updateLigne(idx,"typeProduit",e.target.value)}
-                      style={{border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .3rem",fontSize:".72rem",fontFamily:"inherit",color:C.brun,background:C.blanc,outline:"none",fontWeight:600,flexShrink:0,width:150}}>
-                      {TYPES_PRODUITS_DUREE.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-                    </select>
-                    <input placeholder="Nom du produit" value={ligne.nom} onChange={e=>updateLigne(idx,"nom",e.target.value)}
-                      style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .6rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
-                    {cmdForm.lignes.length>1&&(
-                      <button onClick={()=>removeLigne(idx)} style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".8rem",flexShrink:0,padding:".2rem"}}>✕</button>
-                    )}
-                  </div>
-                ))}
-                <button onClick={addLigne} style={{background:"none",border:`1px dashed ${C.pale}`,borderRadius:7,padding:".3rem .6rem",fontSize:".68rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
-                  + Ajouter un produit
-                </button>
-                <div style={{display:"flex",gap:".4rem"}}>
-                  <INP placeholder="Montant total (€)" value={cmdForm.montant} onChange={e=>setCmdForm(p=>({...p,montant:e.target.value}))} style={{flex:1}}/>
-                  <INP type="date" value={cmdForm.date} onChange={e=>setCmdForm(p=>({...p,date:e.target.value}))} style={{flex:1}}/>
+        return(
+          <div key={statut||"sans"} style={{marginBottom:".65rem"}}>
+            {/* En-tête groupe — cliquable pour ouvrir/fermer */}
+            <div onClick={()=>setGroupesOuverts(g=>({...g,[searchKey]:!g[searchKey]}))}
+              style={{display:"flex",alignItems:"center",gap:".6rem",background:statutInfo?statutInfo.bg:C.creme,border:`1.5px solid ${statutInfo?statutInfo.color+"40":C.pale}`,borderRadius:isOpen?"12px 12px 0 0":12,padding:".65rem .9rem",cursor:"pointer",userSelect:"none"}}>
+              <div style={{fontSize:".85rem"}}>{statutInfo?statutInfo.icon:"📋"}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:".78rem",fontWeight:700,color:statutInfo?statutInfo.color:C.gris}}>
+                  {statutInfo?statutInfo.label:"Sans statut"}
                 </div>
-                <div style={{display:"flex",gap:".4rem",marginTop:".1rem"}}>
-                  <button onClick={()=>addCmd(active.id)} style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".45rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Enregistrer</button>
-                  <button onClick={()=>setShowCmd(false)} style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:7,padding:".45rem",fontSize:".75rem",fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
+                <div style={{fontSize:".6rem",color:C.gris}}>{membres.length} cliente{membres.length>1?"s":""}</div>
+              </div>
+              <div style={{fontSize:".8rem",color:statutInfo?statutInfo.color:C.gris,transform:isOpen?"rotate(90deg)":"rotate(0deg)",transition:"transform .2s"}}>›</div>
+            </div>
+
+            {/* Contenu du groupe — visible seulement si ouvert */}
+            {isOpen&&(
+              <div style={{border:`1.5px solid ${statutInfo?statutInfo.color+"40":C.pale}`,borderTop:"none",borderRadius:"0 0 12px 12px",padding:".75rem",background:C.blanc}}>
+                {/* Barre de recherche */}
+                <input placeholder={`Rechercher dans ${statutInfo?statutInfo.label:"ce groupe"}...`}
+                  value={searchVal} onChange={e=>setSearches(s=>({...s,[searchKey]:e.target.value}))}
+                  style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".38rem .65rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem",boxSizing:"border-box"}}/>
+
+                {/* Cartes clientes */}
+                <div style={{display:"flex",flexDirection:"column",gap:".35rem"}}>
+                  {filtered.map(c=>(
+                    <FicheClienteCard
+                      key={c.id}
+                      c={c}
+                      sel={sel}
+                      setSel={setSel}
+                      clients={clients}
+                      save={save}
+                      uid={uid}
+                      STATUTS_CLIENT={STATUTS_CLIENT}
+                      TYPES_PRODUITS_DUREE={TYPES_PRODUITS_DUREE}
+                      getPeriodeActuelle={getPeriodeActuelle}
+                      sgAll={sgAll}
+                      ss={ss}
+                      daysDiff={daysDiff}
+                    />
+                  ))}
+                  {filtered.length===0&&<div style={{fontSize:".72rem",color:C.gris,padding:".3rem .5rem"}}>Aucun résultat</div>}
                 </div>
               </div>
             )}
-
-            {active.commandes&&active.commandes.length>0?(
-              [...active.commandes].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(cmd=>{
-                const d=daysDiff(cmd.date);
-                const need7=d>=7&&d<21&&!cmd.suivi7;
-                const need21=d>=21&&!cmd.suivi21;
-                // Compatibilité ancien format (1 produit par commande) → on le transforme en lignes[]
-                const lignes = cmd.lignes || (cmd.typeProduit ? [{nom:cmd.produits, typeProduit:cmd.typeProduit, typeLabel:cmd.typeLabel, dureeJours:cmd.dureeJours}] : []);
-                const anyFinFlacon = lignes.some(l=>{
-                  if(!l.dureeJours)return false;
-                  const reste=l.dureeJours-d;
-                  return reste<=7&&reste>-15;
-                });
-                return(
-                  <div key={cmd.id} style={{background:C.creme,borderRadius:9,padding:".7rem .85rem",marginBottom:".45rem",border:`1px solid ${(need7||need21||anyFinFlacon)?"#E6A817":C.pale}`}}>
-                    <div style={{marginBottom:".35rem"}}>
-                      <div style={{fontSize:".78rem",fontWeight:600,color:C.brun}}>{cmd.produits}</div>
-                      <div style={{fontSize:".62rem",color:C.gris}}>{new Date(cmd.date).toLocaleDateString("fr-FR")}{cmd.montant&&` · ${cmd.montant}€`} · J+{d}</div>
-                    </div>
-
-                    {/* Rappels fin de flacon par produit */}
-                    {lignes.map((l,li)=>{
-                      if(!l.dureeJours)return null;
-                      const reste=l.dureeJours-d;
-                      const finFlacon = reste<=7&&reste>-15;
-                      if(!finFlacon)return null;
-                      const script = genererScriptRelance(l, active.prenom);
-                      return(
-                        <div key={li} style={{background:reste>=0?"#FFF3E0":"#FFE8E0",border:`1px solid ${reste>=0?"#E6A817":"#C44B1A"}`,borderRadius:6,padding:".45rem .55rem",marginBottom:".4rem"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:".35rem",fontSize:".68rem",color:reste>=0?"#8B5E00":"#C44B1A",marginBottom:".35rem"}}>
-                            🔔 {reste>=0
-                              ? `${l.typeLabel||l.nom} bientôt fini (dans ~${reste}j)`
-                              : `${l.typeLabel||l.nom} devrait être terminé depuis ~${-reste}j`}
-                          </div>
-                          <div style={{background:C.blanc,borderLeft:`3px solid ${C.lilas}`,borderRadius:"0 6px 6px 0",padding:".5rem .65rem",fontSize:".7rem",color:C.texte,lineHeight:1.6,display:"flex",justifyContent:"space-between",gap:".5rem",alignItems:"flex-start"}}>
-                            <span style={{flex:1}}>{script}</span>
-                            <CopyBtn text={script}/>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    <div style={{display:"flex",gap:".5rem",flexWrap:"wrap"}}>
-                      {[["suivi7","✅ Suivi J+7",7,14],["suivi21","✅ Suivi J+21",21,999]].map(([key,label,min,max])=>{
-                        const due=d>=min&&d<max;
-                        const done=cmd[key];
-                        return(
-                          <div key={key} onClick={()=>toggleSuivi(active.id,cmd.id,key)}
-                            style={{display:"flex",alignItems:"center",gap:".3rem",background:done?C.vert+"20":due?"#FFF3E0":C.pale+"60",borderRadius:6,padding:".2rem .5rem",cursor:"pointer",border:`1px solid ${done?C.vert:due?"#E6A817":C.pale}`,fontSize:".65rem",color:done?C.vert:due?"#8B5E00":C.gris}}>
-                            <div style={{width:12,height:12,borderRadius:3,border:`1.5px solid ${done?C.vert:due?"#E6A817":C.gris}`,background:done?C.vert:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                              {done&&<span style={{fontSize:".45rem",color:"white",fontWeight:700}}>✓</span>}
-                            </div>
-                            {label}{due&&!done?" 🔔":""}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })
-            ):<div style={{fontSize:".74rem",color:C.gris,fontStyle:"italic",marginBottom:".75rem"}}>Aucune commande enregistrée.</div>}
-
-            {/* Notes */}
-            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".4rem",marginTop:".5rem"}}>📝 Notes</div>
-            <textarea value={active.notes||""} onChange={e=>updateNotes(active.id,e.target.value)}
-              placeholder="Préférences, allergies, produits favoris, historique..."
-              style={{width:"100%",minHeight:80,border:`1px solid ${C.pale}`,borderRadius:8,padding:".6rem",fontFamily:"inherit",fontSize:".77rem",color:C.texte,background:C.creme,resize:"vertical",outline:"none",lineHeight:1.6}}/>
-
-            {/* Rappels personnalisés */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem",marginTop:".75rem"}}>
-              <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas}}>🔔 Rappels personnalisés</div>
-              <button onClick={()=>setShowRappel(p=>!p)} style={{background:C.lilas,color:"white",border:"none",borderRadius:6,padding:".2rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Rappel</button>
-            </div>
-            {showRappel&&(
-              <div style={{background:C.creme,borderRadius:9,padding:".75rem",marginBottom:".65rem",border:`1px solid ${C.pale}`}}>
-                <input placeholder="Ex: Rappeler pour renouvellement crème" value={rappelForm.texte} onChange={e=>setRappelForm(p=>({...p,texte:e.target.value}))}
-                  style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".4rem"}}/>
-                <input type="date" value={rappelForm.date} onChange={e=>setRappelForm(p=>({...p,date:e.target.value}))}
-                  style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".5rem"}}/>
-                <div style={{display:"flex",gap:".4rem"}}>
-                  <button onClick={()=>addRappel(active.id)} style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".45rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Ajouter</button>
-                  <button onClick={()=>setShowRappel(false)} style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:7,padding:".45rem",fontSize:".75rem",fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
-                </div>
-              </div>
-            )}
-            {(active.rappels||[]).length===0&&!showRappel&&<div style={{fontSize:".72rem",color:C.gris,fontStyle:"italic",marginBottom:".5rem"}}>Aucun rappel programmé.</div>}
-            {(active.rappels||[]).sort((a,b)=>new Date(a.date)-new Date(b.date)).map(r=>{
-              const isToday=r.date===new Date().toISOString().slice(0,10);
-              const isPast=new Date(r.date)<new Date()&&!isToday;
-              return(
-                <div key={r.id} style={{display:"flex",gap:".55rem",alignItems:"flex-start",padding:".45rem .65rem",borderRadius:8,marginBottom:".3rem",background:r.fait?C.pale+"60":isToday?"#FFF3E0":C.blanc,border:`1px solid ${isToday?"#E6A817":r.fait?C.pale:C.pale}`}}>
-                  <div onClick={()=>toggleRappel(active.id,r.id)} style={{width:18,height:18,borderRadius:4,border:`2px solid ${r.fait?C.vert:C.lilas}`,background:r.fait?C.vert:"transparent",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .15s"}}>
-                    {r.fait&&<span style={{fontSize:".55rem",color:"white",fontWeight:700}}>✓</span>}
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:".76rem",color:r.fait?C.gris:C.brun,textDecoration:r.fait?"line-through":"none"}}>{r.texte}</div>
-                    <div style={{fontSize:".62rem",color:isToday?"#8B5E00":isPast?"#B04040":C.gris,fontWeight:isToday?700:400}}>
-                      {isToday?"🔔 Aujourd'hui !":isPast?"⚠️ Passé — ":""}{new Date(r.date).toLocaleDateString("fr-FR")}
-                    </div>
-                  </div>
-                  <button onClick={()=>delRappel(active.id,r.id)} style={{background:"none",border:"none",color:C.pale,cursor:"pointer",fontSize:".7rem",padding:".1rem",flexShrink:0}}>✕</button>
-                </div>
-              );
-            })}
           </div>
-        </div>
-      )}
+        );
+      })}
+
+      {clients.length===0&&<div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>Aucune cliente pour l'instant.</div>}
     </div>
   );
 }
 
-// ── SUIVI DISTRIBUTEURS ───────────────────────────────────────────────────────
-const PALIERS=["2%","4%","6%","8%","10%","12%","14%","17%","SR","Structural","Business","SR Business"];
-const PALIER_COLORS={"2%":C.gris,"4%":C.gris,"6%":C.lilas,"8%":C.lilas,"10%":C.rose,"12%":C.rose,"14%":C.or,"17%":C.or,"SR":C.brun2,"Structural":"#6B5B8A","Business":"#4A7A5C","SR Business":C.brun};
+// Affiche les liens réseaux sociaux d'un membre — réutilisable
+function LiensReseauxSection({memberUid}){
+  const[liens,setLiens]=useState(null);
+  const[loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    if(!memberUid){setLoading(false);return;}
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"linkbio",memberUid));
+        if(snap.exists()){
+          const lb=snap.data();
+          const labels=lb.liensBonusLabel||[];
+          const urls=lb.liensBonusUrl||[];
+          setLiens(labels.map((lbl,i)=>({label:lbl,url:urls[i]})).filter(l=>l.label&&l.url));
+        } else {
+          setLiens([]);
+        }
+      }catch{ setLiens([]); }
+      setLoading(false);
+    })();
+  },[memberUid]);
+
+  return(
+    <div style={{marginBottom:".75rem"}}>
+      <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".4rem"}}>🔗 Ses réseaux</div>
+      {loading
+        ?<div style={{fontSize:".68rem",color:C.gris}}>Chargement...</div>
+        :liens&&liens.length>0
+          ?liens.map((l,i)=>(
+            <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+              style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.creme,borderRadius:8,padding:".4rem .65rem",marginBottom:".3rem",textDecoration:"none"}}>
+              <span style={{fontSize:".72rem",color:C.brun,fontWeight:600}}>{l.label}</span>
+              <span style={{fontSize:".65rem",color:C.lilas}}>→</span>
+            </a>
+          ))
+          :<div style={{background:C.creme,borderRadius:8,padding:".5rem .65rem",fontSize:".68rem",color:C.gris,fontStyle:"italic"}}>
+            Aucun lien renseigné pour l'instant
+          </div>
+      }
+    </div>
+  );
+}
 
 function DistributeursTab({distributeurs,save,uid}){
+  const PALIERS=["2%","4%","6%","8%","10%","12%","14%","17%","SR","Directeur","Structural","Business Director","SR Business Director","Business"];
+  const PALIER_COLORS={"2%":C.gris,"4%":C.gris,"6%":C.lilas,"8%":C.lilas,"10%":C.rose,"12%":C.rose,"14%":C.or,"17%":C.or,"SR":"#8B6914","Directeur":C.brun,"Structural":"#5C3A8C","Business Director":"#1A6B3C","SR Business Director":"#B8600A","Business":"#C4A832"};
   const[sel,setSel]=useState(null);
   const[form,setForm]=useState({prenom:"",nom:"",tel:"",email:"",dateEnreg:"",notes:""});
   const[showAdd,setShowAdd]=useState(false);
@@ -3664,6 +5345,8 @@ function DistributeursTab({distributeurs,save,uid}){
 
   const updatePalier=(id,p)=>save(distributeurs.map(d=>d.id===id?{...d,palier:p}:d));
   const updateNotes=(id,v)=>save(distributeurs.map(d=>d.id===id?{...d,notes:v}:d));
+  const updateRecrues=(id,field,v)=>save(distributeurs.map(d=>d.id===id?{...d,[field]:v}:d));
+  const updatePremiereCommande=(id,v)=>save(distributeurs.map(d=>d.id===id?{...d,premiereCommande:v}:d));
   const del=(id)=>{save(distributeurs.filter(d=>d.id!==id));if(sel===id)setSel(null);};
 
   const updateAutoNotes=async(uid,v)=>{
@@ -3823,12 +5506,12 @@ function DistributeursTab({distributeurs,save,uid}){
         <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
           <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouveau distributeur</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".4rem"}}>
-            <INP placeholder="Prénom" value={form.prenom} onChange={e=>setForm(p=>({...p,prenom:e.target.value}))}/>
-            <INP placeholder="Nom" value={form.nom} onChange={e=>setForm(p=>({...p,nom:e.target.value}))}/>
+            <GInput placeholder="Prénom" value={form.prenom} onChange={e=>setForm(p=>({...p,prenom:e.target.value}))}/>
+            <GInput placeholder="Nom" value={form.nom} onChange={e=>setForm(p=>({...p,nom:e.target.value}))}/>
           </div>
-          <INP placeholder="Téléphone / WhatsApp" value={form.tel} onChange={e=>setForm(p=>({...p,tel:e.target.value}))}/>
-          <INP placeholder="Email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
-          <INP type="date" placeholder="Date d'enregistrement" value={form.dateEnreg} onChange={e=>setForm(p=>({...p,dateEnreg:e.target.value}))}/>
+          <GInput placeholder="Téléphone / WhatsApp" value={form.tel} onChange={e=>setForm(p=>({...p,tel:e.target.value}))}/>
+          <GInput placeholder="Email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
+          <GInput type="date" placeholder="Date d'enregistrement" value={form.dateEnreg} onChange={e=>setForm(p=>({...p,dateEnreg:e.target.value}))}/>
           <div style={{display:"flex",gap:".4rem",marginTop:".1rem"}}>
             <button onClick={add} style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Ajouter</button>
             <button onClick={()=>setShowAdd(false)} style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
@@ -3883,6 +5566,34 @@ function DistributeursTab({distributeurs,save,uid}){
                   </div>
                 )}
 
+                {/* Recrues & Première commande */}
+                <div style={{display:"flex",gap:".5rem",marginBottom:".75rem"}}>
+                  <div style={{flex:1,background:C.creme,borderRadius:9,padding:".55rem .65rem"}}>
+                    <div style={{fontSize:".55rem",color:C.gris,marginBottom:".2rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>👥 Recrues</div>
+                    <input type="number" min="0" value={d.recrues||0} onChange={e=>updateRecrues(d.id,"recrues",+e.target.value)}
+                      style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".28rem .45rem",fontSize:".85rem",fontFamily:"inherit",color:C.brun,background:"white",outline:"none",fontWeight:600,textAlign:"center"}}/>
+                    <div style={{fontSize:".55rem",color:C.gris,marginTop:".15rem",textAlign:"center"}}>total</div>
+                  </div>
+                  <div style={{flex:1,background:C.creme,borderRadius:9,padding:".55rem .65rem"}}>
+                    <div style={{fontSize:".55rem",color:C.gris,marginBottom:".2rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>🛍️ Avec commande</div>
+                    <input type="number" min="0" value={d.recruesAvecCmd||0} onChange={e=>updateRecrues(d.id,"recruesAvecCmd",+e.target.value)}
+                      style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".28rem .45rem",fontSize:".85rem",fontFamily:"inherit",color:C.brun,background:"white",outline:"none",fontWeight:600,textAlign:"center"}}/>
+                    <div style={{fontSize:".55rem",color:C.gris,marginTop:".15rem",textAlign:"center"}}>ont commandé</div>
+                  </div>
+                  <div style={{flex:1,background:d.premiereCommande?C.vert+"10":C.creme,borderRadius:9,padding:".55rem .65rem",border:`1px solid ${d.premiereCommande?C.vert+"40":C.pale}`}}>
+                    <div style={{fontSize:".55rem",color:C.gris,marginBottom:".3rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>🛒 1ère cmd</div>
+                    <div style={{textAlign:"center"}}>
+                      <label style={{cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:".2rem"}}>
+                        <input type="checkbox" checked={!!d.premiereCommande} onChange={e=>updatePremiereCommande(d.id,e.target.checked)} style={{width:18,height:18}}/>
+                        <span style={{fontSize:".6rem",color:d.premiereCommande?C.vert:C.gris,fontWeight:700}}>{d.premiereCommande?"✅ Oui":"Pas encore"}</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Liens réseaux sociaux */}
+                <LiensReseauxSection memberUid={dUid}/>
+
                 <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>💰 Plan de rémunération</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:".3rem",marginBottom:".85rem"}}>
                   {PALIERS.map((p,i)=>{
@@ -3917,6 +5628,30 @@ function DistributeursTab({distributeurs,save,uid}){
                     Supprimer
                   </button>
                 )}
+
+                {/* Bouton Fast Start */}
+                <button onClick={async()=>{
+                  const fUid=dUid||d.uid;
+                  if(!fUid){alert("Ce distributeur n'a pas encore de compte app.");return;}
+                  try{
+                    const ref=doc(db,"users",fUid);
+                    const snap=await getDoc(ref);
+                    const existing=snap.exists()&&snap.data()["db-fast-start"]?JSON.parse(snap.data()["db-fast-start"]):{};
+                    const nom=`${d.prenom||""} ${d.nom||""}`.trim();
+                    if(!existing.startDate){
+                      await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+                      alert("✅ Fast Start assigné à "+nom);
+                    } else {
+                      if(window.confirm(nom+" a déjà un Fast Start (démarré le "+existing.startDate+"). Relancer depuis le début ?")){
+                        await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+                        alert("✅ Fast Start relancé pour "+nom);
+                      }
+                    }
+                  }catch{alert("Ce distributeur n'est pas encore inscrit dans l'app.");}
+                }}
+                  style={{marginTop:".5rem",marginLeft:".5rem",background:C.rose+"15",border:`1px solid ${C.rose}50`,borderRadius:8,padding:".3rem .7rem",fontSize:".68rem",fontWeight:600,color:C.rose,fontFamily:"inherit",cursor:"pointer"}}>
+                  🚀 Assigner Fast Start
+                </button>
               </div>
             )}
           </div>
@@ -4247,6 +5982,22 @@ function CommunauteTab({uid, userName}){
 
 // ── SCRIPTS ───────────────────────────────────────────────────────────────────
 const SCRIPTS_DATA=[
+  {cat:"🔬 Proposer un diagnostic",scripts:[
+    {title:"Story / DM — Diagnostic Peau (général)",text:"🌸 Tu veux enfin comprendre ce dont ta peau a VRAIMENT besoin ?\n\nJe te propose un diagnostic beauté personnalisé — 100% gratuit, 2 minutes chrono ✨\n\nÀ la clé : une ordonnance sur mesure avec les produits faits pour toi 💊\n\n👇 Écris-moi DIAGNOSTIC en MP et je t'envoie le lien !"},
+    {title:"DM — Diagnostic Skincare ciblé",text:"Coucou [Prénom] ! 👋\n\nJ'ai vu que tu posais des questions sur [problème peau/routine]... J'ai quelque chose qui pourrait vraiment t'aider !\n\nJe fais des diagnostics peau personnalisés — 5 questions et je te propose une routine adaptée à TON profil avec des produits que j'adore 🌿\n\nC'est gratuit et sans engagement. Tu veux essayer ? 😊"},
+    {title:"DM — Diagnostic Cheveux",text:"Coucou [Prénom] ! Je pensais à toi en voyant [contexte]...\n\nEst-ce que tes cheveux te posent des problèmes en ce moment ? (sécheresse, chute, frisottis, etc.)\n\nJe propose des diagnostics capillaires gratuits — ça prend 2 minutes et tu repars avec des conseils 100% adaptés à tes cheveux 💇‍♀️\n\nTu veux que je t'envoie le lien ?"},
+    {title:"DM — Diagnostic Makeup & couleurs",text:"Coucou [Prénom] ! 💄\n\nSi tu cherches le maquillage adapté à TON teint, TON style et TON budget... j'ai créé un diagnostic makeup personnalisé !\n\n→ Teinte de fond de teint\n→ Couleurs qui te valorisent\n→ Produits adaptés à ta morphologie\n\nC'est gratuit, ça prend 3 min. Tu veux l'essayer ? 🎨"},
+    {title:"DM — Diagnostic Compléments / Minceur",text:"Coucou [Prénom] ! Je voulais te partager quelque chose...\n\nJ'ai un diagnostic bien-être qui aide à identifier exactement QUELS compléments alimentaires peuvent t'aider selon tes objectifs (énergie, minceur, immunité, sommeil...)\n\nBeaucoup de gens prennent des compléments qui ne sont pas adaptés à leurs besoins — ce diagnostic évite ça 💊\n\n2 minutes, gratuit, sans engagement. Ça t'intéresse ? ✨"},
+    {title:"DM — Diagnostic Peau Corps",text:"Coucou [Prénom] ! 🌿\n\nEst-ce que tu as des problèmes de peau sur le corps ? (sécheresse, taches, capitons, sensibilité...)\n\nJe fais des diagnostics corps personnalisés pour proposer une routine adaptée. Pas juste \"hydrate-toi\" — une vraie sélection de produits pour TES problèmes spécifiques 💆‍♀️\n\nC'est gratuit, 2 min. Tu veux essayer ?"},
+    {title:"DM — Diagnostic Entrepreneur (recrutement)",text:"Coucou [Prénom] ! 😊\n\nJe propose un mini-diagnostic pour savoir si le marketing de réseau pourrait être une option pour toi — sans pression, juste pour avoir une vision claire de ton profil et de tes possibilités.\n\n5 questions, pas de jugement, 100% honnête. Et si ce n'est pas fait pour toi, je te le dirai aussi 😄\n\nTu serais tentée d'essayer ?"},
+    {title:"Story — Booster diagnostic (engagement)",text:"🔬 J'ai envoyé [X] diagnostics ce mois-ci...\n\nRésultat : des femmes qui comprennent ENFIN leur peau / leurs cheveux / leurs besoins 🌸\n\n→ Une routine sur mesure\n→ Des produits qu'elles adorent\n→ Des résultats concrets\n\nTu n'as pas encore fait le tien ?\n\n👉 Écris-moi DIAGO en commentaire ou en MP 💬"},
+    {title:"Story — Résultat diagnostic (preuve sociale)",text:"Avant le diagnostic : \"Je ne sais pas quels produits prendre, j'ai tout essayé sans résultat\" 😔\n\nAprès le diagnostic : une routine de 3 produits adaptée à son profil exact ✨\n\n→ Résultat en 3 semaines 🌟\n\nC'est ce que j'offre gratuitement à chaque femme qui fait mon diagnostic.\n\nTu veux être la prochaine ? 👇 MP ou commentaire"},
+    {title:"Story — Teasing diagnostic makeup",text:"POV : tu portes depuis 3 ans une teinte de fond de teint qui n'est pas vraiment la tienne 😅\n\nJe fais des diagnostics makeup — couleurs, teinte, style — pour trouver exactement ce qui te va.\n\nEt ça change TOUT.\n\n💄 Écris MAKEUP en commentaire pour essayer"},
+    {title:"Reel — Accroche diagnostic peau",text:"❌ Tu achètes des produits au hasard sur TikTok\n❌ Tu ne comprends pas pourquoi ta peau ne s'améliore pas\n❌ Tu dépenses une fortune sans résultats\n\n✅ Ce qu'il te faut : un diagnostic peau\n✅ Gratuit\n✅ 2 minutes\n✅ Une ordonnance personnalisée\n\nÉcris PEAU en commentaire 👇"},
+    {title:"Approche indirecte — via problème observé",text:"Hé [Prénom] ! J'ai vu ta story avec [problème de peau/cheveux/etc.] — tu galères avec ça depuis longtemps ?\n\nSans pression, mais j'ai un truc qui pourrait vraiment aider. Je fais des petits diagnostics beauté — tu réponds à quelques questions et je te fais une sélection de produits sur mesure.\n\nC'est gratuit. Tu veux qu'on essaie ? 🌸"},
+    {title:"Approche via curiosité (mystère)",text:"[Prénom], je t'envoie quelque chose demain que j'envoie seulement à quelques personnes dans mon entourage...\n\n[lendemain]\n\nVoilà ! C'est un diagnostic beauté personnalisé. Ça prend 2 min et tu repars avec une sélection de produits faite pour toi. Gratuit bien sûr 😊\n\nTu veux essayer ?"},
+    {title:"Approche via résultat d'une cliente",text:"Je viens de recevoir un message d'une cliente qui a fait mon diagnostic la semaine dernière... Elle me dit que la routine que je lui ai recommandée a changé l'état de sa peau en 10 jours 🤍\n\nSi tu veux, je peux faire le tien aussi ? C'est gratuit et ça prend 2 minutes 😊"},
+  ]},
   {cat:"💬 Premier contact",scripts:[
     {title:"Contact WhatsApp — Produits",text:"Coucou [Prénom] 😊 Je pensais à toi ! Je travaille avec une marque de beauté et bien-être qui m'a bluffée. Je me demandais si tu aurais 5 min pour jeter un œil ? Pas d'obligation, juste partager quelque chose qui m'a vraiment plu 🙏"},
     {title:"Contact WhatsApp — Opportunité",text:"Coucou [Prénom] ! J'espère que tu vas bien 🙂 Je développe quelque chose qui m'a permis de gagner un revenu complémentaire depuis chez moi. Ça m'a fait penser à toi — tu serais ouverte à en discuter 5 min ?"},
@@ -4487,44 +6238,311 @@ function AdminAnnonceEditor(){
 
 
 const FAST_START_DAYS=[
-  {jour:1,titre:"Premiers pas",taches:[
-    {t:"Regarde la vidéo de bienvenue de l'équipe (onglet Démarrage, Partie 1)",link:{sub:"demarrage",label:"Voir Démarrage — Partie 1"}},
-    "Configure ta boutique Mihi personnelle",
-    "Rejoins le groupe Facebook et le Telegram de l'équipe",
+  {jour:1,titre:"Module 1 — Bienvenue & Prise en main 🎉",taches:[
+    {t:"Regarde la vidéo du Module 1",link:{video:true,module:1}},
+    {t:"Rejoins les groupes Telegram de l'équipe 🔵",link:{url:"https://t.me/+2wKWxIROE4c1M2Q0",label:"Banque d'images équipe"},link2:{url:"https://t.me/+pv0RY_JJy4wyYzE8",label:"Groupe témoignages"}},
   ]},
-  {jour:2,titre:"Ta liste de contacts",taches:[
-    "Liste tes 20 premiers contacts (famille, amis, collègues...)",
-    "Note pour chacun une info personnelle (besoin, situation, lien avec toi)",
-    "Identifie 3 personnes \"chaudes\" pour commencer",
+  {jour:2,titre:"Module 2 — Connaître Mihi 🌿",taches:[
+    {t:"Regarde la vidéo du Module 2",link:{video:true,module:2}},
+    "Commande ou teste au moins 1 produit Mihi si ce n'est pas fait",
+    "Exo : Envoie ta liste des 3 produits préférés avec une phrase sur pourquoi à ta marraine",
   ]},
-  {jour:3,titre:"Ton profil",taches:[
-    {t:"Optimise ta bio (photo pro + description + lien)",link:{sub:"demarrage",label:"Voir Démarrage — Partie 3 (Profil & contenu)"}},
-    {t:"Publie ton post de lancement (authentique, pas copié-collé)",link:{sub:"demarrage",label:"Voir Démarrage — Partie 2 (Post de lancement)"}},
-    "Partage-le sur Instagram ET Facebook",
+  {jour:3,titre:"Module 3 — Mon histoire & Ma Why 💫",taches:[
+    {t:"Regarde la vidéo du Module 3",link:{video:true,module:3}},
+    "Prends 15 minutes pour écrire ton 'pourquoi' en 3 phrases : avant / déclic / maintenant",
+    "Exo : Envoie ton 'pourquoi' en quelques lignes à ta marraine",
   ]},
-  {jour:4,titre:"Premiers messages",taches:[
-    {t:"Envoie ce message à 5 personnes de ta liste : \"Coucou, ça fait longtemps ! Comment tu vas ?\"",link:{sub:"demarrage",label:"Voir Démarrage — Partie 4 (Prospection & suivi)"}},
-    "Réponds à tous les commentaires/réactions sur ton post de lancement",
-    "Note les réponses dans tes prospects (onglet Prospects)",
+  {jour:4,titre:"Module 4 — Mes premiers contacts 📱",taches:[
+    {t:"Regarde la vidéo du Module 4",link:{video:true,module:4}},
+    "Fais ta liste de 10 contacts potentiels (famille, amies, collègues, voisines...)",
+    "Exo : Envoie ta liste de 10 contacts à ta marraine",
   ]},
-  {jour:5,titre:"Story et interaction",taches:[
-    {t:"Publie une story \"question du jour\" pour générer des réponses en DM",link:{sub:"demarrage",label:"Voir Démarrage — Partie 6 (Réseaux sociaux)"}},
-    "Interagis avec 10 comptes ciblés (vrais commentaires, pas juste des likes)",
-    "Relance 2 personnes qui n'ont pas répondu au message du J4",
+  {jour:5,titre:"Module 5 — Présenter Mihi 🎯",taches:[
+    {t:"Regarde la vidéo du Module 5",link:{video:true,module:5}},
+    "Entraîne-toi à ton pitch de 30 secondes à voix haute 3 fois",
+    "Exo : Fais une story ou un post et envoie la capture à ta marraine",
   ]},
-  {jour:6,titre:"Première présentation",taches:[
-    "Repère 1 personne intéressée pour lui présenter les produits ou l'opportunité",
-    {t:"Pratique ton pitch express (30 sec) à voix haute 3 fois",link:{sub:"demarrage",label:"Voir Démarrage — Partie 5 (Présentations & closing)"}},
-    "Fixe un moment pour ta première vraie présentation",
+  {jour:6,titre:"Module 6 — Mes premières ventes 💰",taches:[
+    {t:"Regarde la vidéo du Module 6",link:{video:true,module:6}},
+    "Note 3 clientes potentielles à contacter cette semaine",
+    "Exo : Envoie la confirmation de ta première commande client à ta marraine",
   ]},
-  {jour:7,titre:"Bilan et célébration",taches:[
-    "Fais le bilan de ta semaine : combien de contacts, de réponses, de ventes/recrues ?",
-    "Note 3 choses que tu as bien faites cette semaine",
-    {t:"Célèbre — même un petit pas est une victoire ! 🎉 (Et regarde la suite dans Démarrage, Parties 2 à 8)",link:{sub:"demarrage",label:"Voir la suite — Démarrage Parties 2 à 8"}},
+  {jour:7,titre:"Module 7 — Je construis mon équipe 👑",taches:[
+    {t:"Regarde la vidéo du Module 7",link:{video:true,module:7}},
+    "Identifie 1 personne dans ton entourage qui pourrait être intéressée par l'opportunité",
+    "Exo : Envoie le nom d'une personne contactée pour l'opportunité à ta marraine",
   ]},
 ];
 
+// Quiz + exercice de validation pour chaque module
+const FAST_START_QUIZ=[
+  {
+    jour:1,
+    exercice:null, // pas d'exercice pour module 1
+    quiz:[
+      {q:"Où se passe la vie d'équipe au quotidien ?",options:["Sur Facebook","Sur Telegram","Par email","Sur WhatsApp"],rep:1},
+      {q:"Que représente Blazing Dynasty ?",options:["Une marque de cosmétiques","L'équipe et la communauté","Le nom de l'appli","Le groupe Facebook"],rep:1},
+      {q:"Quelle est ta première mission dans l'équipe ?",options:["Faire une vente","Rejoindre Telegram et explorer l'appli","Recruter une filleule","Poster sur Instagram"],rep:1},
+    ],
+  },
+  {
+    jour:2,
+    exercice:"Envoie à ta marraine ta liste des 3 produits Mihi préférés avec une phrase sur pourquoi tu les as choisis 🌿",
+    quiz:[
+      {q:"Qu'est-ce qui différencie Mihi des autres marques ?",options:["Le prix le plus bas","Les ingrédients naturels et la qualité","Le nombre de produits","La livraison gratuite"],rep:1},
+      {q:"Pour bien parler des produits, tu dois d'abord...",options:["Les avoir vendus au moins une fois","Les avoir testés toi-même","Lire tous les fiches techniques","Regarder des vidéos YouTube"],rep:1},
+      {q:"Combien de gammes principales propose Mihi ?",options:["2","4","6","Plus de 6"],rep:3},
+    ],
+  },
+  {
+    jour:3,
+    exercice:"Rédige ton 'pourquoi' en 3-5 phrases (avant / déclic / maintenant) et envoie-le à ta marraine 💫",
+    quiz:[
+      {q:"Pourquoi ton 'pourquoi' est-il important ?",options:["Pour remplir le formulaire","C'est la base de ton authenticité et de ta connexion aux autres","Pour impressionner les prospects","Ce n'est pas vraiment important"],rep:1},
+      {q:"La structure d'une bonne histoire personnelle c'est :",options:["Chiffres / résultats / objectifs","Avant / déclic / maintenant","Produits / prix / livraison","Suivis / relances / clôture"],rep:1},
+      {q:"Ton histoire doit être :",options:["Parfaite et sans défauts","Longue et détaillée","Authentique et personnelle","Centrée sur les produits"],rep:2},
+    ],
+  },
+  {
+    jour:4,
+    exercice:"Envoie ta liste de 10 contacts potentiels à ta marraine (prénom + lien avec toi) 📱",
+    quiz:[
+      {q:"Quel est le meilleur point de départ pour ta liste de contacts ?",options:["Les inconnus sur Instagram","Ton entourage proche (famille, amies, collègues)","Les groupes Facebook","Les pages professionnelles"],rep:1},
+      {q:"Comment approcher naturellement un contact ?",options:["En envoyant directement le lien boutique","En prenant des nouvelles d'abord, sans parler de Mihi","En faisant un pitch complet d'emblée","En publiant son contact sur les réseaux"],rep:1},
+      {q:"Combien de contacts doit contenir ta liste de départ ?",options:["5 minimum","10 minimum","50 minimum","100 minimum"],rep:1},
+    ],
+  },
+  {
+    jour:5,
+    exercice:"Publie une story ou un post Mihi et envoie la capture d'écran à ta marraine 🎯",
+    quiz:[
+      {q:"Un bon pitch de présentation dure :",options:["5 minutes minimum","30 secondes maximum","10 minutes","1 à 2 minutes"],rep:1},
+      {q:"Que doit contenir une bonne story de présentation Mihi ?",options:["Tous les prix de la gamme","Ton résultat ou ressenti personnel + appel à l'action","Le lien de la boutique uniquement","Une liste de tous les produits"],rep:1},
+      {q:"Quelle est la règle d'or du contenu sur les réseaux ?",options:["Publier le plus souvent possible","Copier-coller ce qui marche pour d'autres","Être authentique et régulière","Parler uniquement des produits"],rep:2},
+    ],
+  },
+  {
+    jour:6,
+    exercice:"Envoie la confirmation de ta première commande client à ta marraine 💰",
+    quiz:[
+      {q:"Après une commande, quand recontacter la cliente ?",options:["Jamais, c'est elle qui revient","3 à 5 jours après réception pour prendre des nouvelles","Un mois après","Uniquement si elle a un problème"],rep:1},
+      {q:"Le service après-vente c'est :",options:["Une obligation légale","Un outil puissant pour fidéliser et obtenir des recommandations","Une perte de temps","Uniquement pour les problèmes"],rep:1},
+      {q:"Comment transformer une cliente en ambassadrice ?",options:["En lui donnant des remises","En la suivant régulièrement et en lui demandant son avis","En lui envoyant beaucoup de messages","En lui proposant de rejoindre l'équipe dès la 1ère commande"],rep:1},
+    ],
+  },
+  {
+    jour:7,
+    exercice:"Envoie le prénom et le profil d'une personne que tu as contactée pour l'opportunité business à ta marraine 👑",
+    quiz:[
+      {q:"Comment parler de l'opportunité sans forcer ?",options:["Envoyer le lien d'inscription directement","Partager ton propre parcours et laisser la curiosité venir","Lister tous les avantages financiers","Faire un pitch complet non sollicité"],rep:1},
+      {q:"Quel profil est idéal pour l'opportunité Mihi ?",options:["Uniquement les personnes sans emploi","Uniquement les experts en vente","Toute personne motivée, quelle que soit sa situation","Uniquement les femmes de moins de 30 ans"],rep:2},
+      {q:"Après 7 modules, la suite c'est :",options:["Arrêter de se former","Tout faire seule","Continuer à te former et t'appuyer sur ta marraine","Attendre les résultats"],rep:2},
+    ],
+  },
+];
+
+function FastStartQuizPopup({jour, uid, userName, marraineUid, onClose, onValide}){
+  const config = FAST_START_QUIZ.find(q=>q.jour===jour);
+  const[step,setStep]=useState(config?.exercice?"exercice":"quiz");
+  const[reponses,setReponses]=useState({});
+  const[exoTexte,setExoTexte]=useState("");
+  const[sending,setSending]=useState(false);
+  const[sent,setSent]=useState(false);
+  const[score,setScore]=useState(null);
+  if(!config) return null;
+
+  // config existe ici
+  const titre=FAST_START_DAYS.find(d=>d.jour===jour)?.titre||`Module ${jour}`;
+  const fmt=(id)=>id.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+
+  const validerQuiz=()=>{
+    let s=0;
+    config.quiz.forEach((q,i)=>{ if(reponses[i]===q.rep) s++; });
+    setScore(s);
+    setStep("envoyer");
+  };
+
+  const envoyer=async()=>{
+    setSending(true);
+    try{
+      // Message envoyé à la marraine
+      if(marraineUid){
+        const ref=doc(db,"messages",marraineUid);
+        const snap=await getDoc(ref);
+        const existing=snap.exists()?snap.data().msgs||[]:[];
+
+        // Détail des réponses au quiz
+        let quizDetail = "";
+        if(config.quiz){
+          config.quiz.forEach((q,i)=>{
+            const repDonnee = reponses[i];
+            const estJuste = repDonnee === q.rep;
+            quizDetail += `\n${estJuste?"✅":"❌"} Q${i+1}: ${q.q}\n   → Réponse: "${q.options[repDonnee]||"?"}" ${estJuste?"(correct)":"(incorrect — bonne réponse: "+q.options[q.rep]+")"}\n`;
+          });
+        }
+
+        const msg={
+          id:`fs${Date.now()}`,
+          de:uid,
+          deNom:fmt(uid),
+          texte:`✅ ${fmt(uid)} a validé le ${titre}\n\n${config.exercice&&exoTexte?`📝 Exercice :\n${exoTexte}\n`:""}\n📊 Quiz : ${score}/${config.quiz.length} bonnes réponses${quizDetail}`,
+          ts:Date.now(),
+          lu:false,
+          type:"faststart",
+          score,
+          total:config.quiz.length,
+        };
+        await setDoc(ref,{msgs:[msg,...existing].slice(0,100)});
+      }
+      // Marquer le module comme validé
+      onValide&&onValide(jour);
+      setSent(true);
+    }catch{}
+    setSending(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9999}}>
+      <div style={{background:C.blanc,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:480,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.3)"}}>
+
+        {/* Header */}
+        <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:"1rem 1.2rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.blanc}}>
+              {step==="exercice"?"📝 Exercice":step==="quiz"?"📊 Quiz de validation":step==="envoyer"?"📤 Envoyer à ta marraine":"✅ Validé !"}
+            </div>
+            <div style={{fontSize:".65rem",color:C.pale,marginTop:".15rem"}}>{titre}</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:C.pale,fontSize:"1.2rem",cursor:"pointer"}}>✕</button>
+        </div>
+
+        <div style={{padding:"1.2rem"}}>
+
+          {/* ÉTAPE EXERCICE */}
+          {step==="exercice"&&config.exercice&&(
+            <div>
+              <div style={{background:C.creme,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",borderLeft:`3px solid ${C.rose}`}}>
+                <div style={{fontSize:".7rem",fontWeight:700,color:C.rose,marginBottom:".3rem"}}>📝 Exercice de validation</div>
+                <div style={{fontSize:".8rem",color:C.brun,lineHeight:1.65}}>{config.exercice}</div>
+              </div>
+              <textarea value={exoTexte} onChange={e=>setExoTexte(e.target.value)}
+                placeholder="Écris ta réponse ici... ou décris ce que tu as fait"
+                style={{width:"100%",minHeight:100,border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem",fontFamily:"inherit",fontSize:".8rem",color:C.texte,background:C.blanc,resize:"vertical",outline:"none",lineHeight:1.6,marginBottom:"1rem"}}/>
+              <button onClick={()=>setStep("quiz")}
+                style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".7rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                Continuer → Quiz de validation
+              </button>
+            </div>
+          )}
+
+          {/* ÉTAPE QUIZ */}
+          {step==="quiz"&&(
+            <div>
+              <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.6}}>
+                Réponds aux questions pour valider ce module et débloquer le suivant 🎯
+              </p>
+              {config.quiz.map((q,i)=>(
+                <div key={i} style={{marginBottom:"1rem"}}>
+                  <div style={{fontSize:".8rem",fontWeight:600,color:C.brun,marginBottom:".5rem",lineHeight:1.5}}>{i+1}. {q.q}</div>
+                  {q.options.map((opt,j)=>(
+                    <div key={j} onClick={()=>setReponses(r=>({...r,[i]:j}))}
+                      style={{display:"flex",alignItems:"center",gap:".6rem",padding:".5rem .75rem",borderRadius:9,border:`1.5px solid ${reponses[i]===j?C.rose:C.pale}`,background:reponses[i]===j?C.rose+"10":"transparent",marginBottom:".3rem",cursor:"pointer",transition:"all .15s"}}>
+                      <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${reponses[i]===j?C.rose:C.pale}`,background:reponses[i]===j?C.rose:"transparent",flexShrink:0}}/>
+                      <div style={{fontSize:".76rem",color:C.texte}}>{opt}</div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <button onClick={validerQuiz}
+                disabled={Object.keys(reponses).length<config.quiz.length}
+                style={{width:"100%",background:Object.keys(reponses).length>=config.quiz.length?C.brun:C.pale,color:Object.keys(reponses).length>=config.quiz.length?C.blanc:C.gris,border:"none",borderRadius:10,padding:".7rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:Object.keys(reponses).length>=config.quiz.length?"pointer":"default",transition:"all .2s"}}>
+                Valider le quiz →
+              </button>
+            </div>
+          )}
+
+          {/* ÉTAPE ENVOYER */}
+          {step==="envoyer"&&!sent&&(
+            <div>
+              {/* Score */}
+              <div style={{background:score>=2?C.vert+"15":C.rose+"15",border:`1px solid ${score>=2?C.vert:C.rose}`,borderRadius:12,padding:"1rem",textAlign:"center",marginBottom:"1rem"}}>
+                <div style={{fontSize:"2rem",marginBottom:".3rem"}}>{score===config.quiz.length?"🏆":score>=2?"✅":"💪"}</div>
+                <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>{score}/{config.quiz.length} bonnes réponses</div>
+                <div style={{fontSize:".72rem",color:C.gris,marginTop:".2rem"}}>
+                  {score===config.quiz.length?"Parfait !":score>=2?"Bien joué !":"Continue à revoir les notions du module"}
+                </div>
+              </div>
+
+              {/* Récap exercice */}
+              {config.exercice&&exoTexte&&(
+                <div style={{background:C.creme,borderRadius:10,padding:".75rem",marginBottom:"1rem",fontSize:".74rem",color:C.brun}}>
+                  <strong>Ton exercice :</strong> {exoTexte}
+                </div>
+              )}
+
+              <button onClick={envoyer} disabled={sending}
+                style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+                {sending?"Envoi en cours...":"📤 Envoyer à ma marraine pour validation"}
+              </button>
+              <button onClick={onClose}
+                style={{width:"100%",background:"none",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".76rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
+                Enregistrer et fermer
+              </button>
+            </div>
+          )}
+
+          {/* ENVOYÉ */}
+          {sent&&(
+            <div style={{textAlign:"center",padding:"1.5rem 0"}}>
+              <div style={{fontSize:"3rem",marginBottom:".5rem"}}>🎉</div>
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".5rem"}}>
+                Module {jour} validé !
+              </div>
+              <p style={{fontSize:".78rem",color:C.gris,lineHeight:1.7,marginBottom:"1.2rem"}}>
+                Ta marraine a reçu tes réponses et va valider ton module. Le module suivant se débloque automatiquement 🚀
+              </p>
+              <button onClick={onClose}
+                style={{background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".65rem 1.4rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                Continuer →
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FastStartTab({uid, userName, goToFormation}){
+  const {lang} = useLang();
+  const[taskTranslations,setTaskTranslations]=useState({});
+
+  useEffect(()=>{
+    if(lang==="fr"){setTaskTranslations({});return;}
+    // Collecter tous les textes de tâches
+    const allTexts=[];
+    const allKeys=[];
+    FAST_START_DAYS.forEach(d=>{
+      d.taches.forEach((t,i)=>{
+        const txt=typeof t==="string"?t:t.t;
+        allTexts.push(txt);
+        allKeys.push(`${d.jour}-${i}`);
+      });
+      allTexts.push(d.titre);
+      allKeys.push(`titre-${d.jour}`);
+      if(d.objectif){allTexts.push(d.objectif);allKeys.push(`obj-${d.jour}`);}
+    });
+    translateBatch(allTexts,lang).then(res=>{
+      const map={};
+      allKeys.forEach((k,i)=>map[k]=res[i]);
+      setTaskTranslations(map);
+    });
+  },[lang]);
+  const[showQuiz,setShowQuiz]=useState(null);
+  const[marraineUid,setMarraineUid]=useState(null);
+  const[modulesValides,setModulesValides]=useState({});
+
+  const[videosFastStart,setVideosFastStart]=useState({});
   const[startDate,setStartDate]=useState(null);
   const[doneTasks,setDoneTasks]=useState({});
   const[loaded,setLoaded]=useState(false);
@@ -4537,10 +6555,35 @@ function FastStartTab({uid, userName, goToFormation}){
         const parsed = JSON.parse(data);
         setStartDate(parsed.startDate);
         setDoneTasks(parsed.doneTasks||{});
+        setModulesValides(parsed.modulesValides||{});
       }
+      // Charger la marraine depuis l'annuaire
+      try{
+        const snap=await getDoc(doc(db,"equipe","annuaire"));
+        if(snap.exists()){
+          const ann=snap.data().membres||{};
+          const me=ann[uid];
+          if(me?.marraine) setMarraineUid(me.marraine);
+        }
+      }catch{}
+      // Charger les vidéos Fast Start
+      try{
+        const snapV=await getDoc(doc(db,"admin","videos_faststart"));
+        if(snapV.exists()) setVideosFastStart(snapV.data().videos||{});
+      }catch{}
       setLoaded(true);
     })();
   },[uid]);
+
+  const validerModule=(jour)=>{
+    const next={...modulesValides,[jour]:true};
+    setModulesValides(next);
+    // Sauvegarder
+    sg(uid,"db-fast-start").then(data=>{
+      const parsed=data?JSON.parse(data):{};
+      ss(uid,"db-fast-start",JSON.stringify({...parsed,modulesValides:next}));
+    });
+  };
 
   const demarrer=()=>{
     const today = new Date().toISOString().slice(0,10);
@@ -4596,6 +6639,18 @@ function FastStartTab({uid, userName, goToFormation}){
   return(
     <div>
       <Confetti trigger={confettiTrigger}/>
+
+      {showQuiz&&(
+        <FastStartQuizPopup
+          jour={showQuiz}
+          uid={uid}
+          userName={userName}
+          marraineUid={marraineUid}
+          onClose={()=>setShowQuiz(null)}
+          onValide={(j)=>{validerModule(j);setShowQuiz(null);}}
+        />
+      )}
+
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
         Fast <em style={{fontStyle:"italic",color:C.rose}}>Start</em> — J1 à J7
       </div>
@@ -4616,15 +6671,20 @@ function FastStartTab({uid, userName, goToFormation}){
       {FAST_START_DAYS.map(d=>{
         const isCurrent = d.jour===currentDay && !allDone;
         const dayDone = d.taches.every((_,i)=>doneTasks[`${d.jour}-${i}`]);
-        const isLocked = d.jour > currentDay && !allDone;
+        // Module 1 toujours accessible, modules suivants débloqués si le précédent est validé
+        const prevValide = d.jour===1 ? true : !!modulesValides[d.jour-1];
+        const isLocked = !prevValide && !modulesValides[d.jour];
+        const moduleValide = modulesValides[d.jour];
+        const hasQuiz = FAST_START_QUIZ.find(q=>q.jour===d.jour);
         return(
-          <div key={d.jour} style={{background:isCurrent?"rgba(196,154,138,.08)":C.blanc,border:`1.5px solid ${isCurrent?C.rose:dayDone?C.vert+"60":C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".6rem",opacity:isLocked?.55:1}}>
+          <div key={d.jour} style={{background:isCurrent?"rgba(196,154,138,.08)":C.blanc,border:`1.5px solid ${moduleValide?C.vert:isCurrent?C.rose:dayDone?C.vert+"60":C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".6rem",opacity:isLocked?.55:1}}>
             <div style={{display:"flex",alignItems:"center",gap:".5rem",marginBottom:".5rem"}}>
-              <div style={{width:28,height:28,borderRadius:"50%",background:dayDone?C.vert:isCurrent?C.rose:C.pale,color:"white",fontSize:".72rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {dayDone?"✓":`J${d.jour}`}
+              <div style={{width:28,height:28,borderRadius:"50%",background:moduleValide?C.vert:dayDone?C.vert:isCurrent?C.rose:C.pale,color:"white",fontSize:".72rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {moduleValide?"✓":dayDone?"✓":`J${d.jour}`}
               </div>
-              <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:C.brun}}>{d.titre}</div>
-              {isCurrent&&<span style={{fontSize:".58rem",fontWeight:700,color:C.rose,background:C.rose+"15",borderRadius:20,padding:".1rem .5rem",marginLeft:"auto"}}>Aujourd'hui</span>}
+              <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:C.brun,flex:1}}>{taskTranslations[`titre-${d.jour}`]||d.titre}</div>
+              {isCurrent&&!moduleValide&&<span style={{fontSize:".58rem",fontWeight:700,color:C.rose,background:C.rose+"15",borderRadius:20,padding:".1rem .5rem"}}>Aujourd'hui</span>}
+              {moduleValide&&<span style={{fontSize:".58rem",fontWeight:700,color:C.vert,background:C.vert+"15",borderRadius:20,padding:".1rem .5rem"}}>✓ Validé</span>}
             </div>
             {d.taches.map((tk,i)=>{
               const key=`${d.jour}-${i}`;
@@ -4639,17 +6699,49 @@ function FastStartTab({uid, userName, goToFormation}){
                     <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${checked?C.vert:C.pale}`,background:checked?C.vert:"transparent",flexShrink:0,marginTop:2,display:"flex",alignItems:"center",justifyContent:"center"}}>
                       {checked&&<span style={{fontSize:".55rem",color:"white",fontWeight:700}}>✓</span>}
                     </div>
-                    <div style={{fontSize:".74rem",color:checked?C.gris:C.texte,textDecoration:checked?"line-through":"none",lineHeight:1.5}}>{label}</div>
+                    <div style={{fontSize:".74rem",color:checked?C.gris:C.texte,textDecoration:checked?"line-through":"none",lineHeight:1.5}}>{taskTranslations[`${d.jour}-${i}`]||label}</div>
                   </div>
                   {link&&!isLocked&&(
-                    <div onClick={()=>goToFormation&&goToFormation(link.sub)}
-                      style={{marginLeft:"1.55rem",marginTop:".3rem",display:"inline-flex",alignItems:"center",gap:".35rem",fontSize:".66rem",fontWeight:600,color:C.rose,cursor:"pointer"}}>
-                      ▶ {link.label}
-                    </div>
+                    link.video
+                    ? (()=>{
+                        const vKey=`module${link.module}`;
+                        const vData=videosFastStart[vKey];
+                        return vData?.url
+                          ? <a href={vData.url} target="_blank" rel="noopener noreferrer"
+                              style={{marginLeft:"1.55rem",marginTop:".3rem",display:"inline-flex",alignItems:"center",gap:".35rem",fontSize:".72rem",fontWeight:700,color:"white",textDecoration:"none",background:C.brun,borderRadius:8,padding:".3rem .7rem"}}>
+                              ▶ Regarder la vidéo
+                            </a>
+                          : <div style={{marginLeft:"1.55rem",marginTop:".3rem",fontSize:".66rem",color:C.gris,fontStyle:"italic"}}>
+                              🎬 Vidéo bientôt disponible
+                            </div>;
+                      })()
+                    : link.sub
+                    ? <div onClick={()=>goToFormation&&goToFormation(link.sub)}
+                        style={{marginLeft:"1.55rem",marginTop:".3rem",display:"inline-flex",alignItems:"center",gap:".35rem",fontSize:".66rem",fontWeight:600,color:C.rose,cursor:"pointer"}}>
+                        ▶ {link.label}
+                      </div>
+                    : <a href={link.url} target="_blank" rel="noopener noreferrer"
+                        style={{marginLeft:"1.55rem",marginTop:".3rem",display:"inline-flex",alignItems:"center",gap:".35rem",fontSize:".66rem",fontWeight:600,color:"#29A0D8",textDecoration:"none"}}>
+                        ▶ {link.label}
+                      </a>
+                  )}
+                  {tk.link2&&!isLocked&&(
+                    <a href={tk.link2.url} target="_blank" rel="noopener noreferrer"
+                      style={{marginLeft:"1.55rem",marginTop:".2rem",display:"inline-flex",alignItems:"center",gap:".35rem",fontSize:".66rem",fontWeight:600,color:"#29A0D8",textDecoration:"none"}}>
+                      ▶ {tk.link2.label}
+                    </a>
                   )}
                 </div>
               );
             })}
+
+            {/* Bouton exercice + quiz quand toutes les tâches sont cochées */}
+            {dayDone&&!moduleValide&&hasQuiz&&(
+              <button onClick={()=>setShowQuiz(d.jour)}
+                style={{width:"100%",marginTop:".65rem",background:`linear-gradient(135deg,${C.brun},${C.brun2})`,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}>
+                📝 Exercice + Quiz de validation →
+              </button>
+            )}
           </div>
         );
       })}
@@ -4690,207 +6782,466 @@ const PRODUITS_DEFAULT=[
   {id:"sc-enveloppement",categorie:"Soin corps",icon:"🧴",nom:"Enveloppement / soin minceur",besoins:"Cellulite, fermeté, rituel minceur",pointsForts:"Effet rituel spa, parfait pour box cadeaux",prix:""},
 ];
 
-function ProduitsSearchTab(){
-  const[search,setSearch]=useState("");
-  const[produits,setProduits]=useState(PRODUITS_DEFAULT);
-  const[loaded,setLoaded]=useState(false);
+// ── ASSISTANTE IA DE L'ÉQUIPE ────────────────────────────────────────────────
+function AssistanteIATab({uid, userName}){
+  const[ouvert,setOuvert]=useState(false);
+  const[messages,setMessages]=useState([]);
+  const[input,setInput]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[ordonnanceEnvoyee,setOrdonnanceEnvoyee]=useState({});
 
+  const ouvrirChat=()=>{
+    setOuvert(true);
+    if(messages.length===0){
+      setMessages([{role:"assistant",text:`Coucou ${userName?.split(" ")[0]||""} ! 👋 Je suis ton assistante Blazing Dynasty. Je peux t'aider à conseiller tes clientes sur les produits Mihi (avec ordonnance et prix), répondre à tes questions business, ou juste t'écouter si t'as besoin d'en parler. De quoi as-tu besoin ?`}]);
+    }
+  };
+
+  const envoyer=async()=>{
+    const texte=input.trim();
+    if(!texte||loading)return;
+    const newMsgs=[...messages,{role:"user",text:texte}];
+    setMessages(newMsgs);
+    setInput("");
+    setLoading(true);
+
+    try{
+      // Charger le catalogue produits
+      let catalogueText="";
+      try{
+        const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
+        if(catSnap.exists()){
+          const cat=catSnap.data();
+          const allProduits=[...(cat.face||[]),...(cat.hair||[]),...(cat.health||[])].slice(0,80);
+          catalogueText=allProduits.map(p=>`- ${p.nom} (${p.serie}) — ${p.prix}€`).join("\n");
+        }
+      }catch{}
+
+      // Charger les contenus de formation (textes admin)
+      let formationText="";
+      try{
+        const formSnap=await getDoc(doc(db,"admin","contenus"));
+        if(formSnap.exists()){
+          const items=(formSnap.data().items||[]).filter(i=>i.actif!==false&&i.description);
+          formationText=items.slice(0,30).map(i=>`[${i.destination}] ${i.titre}: ${i.description}`).join("\n");
+        }
+      }catch{}
+
+      // Charger formation produits (textes détaillés par catégorie)
+      let produitsFormationText="";
+      try{
+        const fpSnap=await getDoc(doc(db,"admin","formation_produits"));
+        if(fpSnap.exists()){
+          const produits=fpSnap.data().produits||{};
+          const lignes=[];
+          Object.entries(produits).forEach(([cat,liste])=>{
+            (liste||[]).forEach(p=>{
+              if(p.description) lignes.push(`[${cat}] ${p.titre}: ${p.description.slice(0,200)}`);
+            });
+          });
+          produitsFormationText=lignes.slice(0,40).join("\n");
+        }
+      }catch{}
+
+      const historique=newMsgs.slice(-8).map(m=>`${m.role==="user"?"Distributrice":"Assistante"}: ${m.text}`).join("\n");
+
+      const prompt=`Tu es l'assistante IA de l'équipe Blazing Dynasty (Mihi France), une équipe de vente directe en MLM. Tu parles à une distributrice de l'équipe, jamais à une cliente finale.
+
+CONTEXTE FORMATIONS DE L'ÉQUIPE :
+${formationText||"Aucune formation chargée pour l'instant."}
+
+DÉTAILS PRODUITS (descriptions formation) :
+${produitsFormationText||"Aucun détail produit chargé."}
+
+CATALOGUE PRODUITS MIHI AVEC PRIX RÉELS (utilise UNIQUEMENT ces produits et prix exacts si on te demande une recommandation produits — n'invente JAMAIS un produit ou un prix) :
+${catalogueText||"Catalogue non chargé."}
+
+HISTORIQUE DE LA CONVERSATION :
+${historique}
+
+INSTRUCTIONS :
+- Si la distributrice te pose une question PRODUIT (pour conseiller une cliente) : génère une réponse en JSON avec 3 packs et prix exacts du catalogue (format ci-dessous)
+- Si la question est BUSINESS (stratégie, recrutement, vente, organisation) : réponds en JSON avec type "texte", contenu utile et concret basé sur les formations ci-dessus
+- Si la question est MOOD/personnelle (fatigue, doute, motivation) : réponds en JSON avec type "texte", chaleureux et empathique, sans psychanalyser
+- Réponds TOUJOURS en français, ton "cash mais élégant" (direct, bienveillant, jamais mièvre)
+- Réponds UNIQUEMENT avec le JSON, sans markdown ni commentaire
+
+FORMAT JSON SI PRODUITS (type="produits") :
+{"type":"produits","analyse":"2-3 phrases analysant le besoin","packs":[{"nom":"Pack Essentiel","emoji":"💚","produits":[{"nom":"Nom exact du catalogue","prix":XX,"role":"pourquoi ce produit"}],"total":XX},{"nom":"Pack Recommandé","emoji":"⭐","produits":[...],"total":XX},{"nom":"Pack Premium","emoji":"👑","produits":[...],"total":XX}],"conseil":"conseil final"}
+
+FORMAT JSON SI TEXTE (type="texte", business ou mood) :
+{"type":"texte","reponse":"ta réponse complète et utile"}`;
+
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
+      });
+      const data=await res.json();
+      const raw=data.content?.map(x=>x.text||"").join("").trim()||"{}";
+      const match=raw.match(/\{[\s\S]*\}/);
+      const parsed=match?JSON.parse(match[0]):{type:"texte",reponse:"Désolée, je n'ai pas pu traiter ta demande. Réessaie."};
+
+      setMessages(m=>[...m,{role:"assistant",...parsed}]);
+    }catch(e){
+      setMessages(m=>[...m,{role:"assistant",type:"texte",reponse:"Oups, petit souci technique 😅 Réessaie dans quelques secondes."}]);
+    }
+    setLoading(false);
+  };
+
+  const envoyerOrdonnance=(msgIdx,packs)=>{
+    const texte=packs.map(p=>`${p.emoji} ${p.nom} (${p.total}€)\n${p.produits.map(pr=>`• ${pr.nom} — ${pr.prix}€`).join("\n")}`).join("\n\n");
+    navigator.clipboard?.writeText(texte);
+    setOrdonnanceEnvoyee(p=>({...p,[msgIdx]:true}));
+    setTimeout(()=>setOrdonnanceEnvoyee(p=>({...p,[msgIdx]:false})),2500);
+  };
+
+  if(!ouvert){
+    return(
+      <div onClick={ouvrirChat}
+        style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:14,padding:".9rem 1rem",marginBottom:"1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".75rem",boxShadow:"0 3px 12px rgba(61,31,14,.15)"}}>
+        <div style={{width:46,height:46,borderRadius:"50%",background:`linear-gradient(135deg,${C.rose},${C.lilas})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem",flexShrink:0}}>
+          🤖
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:"white"}}>Comment puis-je t'aider et répondre ?</div>
+          <div style={{fontSize:".68rem",color:C.pale,marginTop:".1rem"}}>Produits · Business · Petit coup de mou — je suis là</div>
+        </div>
+        <div style={{color:C.or,fontSize:"1.1rem"}}>→</div>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{background:C.blanc,border:`1.5px solid ${C.rose}40`,borderRadius:14,marginBottom:"1rem",overflow:"hidden"}}>
+      {/* Header */}
+      <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:".75rem 1rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+        <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.rose},${C.lilas})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>🤖</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:".82rem",fontWeight:700,color:"white"}}>Assistante Blazing Dynasty</div>
+          <div style={{fontSize:".6rem",color:C.pale}}>Produits · Business · Mood</div>
+        </div>
+        <button onClick={()=>setOuvert(false)} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:7,padding:".25rem .5rem",color:"white",cursor:"pointer",fontSize:".7rem",fontFamily:"inherit"}}>✕</button>
+      </div>
+
+      {/* Messages */}
+      <div style={{maxHeight:420,overflowY:"auto",padding:".85rem"}}>
+        {messages.map((m,i)=>{
+          if(m.role==="user"){
+            return(
+              <div key={i} style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}>
+                <div style={{background:C.rose,color:"white",borderRadius:"12px 12px 2px 12px",padding:".5rem .75rem",fontSize:".78rem",maxWidth:"80%",lineHeight:1.5}}>{m.text}</div>
+              </div>
+            );
+          }
+          // Assistant
+          if(m.text){
+            // Message d'accueil simple
+            return(
+              <div key={i} style={{display:"flex",marginBottom:".6rem"}}>
+                <div style={{background:C.creme,color:C.texte,borderRadius:"12px 12px 12px 2px",padding:".5rem .75rem",fontSize:".78rem",maxWidth:"85%",lineHeight:1.6}}>{m.text}</div>
+              </div>
+            );
+          }
+          if(m.type==="produits"){
+            return(
+              <div key={i} style={{marginBottom:".75rem"}}>
+                <div style={{background:C.creme,borderRadius:"12px 12px 12px 2px",padding:".65rem .8rem",fontSize:".78rem",color:C.texte,lineHeight:1.6,marginBottom:".5rem"}}>
+                  {m.analyse}
+                </div>
+                {(m.packs||[]).map((pack,pi)=>(
+                  <div key={pi} style={{background:C.blanc,border:`1.5px solid ${C.pale}`,borderRadius:11,padding:".6rem .75rem",marginBottom:".4rem"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem"}}>
+                      <div style={{fontSize:".78rem",fontWeight:700,color:C.brun}}>{pack.emoji} {pack.nom}</div>
+                      <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",fontWeight:700,color:C.rose}}>{pack.total}€</div>
+                    </div>
+                    {(pack.produits||[]).map((pr,pri)=>(
+                      <div key={pri} style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.gris,padding:".15rem 0"}}>
+                        <span>• {pr.nom}</span>
+                        <span style={{fontWeight:600,color:C.brun,flexShrink:0,marginLeft:".5rem"}}>{pr.prix}€</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {m.conseil&&<div style={{fontSize:".72rem",color:C.brun,fontStyle:"italic",padding:".5rem .65rem",background:"#FFF8E1",borderRadius:8,marginBottom:".5rem"}}>💛 {m.conseil}</div>}
+                <button onClick={()=>envoyerOrdonnance(i,m.packs)}
+                  style={{width:"100%",background:ordonnanceEnvoyee[i]?C.vert:C.brun,color:"white",border:"none",borderRadius:9,padding:".5rem",fontSize:".74rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                  {ordonnanceEnvoyee[i]?"✓ Copiée — colle-la à ta cliente !":"📋 Copier l'ordonnance pour l'envoyer"}
+                </button>
+              </div>
+            );
+          }
+          if(m.type==="texte"){
+            return(
+              <div key={i} style={{display:"flex",marginBottom:".6rem"}}>
+                <div style={{background:C.creme,color:C.texte,borderRadius:"12px 12px 12px 2px",padding:".5rem .75rem",fontSize:".78rem",maxWidth:"85%",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.reponse}</div>
+              </div>
+            );
+          }
+          return null;
+        })}
+        {loading&&(
+          <div style={{display:"flex",marginBottom:".6rem"}}>
+            <div style={{background:C.creme,borderRadius:"12px 12px 12px 2px",padding:".5rem .75rem",fontSize:".78rem",color:C.gris}}>✨ Je réfléchis...</div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div style={{display:"flex",gap:".4rem",padding:".65rem .85rem",borderTop:`1px solid ${C.pale}`}}>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&envoyer()}
+          placeholder="Pose ta question..."
+          style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:9,padding:".5rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+        <button onClick={envoyer} disabled={loading||!input.trim()}
+          style={{background:loading||!input.trim()?C.pale:C.brun,color:"white",border:"none",borderRadius:9,padding:".5rem .85rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:loading?"default":"pointer"}}>
+          →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ProduitsSearchTab(){
+  const[question,setQuestion]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[ordonnance,setOrdonnance]=useState(null);
+  const[erreur,setErreur]=useState("");
+  const[baseFormation,setBaseFormation]=useState({});
+  const[baseLoaded,setBaseLoaded]=useState(false);
+
+  // Charger la base Formation Produits au démarrage
   useEffect(()=>{
     (async()=>{
       try{
-        const snap=await getDoc(doc(db,"admin","produits"));
-        if(snap.exists()&&snap.data().items&&snap.data().items.length>0) setProduits(snap.data().items);
+        const snap=await getDoc(doc(db,"admin","formation_produits"));
+        if(snap.exists()) setBaseFormation(snap.data().produits||{});
       }catch{}
-      setLoaded(true);
+      setBaseLoaded(true);
     })();
   },[]);
 
-  const q = search.trim().toLowerCase();
-  const resultats = !q ? [] : produits.filter(p=>
-    p.nom.toLowerCase().includes(q) ||
-    p.besoins.toLowerCase().includes(q) ||
-    p.categorie.toLowerCase().includes(q) ||
-    p.pointsForts.toLowerCase().includes(q)
-  );
+  // Construire le contexte textuel à injecter dans le prompt
+  const buildContexte=()=>{
+    const lignes=[];
+    CATEGORIES_PRODUITS.forEach(cat=>{
+      const produits=baseFormation[cat.id]||[];
+      if(produits.length===0)return;
+      lignes.push(`\n=== ${cat.icon} ${cat.label.toUpperCase()} ===`);
+      produits.forEach(p=>{
+        lignes.push(`\nProduit : ${p.titre}`);
+        if(p.description) lignes.push(`Description : ${p.description.slice(0,600)}`);
+      });
+    });
+    return lignes.join("\n");
+  };
 
-  const parCategorie = {};
-  produits.forEach(p=>{ parCategorie[p.categorie]=(parCategorie[p.categorie]||0)+1; });
+  const genererOrdonnance=async()=>{
+    const q=question.trim();
+    if(!q)return;
+    setLoading(true);setErreur("");setOrdonnance(null);
+
+    const contexte=buildContexte();
+
+    if(!contexte||contexte.length<50){
+      setErreur("La base de formation produits est vide. Demande à Melissa d'ajouter des produits depuis l'Admin.");
+      setLoading(false);return;
+    }
+
+    const prompt=`Tu es une conseillère beauté et bien-être experte des produits Mihi, qui aide à trouver la combinaison parfaite pour chaque cliente.
+
+BASE DE CONNAISSANCES PRODUITS MIHI :
+${contexte}
+
+QUESTION / BESOIN DE LA CLIENTE :
+"${q}"
+
+En te basant UNIQUEMENT sur les produits présents dans la base de connaissances ci-dessus, génère une ordonnance personnalisée en JSON (ne renvoie QUE le JSON, sans markdown ni commentaire) :
+
+{
+  "analyse": "2-3 phrases qui analysent le besoin exprimé et expliquent ton approche",
+  "packs": [
+    {
+      "nom": "Pack Essentiel",
+      "emoji": "💚",
+      "couleur": "#27AE60",
+      "description": "L'essentiel pour commencer, budget accessible",
+      "produits": [
+        {"nom": "Nom exact du produit", "role": "Pourquoi ce produit pour ce besoin", "categorie": "Catégorie"},
+        {"nom": "Nom exact du produit 2", "role": "Pourquoi ce produit", "categorie": "Catégorie"}
+      ],
+      "avantage_cle": "Le principal bénéfice de ce pack en 1 phrase"
+    },
+    {
+      "nom": "Pack Recommandé",
+      "emoji": "⭐",
+      "couleur": "#C49A8A",
+      "description": "La combinaison idéale, notre recommandation",
+      "produits": [
+        {"nom": "Produit 1", "role": "Rôle", "categorie": "Catégorie"},
+        {"nom": "Produit 2", "role": "Rôle", "categorie": "Catégorie"},
+        {"nom": "Produit 3", "role": "Rôle", "categorie": "Catégorie"}
+      ],
+      "avantage_cle": "Pourquoi ce pack est le meilleur choix"
+    },
+    {
+      "nom": "Pack Premium",
+      "emoji": "👑",
+      "couleur": "#C4A832",
+      "description": "La routine complète, résultats maximaux",
+      "produits": [
+        {"nom": "Produit 1", "role": "Rôle", "categorie": "Catégorie"},
+        {"nom": "Produit 2", "role": "Rôle", "categorie": "Catégorie"},
+        {"nom": "Produit 3", "role": "Rôle", "categorie": "Catégorie"},
+        {"nom": "Produit 4", "role": "Rôle", "categorie": "Catégorie"}
+      ],
+      "avantage_cle": "L'expérience complète et transformative"
+    }
+  ],
+  "conseil": "Un conseil personnalisé final pour accompagner la cliente, en 2 phrases"
+}
+
+RÈGLES IMPORTANTES :
+- N'utilise QUE les produits présents dans la base de connaissances
+- Si la base ne contient pas assez de produits pour répondre, adapte les packs en conséquence
+- Les packs doivent être progressifs en termes de complétude (pas nécessairement de prix)
+- Sois précise et concrète dans les explications`;
+
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "x-api-key":"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",
+          "anthropic-version":"2023-06-01",
+          "anthropic-dangerous-direct-browser-access":"true"
+        },
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
+      });
+      const data=await res.json();
+      if(data.error)throw new Error(data.error.message);
+      const text=data.content?.map(i=>i.text||"").join("")||"";
+      const clean=text.replace(/```json|```/g,"").trim();
+      setOrdonnance(JSON.parse(clean));
+    }catch(e){
+      setErreur("Erreur lors de la génération. Réessaie dans quelques secondes.");
+    }
+    setLoading(false);
+  };
 
   return(
     <div>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        Recherche <em style={{fontStyle:"italic",color:C.rose}}>Produits</em>
+        Conseillère <em style={{fontStyle:"italic",color:C.rose}}>Produits IA</em>
       </div>
       <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Ta cliente te demande "qu'est-ce que tu as pour..." ? Tape le mot-clé ici 👇
+        Décris le besoin de ta cliente — l'IA sélectionne les produits Mihi adaptés et crée une ordonnance personnalisée.
       </p>
 
-      <input placeholder="Ex: cheveux secs, calcaire, anti-âge, mascara..." value={search} onChange={e=>setSearch(e.target.value)}
-        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".55rem .8rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:"1rem"}}/>
-
-      {!q&&(
-        <div>
-          <div style={{fontSize:".62rem",color:C.gris,marginBottom:".5rem"}}>Catégories disponibles :</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:".4rem"}}>
-            {Object.entries(parCategorie).map(([cat,count])=>(
-              <div key={cat} style={{padding:".35rem .75rem",borderRadius:20,fontSize:".7rem",fontWeight:600,border:`1px solid ${C.pale}`,background:C.blanc,color:C.brun}}>
-                {produits.find(p=>p.categorie===cat)?.icon} {cat} ({count})
-              </div>
-            ))}
-          </div>
-          {!loaded&&<div style={{textAlign:"center",padding:"1rem",color:C.gris,fontSize:".74rem"}}>Chargement...</div>}
-        </div>
-      )}
-
-      {q&&resultats.length===0&&(
-        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>
-          Aucun produit trouvé pour "{search}".<br/>Essaie un autre mot-clé (ex: peau, cheveux, parfum...).
-        </div>
-      )}
-
-      {resultats.map(p=>(
-        <div key={p.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".6rem"}}>
-          <div style={{display:"flex",gap:".6rem",alignItems:"flex-start"}}>
-            <div style={{fontSize:"1.4rem",flexShrink:0}}>{p.icon}</div>
-            <div style={{flex:1}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:".5rem"}}>
-                <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:600,color:C.brun}}>{p.nom}</div>
-                {p.prix&&<div style={{fontSize:".85rem",fontWeight:700,color:C.rose,flexShrink:0}}>{p.prix}€</div>}
-              </div>
-              <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.lilas,marginTop:".15rem"}}>{p.categorie}</div>
-              <div style={{fontSize:".7rem",color:C.gris,marginTop:".4rem"}}><strong>Pour :</strong> {p.besoins}</div>
-              <div style={{fontSize:".7rem",color:C.texte,marginTop:".25rem"}}><strong>Points forts :</strong> {p.pointsForts}</div>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Éditeur admin pour les prix produits (Melissa)
-function AdminProduitsEditor(){
-  const[produits,setProduits]=useState(PRODUITS_DEFAULT);
-  const[loaded,setLoaded]=useState(false);
-  const[saving,setSaving]=useState(false);
-  const[saved,setSaved]=useState(false);
-
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const snap=await getDoc(doc(db,"admin","produits"));
-        if(snap.exists()&&snap.data().items&&snap.data().items.length>0) setProduits(snap.data().items);
-      }catch{}
-      setLoaded(true);
-    })();
-  },[]);
-
-  const updatePrix=(id,prix)=>{
-    setProduits(prev=>prev.map(p=>p.id===id?{...p,prix}:p));
-  };
-
-  const save=async()=>{
-    setSaving(true);
-    try{
-      await setDoc(doc(db,"admin","produits"),{items:produits});
-      setSaved(true);
-      setTimeout(()=>setSaved(false),2500);
-    }catch{}
-    setSaving(false);
-  };
-
-  if(!loaded) return <div style={{fontSize:".74rem",color:C.gris}}>Chargement...</div>;
-
-  const categories = [...new Set(produits.map(p=>p.categorie))];
-
-  return(
-    <div>
-      {categories.map(cat=>(
-        <div key={cat} style={{marginBottom:"1rem"}}>
-          <div style={{fontSize:".65rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun,marginBottom:".4rem"}}>{cat}</div>
-          {produits.filter(p=>p.categorie===cat).map(p=>(
-            <div key={p.id} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".4rem 0",borderBottom:`1px solid ${C.pale}`}}>
-              <div style={{flex:1,fontSize:".74rem",color:C.texte}}>{p.nom}</div>
-              <input type="number" placeholder="Prix €" value={p.prix||""} onChange={e=>updatePrix(p.id,e.target.value)}
-                style={{width:80,border:`1px solid ${C.pale}`,borderRadius:6,padding:".3rem .5rem",fontSize:".74rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}/>
-            </div>
+      {/* Exemples de questions */}
+      {!ordonnance&&!loading&&(
+        <div style={{display:"flex",flexWrap:"wrap",gap:".35rem",marginBottom:".75rem"}}>
+          {["Peau sèche et terne","Perte de poids + énergie","Maquillage longue tenue","Cheveux abîmés","Complément anti-âge","Parfum féminin doux"].map(ex=>(
+            <button key={ex} onClick={()=>setQuestion(ex)}
+              style={{padding:".3rem .65rem",fontSize:".68rem",borderRadius:20,border:`1px solid ${C.pale}`,background:C.blanc,color:C.brun,cursor:"pointer",fontFamily:"inherit"}}>
+              {ex}
+            </button>
           ))}
         </div>
-      ))}
-      <button onClick={save} disabled={saving}
-        style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:9,padding:".55rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-        {saving?"Sauvegarde...":saved?"✅ Sauvegardé !":"Sauvegarder les prix"}
+      )}
+
+      {/* Champ de saisie */}
+      <div style={{position:"relative",marginBottom:".75rem"}}>
+        <textarea
+          value={question}
+          onChange={e=>setQuestion(e.target.value)}
+          placeholder="Ex: Ma cliente a la peau grasse avec des imperfections, elle veut aussi perdre du poids durablement..."
+          rows={3}
+          style={{width:"100%",border:`1px solid ${question?C.rose:C.pale}`,borderRadius:12,padding:".65rem .85rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",resize:"none",lineHeight:1.6}}
+        />
+      </div>
+
+      <button onClick={genererOrdonnance} disabled={loading||!question.trim()||!baseLoaded}
+        style={{width:"100%",background:loading?"#aaa":question.trim()?C.brun:C.pale,color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:loading||!question.trim()?"default":"pointer",marginBottom:"1rem",transition:"background .2s"}}>
+        {loading?"✨ L'IA cherche dans les produits...":!baseLoaded?"Chargement de la base...":"✨ Générer l'ordonnance produits"}
       </button>
+
+      {erreur&&<div style={{background:"#FEE",border:"1px solid #E88",borderRadius:9,padding:".65rem .85rem",fontSize:".74rem",color:"#B04040",marginBottom:"1rem"}}>{erreur}</div>}
+
+      {/* ORDONNANCE */}
+      {ordonnance&&(
+        <div>
+          {/* Analyse */}
+          <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".9rem 1rem",marginBottom:"1rem"}}>
+            <div style={{fontSize:".55rem",fontWeight:700,color:C.or,letterSpacing:".12em",textTransform:"uppercase",marginBottom:".35rem"}}>🔍 Analyse du besoin</div>
+            <div style={{fontSize:".82rem",color:C.pale,lineHeight:1.7}}>{ordonnance.analyse}</div>
+          </div>
+
+          {/* 3 Packs */}
+          {(ordonnance.packs||[]).map((pack,idx)=>(
+            <div key={idx} style={{background:C.blanc,border:`2px solid ${pack.couleur}30`,borderRadius:14,overflow:"hidden",marginBottom:".75rem"}}>
+              {/* Header pack */}
+              <div style={{background:`linear-gradient(135deg,${pack.couleur},${pack.couleur}bb)`,padding:".75rem 1rem"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div>
+                    <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"white"}}>{pack.emoji} {pack.nom}</div>
+                    <div style={{fontSize:".68rem",color:"rgba(255,255,255,.8)",marginTop:".1rem"}}>{pack.description}</div>
+                  </div>
+                </div>
+                <div style={{background:"rgba(255,255,255,.2)",borderRadius:8,padding:".4rem .6rem",marginTop:".5rem",fontSize:".7rem",color:"white",fontWeight:600}}>
+                  💡 {pack.avantage_cle}
+                </div>
+              </div>
+
+              {/* Produits du pack */}
+              <div style={{padding:".75rem 1rem"}}>
+                {(pack.produits||[]).map((p,i)=>(
+                  <div key={i} style={{display:"flex",gap:".55rem",alignItems:"flex-start",padding:".45rem 0",borderBottom:i<(pack.produits.length-1)?`1px solid ${C.pale}30`:"none"}}>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:pack.couleur+"20",border:`1.5px solid ${pack.couleur}40`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:".65rem",fontWeight:700,color:pack.couleur}}>
+                      {i+1}
+                    </div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:".8rem",fontWeight:700,color:C.brun}}>{p.nom}</div>
+                      <div style={{fontSize:".68rem",color:C.gris,fontStyle:"italic",marginTop:".1rem"}}>{p.role}</div>
+                      {p.categorie&&<div style={{fontSize:".58rem",color:pack.couleur,marginTop:".1rem",fontWeight:600}}>{CATEGORIES_PRODUITS.find(c=>c.id===p.categorie)?.icon||""} {p.categorie}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Conseil final */}
+          {ordonnance.conseil&&(
+            <div style={{background:C.creme,borderRadius:10,padding:".75rem 1rem",border:`1px solid ${C.or}40`}}>
+              <div style={{fontSize:".8rem",color:C.brun,lineHeight:1.7,fontStyle:"italic"}}>💛 {ordonnance.conseil}</div>
+            </div>
+          )}
+
+          {/* Nouvelle question */}
+          <button onClick={()=>{setOrdonnance(null);setQuestion("");}}
+            style={{width:"100%",marginTop:"1rem",background:"none",border:`1px solid ${C.pale}`,borderRadius:9,padding:".5rem",fontSize:".76rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
+            ← Nouvelle question
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-
-
-const OBJECTIONS_VENTE = [
-  {id:"prix",icon:"💸",label:"\"C'est trop cher\"",
-    reponses:[
-      "Je te comprends, c'est un budget ! Cela dit, ramené à l'usage quotidien, ça revient à moins d'1€/jour pour un soin qui dure {durée}. Tu veux que je te montre le détail ?",
-      "C'est vrai que sur le moment ça peut sembler élevé, mais c'est un produit concentré donc tu en utilises très peu à chaque fois — il te dure beaucoup plus longtemps qu'un produit classique 😊",
-      "Je te propose qu'on regarde ensemble ce qui correspond le mieux à ton budget — il y a souvent une alternative plus accessible qui donne déjà de très bons résultats !",
-    ]},
-  {id:"reflexion",icon:"🤔",label:"\"Je vais réfléchir\"",
-    reponses:[
-      "Bien sûr, prends le temps qu'il te faut 🙂 Je reste dispo si tu as des questions en attendant. Tu veux que je te recontacte dans quelques jours pour en discuter ?",
-      "Pas de souci ! Pour t'aider à réfléchir, est-ce qu'il y a un point en particulier qui te freine ? Le prix, le produit, le moment... je peux peut-être éclaircir ça.",
-      "Je comprends totalement. Sache que l'offre/le tarif actuel peut évoluer, donc si jamais tu te décides, dis-le moi et je te garde au courant 😊",
-    ]},
-  {id:"deja-produit",icon:"🧴",label:"\"J'ai déjà un produit similaire\"",
-    reponses:[
-      "Top, ça veut dire que tu prends déjà soin de toi ! Qu'est-ce que tu aimes / n'aimes pas dans ce que tu utilises actuellement ? Ça m'aide à voir si ça vaut le coup de changer.",
-      "C'est noté ! Sur quoi tu n'es pas 100% satisfaite avec ton produit actuel ? Parfois on découvre une vraie différence sur un point précis (texture, odeur, résultat...).",
-      "Aucun souci, pas besoin de tout changer d'un coup — beaucoup de mes clientes commencent par essayer un seul produit en complément pour voir la différence 🙂",
-    ]},
-  {id:"pas-besoin",icon:"🙅",label:"\"Je n'en ai pas besoin\"",
-    reponses:[
-      "Je comprends ! Est-ce que je peux te poser une petite question : as-tu une préoccupation particulière en ce moment (peau, cheveux, énergie...) ? Histoire de voir si ça pourrait t'aider sans pression 😊",
-      "Pas de souci du tout ! Si jamais ça change ou que tu as une question un jour, je suis là 🙂",
-      "C'est noté ! Est-ce que ça t'intéresserait quand même que je t'envoie une petite astuce ou un conseil de temps en temps, sans obligation d'achat ?",
-    ]},
-  {id:"pas-le-temps",icon:"⏰",label:"\"Je n'ai pas le temps d'essayer\"",
-    reponses:[
-      "Je te rassure, c'est justement pensé pour les vies bien remplies — {temps_application} et c'est fait, ça s'intègre facilement dans une routine déjà existante.",
-      "Je comprends totalement ! Et si je t'envoyais juste un petit échantillon/une astuce simple à tester quand tu auras 2 minutes, sans pression ?",
-      "Pas de souci, on peut aussi en reparler à un moment qui te convient mieux. Quand est-ce que ce serait plus simple pour toi ?",
-    ]},
+const OBJECTIONS_VENTE=[
+  {id:"cher",icon:"💰",label:"C'est trop cher",reponses:["Je comprends ! Ce qui est intéressant avec Mihi, c'est que les produits sont concentrés — une petite quantité suffit, donc le flacon dure bien plus longtemps qu'un produit classique. Au final, le coût par utilisation est souvent inférieur à ce qu'on trouve en grande surface 😊","La qualité a un prix, mais avec Mihi tu ne paies pas la pub, les intermédiaires ou les rayons de supermarché. Tout va dans le produit. Tu veux que je te montre la différence de composition ?","C'est un investissement dans ta peau et ta santé. Et le plus souvent, mes clientes me disent qu'elles ont arrêté d'acheter 3 ou 4 autres produits parce que Mihi leur suffit !"]},
+  {id:"besoin",icon:"🤔",label:"Je n'en ai pas besoin",reponses:["Bien sûr, tu n'es pas obligée ! Mais dis-moi, si tu pouvais avoir une peau plus lumineuse / plus d'énergie / moins de cheveux qui tombent... tu prendrais quoi comme produit actuellement ?","Je t'entends. Et souvent, on ne sait pas qu'on a besoin d'un produit avant de l'essayer. C'est pour ça que je propose des tests 😊 Qu'est-ce qui te manquerait le plus si tu pouvais changer une chose dans ta routine ?","Ce n'est pas un problème ! Je ne vends pas à tout le monde. Je te pose juste la question : est-ce que tu es contente à 100% de tes produits actuels ?"]},
+  {id:"reflexion",icon:"💭",label:"Je vais réfléchir",reponses:["Bien sûr ! Je ne veux pas que tu achètes par pression. Pour t'aider à réfléchir : qu'est-ce qui te retient ? Le prix, le fait de ne pas connaître les produits, autre chose ?","Je comprends. Tu veux qu'on se rappelle dans 3 jours ? Comme ça tu as le temps d'y penser tranquillement 😊","À quoi tu dois réfléchir précisément ? Si c'est une question sur les ingrédients, les résultats ou le budget, je peux t'aider maintenant !"]},
+  {id:"concurrence",icon:"🔄",label:"J'ai déjà une autre marque",reponses:["Super ! Ça veut dire que tu prends soin de toi 🌸 Et si tu ajoutes juste un produit Mihi à côté pour comparer ? Beaucoup de mes clientes ont fait ça et ont progressivement switché quand elles ont vu la différence.","C'est quoi ta marque actuelle ? Je te dis franchement si Mihi est mieux adapté ou pas à ton cas. Je préfère être honnête plutôt que de vendre pour vendre.","Je ne te demande pas de tout changer d'un coup ! Est-ce qu'il y a un seul besoin pour lequel tu n'es pas 100% satisfaite ? On peut commencer par là 😊"]},
+  {id:"pharmacie",icon:"🏥",label:"Je préfère la pharmacie",reponses:["La pharmacie c'est bien pour des problèmes spécifiques ! Mais pour la routine quotidienne, Mihi propose des formules sans sulfates, sans parabènes, sans perturbateurs endocriniens. Des ingrédients que tu ne trouveras pas forcément en pharmacie.","Je comprends la confiance en pharmacie. Mihi c'est une gamme développée par ElfaPharm, qui est justement un laboratoire pharmaceutique. Tu bénéficies de la même rigueur, mais avec une distribution directe qui fait baisser le prix.","Est-ce qu'il y a un produit spécifique que tu achètes en pharmacie ? Je peux te dire si on a un équivalent et te montrer la comparaison d'ingrédients 😊"]},
 ];
 
-const OBJECTIONS_RECRUTEMENT = [
-  {id:"pas-le-temps-recrut",icon:"⏰",label:"\"Je n'ai pas le temps\"",
-    reponses:[
-      "Je te comprends complètement, c'est exactement pour ça que ce projet est pensé en flexible — tu avances à ton rythme, même 30 min par jour suffisent pour commencer 😊",
-      "C'est justement le côté intéressant : tu choisis TES horaires. Beaucoup de filles dans l'équipe ont commencé en plus de leur job/famille, en grappillant des petits moments.",
-      "Je comprends ! Et si on regardait ensemble à quoi pourrait ressembler ton planning si tu démarrais en mode \"léger\" pour tester, sans pression ?",
-    ]},
-  {id:"pas-vendeuse",icon:"🙊",label:"\"Je ne sais pas vendre / je ne suis pas à l'aise\"",
-    reponses:[
-      "Tu sais, moi non plus au départ je n'étais pas \"vendeuse\" — c'est justement pour ça qu'il y a toute une formation et un accompagnement pas à pas, on n'est jamais seule !",
-      "C'est très commun, et c'est rassurant : tout le monde démarre comme ça. Le plus important c'est d'être soi-même et de partager ce qu'on aime — le reste s'apprend avec le temps et le soutien de l'équipe.",
-      "Je te rassure, vendre n'est pas le point de départ ! On commence par partager son expérience avec des produits qu'on utilise déjà et qu'on aime. Le reste vient naturellement 🙂",
-    ]},
-  {id:"argent-investir",icon:"💰",label:"\"Je n'ai pas d'argent à investir\"",
-    reponses:[
-      "Je comprends totalement, c'est une vraie question à se poser. Le kit de démarrage est pensé pour être accessible, et l'idée c'est qu'il se rentabilise vite avec les premières ventes — tu veux qu'on regarde les chiffres ensemble ?",
-      "C'est exactement pour ça qu'il existe différentes options de démarrage selon le budget — on peut regarder ensemble celle qui te convient le mieux, sans pression.",
-      "Je te rassure, ce n'est pas un investissement énorme, et beaucoup le voient comme \"se faire plaisir avec des produits qu'on utilise + se former en plus\". Et si on en discutait pour voir ce qui est réaliste pour toi ?",
-    ]},
-  {id:"deja-essaye",icon:"😕",label:"\"J'ai déjà essayé un MLM et ça n'a pas marché\"",
-    reponses:[
-      "Je comprends, ça peut laisser une mauvaise expérience... Qu'est-ce qui n'avait pas fonctionné selon toi ? Ça m'aide à voir si ici ce serait différent pour toi.",
-      "Merci de me le dire honnêtement. Chaque entreprise et chaque équipe est différente — ici, l'accompagnement et la formation sont au cœur du projet, justement pour éviter ce qui n'avait pas marché avant.",
-      "C'est une expérience qui compte ! Est-ce que ça te dérangerait qu'on en discute 10 minutes pour voir ce qui était différent, et si la situation aujourd'hui pourrait changer la donne ?",
-    ]},
-  {id:"avis-conjoint",icon:"👫",label:"\"Je dois en parler à mon conjoint / réfléchir en famille\"",
-    reponses:[
-      "C'est totalement normal et même une bonne idée d'en discuter ensemble ! Si ça peut aider, je peux t'envoyer un récap simple avec les infos clés à partager avec lui/elle 😊",
-      "Bien sûr, prends le temps qu'il faut. Est-ce qu'il y a des questions précises qu'il/elle pourrait avoir, pour que je puisse t'aider à y répondre dès maintenant ?",
-      "Aucun souci ! Je reste disponible si vous avez des questions tous les deux. Tu veux qu'on se refixe un moment dans quelques jours pour en reparler ?",
-    ]},
+const OBJECTIONS_RECRUTEMENT=[
+  {id:"mlm",icon:"😬",label:"C'est du MLM / arnaque",reponses:["Je te comprends totalement, j'avais les mêmes craintes au départ ! La différence fondamentale : avec Mihi, je gagne principalement sur les ventes de vrais produits à de vraies clientes. Pas sur le recrutement. Si je recrutais sans vendre, je ne gagnerais rien.","C'est une vente directe réglementée en France, pas un pyramide. Les produits existent vraiment, les clientes les achètent vraiment. Je peux te montrer mes vrais résultats du mois si tu veux être transparente.","Je ne te demande pas de me croire sur parole ! Je te propose juste de rencontrer quelques membres de l'équipe et de leur poser la question directement. Qu'est-ce qui te ferait changer d'avis si tu pouvais avoir une vraie réponse ?"]},
+  {id:"temps",icon:"⏰",label:"Je n'ai pas le temps",reponses:["C'est exactement pour ça que je t'en parle ! Beaucoup de mes membres travaillent depuis leur téléphone, pendant que les enfants dorment ou pendant la pause déjeuner. On adapte à ton rythme de vie, pas l'inverse.","Combien d'heures par semaine tu penses avoir ? Parce qu'avec 3-4h par semaine, certaines de mes membres font déjà 200-300€ de ventes. C'est pas le Pérou, mais c'est un vrai complément.","Je ne veux pas que tu sacrifies du temps que tu n'as pas. On peut juste en parler 20 minutes pour que tu aies toutes les infos ? Après tu décides librement 😊"]},
+  {id:"argent",icon:"💶",label:"Je n'ai pas les moyens",reponses:["Le starter kit commence à 39€. C'est le seul investissement — après tu te rembourses sur tes premières ventes. Et si vraiment c'est impossible, on peut trouver une solution ensemble.","Je comprends. Est-ce que c'est un problème de budget ponctuel ou structurel ? Parce que si c'est ponctuel, on peut attendre le bon moment. Et si c'est structurel... n'est-ce pas justement pour ça que tu as besoin de revenus complémentaires ?","On peut commencer progressivement. Parle-en autour de toi, ramène tes premières clientes sans kit, et on voit si l'activité te plaît avant d'investir quoi que ce soit."]},
+  {id:"introvertie",icon:"😶",label:"Je suis trop timide / pas commerciale",reponses:["Les meilleures vendeuses de l'équipe sont souvent des personnes discrètes ! Parce qu'elles écoutent vraiment les clientes au lieu de les bombarder. Et avec les produits Mihi, tu n'as pas besoin de 'vendre' — tu partages ce que tu aimes vraiment.","Je n'étais pas commerciale du tout non plus au départ. Ce qui a tout changé : aimer les produits et en parler naturellement. Quand tu crois en ce que tu vends, ça ne ressemble plus à de la vente.","On a une formation complète pour ça ! Scripts, réponses aux objections, stories Instagram... On ne te lâche pas dans le vide. Et les premières ventes se font souvent avec l'entourage proche, pas avec des inconnus 😊"]},
+  {id:"experience",icon:"📚",label:"Je n'ai pas d'expérience",reponses:["Bonne nouvelle : on n'en a pas besoin ! J'ai des membres qui n'avaient jamais vendu quoi que ce soit et qui font des centaines d'euros par mois aujourd'hui. On forme tout le monde de zéro.","L'expérience vient en faisant. Et comme je suis ta marraine, tu n'es jamais seule. Chaque question, chaque doute, je suis là pour t'aider à avancer.","La seule chose dont tu as besoin : croire aux produits et être prête à apprendre. Le reste, on te l'enseigne étape par étape dans notre programme de démarrage 🚀"]},
 ];
 
 function ObjectionBubbles({objections, titre, sousTitre}){
@@ -4911,23 +7262,20 @@ function ObjectionBubbles({objections, titre, sousTitre}){
           </div>
         ))}
       </div>
-      {open&&(()=>{
-        const o = objections.find(x=>x.id===open);
-        return(
-          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
-            <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".7rem"}}>{o.icon} Réponses possibles</div>
-            {o.reponses.map((r,i)=>(
-              <div key={i} style={{background:C.creme,borderLeft:`3px solid ${C.lilas}`,borderRadius:"0 8px 8px 0",padding:".6rem .8rem",fontSize:".74rem",color:C.texte,lineHeight:1.7,marginBottom:".5rem",display:"flex",justifyContent:"space-between",gap:".5rem",alignItems:"flex-start"}}>
-                <span style={{flex:1}}>{r}</span>
-                <CopyBtn text={r}/>
-              </div>
-            ))}
-            <div style={{fontSize:".6rem",color:C.gris,fontStyle:"italic",marginTop:".3rem"}}>
-              💡 Adapte le ton et les détails (durée, prénom...) à ta conversation avant d'envoyer.
+      {open&&(objections.find(x=>x.id===open))&&(
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
+          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".7rem"}}>{objections.find(x=>x.id===open).icon} Réponses possibles</div>
+          {objections.find(x=>x.id===open).reponses.map((r,i)=>(
+            <div key={i} style={{background:C.creme,borderLeft:`3px solid ${C.lilas}`,borderRadius:"0 8px 8px 0",padding:".6rem .8rem",fontSize:".74rem",color:C.texte,lineHeight:1.7,marginBottom:".5rem",display:"flex",justifyContent:"space-between",gap:".5rem",alignItems:"flex-start"}}>
+              <span style={{flex:1}}>{r}</span>
+              <CopyBtn text={r}/>
             </div>
+          ))}
+          <div style={{fontSize:".6rem",color:C.gris,fontStyle:"italic",marginTop:".3rem"}}>
+            💡 Adapte le ton et les détails (durée, prénom...) à ta conversation avant d'envoyer.
           </div>
-        );
-      })()}
+        </div>
+      )}
     </div>
   );
 }
@@ -5212,6 +7560,25 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
   const[loaded,setLoaded]=useState(false);
   const[showAdd,setShowAdd]=useState(false);
   const[showFetes,setShowFetes]=useState(true);
+  const[fetesOverrides,setFetesOverrides]=useState({}); // {title: {date, notes}}
+  const[editFete,setEditFete]=useState(null); // title en cours d'édition
+  const[editFeteDate,setEditFeteDate]=useState("");
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"equipe","fetes-overrides"));
+        if(snap.exists()) setFetesOverrides(snap.data()||{});
+      }catch{}
+    })();
+  },[]);
+
+  const saveFeteOverride=async(title,date)=>{
+    const next={...fetesOverrides,[title]:{date}};
+    setFetesOverrides(next);
+    try{ await setDoc(doc(db,"equipe","fetes-overrides"),next,{merge:true}); }catch{}
+    setEditFete(null);
+  };
   const[form,setForm]=useState({title:"",date:"",time:"",type:"zoom",link:"",notes:""});
   const[saving,setSaving]=useState(false);
   const canAdd=isMelissa||isChef;
@@ -5277,10 +7644,24 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
   const upcoming=events.filter(e=>new Date(e.dateTs)>=today);
   const past=events.filter(e=>new Date(e.dateTs)<today);
 
+  const[editDateId,setEditDateId]=useState(null);
+  const[editDateVal,setEditDateVal]=useState("");
+  const[editTimeVal,setEditTimeVal]=useState("");
+
+  const saveEditDate=async(id)=>{
+    if(!editDateVal)return;
+    const dateTs=new Date(editDateVal+"T"+(editTimeVal||"00:00")).getTime();
+    const next=events.map(e=>e.id===id?{...e,date:editDateVal,time:editTimeVal,dateTs}:e).sort((a,b)=>a.dateTs-b.dateTs);
+    setEvents(next);
+    try{await setDoc(doc(db,"calendrier","events"),{items:next},{merge:true});}catch{}
+    setEditDateId(null);
+  };
+
   const EventCard=({e,canDel})=>{
     const cfg=EVENT_TYPES[e.type]||EVENT_TYPES.other;
     const d=new Date(e.dateTs);
     const isPast=d<today;
+    const isEditing=editDateId===e.id;
     return(
       <div style={{background:isPast?C.pale+"40":C.blanc,border:`1px solid ${isPast?C.pale:cfg.color+"40"}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",opacity:isPast?.7:1}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:".35rem"}}>
@@ -5294,6 +7675,12 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
                   {d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}
                   {e.time&&` à ${e.time}`}
                 </span>
+                {canDel&&!isEditing&&(
+                  <button onClick={()=>{setEditDateId(e.id);setEditDateVal(e.date||"");setEditTimeVal(e.time||"");}}
+                    style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".1rem .35rem",fontSize:".55rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                    ✏️ Date
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -5301,6 +7688,18 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
             <button onClick={()=>delEvent(e.id)} style={{background:"none",border:"none",color:C.pale,cursor:"pointer",fontSize:".75rem",padding:".2rem",fontFamily:"inherit",flexShrink:0}}>✕</button>
           )}
         </div>
+        {isEditing&&(
+          <div style={{display:"flex",gap:".3rem",alignItems:"center",marginBottom:".4rem",background:C.creme,borderRadius:8,padding:".4rem .5rem"}}>
+            <input type="date" value={editDateVal} onChange={e=>setEditDateVal(e.target.value)}
+              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .45rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+            <input type="time" value={editTimeVal} onChange={e=>setEditTimeVal(e.target.value)}
+              style={{width:80,border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .45rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+            <button onClick={()=>saveEditDate(e.id)}
+              style={{background:C.vert,color:"white",border:"none",borderRadius:7,padding:".3rem .55rem",fontSize:".68rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✓</button>
+            <button onClick={()=>setEditDateId(null)}
+              style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .45rem",fontSize:".68rem",cursor:"pointer",color:C.gris,fontFamily:"inherit"}}>✕</button>
+          </div>
+        )}
         {e.notes&&<p style={{fontSize:".73rem",color:C.gris,lineHeight:1.55,margin:".3rem 0 0",fontStyle:"italic"}}>{e.notes}</p>}
         {e.link&&<a href={e.link} target="_blank" rel="noopener noreferrer"
           style={{display:"inline-flex",alignItems:"center",gap:".3rem",background:cfg.color,color:"white",borderRadius:7,padding:".25rem .7rem",fontSize:".68rem",fontWeight:600,textDecoration:"none",marginTop:".45rem"}}>
@@ -5376,20 +7775,44 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
         <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or}}>🎉 Fêtes & Opportunités commerciales</div>
         <button onClick={()=>setShowFetes(p=>!p)} style={{background:"none",border:"none",color:C.gris,fontSize:".65rem",cursor:"pointer",fontFamily:"inherit"}}>{showFetes?"Masquer":"Voir"}</button>
       </div>
-      {showFetes&&FETES_IMPORTANTES.filter(f=>new Date(f.date)>=new Date(new Date().setHours(0,0,0,0))).slice(0,6).map(f=>{
+      {showFetes&&FETES_IMPORTANTES.filter(f=>{
+        const dateEffective=fetesOverrides[f.title]?.date||f.date;
+        return new Date(dateEffective)>=new Date(new Date().setHours(0,0,0,0));
+      }).slice(0,10).map(f=>{
+        const dateEffective=fetesOverrides[f.title]?.date||f.date;
         const cfg=EVENT_TYPES[f.type]||EVENT_TYPES.other;
-        const d=new Date(f.date);
+        const d=new Date(dateEffective);
+        const isEditing=editFete===f.title;
         return(
           <div key={f.title} style={{background:C.blanc,border:`1px solid ${C.or}30`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",opacity:.9}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:".3rem"}}>
-              <div style={{display:"flex",gap:".5rem",alignItems:"center"}}>
+              <div style={{display:"flex",gap:".5rem",alignItems:"center",flex:1}}>
                 <span style={{fontSize:"1.1rem",flexShrink:0}}>{cfg.icon}</span>
-                <div>
+                <div style={{flex:1}}>
                   <div style={{fontSize:".82rem",fontWeight:600,color:C.brun}}>{f.title}</div>
-                  <span style={{fontSize:".62rem",color:C.gris}}>{d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"long"})}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:".4rem"}}>
+                    <span style={{fontSize:".62rem",color:C.gris}}>{d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"long"})}</span>
+                    {fetesOverrides[f.title]&&<span style={{fontSize:".55rem",color:C.or,fontWeight:700}}>✏️ modifiée</span>}
+                    {canAdd&&!isEditing&&(
+                      <button onClick={()=>{setEditFete(f.title);setEditFeteDate(dateEffective);}}
+                        style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".08rem .3rem",fontSize:".55rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                        ✏️
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
+            {isEditing&&(
+              <div style={{display:"flex",gap:".3rem",alignItems:"center",marginBottom:".4rem",background:C.creme,borderRadius:8,padding:".4rem .5rem"}}>
+                <input type="date" value={editFeteDate} onChange={e=>setEditFeteDate(e.target.value)}
+                  style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .45rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+                <button onClick={()=>saveFeteOverride(f.title,editFeteDate)}
+                  style={{background:C.vert,color:"white",border:"none",borderRadius:7,padding:".3rem .55rem",fontSize:".68rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✓</button>
+                <button onClick={()=>{if(fetesOverrides[f.title]){const n={...fetesOverrides};delete n[f.title];setFetesOverrides(n);setDoc(doc(db,"equipe","fetes-overrides"),n).catch(()=>{});}setEditFete(null);}}
+                  style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .45rem",fontSize:".68rem",cursor:"pointer",color:"#B04040",fontFamily:"inherit"}}>↩</button>
+              </div>
+            )}
             {f.notes&&<p style={{fontSize:".72rem",color:C.gris,lineHeight:1.55,margin:".2rem 0 0",fontStyle:"italic"}}>{f.notes}</p>}
           </div>
         );
@@ -5414,27 +7837,14 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
 // Référence : période en cours se termine dans 6j 12h à partir d'aujourd'hui (11/06/2026)
 function getPeriodeInfo(){
   const now = new Date();
-  // Référence : prochain mercredi de fin = 11/06/2026 + 6j12h = 18/06/2026 à 12h00
-  const refEnd = new Date("2026-06-18T12:00:00");
-  
-  // Calculer le nombre de périodes écoulées depuis refEnd
-  const PERIOD_MS = 21 * 24 * 60 * 60 * 1000;
-  let periodEnd = new Date(refEnd);
-  
-  // Avancer ou reculer jusqu'à la prochaine fin de période
-  while(periodEnd <= now) periodEnd = new Date(periodEnd.getTime() + PERIOD_MS);
-  while(periodEnd - now > PERIOD_MS) periodEnd = new Date(periodEnd.getTime() - PERIOD_MS);
-  
-  const periodStart = new Date(periodEnd.getTime() - PERIOD_MS);
+  const PERIOD_MS = PERIODE_DUREE_JOURS * 24 * 60 * 60 * 1000;
+  const periodNum = getPeriodeActuelle();
+  const periodStart = getPeriodeDebut(periodNum);
+  const periodEnd = new Date(periodStart.getTime() + PERIOD_MS);
   const msLeft = periodEnd - now;
-  
-  const daysLeft = Math.floor(msLeft / (1000*60*60*24));
-  const hoursLeft = Math.floor((msLeft % (1000*60*60*24)) / (1000*60*60));
+  const daysLeft = Math.max(0, Math.floor(msLeft / (1000*60*60*24)));
+  const hoursLeft = Math.max(0, Math.floor((msLeft % (1000*60*60*24)) / (1000*60*60)));
   const pctElapsed = Math.round((1 - msLeft/PERIOD_MS)*100);
-  
-  // Numéro de période (depuis refEnd)
-  const periodNum = Math.floor((now - new Date("2024-01-03")) / PERIOD_MS) + 1;
-  
   return { daysLeft, hoursLeft, pctElapsed, periodEnd, periodStart, periodNum };
 }
 
@@ -5561,7 +7971,7 @@ function ObjectifsPopup({uid}){
               Définis ton objectif CA dans<br/><strong>Tableau de bord → Mes objectifs</strong>
             </div>
           : <>
-            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>💰 Mon CA cette période</div>
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>💰 CA Total équipe cette période</div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:".5rem"}}>
               <div style={{fontFamily:"Georgia,serif",fontSize:"2rem",fontWeight:600,color:C.brun}}>{perso.ca||0}€</div>
               <div style={{fontSize:".78rem",color:C.gris}}>objectif : <strong style={{color:C.brun}}>{perso.caObj}€</strong></div>
@@ -5705,6 +8115,2080 @@ function computeBadges(d){
 }
 
 // Citation / conseil / question d'auto-coaching du jour — carte à retourner à la 1ère ouverture du jour
+// ── TO-DO LISTE PERSONNELLE ───────────────────────────────────────────────────
+// ── BIBLIOTHÈQUE D'ACTIONS ────────────────────────────────────────────────────
+const ACTIONS_BIBLIO = {
+  ventes: [
+    {id:"v1",icon:"📸",label:"Poster une photo avant/après produit"},
+    {id:"v2",icon:"🎥",label:"Faire un Reel de démonstration produit"},
+    {id:"v3",icon:"💬",label:"Envoyer 3 DM à des personnes qui ont liké tes posts"},
+    {id:"v4",icon:"🛍️",label:"Partager un témoignage client en story"},
+    {id:"v5",icon:"✨",label:"Faire une story \"routine du matin\" avec tes produits"},
+    {id:"v6",icon:"📋",label:"Envoyer un devis personnalisé à une cliente intéressée"},
+    {id:"v7",icon:"🎁",label:"Créer une offre groupée de 2-3 produits complémentaires"},
+    {id:"v8",icon:"📞",label:"Appeler une ancienne cliente pour prendre des nouvelles"},
+    {id:"v9",icon:"💌",label:"Envoyer un message de suivi à une cliente qui a commandé"},
+    {id:"v10",icon:"🌟",label:"Poster un top 3 produits de la semaine"},
+    {id:"v11",icon:"🎬",label:"Faire un live de 15 min sur un produit phare"},
+    {id:"v12",icon:"📊",label:"Créer un sondage story sur les besoins beauté"},
+    {id:"v13",icon:"💡",label:"Partager un conseil beauté lié à tes produits"},
+    {id:"v14",icon:"🤳",label:"Faire un unboxing d'un produit en story"},
+    {id:"v15",icon:"💰",label:"Proposer un paiement en 2-3 fois à une cliente hésitante"},
+    {id:"v16",icon:"🎯",label:"Contacter 5 personnes de ta liste chaude"},
+    {id:"v17",icon:"📱",label:"Publier le lien de ton diagnostic personnalisé en story"},
+    {id:"v18",icon:"🌸",label:"Faire une story \"ma peau ce matin\" naturelle et authentique"},
+    {id:"v19",icon:"💆",label:"Poster un rituel soin corps avec tes produits"},
+    {id:"v20",icon:"🎉",label:"Annoncer une nouveauté ou lancement produit"},
+    {id:"v21",icon:"📷",label:"Poster une photo lifestyle avec le produit intégré naturellement"},
+    {id:"v22",icon:"🔖",label:"Partager un article ou étude sur les bienfaits d'un ingrédient"},
+    {id:"v23",icon:"👩",label:"Mettre en avant le témoignage d'une cliente satisfaite"},
+    {id:"v24",icon:"💎",label:"Créer un contenu comparatif avant/après 30 jours"},
+    {id:"v25",icon:"🛒",label:"Faire une story avec le lien direct vers ton catalogue"},
+    {id:"v26",icon:"🌙",label:"Partager ta routine du soir en stories"},
+    {id:"v27",icon:"☀️",label:"Partager ta routine du matin en stories"},
+    {id:"v28",icon:"📣",label:"Faire un post éducatif sur un problème de peau courant"},
+    {id:"v29",icon:"🧴",label:"Filmer l'application d'un produit en texture et résultat"},
+    {id:"v30",icon:"🤝",label:"Proposer un diagnostic offert à 3 personnes de ta liste"},
+    {id:"v31",icon:"🎀",label:"Créer un contenu cadeau idéal pour une occasion"},
+    {id:"v32",icon:"💬",label:"Répondre à tous les commentaires de tes posts récents"},
+    {id:"v33",icon:"🌿",label:"Poster sur les ingrédients naturels de tes produits"},
+    {id:"v34",icon:"👑",label:"Faire un carrousel top 5 produits bestsellers"},
+    {id:"v35",icon:"📲",label:"Relancer par DM les personnes qui ont regardé tes stories"},
+    {id:"v36",icon:"🎗️",label:"Créer un post autour d'une journée thématique"},
+    {id:"v37",icon:"💫",label:"Partager ton propre résultat visible sur un produit"},
+    {id:"v38",icon:"🔔",label:"Activer les rappels commandes pour 3 clientes"},
+    {id:"v39",icon:"📝",label:"Rédiger 3 scripts de vente pour tes produits phares"},
+    {id:"v40",icon:"🌈",label:"Faire un post sur la gamme couleur maquillage"},
+    {id:"v41",icon:"🧪",label:"Tester un nouveau produit et partager ta première impression"},
+    {id:"v42",icon:"💪",label:"Poster un contenu sur les compléments alimentaires et énergie"},
+    {id:"v43",icon:"🏆",label:"Partager tes résultats du mois (ventes, clientes)"},
+    {id:"v44",icon:"🎓",label:"Créer un mini-guide beauté à partager en DM"},
+    {id:"v45",icon:"🔥",label:"Faire une vente flash 24h sur un produit"},
+    {id:"v46",icon:"🌺",label:"Poster sur les bienfaits d'un produit en détail"},
+    {id:"v47",icon:"💝",label:"Envoyer un message de remerciement à tes meilleures clientes"},
+    {id:"v48",icon:"📌",label:"Épingler ton meilleur post de vente sur ton profil"},
+    {id:"v49",icon:"🌟",label:"Demander à 3 clientes un avis écrit ou vidéo"},
+    {id:"v50",icon:"🎯",label:"Identifier 10 nouvelles cibles sur Instagram et les suivre"},
+    {id:"v51",icon:"💅",label:"Faire un contenu sur les soins ongles/mains"},
+    {id:"v52",icon:"🧘",label:"Poster sur bien-être et beauté intérieure"},
+    {id:"v53",icon:"🛁",label:"Créer un contenu rituel bain/détente avec tes produits"},
+    {id:"v54",icon:"📦",label:"Filmer la préparation d'une commande cliente"},
+    {id:"v55",icon:"🌍",label:"Poster sur l'engagement éco ou naturel de la marque"},
+    {id:"v56",icon:"❤️",label:"Faire un post sur pourquoi tu as choisi ces produits"},
+    {id:"v57",icon:"🎪",label:"Organiser un jeu concours (partage+follow)"},
+    {id:"v58",icon:"💬",label:"Créer une FAQ beauté en carrousel"},
+    {id:"v59",icon:"🌙",label:"Poster un contenu anti-âge ciblé"},
+    {id:"v60",icon:"🏃",label:"Contacter les personnes inactives depuis 3 mois"},
+    {id:"v61",icon:"🌸",label:"Faire un post sur les soins sensibles/peaux réactives"},
+    {id:"v62",icon:"💡",label:"Créer un contenu mythe vs réalité beauté"},
+    {id:"v63",icon:"🎥",label:"Filmer un tutoriel maquillage rapide"},
+    {id:"v64",icon:"📱",label:"Mettre à jour ta bio Instagram avec ton lien diagnostic"},
+    {id:"v65",icon:"🌿",label:"Poster sur les bienfaits des soins capillaires"},
+    {id:"v66",icon:"✨",label:"Faire un post sur l'éclat de peau en 7 jours"},
+    {id:"v67",icon:"💎",label:"Présenter la gamme premium en story"},
+    {id:"v68",icon:"🛍️",label:"Créer un post \"idée cadeau sous 50€\""},
+    {id:"v69",icon:"📊",label:"Faire un sondage sur le problème beauté n°1 de tes followers"},
+    {id:"v70",icon:"🤳",label:"Poster une selfie naturelle avec un produit"},
+    {id:"v71",icon:"🎁",label:"Offrir un échantillon à une nouvelle cliente"},
+    {id:"v72",icon:"💰",label:"Calculer et partager ta marge sur une vente type"},
+    {id:"v73",icon:"🌟",label:"Mettre en avant un produit méconnu de la gamme"},
+    {id:"v74",icon:"📸",label:"Créer une série de 3 stories \"conseil du jour\""},
+    {id:"v75",icon:"💆",label:"Poster sur les bienfaits du massage avec vos produits"},
+    {id:"v76",icon:"🔑",label:"Partager 3 astuces pour maximiser l'efficacité d'un produit"},
+    {id:"v77",icon:"🌺",label:"Créer un contenu saisonnier (été, hiver, rentrée...)"},
+    {id:"v78",icon:"💬",label:"Réactiver une conversation DM en attente"},
+    {id:"v79",icon:"📋",label:"Mettre à jour ta liste de produits favoris"},
+    {id:"v80",icon:"🎯",label:"Identifier les 5 clientes avec le plus grand potentiel"},
+    {id:"v81",icon:"🧴",label:"Comparer deux produits similaires de la gamme en story"},
+    {id:"v82",icon:"💪",label:"Poster sur les résultats en 21 jours d'utilisation"},
+    {id:"v83",icon:"🌈",label:"Créer un post coloré et vitaminé sur la gamme maquillage"},
+    {id:"v84",icon:"🎬",label:"Faire un mini documentaire \"une journée avec mes produits\""},
+    {id:"v85",icon:"🤝",label:"Proposer un appel découverte gratuit à 3 prospects"},
+    {id:"v86",icon:"📌",label:"Créer un highlight Instagram dédié aux témoignages"},
+    {id:"v87",icon:"💫",label:"Poster sur la transformation de ta peau depuis que tu utilises les produits"},
+    {id:"v88",icon:"🌙",label:"Faire une story ASMR application produit"},
+    {id:"v89",icon:"🎓",label:"Partager un fait méconnu sur un ingrédient clé"},
+    {id:"v90",icon:"💝",label:"Envoyer un cadeau surprise à une cliente fidèle"},
+    {id:"v91",icon:"📲",label:"Créer un carrousel \"erreurs beauté à éviter\""},
+    {id:"v92",icon:"🌿",label:"Poster sur la composition naturelle de tes produits"},
+    {id:"v93",icon:"🏆",label:"Célébrer une réussite cliente en story (avec permission)"},
+    {id:"v94",icon:"🔥",label:"Lancer un défi beauté 7 jours avec tes clientes"},
+    {id:"v95",icon:"💬",label:"Faire un Q&A en story sur tes produits"},
+    {id:"v96",icon:"🌺",label:"Poster sur les soins corps en période hivernale"},
+    {id:"v97",icon:"✨",label:"Créer un contenu sur les routines minimalistes"},
+    {id:"v98",icon:"📦",label:"Faire un haul produits avec descriptions détaillées"},
+    {id:"v99",icon:"💡",label:"Partager 5 façons d'utiliser un produit multi-usage"},
+    {id:"v100",icon:"🎯",label:"Planifier tes 5 prochains posts de vente à l'avance"},
+  ],
+  recrutement: [
+    {id:"r1",icon:"👥",label:"Partager ton témoignage sur ce que l'activité t'a apporté"},
+    {id:"r2",icon:"💰",label:"Poster sur la liberté financière que tu vis"},
+    {id:"r3",icon:"🌟",label:"Faire un post \"rejoins mon équipe\" authentique"},
+    {id:"r4",icon:"📱",label:"Contacter 3 personnes qui ont montré de l'intérêt"},
+    {id:"r5",icon:"🎥",label:"Faire un Reel sur ta journée type en tant que distributrice"},
+    {id:"r6",icon:"💡",label:"Poster sur les avantages produits pour les distributrices"},
+    {id:"r7",icon:"🤝",label:"Envoyer le lien de présentation à une contact qualifiée"},
+    {id:"r8",icon:"🌸",label:"Partager les résultats de ta dernière période"},
+    {id:"r9",icon:"📊",label:"Créer un post sur le plan de rémunération simplifié"},
+    {id:"r10",icon:"🎯",label:"Identifier 5 profils potentiellement intéressés dans ta liste"},
+    {id:"r11",icon:"💬",label:"Inviter une amie à découvrir l'activité autour d'un café"},
+    {id:"r12",icon:"🏆",label:"Partager une victoire de ton équipe en story"},
+    {id:"r13",icon:"✨",label:"Poster sur l'ambiance et l'esprit d'équipe Blazing Dynasty"},
+    {id:"r14",icon:"🎓",label:"Expliquer la formation disponible pour les nouvelles"},
+    {id:"r15",icon:"💪",label:"Faire un post sur ce que tu as appris depuis que tu as commencé"},
+    {id:"r16",icon:"🌈",label:"Partager un post sur la diversité des profils dans ton équipe"},
+    {id:"r17",icon:"📸",label:"Poster une photo de groupe avec ton équipe"},
+    {id:"r18",icon:"🔑",label:"Expliquer le système de parrainage en story"},
+    {id:"r19",icon:"💫",label:"Partager un témoignage d'une filleule sur sa progression"},
+    {id:"r20",icon:"🎁",label:"Faire un post sur les cadeaux et bonus Mihi"},
+    {id:"r21",icon:"🌍",label:"Poster sur la possibilité de travailler depuis n'importe où"},
+    {id:"r22",icon:"⏰",label:"Faire un post sur la flexibilité des horaires"},
+    {id:"r23",icon:"💌",label:"Envoyer un message personnalisé à une prospect recrutement"},
+    {id:"r24",icon:"📋",label:"Préparer ton pitch de 2 minutes pour présenter l'activité"},
+    {id:"r25",icon:"🎬",label:"Filmer un \"pourquoi j'ai dit oui\" sincère"},
+    {id:"r26",icon:"💎",label:"Poster sur les incentives et voyages Mihi"},
+    {id:"r27",icon:"🤳",label:"Faire une story sur tes objectifs du mois"},
+    {id:"r28",icon:"🌺",label:"Partager un post sur l'épanouissement personnel dans l'activité"},
+    {id:"r29",icon:"📱",label:"Partager ton lien diagnostic avec un angle recrutement"},
+    {id:"r30",icon:"🏃",label:"Contacter une personne qui cherche un complément de revenus"},
+    {id:"r31",icon:"💬",label:"Répondre à tous les commentaires sur ton post recrutement"},
+    {id:"r32",icon:"🌟",label:"Faire un post sur les paliers et progression du plan"},
+    {id:"r33",icon:"🎯",label:"Organiser une présentation en ligne pour 3-5 personnes"},
+    {id:"r34",icon:"💡",label:"Créer un carrousel \"5 idées reçues sur le MLM\""},
+    {id:"r35",icon:"🤝",label:"Faire un appel découverte avec une nouvelle prospect"},
+    {id:"r36",icon:"📊",label:"Montrer concrètement combien tu as gagné ce mois"},
+    {id:"r37",icon:"🎉",label:"Fêter l'anniversaire d'entrée d'une filleule en story"},
+    {id:"r38",icon:"💰",label:"Poster sur les revenus passifs possibles avec l'équipe"},
+    {id:"r39",icon:"🌸",label:"Partager comment l'activité a changé ta confiance en toi"},
+    {id:"r40",icon:"📸",label:"Faire un before/after de ta vie avant/après l'activité"},
+    {id:"r41",icon:"🎓",label:"Présenter la formation Fast Start en story"},
+    {id:"r42",icon:"💪",label:"Montrer une journée productive avec ton activité Mihi"},
+    {id:"r43",icon:"🌈",label:"Poster sur les possibilités d'évolution dans l'équipe"},
+    {id:"r44",icon:"🔔",label:"Relancer les prospects recrutement inactifs depuis 2 semaines"},
+    {id:"r45",icon:"✨",label:"Faire un post sur \"ma vie dans 1 an grâce à Mihi\""},
+    {id:"r46",icon:"🎀",label:"Créer un kit de bienvenue digital pour tes nouvelles"},
+    {id:"r47",icon:"💫",label:"Partager les formations et outils disponibles dans l'app"},
+    {id:"r48",icon:"🏆",label:"Poster sur un objectif que tu as atteint grâce à l'activité"},
+    {id:"r49",icon:"🌍",label:"Faire un post sur l'indépendance et l'entrepreneuriat féminin"},
+    {id:"r50",icon:"💬",label:"Faire un sondage \"es-tu intéressée par un revenu complémentaire ?\""},
+    {id:"r51",icon:"📲",label:"Créer un highlight Instagram \"rejoins l'équipe\""},
+    {id:"r52",icon:"🌺",label:"Partager 3 choses que tu aurais aimé savoir avant de commencer"},
+    {id:"r53",icon:"🎥",label:"Filmer une réunion d'équipe ou appel collectif"},
+    {id:"r54",icon:"💡",label:"Créer un carrousel \"comment ça marche en 5 étapes\""},
+    {id:"r55",icon:"🤝",label:"Présenter une filleule à tes abonnés"},
+    {id:"r56",icon:"📋",label:"Écrire 3 objections courantes et tes réponses"},
+    {id:"r57",icon:"💰",label:"Poster sur ce que tu as pu payer grâce à tes revenus Mihi"},
+    {id:"r58",icon:"🌟",label:"Faire un post sur la communauté et le soutien entre membres"},
+    {id:"r59",icon:"🎯",label:"Contacter 3 mamans à la maison dans ta liste"},
+    {id:"r60",icon:"💎",label:"Partager les avantages exclusifs pour les chefs d'équipe"},
+    {id:"r61",icon:"🌸",label:"Faire un post sur \"on peut commencer sans expérience\""},
+    {id:"r62",icon:"📱",label:"Créer une story interactive sur l'activité"},
+    {id:"r63",icon:"🏃",label:"Contacter une amie qui t'a déjà dit chercher quelque chose"},
+    {id:"r64",icon:"💬",label:"Faire un live \"questions/réponses sur l'activité Mihi\""},
+    {id:"r65",icon:"🌈",label:"Poster sur les valeurs de la marque et de l'équipe"},
+    {id:"r66",icon:"📸",label:"Partager une photo de ton espace de travail"},
+    {id:"r67",icon:"🎉",label:"Célébrer une nouvelle recrue en story"},
+    {id:"r68",icon:"💪",label:"Faire un post sur la persévérance et les premiers mois"},
+    {id:"r69",icon:"✨",label:"Partager ce qui te motive à continuer chaque jour"},
+    {id:"r70",icon:"🎓",label:"Expliquer le rôle de cheffe d'équipe et ses avantages"},
+    {id:"r71",icon:"🔑",label:"Partager ton lien de présentation dans ta bio"},
+    {id:"r72",icon:"💫",label:"Faire un post sur les paliers atteints cette année"},
+    {id:"r73",icon:"🌍",label:"Poster sur la possibilité de recruter en dehors de ta ville"},
+    {id:"r74",icon:"💌",label:"Écrire une lettre ouverte \"pourquoi tu devrais rejoindre\""},
+    {id:"r75",icon:"🏆",label:"Partager le résultat de ta meilleure période"},
+    {id:"r76",icon:"🌺",label:"Faire un post sincère sur les difficultés et comment tu les surmontes"},
+    {id:"r77",icon:"📊",label:"Créer une infographie simple sur le plan de rémunération"},
+    {id:"r78",icon:"🤳",label:"Faire une story \"ce qui a tout changé pour moi\""},
+    {id:"r79",icon:"💡",label:"Poster sur comment combiner Mihi avec un emploi salarié"},
+    {id:"r80",icon:"🎯",label:"Envoyer le témoignage d'une filleule à une prospect"},
+    {id:"r81",icon:"💬",label:"Créer un sondage sur les freins au démarrage d'une activité"},
+    {id:"r82",icon:"🌟",label:"Faire un post sur l'impact de l'activité sur ta famille"},
+    {id:"r83",icon:"🎀",label:"Préparer un kit de démarrage pour une nouvelle filleule"},
+    {id:"r84",icon:"💰",label:"Calculer et partager le potentiel de revenus à 6 mois"},
+    {id:"r85",icon:"🌸",label:"Poster sur les réseaux de femmes et la sororité"},
+    {id:"r86",icon:"📲",label:"Contacter 5 personnes qui ont demandé \"comment tu fais\""},
+    {id:"r87",icon:"🎥",label:"Faire un mini-reportage sur une journée avec tes filleules"},
+    {id:"r88",icon:"💪",label:"Partager ta progression depuis ton lancement"},
+    {id:"r89",icon:"✨",label:"Poster sur les reconnaissances et récompenses Mihi"},
+    {id:"r90",icon:"🤝",label:"Planifier un appel de suivi avec une recrue récente"},
+    {id:"r91",icon:"🌈",label:"Faire un post sur l'activité comme plan B devenu plan A"},
+    {id:"r92",icon:"🎓",label:"Créer un mini guide \"commencer avec Mihi\" à partager"},
+    {id:"r93",icon:"💎",label:"Partager les avantages produits dont tu bénéficies"},
+    {id:"r94",icon:"🏃",label:"Contacter les amies qui ont aimé tes posts récents"},
+    {id:"r95",icon:"📋",label:"Mettre à jour ta liste de prospects recrutement"},
+    {id:"r96",icon:"💫",label:"Faire un post sur ce que l'activité t'a appris sur toi"},
+    {id:"r97",icon:"🌺",label:"Partager les succès de ton équipe ce mois-ci"},
+    {id:"r98",icon:"🎯",label:"Organiser un café virtuel recrutement avec 3 personnes"},
+    {id:"r99",icon:"💬",label:"Répondre aux questions sur l'activité en story interactive"},
+    {id:"r100",icon:"🏆",label:"Écrire et poster ta vision à 12 mois dans l'activité"},
+  ],
+  algorithme: [
+    {id:"al1",icon:"⏰",label:"Poster à l'heure de pointe (7h, 12h ou 19h)"},
+    {id:"al2",icon:"💬",label:"Commenter 20 posts de comptes similaires au tien"},
+    {id:"al3",icon:"❤️",label:"Liker les 30 derniers posts de tes abonnés actifs"},
+    {id:"al4",icon:"📊",label:"Analyser tes statistiques et noter le meilleur post de la semaine"},
+    {id:"al5",icon:"🔁",label:"Repartager un contenu pertinent en story avec ton avis"},
+    {id:"al6",icon:"📱",label:"Répondre à toutes tes stories reçues en DM"},
+    {id:"al7",icon:"🎯",label:"Utiliser 10-15 hashtags ciblés sur ton prochain post"},
+    {id:"al8",icon:"🌟",label:"Créer un carrousel (3-10 slides) — fort pour la portée"},
+    {id:"al9",icon:"🎥",label:"Publier un Reel de 15-30 secondes dynamique"},
+    {id:"al10",icon:"💡",label:"Poser une question ouverte dans ta légende de post"},
+    {id:"al11",icon:"🤝",label:"Répondre à tous tes commentaires dans les 30 premières minutes"},
+    {id:"al12",icon:"📸",label:"Publier une photo haute qualité avec lumière naturelle"},
+    {id:"al13",icon:"🔔",label:"Activer tes notifications pour interagir rapidement"},
+    {id:"al14",icon:"🌈",label:"Utiliser une palette de couleurs cohérente sur ton feed"},
+    {id:"al15",icon:"📝",label:"Écrire une légende longue et engageante (300+ mots)"},
+    {id:"al16",icon:"💫",label:"Créer un sondage en story pour maximiser les interactions"},
+    {id:"al17",icon:"🎪",label:"Utiliser la fonction quiz en story"},
+    {id:"al18",icon:"🌺",label:"Poster une story avec curseur de notation"},
+    {id:"al19",icon:"💬",label:"Faire un \"question box\" en story"},
+    {id:"al20",icon:"📌",label:"Épingler ton meilleur commentaire sur un post récent"},
+    {id:"al21",icon:"🎬",label:"Faire un live et interagir en temps réel"},
+    {id:"al22",icon:"🔗",label:"Mettre à jour le lien en bio avec un lien actuel"},
+    {id:"al23",icon:"🌟",label:"Taguer des comptes pertinents dans tes posts (avec sens)"},
+    {id:"al24",icon:"📲",label:"Utiliser la géolocalisation sur tes posts"},
+    {id:"al25",icon:"🤳",label:"Faire une collab post avec un compte complémentaire"},
+    {id:"al26",icon:"⚡",label:"Publier 2 stories minimum par jour"},
+    {id:"al27",icon:"🌸",label:"Créer un highlight thématique et le mettre à jour"},
+    {id:"al28",icon:"💡",label:"Utiliser les mots-clés dans ta bio Instagram"},
+    {id:"al29",icon:"📊",label:"Vérifier tes heures de meilleure audience dans les stats"},
+    {id:"al30",icon:"🎯",label:"Interagir pendant 15 min avant de publier ton post"},
+    {id:"al31",icon:"💎",label:"Créer un contenu \"save-worthy\" (à sauvegarder)"},
+    {id:"al32",icon:"🔥",label:"Créer un contenu \"share-worthy\" (à partager)"},
+    {id:"al33",icon:"❤️",label:"Aller commenter les posts en tendance de ta niche"},
+    {id:"al34",icon:"🌍",label:"Poster en story depuis un lieu avec géolocalisation"},
+    {id:"al35",icon:"📱",label:"Répondre aux DM dans les 2h pour booster l'engagement"},
+    {id:"al36",icon:"🎁",label:"Créer un contenu exclusif à partager uniquement en DM"},
+    {id:"al37",icon:"🏆",label:"Analyser le contenu viral de ta niche et t'en inspirer"},
+    {id:"al38",icon:"💬",label:"Demander à tes abonnés de taguer une amie dans un post"},
+    {id:"al39",icon:"📸",label:"Faire un \"before/after\" — format très partagé"},
+    {id:"al40",icon:"🎥",label:"Utiliser la tendance audio du moment pour ton Reel"},
+    {id:"al41",icon:"✨",label:"Créer un filtre ou sticker de marque en story"},
+    {id:"al42",icon:"🌺",label:"Partager un post de ta filleule avec ton commentaire"},
+    {id:"al43",icon:"💫",label:"Faire un \"compte à rebours\" en story pour une annonce"},
+    {id:"al44",icon:"🔑",label:"Créer un contenu \"liste\" numérotée — très engageant"},
+    {id:"al45",icon:"📋",label:"Faire un \"Top 5\" ou \"Top 10\" dans ta niche"},
+    {id:"al46",icon:"🌟",label:"Utiliser les sous-titres automatiques sur tes Reels"},
+    {id:"al47",icon:"💪",label:"Poster tôt le matin (avant 8h) pour maximiser la portée"},
+    {id:"al48",icon:"🎯",label:"Créer du contenu evergreen (intemporel et toujours utile)"},
+    {id:"al49",icon:"🌈",label:"Alterner formats : photo, carrousel, Reel, story"},
+    {id:"al50",icon:"📲",label:"Activer les sous-titres sur tous tes vidéos"},
+    {id:"al51",icon:"💡",label:"Faire un \"mythe vs réalité\" dans ta niche"},
+    {id:"al52",icon:"🤳",label:"Poster une selfie authentique et naturelle"},
+    {id:"al53",icon:"🎬",label:"Utiliser des transitions créatives dans tes Reels"},
+    {id:"al54",icon:"💬",label:"Répondre en vidéo à un commentaire pertinent"},
+    {id:"al55",icon:"📊",label:"Faire un tableau ou infographie simple et lisible"},
+    {id:"al56",icon:"🌸",label:"Partager un moment de coulisses (behind the scenes)"},
+    {id:"al57",icon:"🎀",label:"Faire un \"wrap up\" hebdomadaire en story"},
+    {id:"al58",icon:"💰",label:"Créer un contenu avec appel à l'action clair"},
+    {id:"al59",icon:"🔔",label:"Demander à tes abonnés d'activer les notifications"},
+    {id:"al60",icon:"🌍",label:"Participer à un challenge tendance de ta niche"},
+    {id:"al61",icon:"✨",label:"Utiliser le texte animé dans tes stories"},
+    {id:"al62",icon:"🏃",label:"Publier à la même heure chaque jour pour la régularité"},
+    {id:"al63",icon:"💎",label:"Créer un contenu avec une promesse forte dans le titre"},
+    {id:"al64",icon:"🤝",label:"Faire une mention partenaire avec une autre distributrice"},
+    {id:"al65",icon:"📸",label:"Varier les angles de prise de vue (dessus, côté, gros plan)"},
+    {id:"al66",icon:"🎯",label:"Utiliser des hashtags de niche (10-50k posts) pour la visibilité"},
+    {id:"al67",icon:"💬",label:"Épingler une story de présentation de toi"},
+    {id:"al68",icon:"🌺",label:"Faire un \"day in my life\" engageant"},
+    {id:"al69",icon:"💡",label:"Poster sur un sujet controversé (positivement) de ta niche"},
+    {id:"al70",icon:"📱",label:"Utiliser les stickers interactifs sur toutes tes stories"},
+    {id:"al71",icon:"🎥",label:"Faire un Reel avec voix off pour plus d'authenticité"},
+    {id:"al72",icon:"💫",label:"Créer une série de posts sur un même thème"},
+    {id:"al73",icon:"🌟",label:"Optimiser ta bio avec des emojis et mots-clés"},
+    {id:"al74",icon:"📊",label:"Tester 2 types de posts différents cette semaine"},
+    {id:"al75",icon:"🎁",label:"Offrir un contenu gratuit pour les DM (PDF, guide...)"},
+    {id:"al76",icon:"🔥",label:"Poster sur un sujet tendance dans ta niche"},
+    {id:"al77",icon:"💬",label:"Commenter les posts des influenceurs de ta niche"},
+    {id:"al78",icon:"🌸",label:"Créer un post avec beaucoup de texte pour le temps de lecture"},
+    {id:"al79",icon:"❤️",label:"Faire une sélection de tes posts favoris en story"},
+    {id:"al80",icon:"📸",label:"Utiliser la photo de profil comme accroche de story"},
+    {id:"al81",icon:"🎯",label:"Répondre aux stories de tes abonnés pour créer du lien"},
+    {id:"al82",icon:"💡",label:"Créer un post \"voici ce que j'aurais aimé savoir\""},
+    {id:"al83",icon:"🏆",label:"Faire un post récapitulatif de ta semaine"},
+    {id:"al84",icon:"🌈",label:"Utiliser des couleurs vives et contrastées pour attirer l'œil"},
+    {id:"al85",icon:"📲",label:"Tester la fonction \"diffusion\" Instagram"},
+    {id:"al86",icon:"💎",label:"Créer du contenu UGC (user generated content) avec clientes"},
+    {id:"al87",icon:"🤳",label:"Faire un \"get ready with me\" dans ta niche"},
+    {id:"al88",icon:"✨",label:"Utiliser les effets de lumière naturelle pour tes photos"},
+    {id:"al89",icon:"🌺",label:"Poster un contenu inspirationnel qui donne envie d'agir"},
+    {id:"al90",icon:"🎀",label:"Faire un \"thank you\" sincère à tes abonnés"},
+    {id:"al91",icon:"💬",label:"Créer un post avec une liste de ressources utiles"},
+    {id:"al92",icon:"📋",label:"Tester un nouveau format de contenu cette semaine"},
+    {id:"al93",icon:"🌟",label:"Poster une citation motivante avec ta photo"},
+    {id:"al94",icon:"💪",label:"Faire un contenu de \"preuve sociale\" (chiffres, résultats)"},
+    {id:"al95",icon:"🎬",label:"Utiliser la musique tendance sur tes Reels"},
+    {id:"al96",icon:"🔑",label:"Créer un post avec un titre accrocheur en première ligne"},
+    {id:"al97",icon:"💫",label:"Utiliser la fonction \"close friends\" pour du contenu exclusif"},
+    {id:"al98",icon:"🌍",label:"Poster sur l'impact positif de tes actions"},
+    {id:"al99",icon:"🎯",label:"Analyser et reproduire ton post avec le plus d'engagement"},
+    {id:"al100",icon:"🏃",label:"Maintenir un rythme de publication régulier pendant 21 jours"},
+  ],
+};
+
+function BiblioActionsPopup({onClose, onAjouter, actionsCustom=[]}){
+  const[cat,setCat]=useState("ventes");
+  const[recherche,setRecherche]=useState("");
+  const[actionsChef,setActionsChef]=useState([]);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","actions_biblio"));
+        if(snap.exists()) setActionsChef(snap.data().items||[]);
+      }catch{}
+    })();
+  },[]);
+
+  const cats=[
+    {id:"ventes",icon:"🛍️",label:"Ventes"},
+    {id:"recrutement",icon:"👥",label:"Recrutement"},
+    {id:"algorithme",icon:"⚡",label:"Algorithme"},
+    {id:"equipe",icon:"✨",label:"Équipe"},
+  ];
+
+  const actionsEquipe=actionsChef.filter(a=>a.cat===cat||cat==="equipe"&&a.cat==="equipe");
+  const actionsBase=ACTIONS_BIBLIO[cat]||[];
+  const actions=cat==="equipe"?actionsEquipe:[...actionsBase,...actionsChef.filter(a=>a.cat===cat)];
+
+  const filtrees=recherche.trim()
+    ? [
+        ...ACTIONS_BIBLIO.ventes,...ACTIONS_BIBLIO.recrutement,...ACTIONS_BIBLIO.algorithme,
+        ...actionsChef
+      ].filter(a=>a.label.toLowerCase().includes(recherche.toLowerCase()))
+    : actions;
+
+  const dejaAjoutee=(id)=>actionsCustom.some(a=>a.id===id);
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9999,padding:"0"}}>
+      <div style={{background:C.blanc,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:480,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 -8px 40px rgba(0,0,0,.25)"}}>
+
+        {/* Header */}
+        <div style={{padding:"1.1rem 1.1rem .6rem",borderBottom:`1px solid ${C.pale}`,flexShrink:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".7rem"}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>💡 Bibliothèque d'actions</div>
+            <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer"}}>✕</button>
+          </div>
+
+          {/* Recherche */}
+          <input value={recherche} onChange={e=>setRecherche(e.target.value)}
+            placeholder="🔍 Rechercher une action..."
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".5rem .8rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".6rem"}}/>
+
+          {/* Onglets catégories */}
+          {!recherche&&(
+            <div style={{display:"flex",gap:".3rem"}}>
+              {cats.map(c=>(
+                <button key={c.id} onClick={()=>setCat(c.id)}
+                  style={{flex:1,padding:".4rem .2rem",fontSize:".68rem",fontWeight:700,border:"none",borderRadius:8,background:cat===c.id?C.brun:C.creme,color:cat===c.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+                  {c.icon} {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Liste */}
+        <div style={{overflowY:"auto",flex:1,padding:".6rem .8rem"}}>
+          {filtrees.map(a=>{
+            const ajoutee=dejaAjoutee(a.id);
+            return(
+              <div key={a.id} style={{display:"flex",alignItems:"center",gap:".6rem",padding:".55rem .6rem",borderRadius:10,marginBottom:".3rem",background:ajoutee?C.vert+"10":C.blanc,border:`1px solid ${ajoutee?C.vert+"40":C.pale}`}}>
+                <span style={{fontSize:"1.1rem",flexShrink:0}}>{a.icon}</span>
+                <div style={{flex:1,fontSize:".76rem",color:C.texte,lineHeight:1.4}}>{a.label}</div>
+                <button onClick={()=>!ajoutee&&onAjouter(a)}
+                  style={{background:ajoutee?C.vert:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".28rem .6rem",fontSize:".68rem",fontWeight:700,fontFamily:"inherit",cursor:ajoutee?"default":"pointer",flexShrink:0,transition:"all .2s"}}>
+                  {ajoutee?"✓ Ajoutée":"+ Ajouter"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {actionsCustom.length>0&&(
+          <div style={{padding:".6rem 1rem",borderTop:`1px solid ${C.pale}`,background:C.creme,flexShrink:0}}>
+            <div style={{fontSize:".68rem",color:C.gris,textAlign:"center"}}>
+              ✅ {actionsCustom.length} action{actionsCustom.length>1?"s":""} ajoutée{actionsCustom.length>1?"s":""} à ta journée
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TodoPerso({uid}){
+  const[todos,setTodos]=useState([]);
+  const[newTodo,setNewTodo]=useState("");
+  const[adding,setAdding]=useState(false);
+  const[saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(snap.exists()&&snap.data()["db-todos"]){
+          setTodos(JSON.parse(snap.data()["db-todos"]));
+        }
+      }catch{}
+    })();
+  },[uid]);
+
+  const saveTodos=async(next)=>{
+    setTodos(next);
+    try{await setDoc(doc(db,"users",uid),{"db-todos":JSON.stringify(next)},{merge:true});}catch{}
+  };
+
+  const addTodo=async()=>{
+    if(!newTodo.trim())return;
+    setSaving(true);
+    const next=[...todos,{id:`t${Date.now()}`,text:newTodo.trim(),done:false}];
+    await saveTodos(next);
+    setNewTodo("");setAdding(false);setSaving(false);
+  };
+
+  const toggleTodo=(id)=>saveTodos(todos.map(t=>t.id===id?{...t,done:!t.done}:t));
+  const delTodo=(id)=>saveTodos(todos.filter(t=>t.id!==id));
+
+  const actives=todos.filter(t=>!t.done);
+  const faits=todos.filter(t=>t.done);
+
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,padding:"1rem",marginBottom:"1rem"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".65rem"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun}}>
+          ✅ Ma to-do liste
+        </div>
+        <button onClick={()=>setAdding(!adding)}
+          style={{background:adding?C.rose:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".25rem .65rem",fontSize:".68rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          {adding?"✕":"+ Ajouter"}
+        </button>
+      </div>
+
+      {adding&&(
+        <div style={{display:"flex",gap:".4rem",marginBottom:".65rem"}}>
+          <input
+            value={newTodo} onChange={e=>setNewTodo(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&addTodo()}
+            placeholder="Nouvelle tâche..."
+            autoFocus
+            style={{flex:1,border:`1px solid ${C.rose}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          <button onClick={addTodo} disabled={!newTodo.trim()||saving}
+            style={{background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".42rem .75rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            ✓
+          </button>
+        </div>
+      )}
+
+      {actives.length===0&&!adding&&(
+        <div style={{fontSize:".74rem",color:C.gris,textAlign:"center",padding:".5rem",fontStyle:"italic"}}>
+          Aucune tâche — ajoute ta première ! 🎯
+        </div>
+      )}
+
+      {actives.map(t=>(
+        <div key={t.id} style={{display:"flex",alignItems:"center",gap:".55rem",padding:".45rem 0",borderBottom:`1px solid ${C.pale}`}}>
+          <div onClick={()=>toggleTodo(t.id)}
+            style={{width:20,height:20,borderRadius:5,border:`2px solid ${C.rose}`,background:"transparent",flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          </div>
+          <div style={{flex:1,fontSize:".8rem",color:C.texte,lineHeight:1.4}}>{t.text}</div>
+          <button onClick={()=>delTodo(t.id)}
+            style={{background:"none",border:"none",color:C.pale,cursor:"pointer",fontSize:".75rem",padding:".1rem .3rem",fontFamily:"inherit"}}>✕</button>
+        </div>
+      ))}
+
+      {faits.length>0&&(
+        <div style={{marginTop:".5rem"}}>
+          <div style={{fontSize:".58rem",color:C.gris,marginBottom:".3rem",textTransform:"uppercase",letterSpacing:".08em"}}>Fait ✓</div>
+          {faits.map(t=>(
+            <div key={t.id} style={{display:"flex",alignItems:"center",gap:".55rem",padding:".35rem 0",opacity:.5}}>
+              <div onClick={()=>toggleTodo(t.id)}
+                style={{width:20,height:20,borderRadius:5,border:`2px solid ${C.vert}`,background:C.vert,flexShrink:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <span style={{fontSize:".55rem",color:"white",fontWeight:700}}>✓</span>
+              </div>
+              <div style={{flex:1,fontSize:".78rem",color:C.gris,textDecoration:"line-through"}}>{t.text}</div>
+              <button onClick={()=>delTodo(t.id)}
+                style={{background:"none",border:"none",color:C.pale,cursor:"pointer",fontSize:".75rem",padding:".1rem .3rem",fontFamily:"inherit"}}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── POPUP BIENVENUE (première connexion) ─────────────────────────────────────
+function WelcomePopup({userName, onClose}){
+  const prenom = userName.split(" ")[0] || userName;
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9999,padding:"0"}}>
+      <div style={{background:C.blanc,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.3)"}}>
+
+        {/* Header */}
+        <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:"1.5rem 1.2rem 1.2rem",textAlign:"center"}}>
+          <div style={{fontSize:"2.2rem",marginBottom:".4rem"}}>👑</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",fontWeight:300,color:C.blanc,lineHeight:1.3}}>
+            Bienvenue {prenom} !
+          </div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",color:C.pale,marginTop:".3rem",fontStyle:"italic"}}>
+            Tu fais maintenant partie de Blazing Dynasty ✨
+          </div>
+        </div>
+
+        <div style={{padding:"1.2rem"}}>
+
+          {/* Message équipe */}
+          <div style={{background:C.creme,borderRadius:12,padding:".9rem 1rem",marginBottom:"1rem",borderLeft:`3px solid ${C.or}`}}>
+            <div style={{fontSize:".72rem",color:C.brun,lineHeight:1.7}}>
+              🌸 Nous sommes tellement heureuses de t'accueillir dans notre équipe. Tu as fait le bon choix — maintenant on est là pour t'accompagner à chaque étape. Let's go ! 💛
+            </div>
+          </div>
+
+          {/* Telegram */}
+          <div style={{background:C.lilas+"15",border:`1px solid ${C.lilas}30`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem"}}>
+            <div style={{fontSize:".78rem",fontWeight:700,color:C.brun,marginBottom:".5rem"}}>✈️ Nos groupes Telegram</div>
+            <a href="https://t.me/+2wKWxIROE4c1M2Q0" target="_blank" rel="noopener noreferrer"
+              style={{display:"flex",alignItems:"center",gap:".6rem",background:"#29A0D8",borderRadius:9,padding:".55rem .85rem",textDecoration:"none",marginBottom:".4rem"}}>
+              <span style={{fontSize:"1rem"}}>🖼️</span>
+              <div>
+                <div style={{fontSize:".78rem",fontWeight:600,color:"white"}}>Banque d'images équipe</div>
+                <div style={{fontSize:".62rem",color:"rgba(255,255,255,.75)"}}>Accède aux visuels de l'équipe</div>
+              </div>
+            </a>
+            <a href="https://t.me/+pv0RY_JJy4wyYzE8" target="_blank" rel="noopener noreferrer"
+              style={{display:"flex",alignItems:"center",gap:".6rem",background:"#29A0D8",borderRadius:9,padding:".55rem .85rem",textDecoration:"none"}}>
+              <span style={{fontSize:"1rem"}}>⭐</span>
+              <div>
+                <div style={{fontSize:".78rem",fontWeight:600,color:"white"}}>Groupe témoignages</div>
+                <div style={{fontSize:".62rem",color:"rgba(255,255,255,.75)"}}>Découvre les résultats de l'équipe</div>
+              </div>
+            </a>
+          </div>
+
+          {/* Tes 2 premiers accès */}
+          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".5rem"}}>
+            🔓 Tes accès du moment
+          </div>
+
+          <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:".5rem",display:"flex",alignItems:"center",gap:".75rem"}}>
+            <div style={{fontSize:"1.4rem",flexShrink:0}}>🚀</div>
+            <div>
+              <div style={{fontSize:".82rem",fontWeight:700,color:C.blanc}}>Fast Start</div>
+              <div style={{fontSize:".68rem",color:C.pale}}>7 modules progressifs pour bien démarrer — commence par là !</div>
+            </div>
+          </div>
+
+          <div style={{background:C.lilas+"15",border:`1px solid ${C.lilas}30`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:".75rem"}}>
+            <div style={{fontSize:"1.4rem",flexShrink:0}}>🎬</div>
+            <div>
+              <div style={{fontSize:".82rem",fontWeight:700,color:C.brun}}>Formation Application</div>
+              <div style={{fontSize:".68rem",color:C.gris}}>Apprends à utiliser l'appli pour te faciliter la vie</div>
+            </div>
+          </div>
+
+          {/* Bandeau déverrouillage */}
+          <div style={{background:C.or+"20",border:`1px solid ${C.or}`,borderRadius:10,padding:".65rem .85rem",marginBottom:"1.2rem",display:"flex",alignItems:"center",gap:".5rem"}}>
+            <span style={{fontSize:"1rem"}}>🔒</span>
+            <div style={{fontSize:".7rem",color:C.brun,lineHeight:1.5}}>
+              <strong>Le reste de la formation</strong> se débloque automatiquement quand tu auras terminé tes 7 modules Fast Start 🎉
+            </div>
+          </div>
+
+          <button onClick={onClose}
+            style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:12,padding:".8rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            Commencer le Fast Start 🚀
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── CLASSEMENT PERMANENT VENTES & RECRUTEMENT ────────────────────────────────
+function CmdPeriodeBlock({cmdPeriode}){
+  const info=getPeriodeInfo();
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:".75rem"}}>
+      <div style={{width:38,height:38,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:"1.2rem"}}>🛍️</div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".15rem"}}>{fmtPLabel(info.periodNum)}</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:700,color:C.brun}}>
+          {cmdPeriode.count} commande{cmdPeriode.count>1?"s":""}
+          {cmdPeriode.montant>0&&<span style={{fontSize:".75rem",fontWeight:400,color:C.gris}}> · {cmdPeriode.montant}€</span>}
+        </div>
+      </div>
+      <div style={{textAlign:"right",fontSize:".62rem",color:C.gris}}>Se remet à 0<br/>en fin de période</div>
+    </div>
+  );
+}
+
+function ClassementEquipe({uid}){
+  const[data,setData]=useState([]);
+  const[lastData,setLastData]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[onglet,setOnglet]=useState("ventes"); // ventes | recrues | progression
+  const[lastUpdate,setLastUpdate]=useState(null);
+
+  const charger=async()=>{
+    try{
+      const annSnap=await getDoc(doc(db,"equipe","annuaire"));
+      if(!annSnap.exists()){setLoading(false);return;}
+      const membres=annSnap.data().membres||{};
+
+      // Données fraîches du membre courant
+      const meSnap=await getDoc(doc(db,"users",uid));
+      const meData=meSnap.exists()&&meSnap.data()["db-obj-perso"]?JSON.parse(meSnap.data()["db-obj-perso"]):{};
+
+      // Historique période précédente pour la progression
+      const prevPeriode=getPeriodeActuelle()-1;
+      const prevKey=`hist_p${prevPeriode}`;
+
+      const valides=Object.entries(membres).map(([mUid,m])=>{
+        const isMe=mUid===uid;
+        const caPerso=isMe?parseFloat(meData.caPerso)||0:parseFloat(m.caPerso)||0;
+        const ca=isMe?parseFloat(meData.ca)||0:parseFloat(m.ca)||0;
+        const recrues=isMe?parseInt(meData.recruesReal)||0:parseInt(m.recruesReal)||0;
+        const prevCaPerso=parseFloat(m[prevKey+"_caPerso"])||0;
+        const prevRecrues=parseInt(m[prevKey+"_recrues"])||0;
+        const progVentes=caPerso-prevCaPerso;
+        const progRecrues=recrues-prevRecrues;
+        const scoreProgression=progVentes+(progRecrues*50);
+        return{uid:mUid,prenom:m.prenom||mUid.split("-")[0],caPerso,ca,recrues,progVentes,progRecrues,scoreProgression};
+      }).filter(m=>m.ca>0||m.caPerso>0||m.recrues>0||m.uid===uid);
+      // Sauvegarder positions précédentes pour les flèches
+      const prev=JSON.parse(localStorage.getItem("bd-classement-prev")||"{}");
+      setLastData(prev);
+      const newPrev={};
+      [...valides].sort((a,b)=>b.caPerso-a.caPerso).forEach((m,i)=>{newPrev[m.uid]={v:i,r:[...valides].sort((a,b)=>b.recrues-a.recrues).findIndex(x=>x.uid===m.uid),p:[...valides].sort((a,b)=>b.scoreProgression-a.scoreProgression).findIndex(x=>x.uid===m.uid)};});
+      localStorage.setItem("bd-classement-prev",JSON.stringify(newPrev));
+      setData(valides);
+      setLastUpdate(new Date());
+    }catch(e){console.error(e);}
+    setLoading(false);
+  };
+
+  useEffect(()=>{
+    charger();
+    const t=setInterval(charger,3*60*1000);
+    // Rafraîchir aussi quand la page reprend le focus
+    const onFocus=()=>charger();
+    window.addEventListener('focus',onFocus);
+    return()=>{clearInterval(t);window.removeEventListener('focus',onFocus);};
+  },[uid]);
+
+  if(loading)return null;
+
+  const onglets=[
+    {id:"ventes",label:"🛍️ Ventes perso",sortKey:"caPerso",unit:"€"},
+    {id:"equipe",label:"👥 Équipe",sortKey:"ca",unit:"€"},
+    {id:"recrues",label:"🤝 Recrues",sortKey:"recrues",unit:""},
+    {id:"progression",label:"📈 Progression",sortKey:"scoreProgression",unit:""},
+  ];
+  // Filtre 100€ perso seulement pour l'onglet Équipe
+  const filtreMin = onglet==="equipe" ? (m)=>m.caPerso>=100||m.uid===uid : ()=>true;
+  const currentOnglet=onglets.find(o=>o.id===onglet)||onglets[0];
+  const sorted=[...data].filter(filtreMin).sort((a,b)=>b[currentOnglet.sortKey]-a[currentOnglet.sortKey]);
+  const medals=["🥇","🥈","🥉"];
+  const timeStr=lastUpdate?`${lastUpdate.getHours()}h${String(lastUpdate.getMinutes()).padStart(2,"0")}`:"";
+
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:".75rem"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".75rem"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.brun}}>🏆 Classement équipe</div>
+        <button onClick={charger} title="Rafraîchir"
+          style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".2rem .4rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>🔄</button>
+      </div>
+
+      {/* Onglets */}
+      <div style={{display:"flex",gap:".25rem",marginBottom:".75rem",overflowX:"auto"}}>
+        {onglets.map(o=>(
+          <button key={o.id} onClick={()=>setOnglet(o.id)}
+            style={{flexShrink:0,padding:".3rem .55rem",fontSize:".63rem",fontWeight:600,borderRadius:9,border:`1.5px solid ${onglet===o.id?C.rose:C.pale}`,background:onglet===o.id?C.rose:C.blanc,color:onglet===o.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Liste */}
+      {sorted.length===0&&<div style={{textAlign:"center",fontSize:".72rem",color:C.gris,padding:".5rem"}}>Aucune donnée pour l'instant</div>}
+      {sorted.map((m,i)=>{
+        const isMe=m.uid===uid;
+        const prevPos=lastData[m.uid];
+        const curIdx=i;
+        const prevIdx=currentOnglet.id==="ventes"?prevPos?.v:currentOnglet.id==="recrues"?prevPos?.r:prevPos?.p;
+        const tendance=prevIdx==null?"→":prevIdx>curIdx?"⬆️":prevIdx<curIdx?"⬇️":"→";
+
+        let valPrimary, valSecondary;
+        if(onglet==="ventes"){
+          valPrimary=`${m.caPerso}€`;
+          valSecondary=m.progVentes!==0?`${m.progVentes>=0?"+":""}${m.progVentes}€ vs P préc.`:null;
+        } else if(onglet==="equipe"){
+          valPrimary=`${m.ca}€`;
+          valSecondary=m.caPerso>=100?`dont ${m.caPerso}€ perso`:null;
+        } else if(onglet==="recrues"){
+          valPrimary=`${m.recrues} recrue${m.recrues>1?"s":""}`;
+          valSecondary=m.progRecrues!==0?`${m.progRecrues>=0?"+":""}${m.progRecrues} vs P préc.`:null;
+        } else {
+          valPrimary=`${m.progVentes>=0?"+":""}${m.progVentes}€ · ${m.progRecrues>=0?"+":""}${m.progRecrues} rec.`;
+          valSecondary=null;
+        }
+
+        return(
+          <div key={m.uid} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".45rem .5rem",borderRadius:9,background:isMe?C.rose+"08":"transparent",marginBottom:".2rem",border:isMe?`1px solid ${C.rose}30`:"none"}}>
+            <div style={{width:26,textAlign:"center",fontSize:i<3?"1rem":".7rem",flexShrink:0}}>
+              {i<3?medals[i]:`${i+1}.`}
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:".78rem",fontWeight:isMe?700:500,color:isMe?C.rose:C.texte}}>{m.prenom}{isMe?" (moi)":""}</div>
+              {valSecondary&&<div style={{fontSize:".6rem",color:C.vert}}>{valSecondary}</div>}
+            </div>
+            <div style={{fontSize:".7rem",color:C.gris,flexShrink:0}}>{tendance}</div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",fontWeight:700,color:isMe?C.rose:C.brun,flexShrink:0,textAlign:"right"}}>{valPrimary}</div>
+          </div>
+        );
+      })}
+
+      <div style={{fontSize:".55rem",color:C.pale,textAlign:"right",marginTop:".4rem"}}>
+        {timeStr?`Màj ${timeStr} · `:""}Rafraîchi auto toutes les 3min
+      </div>
+    </div>
+  );
+}
+
+const THEMES_LINKBIO=[
+  {id:"elegance",label:"Élégance",bg:"linear-gradient(135deg,#3D1F0E,#5C3020)",header:"linear-gradient(135deg,#3D1F0E,#5C3020)",accent:"#C4A882",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#3D1F0E",cardBg:"white",preview:"🤎"},
+  {id:"rose_gold",label:"Rose Gold",bg:"linear-gradient(135deg,#F9E5E0,#F2C4BB)",header:"linear-gradient(135deg,#C49A8A,#A0716A)",accent:"#C49A8A",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#5C3020",cardBg:"#FFF5F3",preview:"🌸"},
+  {id:"nuit",label:"Nuit Étoilée",bg:"linear-gradient(135deg,#0D0D2B,#1A1A4E)",header:"linear-gradient(135deg,#0D0D2B,#1A1A4E)",accent:"#A89BB5",text:"white",btnPrimary:"#A89BB5",btnSecondary:"rgba(255,255,255,.9)",btnTertiary:"#0D0D2B",cardBg:"#12122E",preview:"🌙"},
+  {id:"or_noir",label:"Or & Noir",bg:"#0A0A0A",header:"linear-gradient(135deg,#1A1A1A,#2D2D2D)",accent:"#C4A832",text:"white",btnPrimary:"#C4A832",btnSecondary:"white",btnTertiary:"#1A1A1A",cardBg:"#141414",preview:"⚫"},
+  {id:"nature",label:"Nature & Vert",bg:"linear-gradient(135deg,#E8F5E9,#C8E6C9)",header:"linear-gradient(135deg,#2E7D32,#388E3C)",accent:"#2E7D32",text:"white",btnPrimary:"#4CAF50",btnSecondary:"white",btnTertiary:"#1B5E20",cardBg:"white",preview:"🌿"},
+  {id:"lavande",label:"Lavande",bg:"linear-gradient(135deg,#EDE7F6,#D1C4E9)",header:"linear-gradient(135deg,#7E57C2,#9575CD)",accent:"#7E57C2",text:"white",btnPrimary:"#9575CD",btnSecondary:"white",btnTertiary:"#4527A0",cardBg:"white",preview:"💜"},
+  {id:"soleil",label:"Soleil d'Été",bg:"linear-gradient(135deg,#FFF8E1,#FFF3CD)",header:"linear-gradient(135deg,#F57F17,#F9A825)",accent:"#F57F17",text:"white",btnPrimary:"#FF8F00",btnSecondary:"white",btnTertiary:"#E65100",cardBg:"white",preview:"☀️"},
+  {id:"ocean",label:"Océan",bg:"linear-gradient(135deg,#E3F2FD,#BBDEFB)",header:"linear-gradient(135deg,#1565C0,#1976D2)",accent:"#1565C0",text:"white",btnPrimary:"#1976D2",btnSecondary:"white",btnTertiary:"#0D47A1",cardBg:"white",preview:"🌊"},
+  {id:"corail",label:"Corail & Blanc",bg:"#FFF9F7",header:"linear-gradient(135deg,#FF6B6B,#FF8E8E)",accent:"#FF6B6B",text:"white",btnPrimary:"#FF6B6B",btnSecondary:"white",btnTertiary:"#C62828",cardBg:"white",preview:"🪸"},
+  {id:"minimaliste",label:"Minimaliste",bg:"#FAFAFA",header:"linear-gradient(135deg,#212121,#424242)",accent:"#212121",text:"white",btnPrimary:"#212121",btnSecondary:"white",btnTertiary:"#000",cardBg:"white",preview:"⬛"},
+];
+
+// ── TUNNEL DE VENTE & RECRUTEMENT ────────────────────────────────────────────
+function TunnelTab({uid, userName}){
+  const slug=(userName||uid).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"-");
+  const[config,setConfig]=useState({
+    // Tunnel Vente
+    venteActif:true,
+    venteTitre:"Découvrez vos produits idéaux",
+    venteAccroche:"Répondez à quelques questions et recevez vos recommandations personnalisées",
+    venteImage:"",
+    venteCTA:"Commencer mon diagnostic",
+    venteLienBoutique:"",
+    // Tunnel Recrutement
+    recrutActif:true,
+    recrutTitre:"Et si vous rejoigniez notre équipe ?",
+    recrutAccroche:"Liberté, revenus complémentaires, communauté bienveillante — découvrez si cette aventure est faite pour vous",
+    recrutImage:"",
+    recrutCTA:"Découvrir l'opportunité",
+    recrutLienContact:"",
+    // Commun
+    couleurPrincipale:"#C49A8A",
+    nomAffiche:"",
+    photoAffichee:"",
+  });
+  const[saving,setSaving]=useState(false);
+  const[saved,setSaved]=useState(false);
+  const[loading,setLoading]=useState(true);
+  const[onglet,setOnglet]=useState("vente");
+  const[prospects,setProspects]=useState([]);
+  const[loadingProspects,setLoadingProspects]=useState(false);
+
+  const urlVente=`https://blazing-dinasty-1fad9.web.app/funnel/${slug}/vente`;
+  const urlRecrut=`https://blazing-dinasty-1fad9.web.app/funnel/${slug}/recrutement`;
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"tunnels",uid));
+        if(snap.exists()) setConfig(c=>({...c,...snap.data()}));
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  // Charger les prospects générés par le tunnel
+  const chargerProspects=async()=>{
+    setLoadingProspects(true);
+    try{
+      const snap=await getDoc(doc(db,"tunnel-prospects",uid));
+      if(snap.exists()) setProspects(snap.data().liste||[]);
+    }catch{}
+    setLoadingProspects(false);
+  };
+
+  useEffect(()=>{chargerProspects();},[uid]);
+
+  const save=async()=>{
+    setSaving(true);
+    try{
+      await setDoc(doc(db,"tunnels",uid),{...config,uid,slug,updatedAt:Date.now()});
+      setSaved(true);setTimeout(()=>setSaved(false),2000);
+    }catch{}
+    setSaving(false);
+  };
+
+  const copy=(url)=>{navigator.clipboard?.writeText(url);};
+
+  const INP=({label,field,placeholder,textarea=false,type="text"})=>(
+    <div style={{marginBottom:".55rem"}}>
+      <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{label}</div>
+      {textarea
+        ?<textarea value={config[field]||""} onChange={e=>setConfig(c=>({...c,[field]:e.target.value}))} placeholder={placeholder} rows={2}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical"}}/>
+        :<input type={type} value={config[field]||""} onChange={e=>setConfig(c=>({...c,[field]:e.target.value}))} placeholder={placeholder}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+      }
+    </div>
+  );
+
+  if(loading)return null;
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
+        Mon <em style={{fontStyle:"italic",color:C.rose}}>Tunnel</em>
+      </div>
+      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
+        2 tunnels personnalisables — vente et recrutement. Les prospects qui remplissent le formulaire arrivent directement dans ta liste.
+      </p>
+
+      {/* Liens à copier */}
+      {[{label:"🛍️ Tunnel Vente",url:urlVente,actif:config.venteActif},{label:"👑 Tunnel Recrutement",url:urlRecrut,actif:config.recrutActif}].map(t=>(
+        <div key={t.url} style={{background:t.actif?`linear-gradient(135deg,${C.brun},${C.brun2})`:"#888",borderRadius:11,padding:".7rem .9rem",marginBottom:".5rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:".58rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".15rem"}}>{t.label}</div>
+            <div style={{fontSize:".65rem",color:C.pale,wordBreak:"break-all"}}>{t.url}</div>
+          </div>
+          <button onClick={()=>copy(t.url)} style={{background:C.or,color:C.brun,border:"none",borderRadius:7,padding:".3rem .6rem",fontSize:".65rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+            📋 Copier
+          </button>
+        </div>
+      ))}
+
+      {/* Navigation onglets */}
+      <div style={{display:"flex",gap:".3rem",margin:"1rem 0 .75rem"}}>
+        {[{id:"vente",label:"🛍️ Vente"},{id:"recrutement",label:"👑 Recrutement"},{id:"prospects",label:`📥 Prospects (${prospects.length})`}].map(o=>(
+          <button key={o.id} onClick={()=>{setOnglet(o.id);if(o.id==="prospects")chargerProspects();}}
+            style={{flex:1,padding:".45rem .3rem",fontSize:".68rem",fontWeight:600,borderRadius:10,border:`1.5px solid ${onglet===o.id?C.rose:C.pale}`,background:onglet===o.id?C.rose:C.blanc,color:onglet===o.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {/* TUNNEL VENTE */}
+      {onglet==="vente"&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:".75rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase"}}>⚙️ Configuration tunnel vente</div>
+            <label style={{display:"flex",alignItems:"center",gap:".4rem",cursor:"pointer"}}>
+              <input type="checkbox" checked={!!config.venteActif} onChange={e=>setConfig(c=>({...c,venteActif:e.target.checked}))}/>
+              <span style={{fontSize:".72rem",color:C.brun,fontWeight:600}}>{config.venteActif?"Actif":"Inactif"}</span>
+            </label>
+          </div>
+          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
+            <INP label="Titre principal" field="venteTitre" placeholder="Découvrez vos produits idéaux"/>
+            <INP label="Phrase d'accroche" field="venteAccroche" placeholder="Répondez à quelques questions..." textarea/>
+            <UploadPhoto label="Image de fond" value={config.venteImage} onChange={v=>setConfig(c=>({...c,venteImage:v}))} folder="tunnels"/>
+            <INP label="Texte du bouton principal" field="venteCTA" placeholder="Commencer mon diagnostic"/>
+            <INP label="Lien boutique Mihi" field="venteLienBoutique" placeholder="https://mihi.care/fr/..."/>
+            <INP label="Couleur principale" field="couleurPrincipale" type="color"/>
+          </div>
+
+          {/* Preview vente */}
+          <div style={{background:C.creme,borderRadius:12,padding:".75rem",border:`1.5px dashed ${C.pale}`}}>
+            <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em",marginBottom:".5rem"}}>👁️ Aperçu</div>
+            <div style={{background:config.couleurPrincipale||C.brun,borderRadius:10,padding:"1.5rem 1rem",textAlign:"center"}}>
+              {config.venteImage&&<img src={config.venteImage} alt="" style={{width:"100%",maxHeight:120,objectFit:"cover",borderRadius:8,marginBottom:".75rem"}}/>}
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:"white",marginBottom:".4rem"}}>{config.venteTitre||"Titre du tunnel"}</div>
+              <div style={{fontSize:".72rem",color:"rgba(255,255,255,.8)",marginBottom:".85rem",lineHeight:1.6}}>{config.venteAccroche||"Accroche..."}</div>
+              <div style={{background:"white",color:config.couleurPrincipale||C.brun,borderRadius:9,padding:".55rem 1rem",fontSize:".82rem",fontWeight:700,display:"inline-block"}}>{config.venteCTA||"CTA"}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TUNNEL RECRUTEMENT */}
+      {onglet==="recrutement"&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:".75rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase"}}>⚙️ Configuration tunnel recrutement</div>
+            <label style={{display:"flex",alignItems:"center",gap:".4rem",cursor:"pointer"}}>
+              <input type="checkbox" checked={!!config.recrutActif} onChange={e=>setConfig(c=>({...c,recrutActif:e.target.checked}))}/>
+              <span style={{fontSize:".72rem",color:C.brun,fontWeight:600}}>{config.recrutActif?"Actif":"Inactif"}</span>
+            </label>
+          </div>
+          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
+            <INP label="Titre principal" field="recrutTitre" placeholder="Et si vous rejoigniez notre équipe ?"/>
+            <INP label="Phrase d'accroche" field="recrutAccroche" placeholder="Liberté, revenus, communauté..." textarea/>
+            <UploadPhoto label="Image de fond" value={config.recrutImage} onChange={v=>setConfig(c=>({...c,recrutImage:v}))} folder="tunnels"/>
+            <INP label="Texte du bouton principal" field="recrutCTA" placeholder="Découvrir l'opportunité"/>
+            <INP label="Lien contact / WhatsApp" field="recrutLienContact" placeholder="https://wa.me/33..."/>
+          </div>
+
+          <div style={{background:C.creme,borderRadius:12,padding:".75rem",border:`1.5px dashed ${C.pale}`}}>
+            <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em",marginBottom:".5rem"}}>👁️ Aperçu</div>
+            <div style={{background:`linear-gradient(135deg,${C.brun},${config.couleurPrincipale||C.brun2})`,borderRadius:10,padding:"1.5rem 1rem",textAlign:"center"}}>
+              {config.recrutImage&&<img src={config.recrutImage} alt="" style={{width:"100%",maxHeight:120,objectFit:"cover",borderRadius:8,marginBottom:".75rem"}}/>}
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:"white",marginBottom:".4rem"}}>{config.recrutTitre||"Titre du tunnel"}</div>
+              <div style={{fontSize:".72rem",color:"rgba(255,255,255,.8)",marginBottom:".85rem",lineHeight:1.6}}>{config.recrutAccroche||"Accroche..."}</div>
+              <div style={{background:config.couleurPrincipale||C.rose,color:"white",borderRadius:9,padding:".55rem 1rem",fontSize:".82rem",fontWeight:700,display:"inline-block"}}>{config.recrutCTA||"CTA"}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROSPECTS générés */}
+      {onglet==="prospects"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>📥 Prospects arrivés via ton tunnel</div>
+          {loadingProspects&&<div style={{textAlign:"center",color:C.gris,fontSize:".75rem"}}>Chargement...</div>}
+          {!loadingProspects&&prospects.length===0&&(
+            <div style={{textAlign:"center",padding:"1.5rem",color:C.gris,fontSize:".75rem",fontStyle:"italic"}}>
+              Aucun prospect pour l'instant. Partage tes liens pour en recevoir !
+            </div>
+          )}
+          {prospects.map((p,i)=>(
+            <div key={i} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:10,padding:".65rem .85rem",marginBottom:".35rem"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div>
+                  <div style={{fontSize:".82rem",fontWeight:600,color:C.brun}}>{p.prenom} {p.nom}</div>
+                  {p.email&&<div style={{fontSize:".65rem",color:C.gris}}>✉️ {p.email}</div>}
+                  {p.tel&&<div style={{fontSize:".65rem",color:C.gris}}>📞 {p.tel}</div>}
+                  {p.message&&<div style={{fontSize:".68rem",color:C.gris,marginTop:".25rem",fontStyle:"italic"}}>"{p.message}"</div>}
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontSize:".6rem",fontWeight:700,color:p.type==="vente"?C.rose:C.or,background:p.type==="vente"?C.rose+"15":C.or+"15",borderRadius:20,padding:".1rem .4rem",marginBottom:".2rem"}}>
+                    {p.type==="vente"?"🛍️ Vente":"👑 Recrutement"}
+                  </div>
+                  <div style={{fontSize:".58rem",color:C.pale}}>{p.date?new Date(p.date).toLocaleDateString("fr-FR"):""}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bouton sauvegarder */}
+      {onglet!=="prospects"&&(
+        <button onClick={save} disabled={saving} style={{width:"100%",marginTop:"1rem",background:saved?C.vert:C.brun,color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          {saving?"Sauvegarde...":saved?"✅ Sauvegardé !":"Sauvegarder mon tunnel"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function LinkBioTab({uid, userName}){
+  const[profil,setProfil]=useState({
+    prenom:"",slogan:"",histoire:"",photo:"",theme:"elegance",
+    accroche:"",nbClientes:"",nbDiags:"",nbEquipe:"",nbAnnees:"",
+    ctaLabel:"✨ Faire mon diagnostic gratuit",ctaUrl:"",
+    urgence:"",banniere:"",banniereUrl:"",badge:"",
+    lienBoutique:"",lienRecrutement:"",lienDiag:"",
+    liensBonusLabel:[],liensBonusUrl:[],liensBonusPhoto:[],
+    photos:[],temoignages:[],produitsStar:[],faq:[],
+    showBanniere:true,
+    bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,
+  });
+  const[banniereGlobale,setBanniereGlobale]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[saved,setSaved]=useState(false);
+  const[loading,setLoading]=useState(true);
+  const[copied,setCopied]=useState(false);
+  const[activeSection,setActiveSection]=useState("theme"); // theme|profil|liens|banniere|photos
+
+  const slug=(userName||uid).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"-");
+  const bioUrl=`https://blazing-dinasty-1fad9.web.app/bio/${slug}`;
+  const theme=THEMES_LINKBIO.find(t=>t.id===profil.theme)||THEMES_LINKBIO[0];
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"linkbio",uid));
+        if(snap.exists()) setProfil(p=>({...p,...snap.data()}));
+      }catch{}
+      try{
+        const bSnap=await getDoc(doc(db,"admin","linkbio_banniere"));
+        if(bSnap.exists()) setBanniereGlobale(bSnap.data());
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  const save=async()=>{
+    setSaving(true);
+    try{
+      await setDoc(doc(db,"linkbio",uid),{...profil,uid,slug,updatedAt:Date.now()});
+      setSaved(true);setTimeout(()=>setSaved(false),2500);
+    }catch{}
+    setSaving(false);
+  };
+
+  const copyUrl=()=>{navigator.clipboard?.writeText(bioUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);};
+
+  const addLienBonus=()=>{
+    setProfil(p=>({...p,
+      liensBonusLabel:[...(p.liensBonusLabel||[]),""],
+      liensBonusUrl:[...(p.liensBonusUrl||[]),""],
+      liensBonusPhoto:[...(p.liensBonusPhoto||[]),""],
+    }));
+  };
+  const removeLienBonus=(i)=>{
+    setProfil(p=>({...p,
+      liensBonusLabel:(p.liensBonusLabel||[]).filter((_,j)=>j!==i),
+      liensBonusUrl:(p.liensBonusUrl||[]).filter((_,j)=>j!==i),
+      liensBonusPhoto:(p.liensBonusPhoto||[]).filter((_,j)=>j!==i),
+    }));
+  };
+
+  if(loading)return null;
+
+  const SECTIONS=[
+    {id:"theme",icon:"🎨",label:"Thème"},
+    {id:"profil",icon:"✨",label:"Profil"},
+    {id:"liens",icon:"🔗",label:"Liens"},
+    {id:"photos",icon:"📸",label:"Photos"},
+    {id:"banniere",icon:"📢",label:"Bannière"},
+  ];
+
+  // Prévisualisation
+  const Preview=({bg=banniereGlobale})=>(
+    <div style={{background:theme.bg,borderRadius:14,overflow:"hidden",maxWidth:300,margin:"0 auto",boxShadow:"0 4px 24px rgba(0,0,0,.12)"}}>
+      {/* Bannière */}
+      {((bg?.actif&&bg?.texte&&profil.showBanniere)||(profil.bannierePersoActif&&profil.bannierePersoTexte))&&(
+        <div style={{background:profil.bannierePersoBg||(profil.bannierePersoActif&&profil.bannierePersoTexte?undefined:bg?.couleur)||theme.btnPrimary,padding:".5rem .75rem",textAlign:"center",fontSize:".7rem",fontWeight:600,color:"white"}}>
+          {profil.bannierePersoActif&&profil.bannierePersoTexte ? profil.bannierePersoTexte : bg?.texte}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{background:theme.header,padding:"1.5rem 1rem",textAlign:"center"}}>
+        {profil.photo
+          ?<img src={profil.photo} alt="" style={{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:"3px solid rgba(255,255,255,.25)",marginBottom:".6rem",display:"block",margin:"0 auto .6rem"}}/>
+          :<div style={{width:72,height:72,borderRadius:"50%",background:"rgba(255,255,255,.2)",margin:"0 auto .6rem",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.8rem",fontFamily:"Georgia,serif",color:"white",fontWeight:600}}>
+            {(profil.prenom||userName||"B")[0].toUpperCase()}
+          </div>
+        }
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:theme.text}}>{profil.prenom||userName}</div>
+        {profil.slogan&&<div style={{fontSize:".65rem",color:"rgba(255,255,255,.75)",marginTop:".2rem",lineHeight:1.5}}>{profil.slogan}</div>}
+      </div>
+
+      {profil.histoire&&<div style={{padding:".75rem 1rem",fontSize:".72rem",lineHeight:1.65,color:theme.id==="nuit"||theme.id==="or_noir"?"rgba(255,255,255,.75)":C.gris,background:theme.cardBg}}>{profil.histoire}</div>}
+
+      {/* Photos */}
+      {(profil.photos||[]).filter(p=>p).length>0&&(
+        <div style={{display:"flex",gap:".3rem",padding:".5rem .75rem",overflowX:"auto",background:theme.cardBg}}>
+          {profil.photos.filter(p=>p).map((url,i)=>(
+            <img key={i} src={url} alt="" style={{width:68,height:68,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+          ))}
+        </div>
+      )}
+
+      {/* Liens */}
+      <div style={{padding:".75rem",background:theme.cardBg,display:"flex",flexDirection:"column",gap:".4rem"}}>
+        {profil.lienBoutique&&<a href={profil.lienBoutique} target="_blank" rel="noopener noreferrer" style={{display:"block",background:theme.btnPrimary,color:theme.id==="soleil"||theme.id==="nature"?"white":theme.text,borderRadius:10,padding:".55rem .85rem",textAlign:"center",textDecoration:"none",fontSize:".78rem",fontWeight:600}}>🛍️ Découvrir les produits</a>}
+        {profil.lienDiag&&<a href={profil.lienDiag} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:10,padding:".55rem .85rem",textAlign:"center",textDecoration:"none",fontSize:".78rem",fontWeight:600}}>✨ Faire mon diagnostic</a>}
+        {profil.lienRecrutement&&<a href={profil.lienRecrutement} target="_blank" rel="noopener noreferrer" style={{display:"block",background:theme.btnTertiary,color:"white",borderRadius:10,padding:".55rem .85rem",textAlign:"center",textDecoration:"none",fontSize:".78rem",fontWeight:600}}>👑 Rejoindre l'équipe</a>}
+        {(profil.liensBonusLabel||[]).map((lbl,i)=>lbl&&profil.liensBonusUrl?.[i]&&(
+          <a key={i} href={profil.liensBonusUrl[i]} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:".5rem",background:theme.accent+"15",border:`1.5px solid ${theme.accent}30`,borderRadius:10,padding:".45rem .75rem",textDecoration:"none"}}>
+            {profil.liensBonusPhoto?.[i]&&<img src={profil.liensBonusPhoto[i]} alt="" style={{width:30,height:30,borderRadius:6,objectFit:"cover",flexShrink:0}}/>}
+            <span style={{fontSize:".75rem",fontWeight:600,color:theme.accent}}>{lbl}</span>
+          </a>
+        ))}
+      </div>
+      <div style={{padding:".4rem",textAlign:"center",fontSize:".55rem",color:theme.accent,background:theme.cardBg}}>Blazing Dynasty × Mihi</div>
+    </div>
+  );
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
+        Mon <em style={{fontStyle:"italic",color:C.rose}}>Link-in-Bio</em>
+      </div>
+
+      {/* Lien à copier */}
+      <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:".75rem"}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase",marginBottom:".2rem"}}>🔗 Ton lien de bio</div>
+          <div style={{fontSize:".68rem",color:C.pale,wordBreak:"break-all"}}>{bioUrl}</div>
+        </div>
+        <button onClick={copyUrl} style={{background:C.or,color:C.brun,border:"none",borderRadius:8,padding:".38rem .7rem",fontSize:".7rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+          {copied?"✓ Copié!":"📋 Copier"}
+        </button>
+      </div>
+
+      {/* Navigation sections */}
+      <div style={{display:"flex",gap:".3rem",marginBottom:"1rem",overflowX:"auto",paddingBottom:".2rem"}}>
+        {SECTIONS.map(s=>(
+          <button key={s.id} onClick={()=>setActiveSection(s.id)}
+            style={{flexShrink:0,padding:".38rem .65rem",fontSize:".68rem",fontWeight:600,borderRadius:9,border:`1.5px solid ${activeSection===s.id?C.rose:C.pale}`,background:activeSection===s.id?C.rose:C.blanc,color:activeSection===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            {s.icon} {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* SECTION THÈME */}
+      {activeSection==="theme"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>Choisis ton thème</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:".4rem",marginBottom:"1rem"}}>
+            {THEMES_LINKBIO.map(t=>(
+              <div key={t.id} onClick={()=>setProfil(p=>({...p,theme:t.id}))}
+                style={{textAlign:"center",cursor:"pointer",padding:".4rem .2rem",borderRadius:10,border:`2px solid ${profil.theme===t.id?C.rose:C.pale}`,background:profil.theme===t.id?C.rose+"10":"transparent",transition:"all .15s"}}>
+                <div style={{fontSize:"1.4rem"}}>{t.preview}</div>
+                <div style={{fontSize:".55rem",fontWeight:600,color:profil.theme===t.id?C.rose:C.gris,marginTop:".2rem",lineHeight:1.2}}>{t.label}</div>
+              </div>
+            ))}
+          </div>
+          <Preview/>
+        </div>
+      )}
+
+      {/* SECTION PROFIL */}
+      {activeSection==="profil"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>Ton profil</div>
+          {[
+            {label:"Prénom affiché",key:"prenom",placeholder:"Ex: Melissa"},
+            {label:"Phrase d'accroche",key:"slogan",placeholder:"Ex: Maman entrepreneur 🌸"},
+          ].map(f=>(
+            <div key={f.key} style={{marginBottom:".6rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{f.label}</div>
+              <input value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            </div>
+          ))}
+          <UploadPhoto label="Photo de profil" value={profil.photo} onChange={v=>setProfil(p=>({...p,photo:v}))} folder="linkbio"/>
+          <div style={{marginBottom:".6rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Mon histoire</div>
+            <textarea value={profil.histoire||""} onChange={e=>setProfil(p=>({...p,histoire:e.target.value}))} placeholder="2-3 phrases : qui tu es, pourquoi Mihi..." rows={3}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",lineHeight:1.55}}/>
+          </div>
+
+          {/* Accroche forte */}
+          <div style={{marginBottom:".6rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Citation / Accroche forte</div>
+            <input value={profil.accroche||""} onChange={e=>setProfil(p=>({...p,accroche:e.target.value}))} placeholder="Ex: J'ai retrouvé confiance en moi grâce à Mihi"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          </div>
+
+          {/* Stats chiffrées */}
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>📊 Chiffres clés (social proof)</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".35rem",marginBottom:".6rem"}}>
+            {[
+              {key:"nbClientes",placeholder:"Ex: 48 clientes"},
+              {key:"nbDiags",placeholder:"Ex: 120 diags"},
+              {key:"nbEquipe",placeholder:"Ex: 12 dans l'équipe"},
+              {key:"nbAnnees",placeholder:"Ex: 2 ans d'exp."},
+            ].map(f=>(
+              <input key={f.key} value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                style={{border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            ))}
+          </div>
+
+          {/* CTA Principal */}
+          <div style={{fontSize:".6rem",color:C.rose,marginBottom:".3rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>🎯 Bouton d'appel à l'action principal</div>
+          <input value={profil.ctaLabel||""} onChange={e=>setProfil(p=>({...p,ctaLabel:e.target.value}))} placeholder="Ex: ✨ Faire mon diagnostic gratuit"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".35rem"}}/>
+          <input value={profil.ctaUrl||""} onChange={e=>setProfil(p=>({...p,ctaUrl:e.target.value}))} placeholder="URL du CTA (lien diagnostic par défaut)"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".6rem"}}/>
+
+          {/* Urgence */}
+          <div style={{fontSize:".6rem",color:C.or,marginBottom:".2rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>⏰ Message d'urgence (optionnel)</div>
+          <input value={profil.urgence||""} onChange={e=>setProfil(p=>({...p,urgence:e.target.value}))} placeholder="Ex: Offre limitée — seulement 5 places cette semaine"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".6rem"}}/>
+
+          {/* Témoignages */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Témoignages clientes</div>
+            <button onClick={()=>setProfil(p=>({...p,temoignages:[...(p.temoignages||[]),{texte:"",auteur:""}]}))}
+              style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          </div>
+          {(profil.temoignages||[]).map((t,i)=>(
+            <div key={i} style={{background:C.creme,borderRadius:9,padding:".55rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
+              <textarea value={t.texte} onChange={e=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],texte:e.target.value};setProfil(p=>({...p,temoignages:a}));}}
+                placeholder="Texte du témoignage" rows={2}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",resize:"none",marginBottom:".3rem"}}/>
+              <div style={{display:"flex",gap:".3rem"}}>
+                <input value={t.auteur} onChange={e=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],auteur:e.target.value};setProfil(p=>({...p,temoignages:a}));}}
+                  placeholder="Prénom de la cliente" style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".28rem .5rem",fontSize:".7rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+                <button onClick={()=>setProfil(p=>({...p,temoignages:(p.temoignages||[]).filter((_,j)=>j!==i)}))}
+                  style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem"}}>✕</button>
+              </div>
+            </div>
+          ))}
+
+          {/* FAQ */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem",marginTop:".6rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>❓ FAQ</div>
+            <button onClick={()=>setProfil(p=>({...p,faq:[...(p.faq||[]),{q:"",a:""}]}))}
+              style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          </div>
+          {(profil.faq||[]).map((f,i)=>(
+            <div key={i} style={{background:C.creme,borderRadius:9,padding:".55rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
+              <input value={f.q} onChange={e=>{const a=[...(profil.faq||[])];a[i]={...a[i],q:e.target.value};setProfil(p=>({...p,faq:a}));}}
+                placeholder="Question" style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",marginBottom:".3rem"}}/>
+              <div style={{display:"flex",gap:".3rem"}}>
+                <textarea value={f.a} onChange={e=>{const a=[...(profil.faq||[])];a[i]={...a[i],a:e.target.value};setProfil(p=>({...p,faq:a}));}}
+                  placeholder="Réponse" rows={2} style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",resize:"none"}}/>
+                <button onClick={()=>setProfil(p=>({...p,faq:(p.faq||[]).filter((_,j)=>j!==i)}))}
+                  style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem",alignSelf:"flex-start"}}>✕</button>
+              </div>
+            </div>
+          ))}
+
+          <Preview/>
+        </div>
+      )}
+
+      {/* SECTION LIENS */}
+      {activeSection==="liens"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>Liens principaux</div>
+          {[
+            {label:"🛍️ Boutique Mihi",key:"lienBoutique",placeholder:"https://mihi.care/fr/..."},
+            {label:"👑 Rejoindre l'équipe",key:"lienRecrutement",placeholder:"https://mihi.care/fr/..."},
+          ].map(f=>(
+            <div key={f.key} style={{marginBottom:".55rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600}}>{f.label}</div>
+              <input value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            </div>
+          ))}
+
+          {/* Diagnostics multiples */}
+          <div style={{height:1,background:C.pale,margin:"1rem 0"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase"}}>✨ Liens Diagnostics</div>
+            <button onClick={()=>setProfil(p=>({...p,liensDiag:[...(p.liensDiag||[]),{label:"",url:""}]}))}
+              style={{background:C.rose,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          </div>
+          {(profil.liensDiag||[{label:"✨ Faire mon diagnostic",url:profil.lienDiag||""}]).map((d,i)=>(
+            <div key={i} style={{display:"flex",gap:".3rem",marginBottom:".35rem",alignItems:"center"}}>
+              <input value={d.label} onChange={e=>{const a=[...(profil.liensDiag||[])];a[i]={...a[i],label:e.target.value};setProfil(p=>({...p,liensDiag:a}));}}
+                placeholder="Label ex: Diagnostic Skincare"
+                style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+              <input value={d.url} onChange={e=>{const a=[...(profil.liensDiag||[])];a[i]={...a[i],url:e.target.value};setProfil(p=>({...p,liensDiag:a}));}}
+                placeholder="URL https://..."
+                style={{flex:2,border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+              <button onClick={()=>setProfil(p=>({...p,liensDiag:(p.liensDiag||[]).filter((_,j)=>j!==i)}))}
+                style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem",flexShrink:0}}>✕</button>
+            </div>
+          ))}
+
+          {/* Liens bonus */}
+          <div style={{height:1,background:C.pale,margin:"1rem 0"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".6rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase"}}>Liens bonus</div>
+            <button onClick={addLienBonus} style={{background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".25rem .6rem",fontSize:".68rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          </div>
+          {(profil.liensBonusLabel||[]).map((_,i)=>(
+            <div key={i} style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".5rem",border:`1px solid ${C.pale}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:".35rem"}}>
+                <div style={{fontSize:".62rem",fontWeight:700,color:C.gris}}>Lien bonus {i+1}</div>
+                <button onClick={()=>removeLienBonus(i)} style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".7rem"}}>✕</button>
+              </div>
+              <input value={profil.liensBonusLabel?.[i]||""} onChange={e=>{const a=[...(profil.liensBonusLabel||[])];a[i]=e.target.value;setProfil(p=>({...p,liensBonusLabel:a}));}}
+                placeholder="Label du bouton" style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .55rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".3rem"}}/>
+              <input value={profil.liensBonusUrl?.[i]||""} onChange={e=>{const a=[...(profil.liensBonusUrl||[])];a[i]=e.target.value;setProfil(p=>({...p,liensBonusUrl:a}));}}
+                placeholder="URL https://..." style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .55rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".3rem"}}/>
+              <input value={profil.liensBonusPhoto?.[i]||""} onChange={e=>{const a=[...(profil.liensBonusPhoto||[])];a[i]=e.target.value;setProfil(p=>({...p,liensBonusPhoto:a}));}}
+                placeholder="Photo miniature (URL optionnel)" style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .55rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* SECTION PHOTOS */}
+      {activeSection==="photos"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>Galerie photos</div>
+          <p style={{fontSize:".7rem",color:C.gris,lineHeight:1.6,marginBottom:".75rem"}}>
+            Ajoute des photos. Tu peux coller une URL ou utiliser les photos de ta galerie (partage → copier le lien).
+          </p>
+          {Array.from({length:5},(_,i)=>(
+            <div key={i} style={{display:"flex",gap:".5rem",alignItems:"center",marginBottom:".4rem"}}>
+              <div style={{width:52,height:52,borderRadius:8,background:C.creme,border:`1px solid ${C.pale}`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}
+                onClick={()=>{
+                  // Ouvrir input file caché
+                  document.getElementById(`photo-input-${i}`)?.click();
+                }}>
+                {profil.photos?.[i]
+                  ?<img src={profil.photos[i]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                  :<div style={{textAlign:"center"}}><div style={{fontSize:"1.2rem"}}>📷</div><div style={{fontSize:".5rem",color:C.gris}}>Tap</div></div>
+                }
+              </div>
+              <input value={profil.photos?.[i]||""} onChange={e=>{const a=[...(profil.photos||["","","","",""])];a[i]=e.target.value;setProfil(p=>({...p,photos:a}));}}
+                placeholder={`URL photo ${i+1}`}
+                style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".38rem .55rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+              {profil.photos?.[i]&&<button onClick={()=>{const a=[...(profil.photos||[])];a[i]="";setProfil(p=>({...p,photos:a}));}} style={{background:"none",border:"none",color:C.gris,cursor:"pointer",flexShrink:0}}>✕</button>}
+            </div>
+          ))}
+          {(profil.photos||[]).some(p=>p)&&<Preview/>}
+        </div>
+      )}
+
+      {/* SECTION BANNIÈRE */}
+      {activeSection==="banniere"&&(
+        <div>
+          {/* Bannière globale admin */}
+          {banniereGlobale?.actif&&banniereGlobale?.texte&&(
+            <div style={{background:C.or+"15",border:`1px solid ${C.or}`,borderRadius:10,padding:".75rem",marginBottom:".85rem"}}>
+              <div style={{fontSize:".6rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".3rem"}}>📢 Bannière équipe (de Melissa)</div>
+              <div style={{fontSize:".78rem",color:C.brun,marginBottom:".5rem"}}>{banniereGlobale.texte}</div>
+              <label style={{display:"flex",alignItems:"center",gap:".5rem",cursor:"pointer"}}>
+                <input type="checkbox" checked={profil.showBanniere!==false} onChange={e=>setProfil(p=>({...p,showBanniere:e.target.checked}))}/>
+                <span style={{fontSize:".74rem",color:C.brun,fontWeight:600}}>Afficher sur ma page</span>
+              </label>
+            </div>
+          )}
+
+          {/* Bannière personnelle */}
+          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>✨ Ma bannière personnelle</div>
+            <input value={profil.bannierePersoTexte||""} onChange={e=>setProfil(p=>({...p,bannierePersoTexte:e.target.value}))}
+              placeholder="Ex: 🎉 Promo -15% ce weekend seulement !"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+            <input value={profil.bannierePersoLien||""} onChange={e=>setProfil(p=>({...p,bannierePersoLien:e.target.value}))}
+              placeholder="Lien optionnel (https://...)"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+            <div style={{display:"flex",gap:".75rem",alignItems:"center",marginBottom:".5rem"}}>
+              <div style={{fontSize:".7rem",color:C.gris}}>Couleur :</div>
+              <input type="color" value={profil.bannierePersoBg||"#C49A8A"} onChange={e=>setProfil(p=>({...p,bannierePersoBg:e.target.value}))}
+                style={{width:36,height:30,border:"none",borderRadius:6,cursor:"pointer"}}/>
+            </div>
+            <label style={{display:"flex",alignItems:"center",gap:".5rem",cursor:"pointer"}}>
+              <input type="checkbox" checked={!!profil.bannierePersoActif} onChange={e=>setProfil(p=>({...p,bannierePersoActif:e.target.checked}))}/>
+              <span style={{fontSize:".74rem",color:C.brun,fontWeight:600}}>Activer ma bannière personnelle</span>
+            </label>
+          </div>
+
+          {(profil.bannierePersoActif&&profil.bannierePersoTexte)||(banniereGlobale?.actif&&profil.showBanniere!==false)&&(
+            <div style={{marginTop:"1rem"}}><Preview/></div>
+          )}
+        </div>
+      )}
+
+      {/* Bouton sauvegarder */}
+      <div style={{marginTop:"1.2rem"}}>
+        <button onClick={save} disabled={saving}
+          style={{width:"100%",background:saved?C.vert:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".75rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",transition:"background .3s"}}>
+          {saving?"Sauvegarde...":saved?"✅ Sauvegardé !":"Sauvegarder ma page"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── FORMATION PRODUITS ───────────────────────────────────────────────────────
+const CATEGORIES_PRODUITS = [
+  {id:"parfum",        label:"Parfum",                  icon:"🌸", color:"#9B59B6"},
+  {id:"makeup",        label:"Maquillage",               icon:"💄", color:"#E91E8C"},
+  {id:"complement",    label:"Compléments alimentaires", icon:"💊", color:"#27AE60"},
+  {id:"poids",         label:"Perte de poids",           icon:"⚖️", color:"#E67E22"},
+  {id:"skincare",      label:"Skincare",                 icon:"✨", color:"#C49A8A"},
+  {id:"cheveux",       label:"Soins cheveux",            icon:"💇", color:"#8E44AD"},
+  {id:"corpsoin",      label:"Soins corps",              icon:"🧴", color:"#3498DB"},
+  {id:"entretien",     label:"Produits d'entretien",     icon:"🏠", color:"#7F8C8D"},
+  {id:"problematiques",label:"Par Problématiques",       icon:"🎯", color:"#C0392B"},
+];
+
+// Sous-thèmes de la catégorie Problématiques
+const PROBLEMATIQUES_THEMES = [
+  {id:"anti_age",       label:"Anti-âge",            icon:"⏳", color:"#8E44AD"},
+  {id:"acne",           label:"Acné / Imperfections", icon:"🌿", color:"#27AE60"},
+  {id:"peau_seche",     label:"Peau sèche",           icon:"💧", color:"#3498DB"},
+  {id:"peau_grasse",    label:"Peau grasse",          icon:"🫧", color:"#1ABC9C"},
+  {id:"eclat",          label:"Éclat / Teint terne",  icon:"☀️", color:"#F39C12"},
+  {id:"cernes",         label:"Cernes / Fatigue",     icon:"🌙", color:"#6C3483"},
+  {id:"cellulite",      label:"Cellulite / Fermeté",  icon:"💪", color:"#E67E22"},
+  {id:"cheveux_abimes", label:"Cheveux abîmés",        icon:"💇", color:"#5D6D7E"},
+  {id:"perte_cheveux",  label:"Perte de cheveux",     icon:"🔄", color:"#C0392B"},
+  {id:"stress",         label:"Stress / Sommeil",     icon:"😴", color:"#2980B9"},
+  {id:"digestion",      label:"Digestion",            icon:"🌱", color:"#27AE60"},
+  {id:"immunite",       label:"Immunité",             icon:"🛡️", color:"#E74C3C"},
+  {id:"energie",        label:"Énergie / Vitalité",   icon:"⚡", color:"#F1C40F"},
+  {id:"minceur",        label:"Minceur globale",      icon:"🎯", color:"#E67E22"},
+];
+
+function FormationProduitsTab(){
+  const {lang} = useLang();
+  const[produits,setProduits]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[catActive,setCatActive]=useState("parfum");
+  const[produitOuvert,setProduitOuvert]=useState(null); // {id, cat}
+  const[ongletProduit,setOngletProduit]=useState("texte");
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","formation_produits"));
+        if(snap.exists()) setProduits(snap.data().produits||{});
+      }catch{}
+      setLoading(false);
+    })();
+  },[]);
+
+  const cat=CATEGORIES_PRODUITS.find(c=>c.id===catActive)||CATEGORIES_PRODUITS[0];
+  const[themeActif,setThemeActif]=useState(null);
+  const listeCat=produits[catActive]||[];
+  // Pour problématiques : filtrer par thème si sélectionné
+  const listeAffichee=catActive==="problematiques"&&themeActif
+    ?listeCat.filter(p=>p.theme===themeActif)
+    :listeCat;
+  const produitActifRaw=produitOuvert?listeCat.find(p=>p.id===produitOuvert.id):null;
+  const produitActif=useTranslatedProduit(produitActifRaw);
+
+  if(loading)return <div style={{textAlign:"center",padding:"2rem",color:C.gris}}>Chargement...</div>;
+
+  // Vue détail produit
+  if(produitActif){
+    return(
+      <div>
+        {/* Header produit */}
+        <button onClick={()=>{setProduitOuvert(null);setOngletProduit("texte");}}
+          style={{background:"none",border:"none",color:C.gris,fontSize:".75rem",cursor:"pointer",fontFamily:"inherit",marginBottom:"1rem",padding:0,display:"flex",alignItems:"center",gap:".3rem"}}>
+          ← Retour {cat.label}
+        </button>
+
+        {/* Image avec titre superposé */}
+        <div style={{position:"relative",borderRadius:14,overflow:"hidden",marginBottom:"1rem",minHeight:produitActif.image?200:80}}>
+          {produitActif.image
+            ?<img src={produitActif.image} alt={produitActif.titre} style={{width:"100%",maxHeight:240,objectFit:"cover",display:"block"}}/>
+            :<div style={{background:`linear-gradient(135deg,${cat.color},${cat.color}88)`,height:120}}/>
+          }
+          <div style={{position:"absolute",top:0,left:0,right:0,padding:"1rem",background:"linear-gradient(180deg,rgba(0,0,0,.55) 0%,transparent 100%)"}}>
+            <div style={{fontSize:".55rem",fontWeight:700,color:"rgba(255,255,255,.8)",letterSpacing:".12em",textTransform:"uppercase",marginBottom:".2rem"}}>{cat.icon} {cat.label}</div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"white",lineHeight:1.35}}>{produitActif.titre}</div>
+          </div>
+        </div>
+
+        {/* Onglets Texte / Vidéo */}
+        <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
+          {[{id:"texte",label:"📄 Texte"},{id:"video",label:"▶ Vidéo"}].map(o=>(
+            <button key={o.id} onClick={()=>setOngletProduit(o.id)}
+              style={{flex:1,padding:".5rem",fontSize:".78rem",fontWeight:600,borderRadius:10,border:`1.5px solid ${ongletProduit===o.id?cat.color:C.pale}`,background:ongletProduit===o.id?cat.color:C.blanc,color:ongletProduit===o.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Contenu */}
+        {ongletProduit==="texte"&&(
+          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
+            {produitActif.description
+              ?<div style={{fontSize:".82rem",color:C.texte,lineHeight:1.75,whiteSpace:"pre-wrap"}}>{produitActif.description}</div>
+              :<div style={{textAlign:"center",padding:"1.5rem",color:C.gris,fontSize:".75rem",fontStyle:"italic"}}>Aucun texte pour ce produit.</div>
+            }
+          </div>
+        )}
+
+        {ongletProduit==="video"&&(
+          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
+            {produitActif.videoUrl
+              ?<a href={produitActif.videoUrl} target="_blank" rel="noopener noreferrer"
+                  style={{display:"flex",alignItems:"center",gap:".75rem",background:`linear-gradient(135deg,${cat.color},${cat.color}aa)`,borderRadius:10,padding:".85rem 1rem",textDecoration:"none"}}>
+                  <div style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.3rem",flexShrink:0}}>▶</div>
+                  <div>
+                    <div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:"white"}}>{produitActif.titreVideo||"Voir la vidéo"}</div>
+                    <div style={{fontSize:".65rem",color:"rgba(255,255,255,.75)",marginTop:".15rem"}}>Cliquer pour regarder</div>
+                  </div>
+                </a>
+              :<div style={{textAlign:"center",padding:"1.5rem",color:C.gris,fontSize:".75rem",fontStyle:"italic"}}>
+                🎬 Vidéo à venir prochainement
+              </div>
+            }
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Vue liste
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".75rem"}}>
+        Formation <em style={{fontStyle:"italic",color:C.rose}}>Produits</em>
+      </div>
+
+      {/* Catégories */}
+      <div style={{display:"flex",gap:".3rem",overflowX:"auto",paddingBottom:".3rem",marginBottom:"1rem"}}>
+        {CATEGORIES_PRODUITS.map(c=>(
+          <button key={c.id} onClick={()=>{setCatActive(c.id);setProduitOuvert(null);}}
+            style={{flexShrink:0,padding:".42rem .75rem",fontSize:".7rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${catActive===c.id?c.color:C.pale}`,background:catActive===c.id?c.color:C.blanc,color:catActive===c.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            {c.icon} {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Sous-thèmes pour Problématiques */}
+      {catActive==="problematiques"&&(
+        <div style={{marginBottom:".75rem"}}>
+          <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:".4rem"}}>Filtrer par problématique</div>
+          <div style={{display:"flex",gap:".25rem",flexWrap:"wrap"}}>
+            <button onClick={()=>setThemeActif(null)}
+              style={{padding:".28rem .6rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${!themeActif?"#C0392B":C.pale}`,background:!themeActif?"#C0392B":C.blanc,color:!themeActif?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+              Tout voir ({listeCat.length})
+            </button>
+            {PROBLEMATIQUES_THEMES.filter(t=>listeCat.some(p=>p.theme===t.id)).map(t=>(
+              <button key={t.id} onClick={()=>setThemeActif(themeActif===t.id?null:t.id)}
+                style={{padding:".28rem .6rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${themeActif===t.id?t.color:C.pale}`,background:themeActif===t.id?t.color:C.blanc,color:themeActif===t.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                {t.icon} {t.label} ({listeCat.filter(p=>p.theme===t.id).length})
+              </button>
+            ))}
+            {/* Afficher les thèmes vides en gris si tous les thèmes */}
+            {PROBLEMATIQUES_THEMES.filter(t=>!listeCat.some(p=>p.theme===t.id)).map(t=>(
+              <span key={t.id} style={{padding:".28rem .6rem",fontSize:".62rem",borderRadius:20,border:`1px solid ${C.pale}`,color:C.pale,whiteSpace:"nowrap"}}>
+                {t.icon} {t.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Grille produits */}
+      {listeAffichee.length===0
+        ?<div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem",fontStyle:"italic"}}>
+            {catActive==="problematiques"&&themeActif?"Aucun produit pour cette problématique.":"Aucun produit dans cette catégorie pour l'instant."}
+          </div>
+        :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".65rem"}}>
+          {listeAffichee.map(p=>(
+            <div key={p.id} onClick={()=>{setProduitOuvert({id:p.id,cat:catActive});setOngletProduit("texte");}}
+              style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,overflow:"hidden",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,.05)",transition:"transform .15s"}}
+              onTouchStart={e=>e.currentTarget.style.transform="scale(.97)"}
+              onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}>
+              {/* Image */}
+              <div style={{position:"relative",height:110,background:`linear-gradient(135deg,${cat.color}30,${cat.color}15)`,overflow:"hidden"}}>
+                {p.image
+                  ?<img src={p.image} alt={p.titre} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                  :<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",fontSize:"2.5rem"}}>{cat.icon}</div>
+                }
+                {/* Titre superposé en haut à gauche */}
+                <div style={{position:"absolute",top:0,left:0,right:0,padding:".5rem .6rem",background:"linear-gradient(180deg,rgba(0,0,0,.6) 0%,transparent 100%)"}}>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:".78rem",fontWeight:700,color:"white",lineHeight:1.3,textShadow:"0 1px 3px rgba(0,0,0,.5)"}}>{p.titre}</div>
+                </div>
+                {/* Badge vidéo */}
+                {p.videoUrl&&<div style={{position:"absolute",bottom:4,right:4,background:"rgba(0,0,0,.5)",borderRadius:20,padding:".1rem .35rem",fontSize:".55rem",color:"white"}}>▶ Vidéo</div>}
+              </div>
+              {/* Extrait */}
+              {p.description&&<div style={{padding:".5rem .65rem",fontSize:".68rem",color:C.gris,lineHeight:1.5}}>
+                {p.description.slice(0,80)}{p.description.length>80?"...":""}
+              </div>}
+            </div>
+          ))}
+        </div>
+      }
+    </div>
+  );
+}
+
+// Admin Formation Produits
+// Composant upload photo — sélection depuis galerie OU URL
+function UploadPhoto({value, onChange, label="Photo", folder="produits"}){
+  const[uploading,setUploading]=useState(false);
+  const[preview,setPreview]=useState(value||"");
+
+  useEffect(()=>setPreview(value||""),[value]);
+
+  const handleFile=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    setUploading(true);
+    try{
+      // Preview immédiat
+      const reader=new FileReader();
+      reader.onload=ev=>setPreview(ev.target.result);
+      reader.readAsDataURL(file);
+      // Upload Firebase Storage
+      const path=`${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g,"_")}`;
+      const sRef=storageRef(storage,path);
+      await uploadBytes(sRef,file);
+      const url=await getDownloadURL(sRef);
+      onChange(url);
+    }catch(err){
+      alert("Erreur upload : "+err.message);
+    }
+    setUploading(false);
+  };
+
+  return(
+    <div style={{marginBottom:".55rem"}}>
+      <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{label}</div>
+      <div style={{display:"flex",gap:".4rem",alignItems:"flex-start"}}>
+        {preview&&<img src={preview} alt="" style={{width:52,height:52,borderRadius:8,objectFit:"cover",flexShrink:0,border:`1px solid ${C.pale}`}}/>}
+        <div style={{flex:1}}>
+          <label style={{display:"block",background:uploading?"#aaa":C.brun,color:"white",borderRadius:8,padding:".38rem .65rem",fontSize:".72rem",fontWeight:600,textAlign:"center",cursor:uploading?"default":"pointer",fontFamily:"inherit",marginBottom:".25rem"}}>
+            {uploading?"⏳ Envoi en cours...":"📷 Choisir une photo"}
+            <input type="file" accept="image/*" onChange={handleFile} style={{display:"none"}} disabled={uploading}/>
+          </label>
+          <input value={value||""} onChange={e=>{onChange(e.target.value);setPreview(e.target.value);}} placeholder="...ou coller une URL"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".32rem .5rem",fontSize:".7rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Composant global — ne jamais définir à l'intérieur d'un autre composant
+function FormField({label, value, onChange, placeholder, textarea=false, type="text"}){
+  return(
+    <div style={{marginBottom:".5rem"}}>
+      <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{label}</div>
+      {textarea
+        ?<textarea value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={5}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",lineHeight:1.6}}/>
+        :<input type={type} value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+      }
+    </div>
+  );
+}
+
+function AdminFormationProduits(){
+  const[produits,setProduits]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[catActive,setCatActive]=useState("parfum");
+  const[showForm,setShowForm]=useState(false);
+  const[editId,setEditId]=useState(null);
+  const[form,setForm]=useState({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:""});
+  const[saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","formation_produits"));
+        if(snap.exists()) setProduits(snap.data().produits||{});
+      }catch{}
+      setLoading(false);
+    })();
+  },[]);
+
+  const save=async(nextProduits)=>{
+    setSaving(true);
+    try{await setDoc(doc(db,"admin","formation_produits"),{produits:nextProduits});setProduits(nextProduits);}catch{}
+    setSaving(false);
+  };
+
+  const ajouter=async()=>{
+    if(!form.titre.trim())return;
+    const cat=catActive;
+    const listeCat=produits[cat]||[];
+    let next;
+    if(editId){
+      next={...produits,[cat]:listeCat.map(p=>p.id===editId?{...p,...form}:p)};
+    } else {
+      next={...produits,[cat]:[...listeCat,{id:`p${Date.now()}`,...form}]};
+    }
+    await save(next);
+    setForm({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:""});
+    setShowForm(false);setEditId(null);
+  };
+
+  const supprimer=async(cat,id)=>{
+    if(!window.confirm("Supprimer ce produit ?"))return;
+    await save({...produits,[cat]:(produits[cat]||[]).filter(p=>p.id!==id)});
+  };
+
+  if(loading)return null;
+
+  const listeCat=produits[catActive]||[];
+
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".75rem"}}>🧴 Formation Produits — Gestion du contenu</div>
+
+      {/* Catégories */}
+      <div style={{display:"flex",gap:".25rem",overflowX:"auto",marginBottom:".75rem",paddingBottom:".2rem"}}>
+        {CATEGORIES_PRODUITS.map(c=>(
+          <button key={c.id} onClick={()=>{setCatActive(c.id);setShowForm(false);setEditId(null);}}
+            style={{flexShrink:0,padding:".3rem .55rem",fontSize:".65rem",fontWeight:600,borderRadius:8,border:`1.5px solid ${catActive===c.id?c.color:C.pale}`,background:catActive===c.id?c.color:C.blanc,color:catActive===c.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            {c.icon} {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Formulaire */}
+      {showForm&&(
+        <div style={{background:C.creme,borderRadius:10,padding:".85rem",marginBottom:".75rem",border:`1px solid ${C.pale}`}}>
+          <div style={{fontSize:".65rem",fontWeight:700,color:C.brun,marginBottom:".6rem"}}>{editId?"✏️ Modifier":"+ Nouveau produit"} — {CATEGORIES_PRODUITS.find(c=>c.id===catActive)?.label}</div>
+          <FormField label="Titre du produit *" value={form.titre} onChange={v=>setForm(p=>({...p,titre:v}))} placeholder="Ex: Eau de parfum Rose Dorée"/>
+          <UploadPhoto label="Image du produit" value={form.image} onChange={v=>setForm(p=>({...p,image:v}))} folder="produits"/>
+          {catActive==="problematiques"&&(
+            <div style={{marginBottom:".5rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>🎯 Problématique</div>
+              <select value={form.theme} onChange={e=>setForm(p=>({...p,theme:e.target.value}))}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
+                <option value="">— Choisir une problématique —</option>
+                {PROBLEMATIQUES_THEMES.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+              </select>
+            </div>
+          )}
+          <FormField label="Texte / Description" value={form.description} onChange={v=>setForm(p=>({...p,description:v}))} placeholder="Composition, bienfaits, conseils d'utilisation..." textarea={true}/>
+          <FormField label="Lien vidéo (YouTube, Zoom...)" value={form.videoUrl} onChange={v=>setForm(p=>({...p,videoUrl:v}))} placeholder="https://..."/>
+          <FormField label="Titre de la vidéo" value={form.titreVideo} onChange={v=>setForm(p=>({...p,titreVideo:v}))} placeholder="Ex: Présentation de la gamme"/>
+          <div style={{display:"flex",gap:".4rem",marginTop:".25rem"}}>
+            <button onClick={ajouter} disabled={saving||!form.titre.trim()}
+              style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".48rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+              {saving?"Sauvegarde...":editId?"✓ Modifier":"✓ Ajouter"}
+            </button>
+            <button onClick={()=>{setShowForm(false);setEditId(null);setForm({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:""}); }}
+              style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:8,padding:".48rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!showForm&&<button onClick={()=>setShowForm(true)}
+        style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".48rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+        + Ajouter un produit dans {CATEGORIES_PRODUITS.find(c=>c.id===catActive)?.label}
+      </button>}
+
+      {/* Liste existante */}
+      {listeCat.map(p=>(
+        <div key={p.id} style={{display:"flex",alignItems:"center",gap:".5rem",background:C.creme,borderRadius:9,padding:".5rem .75rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
+          {p.image&&<img src={p.image} alt="" style={{width:40,height:40,borderRadius:7,objectFit:"cover",flexShrink:0}}/>}
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.titre}</div>
+            <div style={{fontSize:".6rem",color:C.gris}}>{p.videoUrl?"▶ Vidéo · ":""}{p.theme?`🎯 ${PROBLEMATIQUES_THEMES.find(t=>t.id===p.theme)?.label||p.theme} · `:""}{p.description?.slice(0,40)||"Pas de texte"}{p.description?.length>40?"...":""}</div>
+          </div>
+          <button onClick={()=>{setEditId(p.id);setForm({titre:p.titre||"",image:p.image||"",description:p.description||"",videoUrl:p.videoUrl||"",titreVideo:p.titreVideo||"",theme:p.theme||""});setShowForm(true);}}
+            style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .4rem",fontSize:".62rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>✏️</button>
+          <button onClick={()=>supprimer(catActive,p.id)}
+            style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .4rem",fontSize:".62rem",color:"#B04040",cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>✕</button>
+        </div>
+      ))}
+      {listeCat.length===0&&<div style={{textAlign:"center",fontSize:".72rem",color:C.gris,padding:".5rem",fontStyle:"italic"}}>Aucun produit — ajoute le premier !</div>}
+    </div>
+  );
+}
+
+// ── DREAM BOARD ───────────────────────────────────────────────────────────────
+function DreamBoardWidget({uid}){
+  const[dreams,setDreams]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[expanded,setExpanded]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(snap.exists()&&snap.data()["db-dreamboard"]){
+          setDreams(JSON.parse(snap.data()["db-dreamboard"]));
+        }
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  if(loading||dreams.length===0) return null;
+
+  const visibles=expanded?dreams:dreams.slice(0,3);
+
+  return(
+    <div style={{marginBottom:"1rem"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or}}>✨ Mon Dream Board</div>
+        <button onClick={()=>setExpanded(e=>!e)} style={{background:"none",border:"none",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+          {expanded?"Réduire":"Voir tout"}
+        </button>
+      </div>
+      <div style={{display:"flex",gap:".5rem",overflowX:expanded?"visible":"auto",flexWrap:expanded?"wrap":"nowrap",paddingBottom:".25rem"}}>
+        {visibles.map((d,i)=>(
+          <div key={i} style={{flexShrink:0,width:expanded?"calc(33% - .35rem)":100,height:100,borderRadius:12,overflow:"hidden",position:"relative",background:`linear-gradient(135deg,${C.brun},${C.brun2})`}}>
+            {d.image
+              ?<img src={d.image} alt={d.titre} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              :<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",fontSize:"2rem"}}>{d.emoji||"🌟"}</div>
+            }
+            <div style={{position:"absolute",bottom:0,left:0,right:0,padding:".3rem .4rem",background:"linear-gradient(0deg,rgba(0,0,0,.65),transparent)"}}>
+              <div style={{fontSize:".58rem",fontWeight:700,color:"white",lineHeight:1.2}}>{d.titre}</div>
+            </div>
+          </div>
+        ))}
+        {dreams.length>3&&!expanded&&(
+          <div onClick={()=>setExpanded(true)} style={{flexShrink:0,width:100,height:100,borderRadius:12,background:C.brun+"20",border:`1.5px dashed ${C.pale}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexDirection:"column",gap:".2rem"}}>
+            <div style={{fontSize:"1.2rem"}}>+{dreams.length-3}</div>
+            <div style={{fontSize:".58rem",color:C.gris}}>rêves</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DreamBoardTab({uid}){
+  const[dreams,setDreams]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[showForm,setShowForm]=useState(false);
+  const[editIdx,setEditIdx]=useState(null);
+  const[form,setForm]=useState({titre:"",description:"",emoji:"🌟",image:"",categorie:"vie"});
+  const[saving,setSaving]=useState(false);
+  const[zoom,setZoom]=useState(null); // reve zoomé en plein écran
+  const[vue,setVue]=useState("mosaique"); // mosaique | liste
+
+  const CATEGORIES=[
+    {id:"vie",label:"✨ Vie de rêve",color:C.or},
+    {id:"finance",label:"💰 Finances",color:C.vert},
+    {id:"famille",label:"👨‍👩‍👧 Famille",color:C.rose},
+    {id:"voyage",label:"✈️ Voyages",color:"#3498DB"},
+    {id:"sante",label:"💪 Santé",color:"#27AE60"},
+    {id:"maison",label:"🏠 Maison",color:"#E67E22"},
+    {id:"business",label:"👑 Business",color:C.brun},
+    {id:"perso",label:"🌸 Personnel",color:C.lilas},
+  ];
+  const EMOJIS=["🌟","🏠","✈️","💰","👑","💪","🌸","❤️","🎯","🚀","🌊","🏖️","💎","🎨","📚","🎵","🐾","🌺","🍀","🦋","🏡","🌍","💫","🌈","🔑","🎭","🏆","🌙"];
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(snap.exists()&&snap.data()["db-dreamboard"])
+          setDreams(JSON.parse(snap.data()["db-dreamboard"]));
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  const saveDreams=async(next)=>{
+    setSaving(true);
+    try{ await setDoc(doc(db,"users",uid),{"db-dreamboard":JSON.stringify(next)},{merge:true}); setDreams(next); }catch{}
+    setSaving(false);
+  };
+
+  const addDream=async()=>{
+    if(!form.titre.trim())return;
+    let next;
+    if(editIdx!==null){ next=dreams.map((d,i)=>i===editIdx?{...form}:d); }
+    else{ next=[...dreams,{...form,date:new Date().toISOString().slice(0,10)}]; }
+    await saveDreams(next);
+    setForm({titre:"",description:"",emoji:"🌟",image:"",categorie:"vie"});
+    setShowForm(false);setEditIdx(null);
+  };
+
+  const del=(idx)=>{ if(window.confirm("Supprimer ce rêve ?")) saveDreams(dreams.filter((_,i)=>i!==idx)); };
+  const toggleRealise=(idx)=>{ saveDreams(dreams.map((d,i)=>i===idx?{...d,realise:!d.realise}:d)); };
+
+  if(loading)return null;
+
+  // Popup zoom
+  if(zoom!==null){
+    const d=dreams[zoom];
+    const cat=CATEGORIES.find(c=>c.id===d.categorie)||CATEGORIES[0];
+    return(
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.92)",zIndex:1000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}
+        onClick={()=>setZoom(null)}>
+        <div style={{maxWidth:480,width:"90%"}} onClick={e=>e.stopPropagation()}>
+          {d.image
+            ?<img src={d.image} alt={d.titre} style={{width:"100%",borderRadius:20,objectFit:"cover",maxHeight:"55vh",display:"block"}}/>
+            :<div style={{height:220,borderRadius:20,background:`linear-gradient(135deg,${cat.color},${C.brun})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"5rem"}}>{d.emoji}</div>
+          }
+          <div style={{background:"white",borderRadius:"0 0 20px 20px",padding:"1.1rem 1.3rem"}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".4rem"}}>{d.titre}</div>
+            {d.description&&<div style={{fontSize:".8rem",color:C.gris,lineHeight:1.7,marginBottom:".6rem"}}>{d.description}</div>}
+            <div style={{display:"flex",gap:".4rem",marginTop:".5rem"}}>
+              <button onClick={()=>toggleRealise(zoom)}
+                style={{flex:1,background:d.realise?C.vert:cat.color,color:"white",border:"none",borderRadius:9,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                {d.realise?"↩ En cours":"🎉 Réalisé !"}
+              </button>
+              <button onClick={()=>{setZoom(null);setEditIdx(zoom);setForm({titre:d.titre,description:d.description||"",emoji:d.emoji||"🌟",image:d.image||"",categorie:d.categorie||"vie"});setShowForm(true);}}
+                style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:9,padding:".5rem .9rem",fontSize:".78rem",cursor:"pointer"}}>✏️</button>
+              <button onClick={()=>{del(zoom);setZoom(null);}}
+                style={{background:"#FEE2E2",border:"none",borderRadius:9,padding:".5rem .9rem",fontSize:".78rem",cursor:"pointer",color:"#B04040"}}>🗑️</button>
+              <button onClick={()=>setZoom(null)}
+                style={{background:C.pale,border:"none",borderRadius:9,padding:".5rem .9rem",fontSize:".78rem",cursor:"pointer"}}>✕</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
+        Mon <em style={{fontStyle:"italic",color:C.or}}>Dream Board</em>
+      </div>
+      <p style={{fontSize:".74rem",color:C.gris,marginBottom:".75rem",lineHeight:1.65}}>
+        Visualise tes rêves chaque jour. Ce que l'on voit clairement, on l'attire à soi. ✨
+      </p>
+
+      {/* Barre d'actions */}
+      <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
+        <button onClick={()=>{setShowForm(true);setEditIdx(null);setForm({titre:"",description:"",emoji:"🌟",image:"",categorie:"vie"});}}
+          style={{flex:1,background:`linear-gradient(135deg,${C.brun},${C.brun2})`,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          + Ajouter un rêve
+        </button>
+        <button onClick={()=>setVue(v=>v==="mosaique"?"liste":"mosaique")}
+          style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .75rem",fontSize:".78rem",cursor:"pointer"}}>
+          {vue==="mosaique"?"☰":"⊞"}
+        </button>
+      </div>
+
+      {/* Formulaire */}
+      {showForm&&(
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,padding:"1rem",marginBottom:"1rem"}}>
+          <div style={{fontSize:".68rem",fontWeight:700,color:C.brun,marginBottom:".65rem"}}>{editIdx!==null?"✏️ Modifier":"✨ Nouveau rêve"}</div>
+
+          {/* Upload photo en premier — visuellement prioritaire */}
+          <UploadPhoto label="📸 Photo d'inspiration (optionnel)" value={form.image} onChange={v=>setForm(p=>({...p,image:v}))} folder="dreamboard"/>
+
+          {/* Aperçu immédiat */}
+          {form.image&&(
+            <div style={{borderRadius:12,overflow:"hidden",height:140,marginBottom:".6rem",position:"relative"}}>
+              <img src={form.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              <button onClick={()=>setForm(p=>({...p,image:""}))} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.5)",border:"none",borderRadius:20,color:"white",fontSize:".7rem",padding:".2rem .5rem",cursor:"pointer"}}>✕ Retirer</button>
+            </div>
+          )}
+
+          {/* Emoji (affiché seulement si pas de photo) */}
+          {!form.image&&(
+            <div style={{marginBottom:".5rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Emoji (si pas de photo)</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:".25rem"}}>
+                {EMOJIS.map(em=>(
+                  <button key={em} onClick={()=>setForm(p=>({...p,emoji:em}))}
+                    style={{width:32,height:32,borderRadius:8,border:`2px solid ${form.emoji===em?C.brun:C.pale}`,background:form.emoji===em?C.brun+"15":"white",fontSize:"1rem",cursor:"pointer"}}>
+                    {em}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{marginBottom:".5rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Titre *</div>
+            <input value={form.titre} onChange={e=>setForm(p=>({...p,titre:e.target.value}))} placeholder="Ex: Ma maison de rêve à Bali"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          </div>
+
+          <div style={{marginBottom:".5rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Description (facultatif)</div>
+            <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Décris ce rêve en détail..." rows={2}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical"}}/>
+          </div>
+
+          <div style={{marginBottom:".65rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Catégorie</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:".25rem"}}>
+              {CATEGORIES.map(cat=>(
+                <button key={cat.id} onClick={()=>setForm(p=>({...p,categorie:cat.id}))}
+                  style={{padding:".25rem .5rem",fontSize:".65rem",borderRadius:8,border:`1.5px solid ${form.categorie===cat.id?cat.color:C.pale}`,background:form.categorie===cat.id?cat.color+"20":"white",color:form.categorie===cat.id?cat.color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:".4rem"}}>
+            <button onClick={addDream} disabled={saving||!form.titre.trim()}
+              style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+              {saving?"Sauvegarde...":editIdx!==null?"✓ Modifier":"✓ Ajouter"}
+            </button>
+            <button onClick={()=>{setShowForm(false);setEditIdx(null);}}
+              style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {/* Board vide */}
+      {dreams.length===0&&(
+        <div style={{textAlign:"center",padding:"2.5rem 1rem",background:C.creme,borderRadius:14,border:`1.5px dashed ${C.pale}`}}>
+          <div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>🌟</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",color:C.brun,marginBottom:".3rem"}}>Ton board est vide</div>
+          <div style={{fontSize:".72rem",color:C.gris,lineHeight:1.6}}>Ajoute ta première photo d'inspiration — maison, voyage, famille...<br/>Visualise-la chaque matin pour l'attirer à toi.</div>
+        </div>
+      )}
+
+      {/* VUE MOSAÏQUE */}
+      {vue==="mosaique"&&dreams.length>0&&(
+        <div>
+          {/* Rêves réalisés séparés */}
+          {dreams.filter(d=>!d.realise).length>0&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
+              {dreams.map((d,i)=>{
+                if(d.realise)return null;
+                const cat=CATEGORIES.find(c=>c.id===d.categorie)||CATEGORIES[0];
+                const hasImg=!!d.image;
+                return(
+                  <div key={i} onClick={()=>setZoom(i)}
+                    style={{borderRadius:14,overflow:"hidden",position:"relative",cursor:"pointer",
+                      background:hasImg?"transparent":`linear-gradient(135deg,${cat.color}CC,${C.brun})`,
+                      height:i===0?200:150, // premier rêve plus grand
+                    }}>
+                    {hasImg
+                      ?<img src={d.image} alt={d.titre} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                      :<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",fontSize:i===0?"3.5rem":"2.5rem"}}>{d.emoji||"🌟"}</div>
+                    }
+                    <div style={{position:"absolute",bottom:0,left:0,right:0,padding:".45rem .6rem",background:"linear-gradient(0deg,rgba(0,0,0,.7),transparent)"}}>
+                      <div style={{fontSize:i===0?".82rem":".7rem",fontWeight:700,color:"white",lineHeight:1.2}}>{d.titre}</div>
+                      <div style={{fontSize:".58rem",color:"rgba(255,255,255,.7)"}}>{cat.label.split(" ").slice(1).join(" ")}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {/* Rêves réalisés */}
+          {dreams.filter(d=>d.realise).length>0&&(
+            <div>
+              <div style={{fontSize:".62rem",color:C.vert,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em",marginBottom:".4rem"}}>✅ Réalisés ({dreams.filter(d=>d.realise).length})</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:".4rem"}}>
+                {dreams.map((d,i)=>{
+                  if(!d.realise)return null;
+                  const cat=CATEGORIES.find(c=>c.id===d.categorie)||CATEGORIES[0];
+                  return(
+                    <div key={i} onClick={()=>setZoom(i)}
+                      style={{borderRadius:10,overflow:"hidden",position:"relative",height:80,cursor:"pointer",border:`2px solid ${C.vert}`,opacity:.75}}>
+                      {d.image
+                        ?<img src={d.image} alt={d.titre} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                        :<div style={{background:`linear-gradient(135deg,${cat.color},${C.brun})`,height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.8rem"}}>{d.emoji}</div>
+                      }
+                      <div style={{position:"absolute",bottom:0,left:0,right:0,padding:".2rem .3rem",background:"rgba(0,0,0,.6)"}}>
+                        <div style={{fontSize:".55rem",color:"white",fontWeight:600}}>{d.titre.slice(0,20)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* VUE LISTE */}
+      {vue==="liste"&&dreams.length>0&&dreams.map((d,i)=>{
+        const cat=CATEGORIES.find(c=>c.id===d.categorie)||CATEGORIES[0];
+        return(
+          <div key={i} style={{display:"flex",gap:".65rem",background:d.realise?"#F0FFF4":C.blanc,border:`1px solid ${d.realise?C.vert:C.pale}`,borderRadius:12,padding:".6rem",marginBottom:".4rem",opacity:d.realise?.8:1}}>
+            <div style={{width:60,height:60,borderRadius:10,overflow:"hidden",flexShrink:0,background:`linear-gradient(135deg,${cat.color},${C.brun})`}}>
+              {d.image
+                ?<img src={d.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                :<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",fontSize:"1.8rem"}}>{d.emoji}</div>
+              }
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:".82rem",fontWeight:600,color:C.brun}}>{d.titre}</div>
+              <div style={{fontSize:".6rem",color:cat.color,fontWeight:600}}>{cat.label}</div>
+              {d.description&&<div style={{fontSize:".68rem",color:C.gris,marginTop:".1rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.description}</div>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:".25rem",flexShrink:0}}>
+              <button onClick={()=>toggleRealise(i)} style={{background:"none",border:"none",fontSize:".75rem",cursor:"pointer"}}>{d.realise?"↩":"🎉"}</button>
+              <button onClick={()=>{setEditIdx(i);setForm({titre:d.titre,description:d.description||"",emoji:d.emoji||"🌟",image:d.image||"",categorie:d.categorie||"vie"});setShowForm(true);}} style={{background:"none",border:"none",fontSize:".75rem",cursor:"pointer"}}>✏️</button>
+              <button onClick={()=>del(i)} style={{background:"none",border:"none",fontSize:".75rem",cursor:"pointer",color:"#B04040"}}>✕</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CitationDuJour({uid}){
   const[citations,setCitations]=useState(null);
   const[revealed,setRevealed]=useState(true);
@@ -6087,6 +10571,7 @@ function PowerHourTab({uid, userName, canCreate}){
   const[session,setSession]=useState(null);
   const[loading,setLoading]=useState(true);
   const[message,setMessage]=useState("");
+  const[accepted,setAccepted]=useState(false);
   const DUREE_MIN=20;
 
   const load=async()=>{
@@ -6094,134 +10579,156 @@ function PowerHourTab({uid, userName, canCreate}){
       const snap=await getDoc(doc(db,"equipe","power-hour"));
       if(snap.exists()&&snap.data().startedAt){
         const d=snap.data();
-        const elapsed = Date.now()-d.startedAt;
-        if(elapsed < DUREE_MIN*60000+5*60000){ // garde la session visible 5min après la fin pour le récap
-          setSession(d);
-        } else setSession(null);
+        const elapsed=Date.now()-d.startedAt;
+        if(elapsed < DUREE_MIN*60000+5*60000){ setSession(d); }
+        else setSession(null);
       } else setSession(null);
+      // Charger si l'utilisateur a accepté cette session
+      const accSnap=await getDoc(doc(db,"power-hour-accepts",uid));
+      if(accSnap.exists()&&accSnap.data().sessionStart===snap.data()?.startedAt){
+        setAccepted(true);
+      } else setAccepted(false);
     }catch{}
     setLoading(false);
   };
 
-  useEffect(()=>{
-    load();
-    const t=setInterval(load, 5000);
-    return ()=>clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  useEffect(()=>{ load(); const t=setInterval(load,5000); return()=>clearInterval(t); },[]);
 
   const lancer=async()=>{
-    const nouvelle={startedAt:Date.now(), startedBy:userName, messages:[]};
-    try{ await setDoc(doc(db,"equipe","power-hour"), nouvelle); setSession(nouvelle); }catch{}
+    const nouvelle={startedAt:Date.now(),startedBy:userName,messages:[],accepts:{}};
+    try{ await setDoc(doc(db,"equipe","power-hour"),nouvelle); setSession(nouvelle); }catch{}
+  };
+
+  const accepter=async()=>{
+    if(!session)return;
+    const next={...session,accepts:{...(session.accepts||{}),[uid]:{userName,ts:Date.now()}}};
+    setSession(next);setAccepted(true);
+    try{
+      await setDoc(doc(db,"equipe","power-hour"),next,{merge:true});
+      await setDoc(doc(db,"power-hour-accepts",uid),{sessionStart:session.startedAt,userName,ts:Date.now()});
+    }catch{}
   };
 
   const envoyerMessage=async()=>{
     if(!message.trim()||!session)return;
     const msg={uid,userName,text:message.trim(),ts:Date.now()};
-    const next={...session, messages:[...(session.messages||[]),msg].slice(-100)};
-    setMessage("");
-    setSession(next);
-    try{ await setDoc(doc(db,"equipe","power-hour"), next, {merge:true}); }catch{}
+    const next={...session,messages:[...(session.messages||[]),msg].slice(-100)};
+    setMessage("");setSession(next);
+    try{ await setDoc(doc(db,"equipe","power-hour"),next,{merge:true}); }catch{}
   };
 
   const arreter=async()=>{
-    try{ await setDoc(doc(db,"equipe","power-hour"), {startedAt:0, startedBy:"", messages:[]}); }catch{}
+    try{ await setDoc(doc(db,"equipe","power-hour"),{startedAt:0,startedBy:"",messages:[],accepts:{}}); }catch{}
     setSession(null);
   };
 
-  if(loading) return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
+  if(loading)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
 
-  const elapsed = session ? Date.now()-session.startedAt : 0;
-  const remaining = session ? DUREE_MIN*60000-elapsed : 0;
-  const isActive = session && remaining>0;
-  const isFinished = session && remaining<=0;
+  const elapsed=session?Date.now()-session.startedAt:0;
+  const remaining=session?DUREE_MIN*60000-elapsed:0;
+  const isActive=session&&remaining>0;
+  const minutes=Math.max(0,Math.floor(remaining/60000));
+  const seconds=Math.max(0,Math.floor((remaining%60000)/1000));
 
-  const Countdown=()=>{
-    const[, setTick]=useState(0);
-    useEffect(()=>{
-      const t=setInterval(()=>setTick(x=>x+1),1000);
-      return ()=>clearInterval(t);
-    },[]);
-    const rem = DUREE_MIN*60000-(Date.now()-session.startedAt);
-    if(rem<=0) return <span style={{color:C.vert,fontWeight:700}}>Terminé !</span>;
-    const m=Math.floor(rem/60000), s=Math.floor((rem%60000)/1000);
-    return <span style={{fontFamily:"Georgia,serif",fontSize:"2.2rem",fontWeight:700,color:C.or}}>{m}:{String(s).padStart(2,"0")}</span>;
-  };
+  // Stats pour chef
+  const acceptsList=Object.entries(session?.accepts||{});
+  const totalEquipe=Math.max(1,acceptsList.length);
 
   return(
     <div>
-      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        Power <em style={{fontStyle:"italic",color:C.rose}}>Hour</em>
-      </div>
-      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        20 minutes, toute l'équipe ensemble, on envoie nos messages en même temps. L'énergie collective à distance est surpuissante 🚀
-      </p>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun,marginBottom:".75rem"}}>⚡ Power Hour</div>
 
-      {!session&&(
-        <div style={{textAlign:"center",padding:"2rem 1rem"}}>
-          <div style={{fontSize:"2rem",marginBottom:".5rem"}}>⏱️</div>
-          <div style={{fontSize:".8rem",color:C.gris,marginBottom:"1rem"}}>Aucune Power Hour en cours actuellement.</div>
-          {canCreate?(
+      {!session&&!isActive&&(
+        <div style={{background:C.creme,borderRadius:12,padding:"1.25rem",textAlign:"center",marginBottom:"1rem"}}>
+          <div style={{fontSize:"2rem",marginBottom:".5rem"}}>⚡</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:C.brun,marginBottom:".3rem"}}>Aucune session en cours</div>
+          <div style={{fontSize:".72rem",color:C.gris,marginBottom:"1rem"}}>20 minutes de focus intense pour toute l'équipe</div>
+          {canCreate&&(
             <button onClick={lancer}
-              style={{background:C.rose,color:"white",border:"none",borderRadius:10,padding:".6rem 1.2rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-              🚀 Lancer une Power Hour (20 min)
+              style={{background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem 1.5rem",fontSize:".82rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+              🚀 Lancer une Power Hour
             </button>
-          ):(
-            <div style={{fontSize:".7rem",color:C.gris}}>Seule ta chef d'équipe (ou Melissa) peut en lancer une.</div>
           )}
         </div>
       )}
 
       {session&&(
-        <>
-          <div style={{background:C.brun,borderRadius:14,padding:"1.2rem",marginBottom:"1rem",textAlign:"center"}}>
-            <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:C.or,marginBottom:".5rem"}}>
-              {isFinished?"⏱️ POWER HOUR TERMINÉE":"🚀 POWER HOUR EN COURS"}
-            </div>
-            {isActive?<Countdown/>:<span style={{fontFamily:"Georgia,serif",fontSize:"1.5rem",fontWeight:700,color:C.vert}}>Bravo l'équipe ! 🎉</span>}
-            <div style={{fontSize:".68rem",color:C.pale,marginTop:".5rem"}}>Lancée par {session.startedBy}</div>
-          </div>
-
-          {/* Chat en direct */}
-          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-            <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>💬 Chat de l'équipe</div>
-            <div style={{maxHeight:220,overflowY:"auto",marginBottom:".6rem"}}>
-              {(session.messages||[]).length===0&&(
-                <div style={{fontSize:".7rem",color:C.gris,textAlign:"center",padding:"1rem 0"}}>
-                  Personne n'a encore écrit. Lance le mouvement : "Ok, j'envoie mes messages, qui est avec moi ?" 💪
+        <div>
+          {/* Bandeau session */}
+          <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".9rem 1rem",marginBottom:"1rem",color:C.blanc}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:".58rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".15rem"}}>
+                  {isActive?"⚡ POWER HOUR EN COURS":"✅ Session terminée"}
+                </div>
+                <div style={{fontSize:".72rem",color:C.pale}}>Lancée par {session.startedBy}</div>
+              </div>
+              {isActive&&(
+                <div style={{fontFamily:"Georgia,serif",fontSize:"1.8rem",fontWeight:700,color:C.or}}>
+                  {String(minutes).padStart(2,"0")}:{String(seconds).padStart(2,"0")}
                 </div>
               )}
+            </div>
+
+            {/* Coche d'acceptation */}
+            {isActive&&(
+              <div onClick={!accepted?accepter:null}
+                style={{marginTop:".75rem",background:accepted?"rgba(127,175,138,.25)":"rgba(255,255,255,.1)",borderRadius:10,padding:".6rem .85rem",display:"flex",alignItems:"center",gap:".6rem",cursor:accepted?"default":"pointer",border:`1px solid ${accepted?"rgba(127,175,138,.5)":"rgba(255,255,255,.2)"}`}}>
+                <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${accepted?"#7FAF8A":"rgba(255,255,255,.4)"}`,background:accepted?"#7FAF8A":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {accepted&&<span style={{color:"white",fontSize:".7rem",fontWeight:700}}>✓</span>}
+                </div>
+                <span style={{fontSize:".78rem",fontWeight:600,color:accepted?"#B8E6C4":C.pale}}>
+                  {accepted?"✅ Tu participes à cette Power Hour !":"Je participe à cette Power Hour"}
+                </span>
+              </div>
+            )}
+
+            {/* Stats chef */}
+            {canCreate&&isActive&&(
+              <div style={{marginTop:".5rem",background:"rgba(255,255,255,.08)",borderRadius:9,padding:".5rem .75rem"}}>
+                <div style={{fontSize:".6rem",color:C.or,fontWeight:700,marginBottom:".3rem"}}>📊 Participation équipe</div>
+                <div style={{display:"flex",alignItems:"center",gap:".75rem"}}>
+                  <div style={{flex:1,height:6,background:"rgba(255,255,255,.15)",borderRadius:10,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:C.vert,width:Math.min(100,(acceptsList.length/Math.max(1,Object.keys(session.accepts||{}).length+5))*100)+"%",borderRadius:10}}/>
+                  </div>
+                  <span style={{fontSize:".72rem",fontWeight:700,color:C.pale,flexShrink:0}}>{acceptsList.length} participant{acceptsList.length>1?"s":""}</span>
+                </div>
+                {acceptsList.length>0&&(
+                  <div style={{marginTop:".35rem",display:"flex",flexWrap:"wrap",gap:".25rem"}}>
+                    {acceptsList.map(([,v])=>(
+                      <span key={v.userName} style={{background:"rgba(255,255,255,.12)",borderRadius:20,padding:".1rem .4rem",fontSize:".6rem",color:C.pale}}>{v.userName}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {canCreate&&<button onClick={arreter} style={{marginTop:".6rem",background:"rgba(255,255,255,.15)",border:"none",borderRadius:7,padding:".3rem .8rem",fontSize:".65rem",color:C.pale,cursor:"pointer",fontFamily:"inherit"}}>✕ Arrêter</button>}
+          </div>
+
+          {/* Chat */}
+          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem",marginBottom:".5rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>💬 Messages</div>
+            <div style={{maxHeight:200,overflowY:"auto",marginBottom:".5rem"}}>
+              {(session.messages||[]).length===0&&<div style={{fontSize:".7rem",color:C.gris,textAlign:"center",padding:".5rem"}}>Aucun message</div>}
               {(session.messages||[]).map((m,i)=>(
-                <div key={i} style={{marginBottom:".4rem"}}>
-                  <span style={{fontSize:".68rem",fontWeight:700,color:C.brun}}>{m.userName}: </span>
-                  <span style={{fontSize:".7rem",color:C.texte}}>{m.text}</span>
+                <div key={i} style={{marginBottom:".35rem",padding:".35rem .6rem",background:m.uid===uid?C.rose+"12":C.creme,borderRadius:8,border:`1px solid ${m.uid===uid?C.rose+"30":C.pale}`}}>
+                  <div style={{fontSize:".6rem",fontWeight:700,color:m.uid===uid?C.rose:C.brun}}>{m.userName}</div>
+                  <div style={{fontSize:".75rem",color:C.texte}}>{m.text}</div>
                 </div>
               ))}
             </div>
             <div style={{display:"flex",gap:".4rem"}}>
-              <input value={message} onChange={e=>setMessage(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&envoyerMessage()}
-                placeholder="Ok, j'envoie mes messages !"
-                style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .7rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-              <button onClick={envoyerMessage}
-                style={{background:C.rose,color:"white",border:"none",borderRadius:8,padding:".45rem .9rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                Envoyer
-              </button>
+              <GInput value={message} onChange={e=>setMessage(e.target.value)} placeholder="Ton message..." style={{marginBottom:0}}
+                onKeyDown={e=>e.key==="Enter"&&envoyerMessage()}/>
+              <button onClick={envoyerMessage} style={{background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".4rem .7rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>→</button>
             </div>
           </div>
-
-          {canCreate&&(
-            <button onClick={arreter}
-              style={{width:"100%",background:"none",border:"1px solid #B0404040",borderRadius:8,padding:".4rem",fontSize:".68rem",color:"#B04040",fontFamily:"inherit",cursor:"pointer"}}>
-              Clôturer la Power Hour
-            </button>
-          )}
-        </>
+        </div>
       )}
     </div>
   );
 }
-
 
 function WallOfFameTab({uid, userName}){
   const[posts,setPosts]=useState([]);
@@ -6310,205 +10817,334 @@ function WallOfFameTab({uid, userName}){
 }
 
 // Module de Défis éphémères équipe
-function DefisTab({uid, userName, canCreate}){
-  const[defi,setDefi]=useState(null);
+function ChallengeCountdown({deadline}){
+  const[r,setR]=useState(deadline-Date.now());
+  useEffect(()=>{const t=setInterval(()=>setR(deadline-Date.now()),30000);return()=>clearInterval(t);},[deadline]);
+  if(r<=0)return <span style={{color:"#B04040",fontWeight:700,fontSize:".72rem"}}>⏰ Terminé</span>;
+  const d2=Math.floor(r/86400000),h=Math.floor((r%86400000)/3600000),m=Math.floor((r%3600000)/60000);
+  return <span style={{fontWeight:700,color:C.or,fontSize:".72rem"}}>{d2>0?`${d2}j `:""}{h}h {m}min</span>;
+}
+
+function DefisTab({uid, userName, canCreate, isChef}){
+  const[challenges,setChallenges]=useState([]);
   const[loading,setLoading]=useState(true);
   const[showCreate,setShowCreate]=useState(false);
-  const[form,setForm]=useState({titre:"",objectif:"3",unite:"ventes",dureeHeures:"48"});
-  const[declareAmount,setDeclareAmount]=useState("1");
+  const[form,setForm]=useState({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true});
+  const[equipes,setEquipes]=useState([]);
+  const[declarations,setDeclarations]=useState({});
+  const[declareInput,setDeclareInput]=useState({});
 
-  const load=async()=>{
-    setLoading(true);
-    try{
-      const snap = await getDoc(doc(db,"equipe","defi-actuel"));
-      const d = snap.exists()?snap.data():null;
-      if(d&&d.deadline&&d.deadline<Date.now()){ setDefi(null); }
-      else setDefi(d&&d.titre?d:null);
-    }catch{}
-    setLoading(false);
+  const isMelissa = uid==="melissa"||uid==="melissa-da-silveira";
+
+  useEffect(()=>{
+    (async()=>{
+      let annuaire={};
+      let chefsUids=[];
+      try{
+        // Charger l'annuaire et la liste des chefs en premier
+        const annSnap=await getDoc(doc(db,"equipe","annuaire"));
+        if(annSnap.exists()){
+          annuaire=annSnap.data().membres||{};
+          // Un "chef" = quelqu'un qui a au moins une filleule OU marqué isChef
+          const marraines=new Set(Object.values(annuaire).map(m=>m.marraine).filter(Boolean));
+          const chefsEntries=Object.entries(annuaire).filter(([k,v])=>v.isChef||marraines.has(k));
+          // Ajouter Melissa (uid racine) si pas dans l'annuaire
+          const melissaEntry={uid:"melissa-da-silveira",nom:"Melissa"};
+          const chefsAvecMelissa=[...chefsEntries.map(([k,v])=>({uid:k,nom:v.prenom||k}))];
+          if(!chefsAvecMelissa.find(e=>e.uid==="melissa-da-silveira")) chefsAvecMelissa.unshift(melissaEntry);
+          chefsUids=chefsAvecMelissa.map(e=>e.uid);
+          setEquipes(chefsAvecMelissa.sort((a,b)=>a.nom.localeCompare(b.nom)));
+        }
+      }catch{}
+      try{
+        // Charger les challenges
+        const snap=await getDoc(doc(db,"challenges","liste"));
+        const data=snap.exists()?snap.data().items||[]:[];
+        // Filtrer selon l'équipe de l'utilisateur — en remontant sa lignée jusqu'aux chefs
+        const now=Date.now();
+        const mesChefs=getLigneeChefs(annuaire,uid,chefsUids);
+        const actifs=data.filter(c=>{
+          if(c.deadline&&c.deadline<now)return false;
+          if(isMelissa)return true;
+          if(c.global)return true;
+          if(!c.equipesCibles||c.equipesCibles.length===0)return true;
+          if(c.equipesCibles.includes("all"))return true;
+          // Visible si l'utilisateur EST un des chefs ciblés, OU si un de ses chefs (lignée) est ciblé
+          return c.equipesCibles.includes(uid)||mesChefs.some(chefUid=>c.equipesCibles.includes(chefUid));
+        });
+        setChallenges(actifs.sort((a,b)=>b.ts-a.ts));
+        // Charger les déclarations par challenge
+        const declSnap=await getDoc(doc(db,"challenges","declarations"));
+        setDeclarations(declSnap.exists()?declSnap.data():{});
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  const saveAll=async(items)=>{
+    await setDoc(doc(db,"challenges","liste"),{items});
+    setChallenges(items.filter(c=>{
+      if(c.deadline&&c.deadline<Date.now())return false;
+      if(isMelissa)return true;
+      if(c.global)return true;
+      if(!c.equipesCibles||c.equipesCibles.length===0)return true;
+      return c.equipesCibles.includes(uid);
+    }));
   };
 
-  useEffect(()=>{ load(); },[]);
-
-  const creerDefi=async()=>{
+  const creer=async()=>{
     if(!form.titre.trim())return;
-    const nouveau = {
-      titre: form.titre.trim(),
-      objectif: +form.objectif||1,
-      unite: form.unite,
-      deadline: Date.now() + (+form.dureeHeures||48)*3600000,
-      createdBy: userName,
-      declarations: [],
-      ts: Date.now(),
+    const id=`c${Date.now()}`;
+    const nouveau={
+      id,titre:form.titre.trim(),description:form.description.trim(),
+      type:form.type,
+      deadline:form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null,
+      objectif:+form.objectif||0,unite:form.unite,
+      cadeau:form.cadeau.trim(),cadeauImage:form.cadeauImage.trim(),
+      global:form.global,equipesCibles:form.global?[]:form.equipesCibles,
+      createdBy:userName,ts:Date.now(),
     };
-    await setDoc(doc(db,"equipe","defi-actuel"), nouveau);
-    setDefi(nouveau);
+    const snap=await getDoc(doc(db,"challenges","liste"));
+    const existing=snap.exists()?snap.data().items||[]:[];
+    await saveAll([nouveau,...existing]);
     setShowCreate(false);
-    setForm({titre:"",objectif:"3",unite:"ventes",dureeHeures:"48"});
+    setForm({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true});
   };
 
-  const declarer=async()=>{
-    if(!defi)return;
-    const amount = +declareAmount||1;
-    const declarations = [...(defi.declarations||[]), {uid, userName, count:amount, ts:Date.now()}];
-    const next = {...defi, declarations};
-    setDefi(next);
-    try{ await setDoc(doc(db,"equipe","defi-actuel"), next, {merge:true}); }catch{}
-    postToWallOfFame(uid, userName, `vient de déclarer ${amount} ${defi.unite} pour le défi "${defi.titre}" 💪`, "🚀");
+  const declarer=async(challengeId,amount)=>{
+    const d={uid,userName,count:+amount||1,ts:Date.now()};
+    const current=declarations[challengeId]||[];
+    const next={...declarations,[challengeId]:[...current,d]};
+    setDeclarations(next);
+    await setDoc(doc(db,"challenges","declarations"),next,{merge:true});
+    postToWallOfFame&&postToWallOfFame(uid,userName,`a déclaré ${amount} ${form.unite} sur le challenge "${challengeId}" 💪`,"🚀");
   };
 
-  const supprimerDefi=async()=>{
-    try{ await setDoc(doc(db,"equipe","defi-actuel"), {titre:"", deadline:0}, {merge:false}); }catch{}
-    setDefi(null);
+  const supprimer=async(id)=>{
+    const snap=await getDoc(doc(db,"challenges","liste"));
+    const items=(snap.exists()?(snap.data().items||[]):[]).filter(c=>c.id!==id);
+    await saveAll(items);
   };
 
-  if(loading) return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
+  if(loading)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
 
-  // Compte à rebours
-  const Countdown=({deadline})=>{
-    const[remaining,setRemaining]=useState(deadline-Date.now());
-    useEffect(()=>{
-      const t=setInterval(()=>setRemaining(deadline-Date.now()),1000);
-      return ()=>clearInterval(t);
-    },[deadline]);
-    if(remaining<=0) return <span style={{color:"#B04040",fontWeight:700}}>Terminé</span>;
-    const h=Math.floor(remaining/3600000), m=Math.floor((remaining%3600000)/60000);
-    return <span style={{fontWeight:700,color:C.or}}>{h}h {m}min restantes</span>;
-  };
-
-  const totalDeclare = defi ? (defi.declarations||[]).reduce((s,d)=>s+d.count,0) : 0;
-  const pctDefi = defi ? Math.min(100,Math.round(totalDeclare/defi.objectif*100)) : 0;
-
-  // Classement par personne
-  const classement = defi ? Object.values(
-    (defi.declarations||[]).reduce((acc,d)=>{
-      acc[d.userName]=acc[d.userName]||{userName:d.userName,total:0};
-      acc[d.userName].total += d.count;
-      return acc;
-    },{})
-  ).sort((a,b)=>b.total-a.total) : [];
+  const Countdown=ChallengeCountdown;
 
   return(
     <div>
-      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        Défi <em style={{fontStyle:"italic",color:C.rose}}>Flash</em>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🏆 Challenges & Défis</div>
+        {canCreate&&(
+          <button onClick={()=>setShowCreate(p=>!p)}
+            style={{background:showCreate?C.pale:C.brun,color:showCreate?C.gris:C.blanc,border:"none",borderRadius:9,padding:".4rem .8rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            {showCreate?"✕ Annuler":"+ Créer"}
+          </button>
+        )}
       </div>
-      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Un défi collectif, toute l'équipe ensemble — déclare tes actions en direct !
-      </p>
 
-      {!defi&&!showCreate&&(
-        <div style={{textAlign:"center",padding:"2rem 1rem",color:C.gris}}>
-          <div style={{fontSize:"2rem",marginBottom:".5rem"}}>🏁</div>
-          <div style={{fontSize:".8rem",marginBottom:"1rem"}}>Aucun défi en cours actuellement.</div>
-          {canCreate&&(
-            <button onClick={()=>setShowCreate(true)}
-              style={{background:C.rose,color:"white",border:"none",borderRadius:10,padding:".6rem 1.2rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-              🚀 Lancer un défi
-            </button>
-          )}
-        </div>
-      )}
+      {/* FORMULAIRE CRÉATION */}
+      {showCreate&&canCreate&&(
+        <div style={{background:C.blanc,border:`1px solid ${C.rose}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".75rem"}}>✨ Nouveau challenge</div>
 
-      {showCreate&&(
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>🚀 Nouveau défi flash</div>
-          <input placeholder='Ex: "3 ventes ce week-end !"' value={form.titre} onChange={e=>setForm(f=>({...f,titre:e.target.value}))}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .7rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem"}}/>
-          <div style={{display:"flex",gap:".5rem",marginBottom:".5rem"}}>
-            <div style={{flex:1}}>
-              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Objectif total</div>
-              <input type="number" value={form.objectif} onChange={e=>setForm(f=>({...f,objectif:e.target.value}))}
-                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".85rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}/>
-            </div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Unité</div>
-              <select value={form.unite} onChange={e=>setForm(f=>({...f,unite:e.target.value}))}
-                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".85rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}>
-                <option value="ventes">ventes</option>
-                <option value="recrues">recrues</option>
-                <option value="messages">messages</option>
-                <option value="contacts">contacts</option>
-              </select>
-            </div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Durée (h)</div>
-              <input type="number" value={form.dureeHeures} onChange={e=>setForm(f=>({...f,dureeHeures:e.target.value}))}
-                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".85rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}/>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:".5rem"}}>
-            <button onClick={creerDefi}
-              style={{flex:1,background:C.rose,color:"white",border:"none",borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-              Lancer le défi
-            </button>
-            <button onClick={()=>setShowCreate(false)}
-              style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .9rem",fontSize:".76rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
+          {/* Titre */}
+          <input placeholder="Titre du challenge*" value={form.titre} onChange={e=>setForm(p=>({...p,titre:e.target.value}))}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem"}}/>
+          <textarea placeholder="Description (optionnel)" value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} rows={2}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",marginBottom:".5rem"}}/>
 
-      {defi&&(
-        <>
-          <div style={{background:C.brun,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
-            <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:C.or,marginBottom:".3rem"}}>🚀 DÉFI EN COURS</div>
-            <div style={{fontFamily:"Georgia,serif",fontSize:"1.15rem",fontWeight:600,color:C.blanc,marginBottom:".4rem"}}>{defi.titre}</div>
-            <div style={{fontSize:".7rem",color:C.pale,marginBottom:".5rem"}}>
-              <Countdown deadline={defi.deadline}/> · lancé par {defi.createdBy}
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.pale,marginBottom:".3rem"}}>
-              <span>Progression collective</span>
-              <span style={{fontWeight:700,color:pctDefi>=100?C.vert:C.or}}>{totalDeclare} / {defi.objectif} {defi.unite} ({pctDefi}%)</span>
-            </div>
-            <div style={{height:10,background:"rgba(255,255,255,.1)",borderRadius:10,overflow:"hidden"}}>
-              <div style={{height:"100%",background:pctDefi>=100?C.vert:C.rose,width:pctDefi+"%",borderRadius:10,transition:"width .4s"}}/>
-            </div>
-            {pctDefi>=100&&<div style={{textAlign:"center",fontSize:".78rem",color:C.vert,fontWeight:700,marginTop:".5rem"}}>🎉 Défi collectif réussi, bravo l'équipe !</div>}
-          </div>
-
-          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-            <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>✋ Je déclare !</div>
-            <div style={{display:"flex",gap:".5rem"}}>
-              <input type="number" min="1" value={declareAmount} onChange={e=>setDeclareAmount(e.target.value)}
-                style={{width:70,border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".85rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600,textAlign:"center"}}/>
-              <button onClick={declarer}
-                style={{flex:1,background:C.rose,color:"white",border:"none",borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                + {declareAmount} {defi.unite} fait{declareAmount>1?"s":""} !
+          {/* Type */}
+          <div style={{display:"flex",gap:".35rem",marginBottom:".5rem"}}>
+            {[{v:"flash",l:"⚡ Challenge Flash (24-72h)"},{v:"long",l:"📅 Challenge Long terme (21j)"},{v:"libre",l:"🎯 Challenge Libre"}].map(t=>(
+              <button key={t.v} onClick={()=>setForm(p=>({...p,type:t.v}))}
+                style={{flex:1,padding:".38rem .3rem",fontSize:".65rem",fontWeight:600,borderRadius:8,border:`1px solid ${form.type===t.v?C.rose:C.pale}`,background:form.type===t.v?C.rose:C.blanc,color:form.type===t.v?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                {t.l}
               </button>
-            </div>
+            ))}
           </div>
 
-          {classement.length>0&&(
-            <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-              <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".6rem"}}>🏆 Classement</div>
-              {classement.map((c,i)=>(
-                <div key={c.userName} style={{display:"flex",justifyContent:"space-between",padding:".35rem 0",borderBottom:i<classement.length-1?`1px solid ${C.pale}`:"none",fontSize:".74rem"}}>
-                  <span style={{color:C.texte}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`} {c.userName}</span>
-                  <span style={{fontWeight:700,color:C.brun}}>{c.total} {defi.unite}</span>
-                </div>
+          {/* Durée si flash */}
+          {form.type==="flash"&&(
+            <div style={{display:"flex",gap:".4rem",marginBottom:".5rem",alignItems:"center"}}>
+              <span style={{fontSize:".7rem",color:C.gris,flexShrink:0}}>Durée :</span>
+              {["24","48","72"].map(h=>(
+                <button key={h} onClick={()=>setForm(p=>({...p,dureeHeures:h}))}
+                  style={{flex:1,padding:".35rem",fontSize:".7rem",fontWeight:600,borderRadius:7,border:`1px solid ${form.dureeHeures===h?C.rose:C.pale}`,background:form.dureeHeures===h?C.rose:C.blanc,color:form.dureeHeures===h?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                  {h}h
+                </button>
               ))}
             </div>
           )}
 
-          <button onClick={load}
-            style={{width:"100%",background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem",fontSize:".68rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
-            🔄 Actualiser
-          </button>
+          {/* Objectif + unité */}
+          <div style={{display:"flex",gap:".4rem",marginBottom:".5rem"}}>
+            <input type="number" placeholder="Objectif" value={form.objectif} onChange={e=>setForm(p=>({...p,objectif:e.target.value}))}
+              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .55rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            <input placeholder="Unité (ventes, €...)" value={form.unite} onChange={e=>setForm(p=>({...p,unite:e.target.value}))}
+              style={{flex:2,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .55rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          </div>
 
-          {canCreate&&(
-            <button onClick={supprimerDefi}
-              style={{width:"100%",background:"none",border:`1px solid #B0404040`,borderRadius:8,padding:".4rem",fontSize:".68rem",color:"#B04040",fontFamily:"inherit",cursor:"pointer"}}>
-              Clôturer ce défi
-            </button>
-          )}
-        </>
+          {/* Cadeau */}
+          <input placeholder="🎁 Récompense (ex: Kit produit Mihi, carte cadeau 50€...)" value={form.cadeau} onChange={e=>setForm(p=>({...p,cadeau:e.target.value}))}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".35rem"}}/>
+          <input placeholder="Image du cadeau (URL optionnel)" value={form.cadeauImage} onChange={e=>setForm(p=>({...p,cadeauImage:e.target.value}))}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem"}}/>
+
+          {/* Ciblage équipes — 2 choix clairs */}
+          <div style={{marginBottom:".75rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,fontWeight:600,textTransform:"uppercase",letterSpacing:".08em",marginBottom:".4rem"}}>Portée du challenge</div>
+            <div style={{display:"flex",gap:".4rem",marginBottom:".5rem"}}>
+              <button onClick={()=>setForm(p=>({...p,global:true,equipesCibles:[]}))}
+                style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:`1.5px solid ${form.global?C.rose:C.pale}`,background:form.global?C.rose:C.blanc,color:form.global?"white":C.gris,cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>
+                🌍 Toute l'équipe
+              </button>
+              <button onClick={()=>setForm(p=>({...p,global:false}))}
+                style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:`1.5px solid ${!form.global?C.or:C.pale}`,background:!form.global?C.or+"15":C.blanc,color:!form.global?C.brun:C.gris,cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>
+                👑 Inter-équipes
+              </button>
+            </div>
+            {!form.global&&(
+              <div style={{background:C.creme,borderRadius:9,padding:".6rem .75rem",border:`1px solid ${C.or}40`}}>
+                <div style={{fontSize:".62rem",color:C.brun,fontWeight:600,marginBottom:".35rem"}}>Sélectionne les équipes participantes :</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:".3rem"}}>
+                  {equipes.map(e=>{
+                    const sel=form.equipesCibles.includes(e.uid);
+                    const estMoi=e.uid===uid;
+                    return(
+                      <button key={e.uid} onClick={()=>setForm(p=>({...p,equipesCibles:sel?p.equipesCibles.filter(x=>x!==e.uid):[...p.equipesCibles,e.uid]}))}
+                        style={{padding:".28rem .65rem",fontSize:".68rem",fontWeight:600,borderRadius:8,border:`1.5px solid ${sel?C.brun:C.pale}`,background:sel?C.brun:C.blanc,color:sel?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                        {e.nom}{estMoi?" (moi)":""}
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.equipesCibles.length>=2&&(
+                  <div style={{fontSize:".62rem",color:C.vert,fontWeight:600,marginTop:".4rem"}}>
+                    ✓ {form.equipesCibles.length} équipes sélectionnées — les membres de chacune verront ce challenge
+                  </div>
+                )}
+                {form.equipesCibles.length<2&&(
+                  <div style={{fontSize:".62rem",color:C.gris,marginTop:".4rem",fontStyle:"italic"}}>
+                    Sélectionne au moins 2 équipes pour un challenge inter-équipes
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <button onClick={creer}
+            style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:9,padding:".6rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            🚀 Lancer le challenge
+          </button>
+        </div>
       )}
+
+      {/* LISTE DES CHALLENGES */}
+      {challenges.length===0&&!showCreate&&(
+        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>
+          Aucun challenge en cours 🌸<br/>
+          {canCreate&&<span style={{color:C.rose,fontSize:".72rem"}}>Crée le premier !</span>}
+        </div>
+      )}
+
+      {challenges.map(c=>{
+        const decls=declarations[c.id]||[];
+        const total=decls.reduce((s,d)=>s+d.count,0);
+        const pct=c.objectif?Math.min(100,Math.round(total/c.objectif*100)):0;
+        const classement=Object.values(decls.reduce((acc,d)=>{
+          acc[d.userName]=acc[d.userName]||{userName:d.userName,total:0};
+          acc[d.userName].total+=d.count;
+          return acc;
+        },{})).sort((a,b)=>b.total-a.total);
+        const medals=["🥇","🥈","🥉"];
+        const monTotal=decls.filter(d=>d.uid===uid).reduce((s,d)=>s+d.count,0);
+
+        return(
+          <div key={c.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,overflow:"hidden",marginBottom:".75rem"}}>
+            {/* Header challenge */}
+            <div style={{background:`linear-gradient(135deg,${c.type==="flash"?C.rose:c.type==="long"?C.lilas:C.or},${c.type==="flash"?C.brun2:c.type==="long"?C.brun:C.brun})`,padding:".9rem 1rem"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:".55rem",fontWeight:700,color:"rgba(255,255,255,.7)",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".2rem"}}>
+                    {c.type==="flash"?"⚡ Challenge Flash":c.type==="long"?"📅 Challenge Long terme":"🎯 Challenge"}
+                    {!c.global&&(c.equipesCibles?.length>1?` · 👑 Challenge entre ${c.equipesCibles.length} équipes`:" · Équipe ciblée")}
+                  </div>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:"white"}}>{c.titre}</div>
+                  {c.description&&<div style={{fontSize:".7rem",color:"rgba(255,255,255,.75)",marginTop:".2rem",lineHeight:1.5}}>{c.description}</div>}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:".2rem",flexShrink:0,marginLeft:".5rem"}}>
+                  {c.deadline&&<Countdown deadline={c.deadline}/>}
+                  {canCreate&&<button onClick={()=>supprimer(c.id)}
+                    style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:5,padding:".18rem .4rem",color:"rgba(255,255,255,.6)",cursor:"pointer",fontSize:".6rem",fontFamily:"inherit"}}>
+                    ✕
+                  </button>}
+                </div>
+              </div>
+            </div>
+
+            <div style={{padding:".85rem 1rem"}}>
+              {/* Barre de progression */}
+              {c.objectif>0&&(
+                <div style={{marginBottom:".75rem"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>
+                    <span>Total équipe : {total} {c.unite}</span>
+                    <span style={{fontWeight:700,color:pct>=100?C.vert:C.rose}}>{pct}% · objectif {c.objectif}</span>
+                  </div>
+                  <div style={{height:8,background:C.pale,borderRadius:10,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:pct>=100?C.vert:C.rose,width:pct+"%",borderRadius:10,transition:"width .5s"}}/>
+                  </div>
+                </div>
+              )}
+
+              {/* Encadré cadeau */}
+              {c.cadeau&&(
+                <div style={{background:`linear-gradient(135deg,${C.or}20,${C.creme})`,border:`1.5px solid ${C.or}40`,borderRadius:12,padding:".75rem",marginBottom:".75rem",display:"flex",alignItems:"center",gap:".75rem"}}>
+                  {c.cadeauImage
+                    ?<img src={c.cadeauImage} alt="cadeau" style={{width:52,height:52,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+                    :<div style={{width:44,height:44,background:`linear-gradient(135deg,${C.or},#B8962A)`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem",flexShrink:0}}>🎁</div>
+                  }
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:".58rem",fontWeight:700,color:C.or,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".15rem"}}>Récompense</div>
+                    <div style={{fontSize:".8rem",fontWeight:600,color:C.brun,lineHeight:1.5}}>{c.cadeau}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Ma participation */}
+              <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:".6rem",color:C.gris,marginBottom:".1rem"}}>Ma participation</div>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:700,color:C.brun}}>{monTotal} {c.unite}</div>
+                </div>
+                <input type="number" min="1" value={declareInput[c.id]||""} onChange={e=>setDeclareInput(p=>({...p,[c.id]:e.target.value}))}
+                  placeholder="Qté"
+                  style={{width:60,border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .4rem",fontSize:".8rem",fontFamily:"inherit",textAlign:"center",color:C.texte,background:C.blanc,outline:"none"}}/>
+                <button onClick={()=>{declarer(c.id,declareInput[c.id]||1);setDeclareInput(p=>({...p,[c.id]:""}));}}
+                  style={{background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".35rem .7rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>
+                  + Déclarer
+                </button>
+              </div>
+
+              {/* Classement */}
+              {classement.length>0&&(
+                <div>
+                  <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>🏆 Classement</div>
+                  {classement.slice(0,5).map((p,i)=>(
+                    <div key={p.userName} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",borderBottom:i<classement.slice(0,5).length-1?`1px solid ${C.pale}30`:"none"}}>
+                      <div style={{width:22,textAlign:"center",fontSize:i<3?"1rem":".7rem",flexShrink:0}}>{i<3?medals[i]:`${i+1}.`}</div>
+                      <div style={{flex:1,fontSize:".76rem",fontWeight:p.userName===userName?700:400,color:p.userName===userName?C.rose:C.texte}}>{p.userName}{p.userName===userName?" ✓":""}</div>
+                      <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",fontWeight:700,color:C.brun}}>{p.total} {c.unite}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
-
 
 // Mini graphique d'évolution (SVG, sans dépendance externe)
 function MiniChart({data, dataKey, objKey, color, unit=""}){
@@ -6573,86 +11209,166 @@ const PALIER_CA_OBJ={
   "2%":100, "4%":250, "6%":500, "8%":1000, "10%":1500, "12%":2000, "14%":3000, "17%":5000, "SR":7500,
 };
 
-// Paliers de qualification "Directeur" : nombre de directeurs requis dans la structure + montant de prime
+// Paliers de qualification : nombre de directeurs requis + points requis + montant de prime
 const PALIERS_QUALIFICATION=[
-  {id:"Directeur", nbDirecteurs:1, prime:1000},
-  {id:"SR", nbDirecteurs:0, prime:500},
-  {id:"Structural", nbDirecteurs:2, prime:2000},
-  {id:"Business Director", nbDirecteurs:3, prime:3000},
-  {id:"SR Business Director", nbDirecteurs:4, prime:4000},
+  {id:"Directeur", nbDirecteurs:1, pts:0, prime:1000},
+  {id:"SR", nbDirecteurs:1, pts:7500, ptsOU:true, prime:500}, // 7500 pts OU 1 directeur
+  {id:"Structural", nbDirecteurs:2, pts:0, prime:2000},
+  {id:"Business Director", nbDirecteurs:3, pts:0, prime:3000},
+  {id:"SR Business Director", nbDirecteurs:4, pts:0, prime:4000},
 ];
 
-const MOIS_LABELS=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+// Périodes Mihi — ancre chargée depuis Firebase admin (modifiable)
+// Valeur par défaut : 19/12/2024
+let PERIODE_DEBUT_ABSOLU_MS = new Date("2024-12-19T00:00:00").getTime();
+const PERIODE_DUREE_JOURS = 21;
+const PERIODES_PAR_AN = 18;
 
-// Section "Primes de Qualification" — suivi mensuel par palier (Directeur, SR, Structural, Business Director, SR Business Director)
+// Charge l'ancre depuis Firebase (appelé au démarrage de l'app)
+async function chargerAncrePeriodesFirebase(){
+  try{
+    const snap = await getDoc(doc(db,"admin","config_periodes"));
+    if(snap.exists()&&snap.data().ancre){
+      PERIODE_DEBUT_ABSOLU_MS = new Date(snap.data().ancre).getTime();
+    }
+  }catch{}
+}
+
+// Appel immédiat au chargement
+chargerAncrePeriodesFirebase();
+
+function getPeriodeDebut(nAbsolu){
+  return new Date(PERIODE_DEBUT_ABSOLU_MS + (nAbsolu-1)*PERIODE_DUREE_JOURS*24*60*60*1000);
+}
+
+function getPeriodeActuelle(){
+  const now = new Date();
+  const diffMs = now.getTime() - PERIODE_DEBUT_ABSOLU_MS;
+  const diffJours = Math.floor(diffMs / (24*60*60*1000));
+  return Math.max(1, Math.floor(diffJours / PERIODE_DUREE_JOURS) + 1);
+}
+
+function getPeriodeLabel(nAbsolu){
+  const debut = getPeriodeDebut(nAbsolu);
+  const fin = new Date(debut.getTime() + PERIODE_DUREE_JOURS*24*60*60*1000 - 1);
+  const fmt=(d)=>d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+  // Numéro dans l'année et année
+  // P1 2025 = abs 1, P18 2025 = abs 18, P1 2026 = abs 19...
+  const numDansAnnee = ((nAbsolu-1) % PERIODES_PAR_AN + PERIODES_PAR_AN) % PERIODES_PAR_AN + 1;
+  const annee = debut.getFullYear();
+  return `P${numDansAnnee} ${annee} · ${fmt(debut)}→${fmt(fin)}`;
+}
+
+function getPeriodKeys(n=12){
+  const current = getPeriodeActuelle();
+  const keys = [];
+  for(let i=n-1;i>=0;i--){
+    const num = current - i;
+    if(num > 0) keys.push(`p${num}`);
+  }
+  return keys;
+}
+
+// Label court d'une période : "P7 2026"
+function fmtPLabel(nAbsolu){
+  const debut = getPeriodeDebut(nAbsolu);
+  // Notre ancre (n=1) = P18 2024 dans la vraie numérotation Mihi
+  // Offset = 17 (P18 = dernière de l'année = index 17 dans 0-based)
+  const OFFSET_MIHI = 17; // n=1 → P18, n=2 → P1 suivante
+  const numAnnee = ((nAbsolu - 1 + OFFSET_MIHI) % PERIODES_PAR_AN + PERIODES_PAR_AN) % PERIODES_PAR_AN + 1;
+  return `P${numAnnee} ${debut.getFullYear()}`;
+}
+
+// Section "Primes de Qualification" — suivi par période de 21j
 function PrimesQualificationSection({obj, save, onPrimeValidee}){
   const qualifs = obj.qualifs || {};
-  const annee = new Date().getFullYear();
 
   const setDirecteurs=(palierId, n)=>{
-    const current = qualifs[palierId] || {directeurs:0, mois:{}, primes:{}};
+    const current = qualifs[palierId] || {directeurs:0, periodes:{}, primes:{}, pts:0};
     save({...obj, qualifs:{...qualifs, [palierId]:{...current, directeurs:n}}});
   };
 
-  const toggleMois=(palierId, moisKey)=>{
-    const current = qualifs[palierId] || {directeurs:0, mois:{}, primes:{}};
-    const mois = {...current.mois, [moisKey]:!current.mois[moisKey]};
-    const next = {...current, mois};
+  const setPts=(palierId, n)=>{
+    const current = qualifs[palierId] || {directeurs:0, periodes:{}, primes:{}, pts:0};
+    save({...obj, qualifs:{...qualifs, [palierId]:{...current, pts:n}}});
+  };
 
-    // Calcul consécutif (en remontant depuis le mois courant)
-    const moisKeys=[];
-    const now=new Date();
-    for(let i=0;i<12;i++){
-      const d=new Date(now.getFullYear(), now.getMonth()-i, 1);
-      moisKeys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  const togglePeriode=(palierId, periodeKey)=>{
+    const current = qualifs[palierId] || {directeurs:0, periodes:{}, primes:{}, pts:0};
+    const periodes = {...(current.periodes||{}), [periodeKey]:!current.periodes?.[periodeKey]};
+    const next = {...current, periodes};
+
+    const keys = getPeriodKeys(12);
+
+    // Calcul des consécutives : trouve le nombre max de périodes consécutives dans les 12
+    // (pas forcément depuis la fin — on cherche le max)
+    let maxConsecutifs=0, courant=0;
+    for(let i=0;i<keys.length;i++){
+      if(periodes[keys[i]]){ courant++; maxConsecutifs=Math.max(maxConsecutifs,courant); }
+      else courant=0;
     }
-    let consecutifs=0;
-    for(const k of moisKeys){
-      if(mois[k]) consecutifs++;
+    // Consécutives depuis la fin (les plus récentes)
+    let consecutifsRecents=0;
+    for(let i=keys.length-1;i>=0;i--){
+      if(periodes[keys[i]]) consecutifsRecents++;
       else break;
     }
-    const totalSur12 = moisKeys.filter(k=>mois[k]).length;
+
+    const totalSur12 = keys.filter(k=>periodes[k]).length;
 
     const primes = {...(current.primes||{})};
-    let nouvelle=false;
-    if(consecutifs>=2 && !primes.consecutif){primes.consecutif=true;nouvelle=true;}
-    if(totalSur12>=6 && !primes.sur12){primes.sur12=true;nouvelle=true;}
+
+    // Prime 1 : 2 périodes consécutives
+    if(maxConsecutifs>=2 && !primes.consecutif){
+      primes.consecutif=true;
+      setTimeout(()=>onPrimeValidee&&onPrimeValidee(), 100);
+    }
+
+    // Prime 2 : 6 périodes sur 12
+    if(totalSur12>=6 && !primes.sur12){
+      primes.sur12=true;
+      setTimeout(()=>onPrimeValidee&&onPrimeValidee(), 600); // décalé pour que les deux feux s'enchaînent
+    }
 
     next.primes = primes;
     save({...obj, qualifs:{...qualifs, [palierId]:next}});
-    if(nouvelle) onPrimeValidee&&onPrimeValidee();
   };
 
-  // Affiche uniquement le palier actuel et les paliers déjà atteints (qualification progressive)
   const currentIdx = PALIERS_PERSO.indexOf(obj.palier||"2%");
   const srIdx = PALIERS_PERSO.indexOf("SR");
-  if(currentIdx < srIdx) return null; // pas encore au niveau SR, pas de primes de qualification
+  if(currentIdx < srIdx) return null;
 
-  const now=new Date();
-  const moisKeys=[];
-  for(let i=11;i>=0;i--){
-    const d=new Date(now.getFullYear(), now.getMonth()-i, 1);
-    moisKeys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
-  }
+  const periodeKeys = getPeriodKeys(12);
+  const currentPeriode = getPeriodeActuelle();
 
   return(
     <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:".75rem"}}>
       <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".3rem"}}>💎 Primes de qualification</div>
       <p style={{fontSize:".66rem",color:C.gris,marginBottom:".75rem",lineHeight:1.6}}>
-        Pour chaque niveau atteint, coche le mois où tu valides la qualification. 2 mois d'affilée ou 6 mois sur 12 → prime débloquée 🎉
+        Coche les périodes de 21 jours où tu valides la qualification. 2 périodes consécutives ou 6 sur 12 → prime débloquée 🎉
       </p>
 
       {PALIERS_QUALIFICATION.map(pq=>{
-        const q = qualifs[pq.id] || {directeurs:0, mois:{}, primes:{}};
-        const consecutifs = (()=>{
-          let c=0;
-          for(let i=moisKeys.length-1;i>=0;i--){
-            if(q.mois[moisKeys[i]]) c++;
-            else break;
-          }
-          return c;
-        })();
-        const totalSur12 = moisKeys.filter(k=>q.mois[k]).length;
+        const q = qualifs[pq.id] || {directeurs:0, periodes:{}, primes:{}, pts:0};
+        const periodes = q.periodes || {};
+        // Consécutives récentes (depuis la fin)
+        let consecutifs=0;
+        for(let i=periodeKeys.length-1;i>=0;i--){
+          if(periodes[periodeKeys[i]]) consecutifs++;
+          else break;
+        }
+        // Max consécutives sur les 12
+        let maxConsecutifs=0, courant=0;
+        for(let i=0;i<periodeKeys.length;i++){
+          if(periodes[periodeKeys[i]]){ courant++; maxConsecutifs=Math.max(maxConsecutifs,courant); }
+          else courant=0;
+        }
+        const totalSur12 = periodeKeys.filter(k=>periodes[k]).length;
+
+        // Condition SR : 7500 pts OU 1 directeur
+        const srPtsValide = pq.ptsOU && (q.pts||0)>=pq.pts;
+        const srDirValide = pq.ptsOU && q.directeurs>=1;
+        const srQualifie = pq.ptsOU ? (srPtsValide || srDirValide) : true;
 
         return(
           <div key={pq.id} style={{marginBottom:"1rem",paddingBottom:"1rem",borderBottom:`1px solid ${C.pale}`}}>
@@ -6661,8 +11377,37 @@ function PrimesQualificationSection({obj, save, onPrimeValidee}){
               <div style={{fontSize:".68rem",fontWeight:700,color:C.or}}>{pq.prime}€ par prime</div>
             </div>
 
-            {/* Cases directeurs requis */}
-            {pq.nbDirecteurs>0&&(
+            {/* Condition SR double */}
+            {pq.ptsOU&&(
+              <div style={{background:C.creme,borderRadius:8,padding:".5rem .7rem",marginBottom:".5rem",fontSize:".68rem",color:C.gris}}>
+                <div style={{fontWeight:700,color:C.brun,marginBottom:".3rem"}}>Condition d'accès (au choix) :</div>
+                <div style={{display:"flex",gap:".4rem",flexWrap:"wrap"}}>
+                  {/* Option A : 7500 pts */}
+                  <div style={{flex:1,background:srPtsValide?C.vert+"20":C.blanc,border:`1.5px solid ${srPtsValide?C.vert:C.pale}`,borderRadius:8,padding:".5rem .65rem"}}>
+                    <div style={{fontSize:".62rem",fontWeight:700,color:srPtsValide?C.vert:C.gris,marginBottom:".3rem"}}>Option A — 7 500 pts</div>
+                    <div style={{display:"flex",alignItems:"center",gap:".4rem"}}>
+                      <input type="number" value={q.pts||""} onChange={e=>setPts(pq.id,+e.target.value||0)}
+                        placeholder="0"
+                        style={{width:70,border:`1px solid ${C.pale}`,borderRadius:6,padding:".25rem .4rem",fontSize:".78rem",fontFamily:"inherit",textAlign:"center"}}/>
+                      <span style={{fontSize:".62rem",color:C.gris}}>/ 7500 pts</span>
+                      {srPtsValide&&<span style={{color:C.vert,fontWeight:700,fontSize:".68rem"}}>✓</span>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",fontSize:".72rem",color:C.gris,fontWeight:700}}>OU</div>
+                  {/* Option B : 1 directeur */}
+                  <div style={{flex:1,background:srDirValide?C.vert+"20":C.blanc,border:`1.5px solid ${srDirValide?C.vert:C.pale}`,borderRadius:8,padding:".5rem .65rem"}}>
+                    <div style={{fontSize:".62rem",fontWeight:700,color:srDirValide?C.vert:C.gris,marginBottom:".3rem"}}>Option B — 1 Directeur</div>
+                    <div onClick={()=>setDirecteurs(pq.id, q.directeurs>=1?0:1)}
+                      style={{width:24,height:24,borderRadius:6,border:`2px solid ${srDirValide?C.vert:C.pale}`,background:srDirValide?C.vert:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:".7rem",color:"white",fontWeight:700}}>
+                      {srDirValide?"✓":"1"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Directeurs requis (non-SR) */}
+            {pq.nbDirecteurs>0&&!pq.ptsOU&&(
               <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".5rem",flexWrap:"wrap"}}>
                 <span style={{fontSize:".64rem",color:C.gris}}>Directeurs dans ma structure :</span>
                 {Array.from({length:pq.nbDirecteurs},(_,i)=>i+1).map(n=>(
@@ -6677,275 +11422,498 @@ function PrimesQualificationSection({obj, save, onPrimeValidee}){
               </div>
             )}
 
-            {/* Grille 12 mois */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:".3rem",marginBottom:".5rem"}}>
-              {moisKeys.map(k=>{
-                const [y,m]=k.split("-");
-                const checked=q.mois[k];
-                const isCurrent = k===moisKeys[moisKeys.length-1];
+            {/* Grille périodes */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:".25rem",marginBottom:".5rem"}}>
+              {periodeKeys.map(k=>{
+                const num=parseInt(k.slice(1));
+                const checked=periodes[k];
+                const isCurrent = num===currentPeriode;
                 return(
-                  <div key={k} onClick={()=>toggleMois(pq.id,k)}
+                  <div key={k} onClick={()=>togglePeriode(pq.id,k)}
                     style={{textAlign:"center",padding:".3rem 0",borderRadius:6,border:`1.5px solid ${checked?C.vert:isCurrent?C.rose:C.pale}`,background:checked?C.vert+"20":"transparent",cursor:"pointer"}}>
-                    <div style={{fontSize:".6rem",fontWeight:600,color:checked?C.vert:C.gris}}>{MOIS_LABELS[+m-1]}</div>
-                    <div style={{fontSize:".55rem",color:C.pale}}>{y.slice(2)}</div>
-                    {checked&&<div style={{fontSize:".6rem"}}>✓</div>}
+                    <div style={{fontSize:".58rem",fontWeight:600,color:checked?C.vert:isCurrent?C.rose:C.gris}}>{fmtPLabel(num)}</div>
+                    <div style={{fontSize:".52rem",color:checked?C.vert:C.pale}}>{checked?"✓":""}</div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Statut primes */}
-            <div style={{display:"flex",gap:".5rem",flexWrap:"wrap"}}>
-              <div style={{flex:1,minWidth:120,padding:".4rem .6rem",borderRadius:8,background:consecutifs>=2?C.vert+"15":C.creme,border:`1px solid ${consecutifs>=2?C.vert:C.pale}`,fontSize:".64rem",color:consecutifs>=2?C.vert:C.gris}}>
-                {consecutifs>=2?"🎉":"⏳"} 2 mois d'affilée : <strong>{Math.min(consecutifs,2)}/2</strong> {consecutifs>=2&&"— Prime validée !"}
+            {/* Statut primes — 2 onglets débloquables */}
+            <div style={{display:"flex",flexDirection:"column",gap:".35rem",marginTop:".5rem"}}>
+
+              {/* Prime 1 : 2 consécutives */}
+              <div style={{
+                background:q.primes?.consecutif?`linear-gradient(135deg,${C.vert},#4a9a5a)`:maxConsecutifs>=2?C.or+"15":C.creme,
+                border:`1.5px solid ${q.primes?.consecutif?C.vert:maxConsecutifs>=2?C.or:C.pale}`,
+                borderRadius:10,padding:".6rem .85rem",
+                display:"flex",justifyContent:"space-between",alignItems:"center"
+              }}>
+                <div>
+                  <div style={{fontSize:".7rem",fontWeight:700,color:q.primes?.consecutif?"white":maxConsecutifs>=2?C.brun:C.gris}}>
+                    {q.primes?.consecutif?"🎉 Prime 1 débloquée !":maxConsecutifs>=2?"✓ Condition remplie":"○ Prime 1"}
+                  </div>
+                  <div style={{fontSize:".6rem",color:q.primes?.consecutif?"rgba(255,255,255,.8)":C.gris,marginTop:".1rem"}}>
+                    2 périodes consécutives · {maxConsecutifs}/2
+                  </div>
+                </div>
+                <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:700,color:q.primes?.consecutif?"white":maxConsecutifs>=2?C.vert:C.gris}}>
+                  {pq.prime}€
+                </div>
               </div>
-              <div style={{flex:1,minWidth:120,padding:".4rem .6rem",borderRadius:8,background:totalSur12>=6?C.vert+"15":C.creme,border:`1px solid ${totalSur12>=6?C.vert:C.pale}`,fontSize:".64rem",color:totalSur12>=6?C.vert:C.gris}}>
-                {totalSur12>=6?"🎉":"⏳"} 6 mois / 12 : <strong>{Math.min(totalSur12,6)}/6</strong> {totalSur12>=6&&"— Prime validée !"}
+
+              {/* Prime 2 : 6 sur 12 */}
+              <div style={{
+                background:q.primes?.sur12?`linear-gradient(135deg,${C.or},#b8962a)`:totalSur12>=6?C.vert+"15":C.creme,
+                border:`1.5px solid ${q.primes?.sur12?C.or:totalSur12>=6?C.vert:C.pale}`,
+                borderRadius:10,padding:".6rem .85rem",
+                display:"flex",justifyContent:"space-between",alignItems:"center"
+              }}>
+                <div>
+                  <div style={{fontSize:".7rem",fontWeight:700,color:q.primes?.sur12?"white":totalSur12>=6?C.brun:C.gris}}>
+                    {q.primes?.sur12?"🎉 Prime 2 débloquée !":totalSur12>=6?"✓ Condition remplie":"○ Prime 2"}
+                  </div>
+                  <div style={{fontSize:".6rem",color:q.primes?.sur12?"rgba(255,255,255,.8)":C.gris,marginTop:".1rem"}}>
+                    6 périodes sur 12 · {totalSur12}/6
+                  </div>
+                </div>
+                <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:700,color:q.primes?.sur12?"white":totalSur12>=6?C.vert:C.gris}}>
+                  {pq.prime}€
+                </div>
               </div>
+
+              {/* Total débloqué */}
+              {(q.primes?.consecutif||q.primes?.sur12)&&(
+                <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:10,padding:".55rem .85rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:".72rem",fontWeight:600,color:C.or}}>
+                    💰 Total débloqué pour {pq.id}
+                  </div>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:700,color:C.or}}>
+                    {((q.primes?.consecutif?1:0)+(q.primes?.sur12?1:0)) * pq.prime}€
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
       })}
     </div>
   );
+
+
+
+}
+function PrimesAccordeon({obj, save, onPrimeValidee}){
+  const[open,setOpen]=useState(true);
+  return(
+    <div style={{marginBottom:".75rem"}}>
+      <div onClick={()=>setOpen(o=>!o)}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:open?"12px 12px 0 0":12,padding:".75rem 1rem",cursor:"pointer",userSelect:"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:".5rem"}}>
+          <span style={{fontSize:"1rem"}}>💎</span>
+          <div style={{fontSize:".75rem",fontWeight:700,color:C.brun}}>Primes de qualification</div>
+        </div>
+        <span style={{color:C.gris,fontSize:".8rem",transform:open?"rotate(90deg)":"none",transition:"transform .2s"}}>›</span>
+      </div>
+      {open&&(
+        <div style={{border:`1px solid ${C.pale}`,borderTop:"none",borderRadius:"0 0 12px 12px",overflow:"hidden"}}>
+          <PrimesQualificationSection obj={obj} save={save} onPrimeValidee={onPrimeValidee}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── CALCUL DU RESTE ──────────────────────────────────────────────────────────
+function ResteCalculateur({obj, save, distributeurs=[]}){
+  const[annuaire,setAnnuaire]=useState([]);
+  // State local pour les saisies CA — indépendant de obj pour éviter les re-renders
+  const[vals,setVals]=useState({});
+  const[inited,setInited]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"equipe","annuaire"));
+        if(snap.exists()){
+          const m=snap.data().membres||{};
+          setAnnuaire(Object.entries(m).map(([uid,d])=>({id:uid,prenom:d.prenom||"",nom:d.nom||"",ca:d.ca||""})).filter(d=>d.prenom||d.nom).sort((a,b)=>(a.prenom+a.nom).localeCompare(b.prenom+b.nom)));
+        }
+      }catch{}
+    })();
+  },[]);
+
+  // Initialiser vals depuis obj.caDirecteurs une seule fois
+  useEffect(()=>{
+    if(!inited&&obj.caDirecteurs){
+      setVals({...obj.caDirecteurs});
+      setInited(true);
+    }
+  },[obj.caDirecteurs,inited]);
+
+  const caEquipe=parseFloat(obj.ca)||0;
+  const nbDir=parseInt(obj.nbDirecteurs)||0;
+  const selectionnes=obj.dirSelectionnes||{};
+
+  // Calcul depuis le state local vals
+  const totalDir=Array.from({length:nbDir},(_,i)=>parseFloat(vals[i])||0).reduce((s,v)=>s+v,0);
+  const reste=caEquipe-totalDir;
+
+  const setNbDir=(n)=>{
+    const nextCa={...vals};
+    const nextSel={...selectionnes};
+    for(let i=n;i<6;i++){delete nextCa[i];delete nextSel[i];}
+    setVals(nextCa);
+    save({...obj,nbDirecteurs:n,caDirecteurs:nextCa,dirSelectionnes:nextSel});
+  };
+
+  const setVal=(i,v)=>{
+    const next={...vals,[i]:v};
+    setVals(next);
+    save({...obj,caDirecteurs:next});
+  };
+
+  const selDir=(i,uid)=>{
+    const d=annuaire.find(x=>x.id===uid);
+    const nextSel={...selectionnes,[i]:uid};
+    // Ne pas écraser une valeur déjà saisie manuellement
+    const nextCa={...vals};
+    if(!vals[i]&&d?.ca) nextCa[i]=d.ca;
+    setVals(nextCa);
+    save({...obj,dirSelectionnes:nextSel,caDirecteurs:nextCa});
+  };
+
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:".75rem"}}>
+      <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".6rem"}}><T k="obj.reste">📊 Calcul du Reste</T></div>
+
+      {/* CA équipe */}
+      <div style={{background:C.creme,borderRadius:9,padding:".5rem .75rem",marginBottom:".75rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:".7rem",color:C.gris}}>💰 CA total équipe (mes objectifs)</span>
+        <span style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:700,color:C.brun}}>{caEquipe}€</span>
+      </div>
+
+      {/* Nombre directeurs */}
+      <div style={{marginBottom:".75rem"}}>
+        <div style={{fontSize:".62rem",color:C.gris,marginBottom:".35rem",fontWeight:600}}><T k="obj.directeurs">Directeurs dans ma structure</T></div>
+        <div style={{display:"flex",gap:".3rem"}}>
+          {[0,1,2,3,4,5,6].map(n=>(
+            <button key={n} onClick={()=>setNbDir(n)}
+              style={{width:34,height:34,borderRadius:8,border:`2px solid ${nbDir===n?C.brun:C.pale}`,background:nbDir===n?C.brun:C.blanc,color:nbDir===n?C.blanc:C.gris,fontSize:".8rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Champs directeurs */}
+      {nbDir>0&&(
+        <div style={{marginBottom:".75rem"}}>
+          {Array.from({length:nbDir},(_,i)=>{
+            const selUid=selectionnes[i]||"";
+            const selD=selUid?annuaire.find(x=>x.id===selUid):null;
+            return(
+              <div key={i} style={{background:C.creme,borderRadius:9,padding:".55rem .75rem",marginBottom:".4rem",border:`1px solid ${C.pale}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:".5rem",marginBottom:".3rem"}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:C.brun,color:C.blanc,fontSize:".65rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+                  <select value={selUid} onChange={e=>selDir(i,e.target.value)}
+                    style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".32rem .5rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}>
+                    <option value="">— Choisir —</option>
+                    {annuaire.map(d=>(
+                      <option key={d.id} value={d.id}>{d.prenom} {d.nom}</option>
+                    ))}
+                  </select>
+                </div>
+                {selD&&<div style={{fontSize:".62rem",color:C.vert,marginBottom:".25rem",fontWeight:600}}>✓ {selD.prenom} {selD.nom}</div>}
+                <div style={{display:"flex",alignItems:"center",gap:".4rem"}}>
+                  <span style={{fontSize:".65rem",color:C.gris,flexShrink:0}}>CA ce directeur :</span>
+                  <input
+                    type="number"
+                    value={vals[i]||""}
+                    onChange={e=>setVal(i,e.target.value)}
+                    placeholder="0"
+                    style={{flex:1,border:`1.5px solid ${C.rose}`,borderRadius:7,padding:".32rem .5rem",fontSize:".88rem",fontFamily:"inherit",color:C.brun,background:"white",outline:"none",fontWeight:700}}
+                  />
+                  <span style={{fontSize:".65rem",color:C.gris}}>€</span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Total directeurs */}
+          <div style={{background:C.creme,borderRadius:8,padding:".4rem .75rem",display:"flex",justifyContent:"space-between"}}>
+            <span style={{fontSize:".7rem",color:C.gris}}>Total CA directeurs</span>
+            <span style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:700,color:"#B04040"}}>− {totalDir}€</span>
+          </div>
+        </div>
+      )}
+
+      {/* Résultat */}
+      <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:10,padding:".85rem 1rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem"}}>
+          <div>
+            <div style={{fontSize:".58rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".1rem"}}>✨ Reste qualifiant</div>
+            <div style={{fontSize:".62rem",color:C.pale}}>{caEquipe} − {totalDir} =</div>
+          </div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.6rem",fontWeight:700,color:reste<0?"#F4A460":C.or}}>{reste}€</div>
+        </div>
+        {nbDir>0&&(
+          <div style={{background:"rgba(255,255,255,.1)",borderRadius:7,padding:".3rem .6rem",fontSize:".65rem",color:C.pale}}>
+            {Array.from({length:nbDir},(_,i)=>{
+              const selD=selectionnes[i]?annuaire.find(x=>x.id===selectionnes[i]):null;
+              return<span key={i}>{i>0?" · ":""}{selD?selD.prenom:`Dir.${i+1}`} : {parseFloat(vals[i])||0}€</span>;
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 
-function ObjPersoTab({obj,save,uid,userName}){
+function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   const[confettiTrigger,setConfettiTrigger]=useState(0);
   const[fireworksTrigger,setFireworksTrigger]=useState(0);
-  const pctCA=()=>{
-    if(!obj.caObj||!obj.ca)return 0;
-    return Math.min(100,Math.round(+obj.ca/+obj.caObj*100));
-  };
-  const pctR=()=>{
-    if(!obj.recruesObj||obj.recruesObj==="0"||!obj.recruesReal)return 0;
-    return Math.min(100,Math.round(+obj.recruesReal/+obj.recruesObj*100));
-  };
+  const[graphEnGros,setGraphEnGros]=useState(null);
+  const raw=getPeriodeInfo();
+  const pCourant=getPeriodeActuelle();
+
+  // Score période précédente depuis l'historique
+  const histPerso=obj.historique||[];
+  const dernierHist=histPerso.length>0?histPerso[histPerso.length-1]:null;
+  const scorePrecBadge=dernierHist?(
+    <div style={{display:"flex",gap:".5rem",alignItems:"center",background:"rgba(196,154,138,.1)",border:`1px solid ${C.pale}`,borderRadius:8,padding:".3rem .65rem",marginBottom:".6rem",flexWrap:"wrap"}}>
+      <span style={{fontSize:".58rem",color:C.gris}}>📊 Période précédente ({fmtPLabel(dernierHist.periode||pCourant-1)}) :</span>
+      <span style={{fontSize:".65rem",fontWeight:700,color:C.rose}}>💰 {dernierHist.ca||0}€</span>
+      <span style={{fontSize:".65rem",fontWeight:700,color:C.brun}}>🛍️ {dernierHist.caPerso||0}€ perso</span>
+      <span style={{fontSize:".65rem",fontWeight:700,color:C.lilas}}>👥 {dernierHist.recruesReal||0} recrues</span>
+    </div>
+  ):null;
+
+  const pctCA=()=>{if(!obj.caObj||!obj.ca)return 0;return Math.min(100,Math.round(+obj.ca/+obj.caObj*100));};
+  const pctR=()=>{if(!obj.recruesObj||obj.recruesObj==="0"||!obj.recruesReal)return 0;return Math.min(100,Math.round(+obj.recruesReal/+obj.recruesObj*100));};
+  const pct=(r,o)=>{if(!o||!r)return 0;return Math.min(100,Math.round(+r/+o*100));};
+
   const checkAndCelebrate=(nextObj)=>{
-    const wasNot100CA = pctCA()<100, wasNot100R = pctR()<100;
-    const nextPctCA = (!nextObj.caObj||!nextObj.ca)?0:Math.min(100,Math.round(+nextObj.ca/+nextObj.caObj*100));
-    const nextPctR = (!nextObj.recruesObj||nextObj.recruesObj==="0"||!nextObj.recruesReal)?0:Math.min(100,Math.round(+nextObj.recruesReal/+nextObj.recruesObj*100));
-    if((wasNot100CA&&nextPctCA>=100)||(wasNot100R&&nextPctR>=100)){
-      setConfettiTrigger(t=>t+1);
-    }
-    if(wasNot100CA&&nextPctCA>=100&&uid&&userName){
-      postToWallOfFame(uid, userName, `a atteint son objectif CA du mois ! 💰`, "🎉");
-    }
-    if(wasNot100R&&nextPctR>=100&&uid&&userName){
-      postToWallOfFame(uid, userName, `a atteint son objectif recrutement du mois ! 👥`, "🎉");
-    }
+    const wasNot100CA=pctCA()<100,wasNot100R=pctR()<100;
+    const nextPctCA=(!nextObj.caObj||!nextObj.ca)?0:Math.min(100,Math.round(+nextObj.ca/+nextObj.caObj*100));
+    const nextPctR=(!nextObj.recruesObj||nextObj.recruesObj==="0"||!nextObj.recruesReal)?0:Math.min(100,Math.round(+nextObj.recruesReal/+nextObj.recruesObj*100));
+    if((wasNot100CA&&nextPctCA>=100)||(wasNot100R&&nextPctR>=100))setConfettiTrigger(t=>t+1);
+    if(wasNot100CA&&nextPctCA>=100&&uid&&userName)postToWallOfFame(uid,userName,"a atteint son objectif CA ! 💰","🎉");
+    if(wasNot100R&&nextPctR>=100&&uid&&userName)postToWallOfFame(uid,userName,"a atteint son objectif recrutement ! 👥","🎉");
     save(nextObj);
   };
 
-  const historique = obj.historique || [];
-
-  const snapshotNow = () => {
-    const entry = {
-      date: new Date().toISOString().slice(0,10),
-      ca: +obj.ca || 0,
-      caObj: +obj.caObj || 0,
-      recruesReal: +obj.recruesReal || 0,
-      recruesObj: +obj.recruesObj || 0,
-      palier: obj.palier || "2%",
-    };
-    return [...historique, entry].slice(-24); // garde les 24 derniers points
+  const historique=obj.historique||[];
+  const snapshotNow=()=>{
+    const entry={date:new Date().toISOString().slice(0,10),ca:+obj.ca||0,caObj:+obj.caObj||0,caPerso:+obj.caPerso||0,recruesReal:+obj.recruesReal||0,recruesObj:+obj.recruesObj||0,palier:obj.palier||"2%"};
+    return [...historique,entry].slice(-24);
   };
 
-  const resetPeriode=()=>{
-    const nextHist = snapshotNow();
-    const totalCaCumul = (+obj.totalCaCumul||0) + (+obj.ca||0);
-    const totalRecruesCumul = (+obj.totalRecruesCumul||0) + (+obj.recruesReal||0);
-    save({...obj,ca:"",recruesReal:"0",historique:nextHist,totalCaCumul,totalRecruesCumul});
+  const resetPeriode=async()=>{
+    const hist=snapshotNow();
+    const next={...obj,ca:"",caObj:"",caPerso:"",caEquipe:"",recruesReal:"0",historique:hist};
+    const totalCaCumul=(+obj.totalCaCumul||0)+(+obj.ca||0);
+    const totalRecruesCumul=(+obj.totalRecruesCumul||0)+(+obj.recruesReal||0);
+    checkAndCelebrate({...next,totalCaCumul,totalRecruesCumul});
   };
 
-  const enregistrerPoint=()=>{
-    save({...obj,historique:snapshotNow()});
+  const enregistrerPoint=()=>{save({...obj,historique:snapshotNow()});};
+  const comparaisonPeriode=(hist,valActuelle,key)=>{if(!hist||hist.length<1)return null;const last=hist[hist.length-1];const prev=last[key]||0;const curr=+valActuelle||0;const diff=curr-prev;const pct2=prev?Math.round(diff/prev*100):0;return{diff,previous:prev,pct:pct2};};
+
+  const PALIERS_PERSO=["2%","4%","6%","8%","10%","12%","14%","17%","SR","Directeur","Structural","Business Director","SR Business Director","Business"];
+  const currentPalierIdx=PALIERS_PERSO.indexOf(obj.palier||"2%");
+  const nextPalier=currentPalierIdx<PALIERS_PERSO.length-1?PALIERS_PERSO[currentPalierIdx+1]:null;
+
+  // Mini graphique inline
+  const MiniGraph=({data,dataKey,color,label,onClick})=>{
+    if(!data||data.length<2)return null;
+    const vals=data.map(d=>+d[dataKey]||0);
+    const max=Math.max(...vals,1);
+    const w=120,h=50;
+    const pts=vals.map((v,i)=>`${Math.round(i/(vals.length-1)*w)},${Math.round(h-(v/max*h*.85+h*.05))}`).join(" ");
+    return(
+      <div onClick={onClick} style={{flex:1,minWidth:0,cursor:"pointer",padding:".4rem",background:C.blanc,borderRadius:9,border:`1px solid ${C.pale}`,transition:"transform .15s"}} title="Cliquer pour agrandir">
+        <div style={{fontSize:".58rem",color:C.gris,marginBottom:".2rem",fontWeight:600}}>{label}</div>
+        <svg viewBox={`0 0 ${w} ${h}`} style={{width:"100%",height:50,display:"block"}}>
+          <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+          <polyline points={`0,${h} ${pts} ${w},${h}`} fill={color} fillOpacity={.12} stroke="none"/>
+        </svg>
+        <div style={{fontSize:".55rem",color,fontWeight:700,textAlign:"right",marginTop:".1rem"}}>{vals[vals.length-1]}</div>
+      </div>
+    );
+  };
+
+  // Graphique en grand (popup)
+  const GrandGraph=({data,dataKey,color,label,unit=""})=>{
+    const vals=data.map(d=>+d[dataKey]||0);
+    const dates=data.map(d=>d.date?.slice(5)||"");
+    const max=Math.max(...vals,1);
+    const w=280,h=120;
+    const pts=vals.map((v,i)=>`${Math.round(i/(vals.length-1)*w)},${Math.round(h-(v/max*h*.85+h*.05))}`).join(" ");
+    return(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}} onClick={()=>setGraphEnGros(null)}>
+        <div style={{background:C.blanc,borderRadius:16,padding:"1.25rem",width:"90%",maxWidth:360}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:600,color:C.brun,marginBottom:".75rem"}}>{label}</div>
+          <svg viewBox={`0 0 ${w} ${h}`} style={{width:"100%",height:140,display:"block",marginBottom:".5rem"}}>
+            <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points={`0,${h} ${pts} ${w},${h}`} fill={color} fillOpacity={.1} stroke="none"/>
+            {vals.map((v,i)=>(
+              <g key={i}>
+                <circle cx={Math.round(i/(vals.length-1)*w)} cy={Math.round(h-(v/max*h*.85+h*.05))} r={3} fill={color}/>
+                <text x={Math.round(i/(vals.length-1)*w)} y={h-2} textAnchor="middle" fontSize="7" fill={C.gris}>{dates[i]}</text>
+              </g>
+            ))}
+          </svg>
+          {vals.map((v,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:".65rem",color:C.gris,padding:".2rem 0",borderBottom:`1px solid ${C.pale}`}}>
+              <span>{dates[i]||`Point ${i+1}`}</span>
+              <span style={{fontWeight:700,color}}>{v}{unit}</span>
+            </div>
+          ))}
+          <button onClick={()=>setGraphEnGros(null)} style={{width:"100%",marginTop:".75rem",background:C.brun,color:C.blanc,border:"none",borderRadius:9,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Fermer</button>
+        </div>
+      </div>
+    );
   };
 
   return(
     <div>
       <Confetti trigger={confettiTrigger}/>
       <Fireworks trigger={fireworksTrigger}/>
-      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        Mes <em style={{fontStyle:"italic",color:C.rose}}>Objectifs</em>
-      </div>
-      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Tes objectifs personnels ce mois-ci. Visibles dans le bouton 📊 en bas à droite.
-      </p>
+      {graphEnGros&&historique.length>=2&&<GrandGraph data={historique} dataKey={graphEnGros} color={graphEnGros==="recruesReal"?C.lilas:graphEnGros==="caPerso"?C.rose:C.brun} label={graphEnGros==="recruesReal"?"👥 Recrues":graphEnGros==="caPerso"?"🛍️ Ventes perso":"💰 CA total"} unit={graphEnGros==="recruesReal"?"":" €"}/>}
 
-      {/* Timer période */}
-      <PeriodeTimer/>
-
-      {/* Bouton reset */}
-      <div style={{background:"rgba(196,74,26,.08)",border:"1px solid rgba(196,74,26,.2)",borderRadius:10,padding:".65rem 1rem",marginBottom:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
-          <div style={{fontSize:".73rem",fontWeight:600,color:C.brun}}>🔄 Nouvelle période</div>
-          <div style={{fontSize:".65rem",color:C.gris}}>Remet CA réalisé et recrues à zéro</div>
+      {/* 1. PÉRIODE EN COURS */}
+      <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:".75rem",color:C.blanc}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div style={{fontSize:".55rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".15rem"}}>⏱️ Période en cours</div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.blanc}}>{fmtPLabel(pCourant)}</div>
+            <div style={{fontSize:".65rem",color:C.pale}}>{raw.daysLeft}j {raw.hoursLeft}h restants</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{height:4,width:80,background:"rgba(255,255,255,.15)",borderRadius:10,overflow:"hidden",marginBottom:".2rem"}}>
+              <div style={{height:"100%",background:C.or,width:raw.pctElapsed+"%",borderRadius:10}}/>
+            </div>
+            <div style={{fontSize:".58rem",color:C.pale}}>{raw.pctElapsed}% écoulé</div>
+          </div>
         </div>
-        <button onClick={resetPeriode}
-          style={{background:"#C44B1A",color:"white",border:"none",borderRadius:8,padding:".35rem .75rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-          Remettre à zéro
+      </div>
+
+      {/* Bouton confirmer objectifs posés */}
+      {obj.objectifsPosesPeriode!==pCourant&&(
+        <button onClick={()=>save({...obj,objectifsPosesPeriode:pCourant})}
+          style={{width:"100%",background:C.creme,border:`1.5px dashed ${C.or}`,borderRadius:10,padding:".5rem",fontSize:".75rem",fontWeight:600,color:"#856404",fontFamily:"inherit",cursor:"pointer",marginBottom:".75rem"}}>
+          ✅ Mes objectifs sont posés pour cette période
         </button>
+      )}
+
+      {/* Score période précédente */}
+      {scorePrecBadge}
+
+      {/* 2. TOTAL DEPUIS LE DÉBUT */}
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem .85rem",marginBottom:".75rem"}}>
+        <div style={{fontSize:".55rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".3rem"}}>🏆 Total depuis le début</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:700,color:C.brun}}>{(+obj.totalCaCumul||0)+(+obj.ca||0)}€</div>
+        <div style={{fontSize:".58rem",color:C.gris}}>{(+obj.totalRecruesCumul||0)+(+obj.recruesReal||0)} recrues total</div>
       </div>
 
-      {/* Récap période en cours + total global */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem"}}>
-          <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".4rem"}}>📅 Cette période</div>
-          <div style={{fontSize:".68rem",color:C.gris}}>💰 CA</div>
-          <div style={{fontFamily:"Georgia,serif",fontSize:"1.25rem",fontWeight:600,color:C.brun,lineHeight:1.2}}>{obj.ca||0}€</div>
-          <div style={{fontSize:".68rem",color:C.gris,marginTop:".3rem"}}>👥 Recrues</div>
-          <div style={{fontFamily:"Georgia,serif",fontSize:"1.25rem",fontWeight:600,color:C.brun,lineHeight:1.2}}>{obj.recruesReal||0}</div>
+      {/* 3. PALIER À ATTEINDRE */}
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".75rem"}}>
+        <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".5rem"}}>🎯 Palier à atteindre</div>
+        <div style={{display:"flex",gap:".4rem",flexWrap:"wrap"}}>
+          {PALIERS_PERSO.map((p,idx)=>(
+            <button key={p} onClick={()=>save({...obj,palier:p})}
+              style={{padding:".3rem .55rem",fontSize:".65rem",fontWeight:600,borderRadius:8,border:`1.5px solid ${obj.palier===p?C.or:C.pale}`,background:idx<currentPalierIdx?"#E8F5E9":obj.palier===p?C.or+"20":C.blanc,color:idx<currentPalierIdx?C.vert:obj.palier===p?C.brun:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+              {idx<currentPalierIdx?"✓ ":""}{p}
+            </button>
+          ))}
         </div>
-        <div style={{background:`linear-gradient(135deg, ${C.brun}, ${C.brun2})`,borderRadius:12,padding:".75rem"}}>
-          <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".4rem"}}>🏆 Total depuis le début</div>
-          <div style={{fontSize:".68rem",color:C.pale,opacity:.85}}>💰 CA cumulé</div>
-          <div style={{fontFamily:"Georgia,serif",fontSize:"1.25rem",fontWeight:600,color:"white",lineHeight:1.2}}>{(+obj.totalCaCumul||0)+(+obj.ca||0)}€</div>
-          <div style={{fontSize:".68rem",color:C.pale,opacity:.85,marginTop:".3rem"}}>👥 Recrues cumulées</div>
-          <div style={{fontFamily:"Georgia,serif",fontSize:"1.25rem",fontWeight:600,color:"white",lineHeight:1.2}}>{(+obj.totalRecruesCumul||0)+(+obj.recruesReal||0)}</div>
-        </div>
+        {nextPalier&&<div style={{fontSize:".65rem",color:C.gris,marginTop:".4rem"}}>Prochain palier → <strong style={{color:C.brun}}>{nextPalier}</strong></div>}
       </div>
 
-      {/* PALIER */}
-      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:".75rem"}}>
-        <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".6rem"}}>🏆 Palier à atteindre</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:".35rem"}}>
-          {PALIERS_PERSO.map(p=>{
-            const current=obj.palier===p;
-            const idx=PALIERS_PERSO.indexOf(p);
-            const currentIdx=PALIERS_PERSO.indexOf(obj.palier||"2%");
-            const passed=currentIdx>idx;
-            return(
-              <div key={p} onClick={()=>{
-                  const suggestion = PALIER_CA_OBJ[p];
-                  save(suggestion!==undefined ? {...obj,palier:p,caObj:String(suggestion)} : {...obj,palier:p});
-                }}
-                style={{padding:".3rem .75rem",borderRadius:20,fontSize:".72rem",fontWeight:600,cursor:"pointer",border:`2px solid ${current?C.or:passed?C.or+"50":C.pale}`,background:current?C.or:passed?C.or+"15":"transparent",color:current?C.brun:passed?C.brun2:C.gris,transition:"all .2s"}}>
-                {passed&&!current?"✓ ":""}{p}
-              </div>
-            );
-          })}
-        </div>
-        <div style={{marginTop:".75rem"}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>
-            <span>Progression plan de rémunération</span>
-            <span style={{fontWeight:700,color:C.or}}>{PALIERS_PERSO.indexOf(obj.palier||"2%")+1}/{PALIERS_PERSO.length}</span>
-          </div>
-          <div style={{height:8,background:C.pale,borderRadius:10,overflow:"hidden"}}>
-            <div style={{height:"100%",background:C.or,width:(((PALIERS_PERSO.indexOf(obj.palier||"2%")+1)/PALIERS_PERSO.length)*100)+"%",borderRadius:10,transition:"width .4s"}}/>
-          </div>
-        </div>
-      </div>
-
-      {/* CA */}
+      {/* 4. CHIFFRE D'AFFAIRES */}
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:".75rem"}}>
         <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>💰 Chiffre d'affaires</div>
         <div style={{display:"flex",gap:".5rem",marginBottom:".6rem"}}>
           <div style={{flex:1}}>
-            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>Mon objectif (€)</div>
+            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}><T k="obj.objectif">Objectif (€)</T></div>
             <input type="number" placeholder="Ex: 500" value={obj.caObj||""} onChange={e=>save({...obj,caObj:e.target.value})}
               style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".9rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}/>
           </div>
           <div style={{flex:1}}>
-            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>Réalisé (€)</div>
-            <input type="number" placeholder="Ex: 250" value={obj.ca||""} onChange={e=>checkAndCelebrate({...obj,ca:e.target.value})}
+            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}><T k="obj.ca_total">CA total = ventes équipe (€)</T></div>
+            <input type="number" placeholder="Ex: 250" value={obj.ca||""} onChange={e=>checkAndCelebrate({...obj,ca:e.target.value,caEquipe:String(Math.max(0,(parseFloat(e.target.value)||0)-(parseFloat(obj.caPerso)||0)))})}
               style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".9rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}/>
           </div>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>
-          <span>Progression</span>
-          <span style={{fontWeight:700,color:pctCA()>=100?C.vert:C.rose}}>{pctCA()}%</span>
+        <div style={{background:C.creme,borderRadius:9,padding:".45rem .7rem",marginBottom:".5rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:".68rem",color:C.gris}}>🛍️ Dont mes ventes perso</span>
+          <div style={{display:"flex",gap:".4rem",alignItems:"center"}}>
+            <input type="number" placeholder="0" value={obj.caPerso||""} onChange={e=>{
+              const perso=parseFloat(e.target.value)||0;
+              save({...obj,caPerso:e.target.value,caEquipe:String(Math.max(0,(parseFloat(obj.ca)||0)-perso))});
+            }} style={{width:70,border:`1px solid ${C.rose}40`,borderRadius:7,padding:".28rem .45rem",fontSize:".8rem",fontFamily:"inherit",color:C.brun,background:"white",outline:"none",fontWeight:600,textAlign:"right"}}/>
+            <span style={{fontSize:".65rem",color:C.gris}}>€</span>
+          </div>
         </div>
-        <div style={{height:10,background:C.pale,borderRadius:10,overflow:"hidden"}}>
+        <div style={{height:8,background:C.pale,borderRadius:10,overflow:"hidden",marginBottom:".3rem"}}>
           <div style={{height:"100%",background:pctCA()>=100?C.vert:C.rose,width:pctCA()+"%",borderRadius:10,transition:"width .4s"}}/>
         </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:".62rem",color:C.gris}}>
+          <span>CA équipe : {Math.max(0,(parseFloat(obj.ca)||0)-(parseFloat(obj.caPerso)||0))}€</span>
+          <span style={{fontWeight:700,color:pctCA()>=100?C.vert:C.rose}}>{pctCA()}%</span>
+        </div>
         {pctCA()>=100&&<div style={{textAlign:"center",fontSize:".75rem",color:C.vert,fontWeight:700,marginTop:".4rem"}}>🎉 Objectif CA atteint !</div>}
-        {(() => {
-          const comp = comparaisonPeriode(historique, obj.ca, "ca");
-          if(!comp) return null;
-          const up = comp.diff >= 0;
-          return (
-            <div style={{display:"flex",alignItems:"center",gap:".3rem",marginTop:".5rem",fontSize:".66rem",color:up?C.vert:"#B04040"}}>
-              <span>{up?"📈":"📉"}</span>
-              <span style={{fontWeight:700}}>{comp.diff>=0?"+":""}{comp.diff}€</span>
-              <span style={{color:C.gris}}>vs période précédente ({comp.previous}€{comp.pct!==0?` · ${comp.pct>0?"+":""}${comp.pct}%`:""})</span>
-            </div>
-          );
-        })()}
-        {historique.length>=2&&(
-          <div style={{marginTop:".75rem",paddingTop:".6rem",borderTop:`1px solid ${C.pale}`}}>
-            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>📈 Évolution de ton CA</div>
-            <MiniChart data={historique} dataKey="ca" objKey="caObj" color={C.rose} unit="€"/>
-          </div>
-        )}
-      </div>
 
-      {/* PRIMES DE QUALIFICATION */}
-      <PrimesQualificationSection obj={obj} save={save} onPrimeValidee={()=>setFireworksTrigger(t=>t+1)}/>
-
-      {/* RECRUES */}
-      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:".75rem"}}>
-        <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".6rem"}}>👥 Objectif recrues</div>
-        <div style={{display:"flex",gap:".5rem",marginBottom:".6rem"}}>
-          <div style={{flex:1}}>
-            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>Objectif (recrues)</div>
-            <select value={obj.recruesObj||"0"} onChange={e=>save({...obj,recruesObj:e.target.value})}
-              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".9rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}>
-              {Array.from({length:16},(_,i)=>i).map(n=><option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-          <div style={{flex:1}}>
-            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>Recrutées</div>
-            <select value={obj.recruesReal||"0"} onChange={e=>checkAndCelebrate({...obj,recruesReal:e.target.value})}
-              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".9rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}>
-              {Array.from({length:16},(_,i)=>i).map(n=><option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-        </div>
+        {/* Recrues */}
         {obj.recruesObj&&obj.recruesObj!=="0"&&(
-          <>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:".62rem",color:C.gris,marginBottom:".25rem"}}>
-              <span>Progression</span>
-              <span style={{fontWeight:700,color:pctR()>=100?C.vert:C.lilas}}>{pctR()}%</span>
-            </div>
-            <div style={{height:10,background:C.pale,borderRadius:10,overflow:"hidden"}}>
-              <div style={{height:"100%",background:pctR()>=100?C.vert:C.lilas,width:pctR()+"%",borderRadius:10,transition:"width .4s"}}/>
-            </div>
-            {pctR()>=100&&<div style={{textAlign:"center",fontSize:".75rem",color:C.vert,fontWeight:700,marginTop:".4rem"}}>🎉 Objectif recrues atteint !</div>}
-          </>
-        )}
-        {(() => {
-          const comp = comparaisonPeriode(historique, obj.recruesReal, "recruesReal");
-          if(!comp) return null;
-          const up = comp.diff >= 0;
-          return (
-            <div style={{display:"flex",alignItems:"center",gap:".3rem",marginTop:".5rem",fontSize:".66rem",color:up?C.vert:"#B04040"}}>
-              <span>{up?"📈":"📉"}</span>
-              <span style={{fontWeight:700}}>{comp.diff>=0?"+":""}{comp.diff}</span>
-              <span style={{color:C.gris}}>vs période précédente ({comp.previous})</span>
-            </div>
-          );
-        })()}
-        {historique.length>=2&&(
           <div style={{marginTop:".75rem",paddingTop:".6rem",borderTop:`1px solid ${C.pale}`}}>
-            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>📈 Évolution de tes recrues</div>
-            <MiniChart data={historique} dataKey="recruesReal" objKey="recruesObj" color={C.lilas}/>
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".4rem"}}>👥 Recrues</div>
+            <div style={{display:"flex",gap:".5rem"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Objectif</div>
+                <input type="number" placeholder="0" value={obj.recruesObj||""} onChange={e=>save({...obj,recruesObj:e.target.value})}
+                  style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".38rem .55rem",fontSize:".82rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Réalisé</div>
+                <input type="number" placeholder="0" value={obj.recruesReal||""} onChange={e=>checkAndCelebrate({...obj,recruesReal:e.target.value})}
+                  style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".38rem .55rem",fontSize:".82rem",fontFamily:"inherit",color:C.brun,background:C.creme,outline:"none",fontWeight:600}}/>
+              </div>
+            </div>
+            <div style={{height:6,background:C.pale,borderRadius:10,overflow:"hidden",marginTop:".4rem"}}>
+              <div style={{height:"100%",background:pctR()>=100?C.vert:C.lilas,width:pctR()+"%",borderRadius:10}}/>
+            </div>
           </div>
+        )}
+        {(!obj.recruesObj||obj.recruesObj==="0")&&(
+          <button onClick={()=>save({...obj,recruesObj:"1"})} style={{marginTop:".5rem",background:"none",border:`1px dashed ${C.pale}`,borderRadius:8,padding:".35rem .65rem",fontSize:".68rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
+            + Ajouter un objectif recrutement
+          </button>
         )}
       </div>
 
-      {/* Enregistrer un point manuel */}
-      <div style={{background:"rgba(168,155,181,.08)",border:`1px solid ${C.lilas}40`,borderRadius:10,padding:".65rem 1rem",marginBottom:".75rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
-          <div style={{fontSize:".73rem",fontWeight:600,color:C.brun}}>📍 Enregistrer un point sur la courbe</div>
-          <div style={{fontSize:".62rem",color:C.gris}}>Ajoute ta progression actuelle à l'historique, sans réinitialiser</div>
+      {/* 5. CALCUL DU RESTE */}
+      <ResteCalculateur obj={obj} save={save} distributeurs={distributeurs}/>
+
+      {/* 6. GRAPHIQUES CÔTE À CÔTE */}
+      {historique.length>=2&&(
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem",marginBottom:".75rem"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".6rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris}}>📈 Évolution</div>
+            <button onClick={enregistrerPoint} style={{background:C.lilas,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".62rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Point</button>
+          </div>
+          <div style={{display:"flex",gap:".5rem"}}>
+            <MiniGraph data={historique} dataKey="ca" color={C.brun} label="💰 CA total" onClick={()=>setGraphEnGros("ca")}/>
+            <MiniGraph data={historique} dataKey="caPerso" color={C.rose} label="🛍️ Ventes perso" onClick={()=>setGraphEnGros("caPerso")}/>
+            <MiniGraph data={historique} dataKey="recruesReal" color={C.lilas} label="👥 Recrues" onClick={()=>setGraphEnGros("recruesReal")}/>
+          </div>
+          <div style={{fontSize:".58rem",color:C.pale,textAlign:"center",marginTop:".4rem"}}>Clique sur un graphique pour l'agrandir</div>
         </div>
-        <button onClick={enregistrerPoint}
-          style={{background:C.lilas,color:"white",border:"none",borderRadius:8,padding:".35rem .75rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
-          + Point
-        </button>
-      </div>
+      )}
+
+      {/* 7. PRIMES DE QUALIFICATION */}
+      <PrimesAccordeon obj={obj} save={save} onPrimeValidee={()=>setFireworksTrigger(t=>t+1)}/>
     </div>
   );
 }
@@ -7008,11 +11976,39 @@ function MembresTab({uid}){
   };
 
   const remove=async(m)=>{
+    if(!window.confirm(`Supprimer l'accès de ${fmt(m)} ? Cette personne ne pourra plus se connecter.`))return;
     const nextM=membres.filter(x=>x!==m);
     const nextC=chefs.filter(x=>x!==m);
     setMembres(nextM);setChefs(nextC);
     await saveAll(nextM,nextC);
+    // Bloquer aussi dans Firebase users
+    try{
+      const mUid=m.toLowerCase().replace(/\s+/g,"-");
+      await setDoc(doc(db,"users",mUid),{accesBloqueAdmin:true},{merge:true});
+    }catch{}
   };
+
+  const [pauses,setPauses]=useState({});
+  const togglePause=async(m)=>{
+    const mUid=m.toLowerCase().replace(/\s+/g,"-");
+    const estPause=pauses[mUid]||false;
+    const next={...pauses,[mUid]:!estPause};
+    setPauses(next);
+    try{
+      await setDoc(doc(db,"users",mUid),{accesPause:!estPause},{merge:true});
+      await setDoc(doc(db,"acces","pauses"),{[mUid]:!estPause},{merge:true});
+    }catch{}
+  };
+
+  // Charger les pauses
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"acces","pauses"));
+        if(snap.exists())setPauses(snap.data());
+      }catch{}
+    })();
+  },[]);
 
   const toggleChef=async(m)=>{
     const isChef=chefs.includes(m);
@@ -7080,6 +12076,10 @@ function MembresTab({uid}){
                 style={{background:isChef?C.or+"20":"none",border:`1px solid ${isChef?C.or:C.pale}`,borderRadius:6,padding:".2rem .55rem",color:isChef?C.brun2:C.gris,cursor:"pointer",fontSize:".65rem",fontFamily:"inherit",fontWeight:isChef?700:400}}>
                 {isChef?"👑 Chef":"→ Chef"}
               </button>
+              <button onClick={()=>togglePause(m)}
+                style={{background:pauses[m.toLowerCase().replace(/\s+/g,"-")]?"#FFF3CD":"none",border:`1px solid ${pauses[m.toLowerCase().replace(/\s+/g,"-")]?"#E6A817":C.pale}`,borderRadius:6,padding:".2rem .55rem",color:pauses[m.toLowerCase().replace(/\s+/g,"-")]?"#856404":C.gris,cursor:"pointer",fontSize:".65rem",fontFamily:"inherit"}}>
+                {pauses[m.toLowerCase().replace(/\s+/g,"-")]?"⏸️ En pause":"⏸️"}
+              </button>
               <button onClick={()=>remove(m)}
                 style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .55rem",color:"#B04040",cursor:"pointer",fontSize:".7rem",fontFamily:"inherit"}}>
                 ✕
@@ -7129,11 +12129,21 @@ function MembreStatsCard({m, expanded, onToggleExpand}){
 
   // Charge les données complètes depuis Firebase quand on ouvre la fiche
   useEffect(()=>{
-    if(!expanded||extra||!m.uid)return;
+    if(!expanded||!m.uid)return;
     setLoadingExtra(true);
     (async()=>{
       try{
         const snap=await getDoc(doc(db,"users",m.uid));
+        let liensReseaux=[];
+        try{
+          const linkSnap=await getDoc(doc(db,"linkbio",m.uid));
+          if(linkSnap.exists()){
+            const lb=linkSnap.data();
+            const labels=lb.liensBonusLabel||[];
+            const urls=lb.liensBonusUrl||[];
+            liensReseaux=labels.map((lbl,i)=>({label:lbl,url:urls[i]})).filter(l=>l.label&&l.url);
+          }
+        }catch{}
         if(snap.exists()){
           const d=snap.data();
           setExtra({
@@ -7145,6 +12155,7 @@ function MembreStatsCard({m, expanded, onToggleExpand}){
             badges:d["db-badges-unlocked"]?JSON.parse(d["db-badges-unlocked"]):[],
             notes:d["db-distributeurs-notes"]||"",
             fastStart:d["db-fast-start"]?JSON.parse(d["db-fast-start"]):null,
+            liensReseaux,
           });
         }
       }catch{}
@@ -7270,27 +12281,92 @@ function MembreStatsCard({m, expanded, onToggleExpand}){
                 </div>
               )}
 
-              {/* Fast Start */}
+              {/* Fast Start — interface identique à la formation */}
               {extra.fastStart&&(
-                <div style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".75rem"}}>
-                  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".3rem"}}>🚀 Fast Start</div>
+                <div style={{marginBottom:".75rem"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".6rem"}}>
+                    <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose}}>🚀 Suivi Fast Start</div>
+                    <div style={{fontSize:".62rem",color:C.gris}}>
+                      J1 : {extra.fastStart.startDate?new Date(extra.fastStart.startDate).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"—"}
+                    </div>
+                  </div>
+
+                  {/* Progression globale */}
                   {(()=>{
-                    const totalTaches=FAST_START_DAYS.reduce((s,d)=>s+d.taches.length,0);
-                    const done=Object.values(extra.fastStart.doneTasks||{}).filter(Boolean).length;
+                    const totalTaches=FAST_START_DAYS.reduce((s,d2)=>s+d2.taches.length,0);
+                    const done=FAST_START_DAYS.reduce((s,d2)=>s+d2.taches.filter((_,i)=>extra.fastStart.doneTasks?.[`${d2.jour}-${i}`]).length,0);
+                    const modulesValides=Object.values(extra.fastStart.modulesValides||{}).filter(Boolean).length;
                     const p=Math.round(done/totalTaches*100);
                     return(
-                      <>
-                        <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.gris,marginBottom:".25rem"}}>
-                          <span>Progression</span><span style={{fontWeight:700,color:p>=100?C.vert:C.brun}}>{done}/{totalTaches} ({p}%)</span>
+                      <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:10,padding:".6rem .85rem",marginBottom:".6rem"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:".3rem"}}>
+                          <span style={{fontSize:".65rem",color:C.or,fontWeight:700}}>Progression globale</span>
+                          <span style={{fontSize:".65rem",color:C.pale}}>{modulesValides}/7 modules validés</span>
                         </div>
-                        <div style={{height:5,background:C.pale,borderRadius:10,overflow:"hidden"}}>
-                          <div style={{height:"100%",background:p>=100?C.vert:C.rose,width:p+"%",borderRadius:10}}/>
+                        <div style={{height:6,background:"rgba(255,255,255,.2)",borderRadius:10,overflow:"hidden",marginBottom:".2rem"}}>
+                          <div style={{height:"100%",background:p>=100?C.vert:C.or,width:p+"%",borderRadius:10,transition:"width .5s"}}/>
                         </div>
-                      </>
+                        <div style={{fontSize:".6rem",color:C.pale}}>{done}/{totalTaches} tâches · {p}%</div>
+                      </div>
                     );
                   })()}
+
+                  {/* Modules détaillés — même interface que FastStartTab */}
+                  {FAST_START_DAYS.map(d2=>{
+                    const moduleValide=extra.fastStart.modulesValides?.[d2.jour];
+                    const prevValide=d2.jour===1?true:!!extra.fastStart.modulesValides?.[d2.jour-1];
+                    const isLocked=!prevValide&&!moduleValide;
+                    const tachesDone=d2.taches.filter((_,i)=>extra.fastStart.doneTasks?.[`${d2.jour}-${i}`]).length;
+                    const total=d2.taches.length;
+                    const dayDone=tachesDone===total;
+                    return(
+                      <div key={d2.jour} style={{background:moduleValide?C.vert+"08":C.blanc,border:`1.5px solid ${moduleValide?C.vert:dayDone?C.vert+"60":isLocked?C.pale:C.rose}`,borderRadius:12,padding:".75rem .9rem",marginBottom:".5rem",opacity:isLocked?.5:1}}>
+                        <div style={{display:"flex",alignItems:"center",gap:".6rem",marginBottom:dayDone?".4rem":0}}>
+                          <div style={{width:28,height:28,borderRadius:"50%",background:moduleValide?C.vert:isLocked?C.pale:C.rose,color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".75rem",fontWeight:700,flexShrink:0}}>
+                            {moduleValide?"✓":isLocked?"🔒":d2.jour}
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:".75rem",fontWeight:700,color:moduleValide?C.vert:isLocked?C.gris:C.brun}}>{d2.titre}</div>
+                            <div style={{height:3,background:C.pale,borderRadius:10,overflow:"hidden",marginTop:".25rem"}}>
+                              <div style={{height:"100%",background:moduleValide?C.vert:C.rose,width:(tachesDone/total*100)+"%",borderRadius:10}}/>
+                            </div>
+                          </div>
+                          <div style={{fontSize:".65rem",fontWeight:700,color:moduleValide?C.vert:C.gris,flexShrink:0}}>
+                            {moduleValide?"✅ Validé":isLocked?"Verrouillé":`${tachesDone}/${total}`}
+                          </div>
+                        </div>
+
+                        {/* Tâches détaillées */}
+                        {!isLocked&&(
+                          <div style={{paddingLeft:".5rem"}}>
+                            {d2.taches.map((tache,i)=>{
+                              const done2=!!extra.fastStart.doneTasks?.[`${d2.jour}-${i}`];
+                              const txt=typeof tache==="string"?tache:tache.t;
+                              return(
+                                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:".45rem",padding:".25rem 0",borderBottom:i<d2.taches.length-1?`1px solid ${C.pale}30`:"none"}}>
+                                  <div style={{width:16,height:16,borderRadius:4,border:`2px solid ${done2?C.vert:C.pale}`,background:done2?C.vert:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:".1rem"}}>
+                                    {done2&&<span style={{color:"white",fontSize:".55rem",fontWeight:700}}>✓</span>}
+                                  </div>
+                                  <span style={{fontSize:".7rem",color:done2?C.vert:C.texte,textDecoration:done2?"line-through":"none",lineHeight:1.5}}>{txt}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+
+              {!extra.fastStart&&(
+                <div style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".75rem",textAlign:"center"}}>
+                  <div style={{fontSize:".72rem",color:C.gris,marginBottom:".4rem"}}>🚀 Pas encore de Fast Start assigné</div>
+                </div>
+              )}
+
+              {/* Liens réseaux sociaux — toujours visible */}
+              <LiensReseauxSection memberUid={m.uid}/>
 
               {/* Badges */}
               {extra.badges.length>0&&(
@@ -7368,18 +12444,33 @@ function AssiduiteTab({uid}){
         }
 
         // Charge les données d'assiduité de chaque membre
+        const periodeNum = getPeriodeActuelle();
+        const periodeKey = `p${periodeNum}`;
+        const debutPeriode = getPeriodeDebut(periodeNum);
+        const joursDansLaPeriode = Math.min(
+          Math.floor((Date.now()-debutPeriode.getTime())/(1000*60*60*24))+1, 21
+        );
+
         const results = await Promise.all(targetUids.map(async(mUid)=>{
           try{
             const snap=await getDoc(doc(db,"users",mUid));
             if(!snap.exists())return {uid:mUid, noData:true};
             const data=snap.data();
-            const actions = data["db-actions"] ? JSON.parse(data["db-actions"]) : {};
-            const doneToday = Object.values(actions).filter(Boolean).length;
+            const actionsRaw = data["db-actions"] ? JSON.parse(data["db-actions"]) : {};
+            const todayStr = new Date().toISOString().slice(0,10);
+            const isToday = actionsRaw._date === todayStr;
+            const {_date, ...actionsSeules} = actionsRaw;
+            const doneToday = isToday ? Object.values(actionsSeules).filter(Boolean).length : 0;
+            const assiduite = data["db-assiduite"] ? JSON.parse(data["db-assiduite"]) : {};
+            const joursActifs = assiduite[periodeKey]?.jours?.length || 0;
             return {
               uid:mUid,
               lastLogin: data["db-last-login"]||null,
               streak: +data["db-streak"]||0,
               doneToday,
+              joursActifs,
+              joursDansLaPeriode,
+              periodeNum,
               noData:false,
             };
           }catch{ return {uid:mUid, noData:true}; }
@@ -7412,7 +12503,7 @@ function AssiduiteTab({uid}){
         Assiduité <em style={{fontStyle:"italic",color:C.rose}}>Équipe</em>
       </div>
       <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Connexions et actions du jour de ton équipe. {membres.length} personne{membres.length>1?"s":""}.
+        Connexions, actions du jour et score de la période P{membres[0]?.periodeNum||""} · {membres.length} membre{membres.length>1?"s":""}.
       </p>
 
       <input placeholder="🔍 Rechercher un membre..." value={search} onChange={e=>setSearch(e.target.value)}
@@ -7432,6 +12523,9 @@ function AssiduiteTab({uid}){
         else { statusColor="#C0504D"; statusLabel=`Dernière connexion : ${new Date(m.lastLogin).toLocaleDateString("fr-FR")}`; }
 
         const doneToday = m.noData ? 0 : Math.min(m.doneToday, TODAY_ACTIONS_COUNT);
+        const joursActifs = m.joursActifs||0;
+        const joursDispo = m.joursDansLaPeriode||1;
+        const scorePct = Math.round(joursActifs/joursDispo*100);
 
         return(
           <div key={m.uid} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".7rem 1rem",marginBottom:".5rem"}}>
@@ -7447,15 +12541,29 @@ function AssiduiteTab({uid}){
               {!m.noData&&(
                 <div style={{textAlign:"right",flexShrink:0}}>
                   {m.streak>=2&&<div style={{fontSize:".68rem",fontWeight:700,color:C.or}}>🔥 {m.streak}j</div>}
-                  <div style={{fontSize:".64rem",color:C.gris}}>Actions : {doneToday}/{TODAY_ACTIONS_COUNT}</div>
+                  <div style={{fontSize:".64rem",color:C.gris}}>Aujourd'hui : {doneToday}/{TODAY_ACTIONS_COUNT}</div>
+                  {/* Score période */}
+                  <div style={{fontSize:".68rem",fontWeight:700,color:scorePct>=80?C.vert:scorePct>=50?C.or:"#C0504D",marginTop:".1rem"}}>
+                    📈 {joursActifs}/{joursDispo}j
+                  </div>
                 </div>
               )}
             </div>
+
             {!m.noData&&(
-              <div style={{display:"flex",gap:"3px",marginTop:".5rem"}}>
-                {Array.from({length:TODAY_ACTIONS_COUNT}).map((_,i)=>(
-                  <div key={i} style={{flex:1,height:5,borderRadius:3,background:i<doneToday?C.rose:C.pale}}/>
-                ))}
+              <div style={{marginTop:".5rem"}}>
+                <div style={{display:"flex",gap:"3px",marginBottom:".35rem"}}>
+                  {Array.from({length:TODAY_ACTIONS_COUNT}).map((_,i)=>(
+                    <div key={i} style={{flex:1,height:5,borderRadius:3,background:i<doneToday?C.rose:C.pale}}/>
+                  ))}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:".4rem"}}>
+                  <span style={{fontSize:".58rem",color:C.gris,flexShrink:0}}>P{m.periodeNum} :</span>
+                  <div style={{flex:1,height:5,background:C.pale,borderRadius:10,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:scorePct>=80?C.vert:scorePct>=50?C.or:"#C0504D",width:scorePct+"%",borderRadius:10}}/>
+                  </div>
+                  <span style={{fontSize:".6rem",fontWeight:700,color:scorePct>=80?C.vert:scorePct>=50?C.or:"#C0504D",flexShrink:0}}>{joursActifs}/{joursDispo}j</span>
+                </div>
               </div>
             )}
           </div>
@@ -7468,9 +12576,13 @@ function AssiduiteTab({uid}){
 
 // Onglet "Espace Chef" — regroupe toutes les fonctions chef d'équipe au même endroit
 const ESPACE_CHEF_SECTIONS=[
+  {id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true},
+  {id:"challengeapp",icon:"🎮",label:"Challenge Découverte App",desc:"Progression de chaque membre dans le défi 7 jours",chefOnly:true},
   {id:"membres",icon:"⚙️",label:"Accès équipe",desc:"Gérer les membres, chefs, et assigner les marraines",chefOnly:true},
-  {id:"assiduite",icon:"📊",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true},
-  {id:"defi",icon:"🚀",label:"Défi Flash",desc:"Lancer un défi collectif pour toute l'équipe",chefOnly:true},
+  {id:"assiduite",icon:"📋",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true},
+  {id:"suivica",icon:"📈",label:"Suivi CA",desc:"Ton chiffre d'affaires période par période avec historique",chefOnly:false},
+  {id:"actionsbiblio",icon:"💡",label:"Actions biblio",desc:"Ajouter des actions à la bibliothèque partagée de toute l'équipe",chefOnly:false},
+  {id:"defi",icon:"🚀",label:"Challenge Flash",desc:"Lancer un défi collectif pour toute l'équipe",chefOnly:true},
   {id:"powerhour",icon:"⏱️",label:"Power Hour",desc:"Sprint collectif synchrone de 20 minutes",chefOnly:true},
   {id:"distributeurs",icon:"👑",label:"Distributeurs",desc:"Voir et naviguer dans l'arborescence de ton équipe",chefOnly:false},
   {id:"nouveaux",icon:"📋",label:"Nouveaux Distri",desc:"Suivi onboarding des filleules récentes",chefOnly:false},
@@ -7694,6 +12806,913 @@ function MessagesRecusPopup({uid, onClose}){
 }
 
 
+
+// ── ACTIONS BIBLIO CHEF ───────────────────────────────────────────────────────
+function ActionsBiblioChefTab({uid}){
+  const[actions,setActions]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[form,setForm]=useState({icon:"⚡",label:"",cat:"ventes"});
+  const[saving,setSaving]=useState(false);
+  const[showAdd,setShowAdd]=useState(false);
+
+  const CATS=[
+    {id:"ventes",label:"🛍️ Ventes"},
+    {id:"recrutement",label:"👥 Recrutement"},
+    {id:"algorithme",label:"⚡ Algorithme"},
+    {id:"equipe",label:"✨ Équipe"},
+  ];
+
+  const ICONS=["⚡","💡","🎯","🔥","💪","🌟","✨","🎉","💬","📱","🤝","🏆","💰","🌸","🎥","📸","🌈","💎","🚀","❤️"];
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","actions_biblio"));
+        if(snap.exists()) setActions(snap.data().items||[]);
+      }catch{}
+      setLoading(false);
+    })();
+  },[]);
+
+  const save=async(next)=>{
+    setActions(next);
+    try{await setDoc(doc(db,"admin","actions_biblio"),{items:next},{merge:false});}catch{}
+  };
+
+  const add=async()=>{
+    if(!form.label.trim())return;
+    setSaving(true);
+    const next=[...actions,{
+      id:`chef-${Date.now()}`,
+      icon:form.icon,
+      label:form.label.trim(),
+      cat:form.cat,
+      ajoutePar:uid,
+      ts:Date.now(),
+    }];
+    await save(next);
+    setForm({icon:"⚡",label:"",cat:"ventes"});
+    setShowAdd(false);
+    setSaving(false);
+  };
+
+  const del=async(id)=>save(actions.filter(a=>a.id!==id));
+
+  if(loading) return <div style={{padding:"2rem",textAlign:"center",color:C.gris,fontSize:".76rem"}}>Chargement...</div>;
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
+        Actions <em style={{fontStyle:"italic",color:C.rose}}>Bibliothèque</em>
+      </div>
+      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
+        Les actions que tu ajoutes ici apparaissent dans l'onglet <strong>✨ Équipe</strong> de la bibliothèque d'actions de toutes les membres.
+      </p>
+
+      <button onClick={()=>setShowAdd(!showAdd)}
+        style={{width:"100%",background:showAdd?C.pale:C.brun,color:showAdd?C.gris:C.blanc,border:"none",borderRadius:10,padding:".65rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:"1rem"}}>
+        {showAdd?"✕ Annuler":"+ Ajouter une action"}
+      </button>
+
+      {showAdd&&(
+        <div style={{background:C.blanc,border:`1px solid ${C.rose}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
+          {/* Icône */}
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem"}}>Icône</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:".3rem",marginBottom:".7rem"}}>
+            {ICONS.map(ic=>(
+              <button key={ic} onClick={()=>setForm(f=>({...f,icon:ic}))}
+                style={{background:form.icon===ic?C.brun:"none",border:`1px solid ${form.icon===ic?C.brun:C.pale}`,borderRadius:8,padding:".3rem .4rem",fontSize:".9rem",cursor:"pointer"}}>
+                {ic}
+              </button>
+            ))}
+          </div>
+
+          {/* Catégorie */}
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem"}}>Catégorie</div>
+          <div style={{display:"flex",gap:".3rem",flexWrap:"wrap",marginBottom:".7rem"}}>
+            {CATS.map(c=>(
+              <button key={c.id} onClick={()=>setForm(f=>({...f,cat:c.id}))}
+                style={{padding:".3rem .65rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1px solid ${form.cat===c.id?C.rose:C.pale}`,background:form.cat===c.id?C.rose:C.blanc,color:form.cat===c.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Label */}
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem"}}>Description de l'action</div>
+          <input value={form.label} onChange={e=>setForm(f=>({...f,label:e.target.value}))}
+            placeholder="ex: Envoyer 3 messages de prospection..."
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .7rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".7rem"}}/>
+
+          <button onClick={add} disabled={!form.label.trim()||saving}
+            style={{width:"100%",background:form.label.trim()?C.brun:C.pale,color:form.label.trim()?C.blanc:C.gris,border:"none",borderRadius:8,padding:".55rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:form.label.trim()?"pointer":"default"}}>
+            {saving?"Sauvegarde...":"✓ Publier dans la bibliothèque"}
+          </button>
+        </div>
+      )}
+
+      {/* Liste des actions ajoutées */}
+      {actions.length===0&&!showAdd&&(
+        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>
+          <div style={{fontSize:"2rem",marginBottom:".5rem"}}>💡</div>
+          Aucune action ajoutée pour l'instant.
+        </div>
+      )}
+
+      {CATS.map(c=>{
+        const items=actions.filter(a=>a.cat===c.id);
+        if(items.length===0)return null;
+        return(
+          <div key={c.id} style={{marginBottom:"1rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem",padding:".2rem .6rem",background:C.pale,borderRadius:20,display:"inline-block"}}>{c.label}</div>
+            {items.map(a=>(
+              <div key={a.id} style={{display:"flex",alignItems:"center",gap:".6rem",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .85rem",marginBottom:".35rem"}}>
+                <span style={{fontSize:"1rem"}}>{a.icon}</span>
+                <div style={{flex:1,fontSize:".78rem",color:C.texte}}>{a.label}</div>
+                <button onClick={()=>del(a.id)}
+                  style={{background:"none",border:"none",color:C.pale,cursor:"pointer",fontSize:".75rem",padding:".1rem .3rem",fontFamily:"inherit"}}>✕</button>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Composant global — JAMAIS défini à l'intérieur d'un autre composant
+function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCell, editVal, setEditCell, setEditVal, saveJour, setEditPeriode, setEditCA, setEditObj}){
+  const d=data[`p${pNum}`]||{ca:0,obj:0,jours:{}};
+  const debut=getPeriodeDebut(pNum);
+  const isFutur=(i)=>courante&&i>=joursEcoules;  const isToday=(i)=>courante&&i===joursEcoules-1;
+  const pct=(ca,obj)=>obj?Math.min(100,Math.round((ca||0)/obj*100)):0;
+  const fmtJour=(d2)=>d2.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
+  return(
+    <div>
+      <div style={{background:courante?`linear-gradient(135deg,${C.brun},${C.brun2})`:color+'15',padding:'.5rem .5rem .4rem',borderBottom:`1px solid ${color}30`}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div style={{fontSize:'.6rem',fontWeight:700,color:courante?C.or:color}}>{fmtPLabel(pNum)}</div>
+          <button onClick={()=>{setEditPeriode(pNum);setEditCA(d.ca||'');setEditObj(d.obj||'');}}
+            style={{background:'none',border:`1px solid ${courante?'rgba(255,255,255,.25)':color+'40'}`,borderRadius:5,padding:'.1rem .35rem',fontSize:'.52rem',color:courante?C.pale:color,cursor:'pointer',fontFamily:'inherit'}}>✏️</button>
+        </div>
+        <div style={{fontFamily:'Georgia,serif',fontSize:'.95rem',fontWeight:700,color:courante?C.blanc:color}}>
+          {fmtPLabel(pNum)}
+        </div>
+        <div style={{height:3,background:courante?'rgba(255,255,255,.15)':C.pale,borderRadius:10,overflow:'hidden',marginTop:'.3rem'}}>
+          <div style={{height:'100%',background:courante?C.or:color,width:pct(d.ca,d.obj)+'%',borderRadius:10}}/>
+        </div>
+      </div>
+      {Array.from({length:21},(_,i)=>{
+        const dateJour=new Date(debut.getTime()+i*24*60*60*1000);
+        const val=d.jours?.[i];
+        const editing=editCell?.pNum===pNum&&editCell?.jourIdx===i;
+        return(
+          <div key={i} onClick={()=>!isFutur(i)&&!editing&&(setEditCell({pNum,jourIdx:i}),setEditVal(val||''))}
+            style={{display:'flex',alignItems:'center',gap:'.3rem',padding:'.26rem .45rem',borderBottom:`1px solid ${C.pale}20`,background:isToday(i)?C.rose+'25':val>0?C.vert+'08':'transparent',cursor:isFutur(i)?'default':'pointer',opacity:isFutur(i)?.35:1}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:'.54rem',color:isToday(i)?C.rose:C.gris,fontWeight:isToday(i)?700:400,lineHeight:1.2}}>{fmtJour(dateJour)}</div>
+            </div>
+            {editing
+              ?<input autoFocus type='number' defaultValue={val||''}
+                  onChange={e=>setEditVal(e.target.value)}
+                  onBlur={()=>saveJour(pNum,i,editVal)}
+                  onKeyDown={e=>e.key==='Enter'&&saveJour(pNum,i,editVal)}
+                  style={{width:44,border:`1px solid ${color}`,borderRadius:4,background:'white',textAlign:'right',fontSize:'.65rem',fontWeight:700,outline:'none',padding:'.1rem .25rem',color:C.brun}}/>
+              :<div style={{fontSize:'.65rem',fontWeight:700,color:val>0?C.vert:isFutur(i)?C.pale:C.gris+'80',textAlign:'right',minWidth:36}}>
+                {val>0?val+'€':'—'}
+              </div>
+            }
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── SUIVI CHALLENGE APP PAR LE CHEF ──────────────────────────────────────────
+function ChallengeAppSuiviTab({annuaire}){
+  const[membres,setMembres]=useState([]);
+  const[loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    (async()=>{
+      const liste=Object.entries(annuaire||{});
+      const today=new Date();
+      today.setHours(0,0,0,0);
+
+      const resultats=await Promise.all(
+        liste.map(async([mUid,mData])=>{
+          try{
+            const snap=await getDoc(doc(db,"users",mUid));
+            if(!snap.exists())return null;
+            const d=snap.data();
+            const ca=d["db-challenge-app"]?JSON.parse(d["db-challenge-app"]):null;
+            if(!ca)return{uid:mUid,nom:mData.prenom||mUid,statut:"non_commence",joursValides:[],jourActuel:0,pct:0};
+
+            const startDate=new Date(ca.startDate);
+            startDate.setHours(0,0,0,0);
+            const diffJours=Math.floor((today-startDate)/(1000*60*60*24));
+            const jourActuel=Math.max(0,Math.min(diffJours+1,7));
+            const joursValides=ca.joursValides||[];
+            const termine=diffJours>=7;
+            const pct=Math.round((joursValides.length/7)*100);
+            const dateEnreg=mData.dateEnreg||ca.startDate;
+
+            return{
+              uid:mUid,
+              nom:mData.prenom||mUid,
+              statut:termine?"termine":jourActuel===0?"demarre_demain":"actif",
+              joursValides,
+              jourActuel:Math.max(jourActuel,0),
+              pct,
+              startDate:ca.startDate,
+              dateEnreg,
+            };
+          }catch{return null;}
+        })
+      );
+
+      setMembres(resultats.filter(Boolean).sort((a,b)=>b.pct-a.pct||b.joursValides.length-a.joursValides.length));
+      setLoading(false);
+    })();
+  },[annuaire]);
+
+  if(loading)return<div style={{textAlign:"center",padding:"2rem",color:C.gris}}>⏳ Chargement...</div>;
+
+  const nbActifs=membres.filter(m=>m.statut==="actif"||m.statut==="termine").length;
+  const nbTermines=membres.filter(m=>m.statut==="termine").length;
+  const nbNonCommences=membres.filter(m=>m.statut==="non_commence").length;
+  const pctMoyen=membres.length?Math.round(membres.reduce((s,m)=>s+m.pct,0)/membres.length):0;
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",fontWeight:300,color:C.brun,marginBottom:".75rem"}}>
+        Challenge <em style={{fontStyle:"italic",color:C.rose}}>Découverte App</em>
+      </div>
+
+      {/* Résumé global */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem",textAlign:"center"}}>
+          <div style={{fontSize:"1.6rem",fontWeight:700,color:C.rose,fontFamily:"Georgia,serif"}}>{nbActifs}</div>
+          <div style={{fontSize:".62rem",color:C.gris,fontWeight:600}}>En cours</div>
+        </div>
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem",textAlign:"center"}}>
+          <div style={{fontSize:"1.6rem",fontWeight:700,color:C.vert,fontFamily:"Georgia,serif"}}>{nbTermines}</div>
+          <div style={{fontSize:".62rem",color:C.gris,fontWeight:600}}>Terminé 🏆</div>
+        </div>
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem",textAlign:"center"}}>
+          <div style={{fontSize:"1.6rem",fontWeight:700,color:C.or,fontFamily:"Georgia,serif"}}>{pctMoyen}%</div>
+          <div style={{fontSize:".62rem",color:C.gris,fontWeight:600}}>Progression moyenne</div>
+        </div>
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem",textAlign:"center"}}>
+          <div style={{fontSize:"1.6rem",fontWeight:700,color:C.gris,fontFamily:"Georgia,serif"}}>{nbNonCommences}</div>
+          <div style={{fontSize:".62rem",color:C.gris,fontWeight:600}}>Pas encore commencé</div>
+        </div>
+      </div>
+
+      {/* Liste membres */}
+      {membres.map((m,i)=>(
+        <div key={m.uid} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+            <div style={{display:"flex",alignItems:"center",gap:".5rem"}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:m.statut==="termine"?C.vert+"25":m.statut==="actif"?C.rose+"25":C.pale,color:m.statut==="termine"?C.vert:m.statut==="actif"?C.rose:C.gris,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".78rem",fontWeight:700,flexShrink:0}}>
+                {m.nom[0]?.toUpperCase()}
+              </div>
+              <div>
+                <div style={{fontSize:".82rem",fontWeight:600,color:C.brun}}>{m.nom}</div>
+                <div style={{fontSize:".6rem",color:C.gris}}>
+                  {m.statut==="termine"?"🏆 Challenge terminé !":
+                   m.statut==="demarre_demain"?"⏳ Commence demain":
+                   m.statut==="non_commence"?"❌ Pas encore commencé":
+                   `📅 Jour ${m.jourActuel}/7 en cours`}
+                </div>
+              </div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:".82rem",fontWeight:700,color:m.pct===100?C.vert:m.pct>=50?C.or:C.gris}}>{m.pct}%</div>
+              <div style={{fontSize:".58rem",color:C.gris}}>{m.joursValides.length}/7 jours</div>
+            </div>
+          </div>
+
+          {/* Barre progression avec cases par jour */}
+          <div style={{display:"flex",gap:".2rem"}}>
+            {CHALLENGE_APP_JOURS.map((j,ji)=>{
+              const fait=m.joursValides.includes(j.jour);
+              const estCejour=m.jourActuel===j.jour;
+              return(
+                <div key={ji} title={j.titre}
+                  style={{flex:1,height:28,borderRadius:6,background:fait?C.vert:estCejour?C.or+"40":C.pale,border:`1px solid ${fait?C.vert:estCejour?C.or:C.pale}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".7rem",position:"relative"}}>
+                  {fait?"✓":estCejour?<span style={{fontSize:".6rem",fontWeight:700,color:C.or}}>J{j.jour}</span>:<span style={{fontSize:".55rem",color:C.gris}}>{j.jour}</span>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Détail des jours validés */}
+          {m.joursValides.length>0&&(
+            <div style={{marginTop:".4rem",display:"flex",flexWrap:"wrap",gap:".2rem"}}>
+              {m.joursValides.sort((a,b)=>a-b).map(j=>(
+                <span key={j} style={{fontSize:".58rem",background:C.vert+"15",color:C.vert,borderRadius:20,padding:".1rem .4rem",fontWeight:600}}>
+                  ✓ J{j}: {CHALLENGE_APP_JOURS[j-1]?.emoji}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {membres.length===0&&(
+        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>
+          Aucun membre dans l'équipe pour l'instant.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── STATISTIQUES ÉQUIPE ──────────────────────────────────────────────────────
+function StatsEquipeTab({uid, annuaire}){
+  const[stats,setStats]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[periode,setPeriode]=useState("30j");
+  const[rechercheMembre,setRechercheMembre]=useState("");
+
+  const fmt=(n,dec=0)=>typeof n==="number"?n.toFixed(dec):"-";
+  const pct=(a,b)=>b>0?Math.round((a/b)*100):0;
+
+  useEffect(()=>{
+    (async()=>{
+      setLoading(true);
+      try{
+        const membres=Object.entries(annuaire||{});
+        if(!membres.length){setLoading(false);return;}
+
+        const today=new Date();
+        const cutoffJours=periode==="7j"?7:periode==="30j"?30:90;
+        const cutoff=new Date(today-cutoffJours*24*60*60*1000).toISOString().slice(0,10);
+
+        // Charger les données de chaque membre en parallèle
+        const snapshots=await Promise.all(
+          membres.map(([mUid])=>getDoc(doc(db,"users",mUid)).catch(()=>null))
+        );
+
+        let totalMembres=membres.length;
+        let actifs=0;
+        let streakTotal=0;
+        let totalDiags=0;
+        let totalDiagsAvecOrd=0;
+        let totalProspects=0;
+        let totalProspectsDepuisDiag=0;
+        let totalConvertisClient=0;
+        let totalConvertisDistrib=0;
+        let totalClients=0;
+        let totalCommandes=0;
+        let totalCA=0;
+        let totalRecommandations=0;
+        let totalRecsConverties=0;
+        let totalFastStartDone=0;
+        let totalFastStartAssigne=0;
+        let totalActions=0;
+        let membresAvecDreamboard=0;
+        let membresAvecLinkbio=0;
+        let membreDetails=[];
+        let diagParType={}; // comptage par type
+
+        snapshots.forEach((snap,i)=>{
+          if(!snap||!snap.exists())return;
+          const d=snap.data();
+          const [mUid,mData]=membres[i];
+
+          const lastLogin=d["db-last-login"]||"";
+          const estActif=lastLogin>=cutoff;
+          if(estActif)actifs++;
+
+          const streak=+d["db-streak"]||0;
+          streakTotal+=streak;
+
+          // Diagnostics
+          const diags=d["db-diagnostics"]?JSON.parse(d["db-diagnostics"]):[];
+          const diagsRecents=diags.filter(dg=>dg.date>=cutoff);
+          totalDiags+=diagsRecents.length;
+          const diagsAvecOrd=diagsRecents.filter(dg=>dg.ordonnance||dg.ordre);
+          totalDiagsAvecOrd+=diagsAvecOrd.length;
+          // Compter par type
+          diagsRecents.forEach(dg=>{
+            if(dg.type) diagParType[dg.type]=(diagParType[dg.type]||0)+1;
+          });
+
+          // Prospects
+          const prospects=d["db-prospects"]?JSON.parse(d["db-prospects"]):[];
+          const prospectsRecents=prospects.filter(p=>p.dateAjout>=cutoff||(p.id&&String(p.id).length===13&&new Date(+p.id)>=new Date(cutoff)));
+          totalProspects+=prospectsRecents.length;
+          const depuisDiag=prospects.filter(p=>p.source==="diagnostic").length;
+          totalProspectsDepuisDiag+=depuisDiag;
+          const convertisClient=prospects.filter(p=>p.convertiVers==="client").length;
+          const convertisDistrib=prospects.filter(p=>p.convertiVers==="distributrice").length;
+          totalConvertisClient+=convertisClient;
+          totalConvertisDistrib+=convertisDistrib;
+
+          // Recommandations
+          const prospectsRec=prospects.filter(p=>p.source==="recommandation").length;
+          totalRecommandations+=prospectsRec;
+          totalRecsConverties+=prospects.filter(p=>p.source==="recommandation"&&p.convertiVers).length;
+
+          // Clients et commandes
+          const clients=d["db-clients"]?JSON.parse(d["db-clients"]):[];
+          totalClients+=clients.length;
+          clients.forEach(c=>{
+            const cmds=(c.commandes||[]).filter(cmd=>cmd.date>=cutoff);
+            totalCommandes+=cmds.length;
+            totalCA+=cmds.reduce((s,cmd)=>s+(parseFloat(cmd.montant)||0),0);
+          });
+
+          // Fast Start
+          const fs=d["db-fast-start"]?JSON.parse(d["db-fast-start"]):null;
+          if(fs){
+            totalFastStartAssigne++;
+            const done=Object.values(fs.modulesValides||{}).filter(Boolean).length;
+            if(done>=7)totalFastStartDone++;
+          }
+
+          // Actions biblio
+          const actions=d["db-actions"]?JSON.parse(d["db-actions"]):{};
+          const nbActions=Object.keys(actions).filter(k=>!k.startsWith("_")&&actions[k]).length;
+          totalActions+=nbActions;
+
+          // Dream board
+          if(d["db-dreamboard"])membresAvecDreamboard++;
+
+          membreDetails.push({
+            uid:mUid,
+            nom:mData.prenom||mUid.split("-").map(w=>w[0]?.toUpperCase()+w.slice(1)).join(" "),
+            actif:estActif,
+            lastLogin,
+            streak,
+            nbDiags:diagsRecents.length,
+            nbDiagsAvecOrd:diagsAvecOrd.length,
+            nbProspects:prospectsRecents.length,
+            nbClients:clients.length,
+            nbCommandes:totalCommandes,
+            nbFsModules:fs?Object.values(fs.modulesValides||{}).filter(Boolean).length:0,
+            fsDone:fs&&Object.values(fs.modulesValides||{}).filter(Boolean).length>=7,
+          });
+        });
+
+        // Charger les recommandations depuis la collection recommandations
+        try{
+          const recSnap=await Promise.all(membres.map(([mUid])=>getDoc(doc(db,"recommandations",mUid)).catch(()=>null)));
+          recSnap.forEach(s=>{if(s&&s.exists()){totalRecommandations+=(s.data().liste||[]).reduce((sum,r)=>sum+(r.personnes?.length||1),0);}});
+        }catch{}
+
+        const tauxUtilisation=pct(actifs,totalMembres);
+        const tauxConvDiag=pct(totalProspectsDepuisDiag,totalDiags);
+        const tauxConvProspect=pct(totalConvertisClient+totalConvertisDistrib,totalProspects+totalProspectsDepuisDiag);
+        const tauxFastStart=pct(totalFastStartDone,totalFastStartAssigne||1);
+        const tauxConvRec=pct(totalRecsConverties,totalRecommandations||1);
+
+        setStats({
+          totalMembres,actifs,tauxUtilisation,
+          streakMoyen:totalMembres?Math.round(streakTotal/totalMembres):0,
+          totalDiags,totalDiagsAvecOrd,tauxOrdonnance:pct(totalDiagsAvecOrd,totalDiags||1),
+          totalProspects,totalProspectsDepuisDiag,tauxConvDiag,
+          totalConvertisClient,totalConvertisDistrib,tauxConvProspect,
+          totalClients,totalCommandes,totalCA:Math.round(totalCA),
+          totalRecommandations,totalRecsConverties,tauxConvRec,
+          totalFastStartAssigne,totalFastStartDone,tauxFastStart,
+          totalActions,membresAvecDreamboard,
+          diagParType,
+          membreDetails:membreDetails.sort((a,b)=>b.nbDiags-a.nbDiags),
+          cutoff,periode,
+        });
+      }catch(e){console.error(e);}
+      setLoading(false);
+    })();
+  },[annuaire,periode]);
+
+  const StatCard=({icon,label,value,sub,color,pctVal})=>(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem .85rem"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:".25rem"}}>
+        <div style={{fontSize:".6rem",color:C.gris,fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{icon} {label}</div>
+        {pctVal!==undefined&&(
+          <div style={{fontSize:".65rem",fontWeight:700,color:pctVal>=70?C.vert:pctVal>=40?"#E67E22":"#E74C3C",background:(pctVal>=70?C.vert:pctVal>=40?"#E67E22":"#E74C3C")+"15",borderRadius:20,padding:".1rem .4rem"}}>
+            {pctVal}%
+          </div>
+        )}
+      </div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.4rem",fontWeight:600,color:color||C.brun}}>{value}</div>
+      {sub&&<div style={{fontSize:".62rem",color:C.gris,marginTop:".1rem"}}>{sub}</div>}
+    </div>
+  );
+
+  if(loading)return(
+    <div style={{textAlign:"center",padding:"2rem",color:C.gris}}>
+      <div style={{fontSize:"1.5rem",marginBottom:".5rem"}}>📊</div>
+      Analyse en cours...
+    </div>
+  );
+
+  if(!stats)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Aucune donnée disponible.</div>;
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",fontWeight:300,color:C.brun,marginBottom:".5rem"}}>
+        Statistiques <em style={{fontStyle:"italic",color:C.rose}}>Blazing Dynasty</em>
+      </div>
+
+      {/* Sélecteur de période */}
+      <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
+        {["7j","30j","90j"].map(p=>(
+          <button key={p} onClick={()=>setPeriode(p)}
+            style={{flex:1,padding:".38rem",fontSize:".72rem",fontWeight:600,borderRadius:8,border:`1px solid ${periode===p?C.rose:C.pale}`,background:periode===p?C.rose:C.blanc,color:periode===p?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+            {p==="7j"?"7 jours":p==="30j"?"30 jours":"90 jours"}
+          </button>
+        ))}
+      </div>
+
+      {/* SECTION 1 — UTILISATION */}
+      <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".45rem"}}>📱 Utilisation de l'application</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
+        <StatCard icon="👥" label="Membres actifs" value={`${stats.actifs}/${stats.totalMembres}`} sub={`Connectées sur les ${periode}`} pctVal={stats.tauxUtilisation} color={C.rose}/>
+        <StatCard icon="🔥" label="Streak moyen" value={`${stats.streakMoyen}j`} sub="Jours de connexion consécutifs" color={C.or}/>
+        <StatCard icon="⚡" label="Actions biblio" value={stats.totalActions} sub={`Actions validées équipe`} color={C.brun}/>
+        <StatCard icon="🌟" label="Dream Boards" value={stats.membresAvecDreamboard} sub={`Membres avec un board actif`} color={C.lilas}/>
+      </div>
+
+      {/* SECTION 2 — DIAGNOSTICS */}
+      <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".45rem"}}>🔬 Diagnostics & Ordonnances</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:".65rem"}}>
+        <StatCard icon="📋" label="Diagnostics envoyés" value={stats.totalDiags} sub={`Sur les ${periode}`} color={C.brun}/>
+        <StatCard icon="✨" label="Ordonnances générées" value={stats.totalDiagsAvecOrd} sub="Diagnostics avec résultat IA" pctVal={stats.tauxOrdonnance} color={C.rose}/>
+        <StatCard icon="👤" label="Prospects créés / diag" value={stats.totalProspectsDepuisDiag} sub="Fiches créées depuis un diagnostic" color={C.or}/>
+        <StatCard icon="🔄" label="Taux diag → prospect" value={`${stats.tauxConvDiag}%`} sub="Diagnostic converti en fiche" color={stats.tauxConvDiag>=30?C.vert:"#E67E22"}/>
+      </div>
+
+      {/* Classement diagnostics les plus utilisés */}
+      {stats.diagParType&&Object.keys(stats.diagParType).length>0&&(
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem .85rem",marginBottom:"1rem"}}>
+          <div style={{fontSize:".62rem",fontWeight:700,color:C.brun,marginBottom:".5rem"}}>🏆 Diagnostics les plus utilisés</div>
+          {Object.entries(stats.diagParType)
+            .sort((a,b)=>b[1]-a[1])
+            .slice(0,8)
+            .map(([type,count],i)=>{
+              const max=Object.values(stats.diagParType).reduce((a,b)=>Math.max(a,b),1);
+              const label={skincare:"✨ Skincare",makeup:"💄 Makeup",peaucorps:"🧴 Peau Corps",cheveux:"💇 Cheveux",sante:"💊 Santé",silhouette:"⚖️ Silhouette",detox:"🌿 Détox",antiage:"🌸 Anti-Âge",budget:"💡 Budget Beauté",recrutement:"🤝 Recrutement",complementrevenu:"💰 Revenu +",entrepreneuriat:"🚀 Entrepreneur",valeurmarche:"💼 Valeur marché",chargementale:"🧠 Charge Mentale",libertefin:"🏖️ Liberté Fin.",maman:"🌸 Maman",reconversion:"🔄 Reconversion",confianceensoi:"💪 Confiance",reseauxsociaux2:"📲 Audit Digital",blocage:"🔓 Recrue bloquée",pasrecruiter:"😓 Non recrutement",pasvendre:"💸 Non ventes",reseaux:"📱 Réseaux"}[type]||type;
+              return(
+                <div key={type} style={{marginBottom:".4rem"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",marginBottom:".1rem"}}>
+                    <span style={{color:C.brun,fontWeight:i<3?700:400}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":""} {label}</span>
+                    <span style={{color:C.gris,fontWeight:600}}>{count}</span>
+                  </div>
+                  <div style={{height:5,background:C.pale,borderRadius:10,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:i<3?C.rose:C.gris+"60",borderRadius:10,width:`${Math.round((count/max)*100)}%`,transition:"width .3s"}}/>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
+      {/* SECTION 3 — CONVERSION PROSPECTS */}
+      <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".45rem"}}>🎯 Prospects & Conversion</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
+        <StatCard icon="👥" label="Total prospects" value={stats.totalProspects} sub={`Ajoutés sur les ${periode}`} color={C.brun}/>
+        <StatCard icon="✅" label="Taux de conversion" value={`${stats.tauxConvProspect}%`} sub={`${stats.totalConvertisClient} clientes · ${stats.totalConvertisDistrib} distribs`} pctVal={stats.tauxConvProspect} color={C.vert}/>
+        <StatCard icon="🛍️" label="Clientes totales" value={stats.totalClients} sub="Dans toutes les fiches" color={C.rose}/>
+        <StatCard icon="📦" label="Commandes enregistrées" value={stats.totalCommandes} sub={`CA estimé: ${stats.totalCA}€`} color={C.or}/>
+      </div>
+
+      {/* SECTION 4 — RECOMMANDATIONS */}
+      <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".45rem"}}>🤝 Système de recommandation</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
+        <StatCard icon="📨" label="Recommandations reçues" value={stats.totalRecommandations} sub="Personnes recommandées par clientes" color={C.lilas}/>
+        <StatCard icon="🔁" label="Taux conversion recs" value={`${stats.tauxConvRec}%`} sub="Recommandations devenues prospects" pctVal={stats.tauxConvRec} color={C.vert}/>
+      </div>
+
+      {/* SECTION 5 — FAST START */}
+      <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".45rem"}}>🚀 Onboarding Fast Start</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
+        <StatCard icon="📚" label="Fast Start assignés" value={stats.totalFastStartAssigne} sub="Nouvelles avec parcours actif" color={C.brun}/>
+        <StatCard icon="🏁" label="Fast Start terminés" value={stats.totalFastStartDone} sub="7 modules validés" pctVal={stats.tauxFastStart} color={C.vert}/>
+      </div>
+
+      {/* SCORE GLOBAL */}
+      {(()=>{
+        const score=Math.round((stats.tauxUtilisation*0.3)+(stats.tauxOrdonnance*0.2)+(stats.tauxConvProspect*0.25)+(stats.tauxFastStart*0.25));
+        const couleur=score>=70?C.vert:score>=45?"#E67E22":"#E74C3C";
+        return(
+          <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:14,padding:"1rem 1.1rem",marginBottom:"1rem",textAlign:"center"}}>
+            <div style={{fontSize:".62rem",color:C.or,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".3rem"}}>⚡ Score global Blazing Dynasty</div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"2.5rem",fontWeight:700,color:couleur}}>{score}<span style={{fontSize:"1.2rem",color:"rgba(255,255,255,.6)"}}>/100</span></div>
+            <div style={{fontSize:".68rem",color:"rgba(255,255,255,.7)",marginTop:".2rem"}}>
+              {score>=70?"🔥 Équipe très engagée — excellent levier de recrutement !":score>=45?"⚡ Bonne dynamique — encore des axes de progression":score>0?"💡 Potentiel à débloquer — concentre-toi sur l'engagement":""}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* PHRASE RECRUTEMENT */}
+      <div style={{background:C.creme,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",border:`1px solid ${C.or}40`}}>
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.or,marginBottom:".35rem"}}>💬 Phrase toute prête pour recruter</div>
+        <div style={{fontSize:".74rem",color:C.brun,lineHeight:1.7,fontStyle:"italic"}}>
+          "Dans mon équipe, {stats.tauxUtilisation}% des distributrices utilisent l'outil de gestion que j'ai mis en place. Elles ont réalisé {stats.totalDiags} diagnostics clients ce mois, généré {stats.totalDiagsAvecOrd} ordonnances personnalisées, et converti {stats.tauxConvProspect}% de leurs prospects en clientes ou distributrices. C'est pas juste du MLM — c'est une vraie structure qui marche."
+        </div>
+        <button onClick={()=>{
+          const texte=`"Dans mon équipe, ${stats.tauxUtilisation}% des distributrices utilisent l'outil de gestion que j'ai mis en place. Elles ont réalisé ${stats.totalDiags} diagnostics clients ce mois, généré ${stats.totalDiagsAvecOrd} ordonnances personnalisées, et converti ${stats.tauxConvProspect}% de leurs prospects en clientes ou distributrices. C'est pas juste du MLM — c'est une vraie structure qui marche."`;
+          navigator.clipboard?.writeText(texte);
+          alert("✅ Copié !");
+        }}
+          style={{width:"100%",background:C.or,color:"white",border:"none",borderRadius:8,padding:".42rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginTop:".5rem"}}>
+          📋 Copier cette phrase
+        </button>
+      </div>
+
+      {/* TABLEAU MEMBRE PAR MEMBRE */}
+      <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".45rem"}}>👥 Détail par membre</div>
+      <input
+        placeholder="🔍 Rechercher un membre..."
+        value={rechercheMembre}
+        onChange={e=>setRechercheMembre(e.target.value)}
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:9,padding:".45rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem"}}
+      />
+      {stats.membreDetails.filter(m=>m.nom.toLowerCase().includes(rechercheMembre.toLowerCase())).map((m,i)=>(
+        <div key={i} style={{background:m.actif?C.blanc:C.creme,border:`1px solid ${m.actif?C.pale:"transparent"}`,borderRadius:10,padding:".55rem .75rem",marginBottom:".35rem",opacity:m.actif?1:.7}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".2rem"}}>
+            <div style={{display:"flex",alignItems:"center",gap:".4rem"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:m.actif?C.rose+"25":"#ccc",color:m.actif?C.rose:"#aaa",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".75rem",fontWeight:700,flexShrink:0}}>
+                {m.nom[0]?.toUpperCase()}
+              </div>
+              <div>
+                <div style={{fontSize:".74rem",fontWeight:600,color:C.brun}}>{m.nom}</div>
+                <div style={{fontSize:".58rem",color:m.actif?C.vert:C.gris}}>{m.actif?"✅ Active":"⬜ Inactive"} · {m.streak}🔥</div>
+              </div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:".62rem",color:C.gris}}>🔬 {m.nbDiags} diag · 👤 {m.nbProspects} prospects</div>
+              <div style={{fontSize:".6rem",color:C.gris}}>🛍️ {m.nbClients} clientes · {m.fsDone?"🏁 FS ✓":"📚 FS "+m.nbFsModules+"/7"}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SuiviCATab({uid}){
+  const raw = getPeriodeInfo();
+  const[periodeOverride,setPeriodeOverride]=useState(null);
+  const[editPeriodeNum,setEditPeriodeNum]=useState(false);
+  const[inputPeriodeNum,setInputPeriodeNum]=useState("");
+  const pCourante = periodeOverride || raw.periodNum || getPeriodeActuelle();
+  const joursEcoules = periodeOverride ? 21 : Math.min(21, Math.max(1, 21 - (raw.daysLeft||0)));
+
+  const[data,setData]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+
+  // Colonnes comparaison libres
+  const[compareA,setCompareA]=useState(pCourante-1>0?pCourante-1:1);
+  const[compareB,setCompareB]=useState(pCourante-PERIODES_PAR_AN>0?pCourante-PERIODES_PAR_AN:1);
+  const[editColA,setEditColA]=useState(false);
+  const[editColB,setEditColB]=useState(false);
+  const[inputA,setInputA]=useState(String(pCourante-1>0?pCourante-1:1));
+  const[inputB,setInputB]=useState(String(pCourante-PERIODES_PAR_AN>0?pCourante-PERIODES_PAR_AN:1));
+
+  // Cellule en cours d'édition
+  const[editCell,setEditCell]=useState(null);
+  const[editVal,setEditVal]=useState('');
+
+  // Édition total + objectif
+  const[editPeriode,setEditPeriode]=useState(null);
+  const[editCA,setEditCA]=useState('');
+  const[editObj,setEditObj]=useState('');
+
+  // Historique — navigation
+  const[histAnnee,setHistAnnee]=useState(new Date().getFullYear());
+  const[histPeriodeOuverte,setHistPeriodeOuverte]=useState(null); // num absolu
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,'users',uid));
+        if(snap.exists()&&snap.data()['db-suivi-ca'])
+          setData(JSON.parse(snap.data()['db-suivi-ca']));
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  const saveData=async(next)=>{
+    setSaving(true);
+    try{await setDoc(doc(db,'users',uid),{'db-suivi-ca':JSON.stringify(next)},{merge:true});setData(next);}catch{}
+    setSaving(false);
+  };
+
+  const saveJour=(pNum,idx,val)=>{
+    const pKey=`p${pNum}`;
+    const cur=data[pKey]||{obj:0,jours:{}};
+    const jours={...(cur.jours||{}),[idx]:parseFloat(val)||0};
+    // Total = valeur du jour le plus récent rempli (saisie cumulée)
+    const joursRemplis=Object.entries(jours).filter(([,v])=>parseFloat(v)>0);
+    let ca=0;
+    if(joursRemplis.length>0){
+      const dernierIdx=Math.max(...joursRemplis.map(([k])=>parseInt(k)));
+      ca=parseFloat(jours[dernierIdx])||0;
+    }
+    saveData({...data,[pKey]:{...cur,jours,ca}});
+    setEditCell(null);
+  };
+
+  const saveEdit=()=>{
+    const pKey=`p${editPeriode}`;
+    const cur=data[pKey]||{jours:{}};
+    saveData({...data,[pKey]:{...cur,ca:parseFloat(editCA)||0,obj:parseFloat(editObj)||0}});
+    setEditPeriode(null);
+  };
+
+  const pct=(ca,obj)=>obj?Math.min(100,Math.round((ca||0)/obj*100)):0;
+  const fmtDate=(d)=>d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  const fmtJour=(d)=>d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
+
+  if(loading)return <div style={{padding:'2rem',textAlign:'center',color:C.gris,fontSize:'.76rem'}}>Chargement...</div>;
+
+  const dCour=data[`p${pCourante}`]||{ca:0,obj:0,jours:{}};
+  const attendu=dCour.obj?Math.round(dCour.obj*joursEcoules/21):0;
+  const delta=(dCour.ca||0)-attendu;
+
+  // Grille 21 jours pour une période donnée
+
+  // Années disponibles
+  const anneesDispos=[];
+  const anneeCourante=getPeriodeDebut(pCourante).getFullYear();
+  for(let a=2024;a<=anneeCourante;a++) anneesDispos.push(a);
+
+  // Périodes d'une année donnée (numéros absolus)
+  const periodesDeAnnee=(annee)=>{
+    const result=[];
+    for(let n=-50;n<=pCourante;n++){
+      if(n===0) continue;
+      try{
+        const d=getPeriodeDebut(n);
+        const f=new Date(d.getTime()+PERIODE_DUREE_JOURS*24*60*60*1000-1);
+        if(d.getFullYear()===annee||f.getFullYear()===annee) result.push(n);
+      }catch{}
+    }
+    return [...new Set(result)].sort((a,b)=>a-b);
+  };
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".4rem"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun}}>
+          Suivi <em style={{fontStyle:"italic",color:C.rose}}>CA</em>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:".3rem"}}>
+          {editPeriodeNum
+            ?<div style={{display:"flex",gap:".3rem",alignItems:"center"}}>
+              <span style={{fontSize:".62rem",color:C.gris}}>P n°</span>
+              <input type="number" autoFocus value={inputPeriodeNum} onChange={e=>setInputPeriodeNum(e.target.value)}
+                onBlur={()=>{const v=parseInt(inputPeriodeNum);if(v>0)setPeriodeOverride(v);setEditPeriodeNum(false);}}
+                onKeyDown={e=>{if(e.key==="Enter"){const v=parseInt(inputPeriodeNum);if(v>0)setPeriodeOverride(v);setEditPeriodeNum(false);}}}
+                style={{width:50,border:`1px solid ${C.rose}`,borderRadius:7,padding:".28rem .4rem",fontSize:".78rem",fontFamily:"inherit",textAlign:"center",outline:"none"}}/>
+            </div>
+            :<button onClick={()=>{setEditPeriodeNum(true);setInputPeriodeNum(String(pCourante));}}
+              style={{background:periodeOverride?"#FFF3CD":"none",border:`1px solid ${periodeOverride?"#E6A817":C.pale}`,borderRadius:7,padding:".2rem .45rem",fontSize:".62rem",color:periodeOverride?"#856404":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+              {periodeOverride?`⚠️ P${pCourante} (forcé)`:"+/- Période"}
+            </button>
+          }
+          {periodeOverride&&<button onClick={()=>setPeriodeOverride(null)} title="Revenir à la période actuelle" style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".72rem"}}>↩️</button>}
+        </div>
+      </div>
+
+      {/* Bandeau période courante */}
+      <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:'.85rem 1rem',marginBottom:'1rem',color:C.blanc}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div>
+            <div style={{fontSize:'.55rem',fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',color:C.or}}>{fmtPLabel(pCourante)} · J{joursEcoules}/21</div>
+            <div style={{fontFamily:'Georgia,serif',fontSize:'1.3rem',fontWeight:600}}>{dCour.ca||0}€ <span style={{fontSize:'.7rem',fontWeight:400,color:C.pale}}>/ {dCour.obj||'—'}€</span></div>
+          </div>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:'.72rem',fontWeight:700,color:delta>=0?C.vert:'#F4A460'}}>{delta>=0?'▲ +':'▼ '}{Math.abs(delta)}€</div>
+            <div style={{fontSize:'.58rem',color:C.pale}}>{delta>=0?'en avance':'en retard'} · attendu {attendu}€</div>
+            <div style={{fontSize:'.55rem',color:C.pale,marginTop:'.15rem'}}>{raw.daysLeft}j {raw.hoursLeft}h restants</div>
+          </div>
+        </div>
+        <div style={{height:5,background:'rgba(255,255,255,.15)',borderRadius:10,overflow:'hidden',marginTop:'.5rem'}}>
+          <div style={{height:'100%',background:C.or,width:pct(dCour.ca,dCour.obj)+'%',borderRadius:10}}/>
+        </div>
+      </div>
+
+      {/* GRILLE 3 COLONNES */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.4rem',marginBottom:'1rem'}}>
+        {/* Colonne B */}
+        <div style={{border:`1.5px solid #88888840`,borderRadius:12,overflow:'hidden'}}>
+          <div style={{background:'#f5f5f5',padding:'.35rem .4rem .3rem',borderBottom:'1px solid #88888820',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <button onClick={()=>setCompareB(b=>Math.max(1,b-1))} style={{background:'none',border:'none',color:'#aaa',cursor:'pointer',fontSize:'.85rem',lineHeight:1,padding:0}}>‹</button>
+            <span onClick={()=>setEditColB(true)} style={{fontSize:'.55rem',fontWeight:700,color:'#888',cursor:'pointer',textAlign:'center'}}>{editColB?<input type='number' autoFocus value={inputB} onChange={e=>setInputB(e.target.value)} onBlur={()=>{const v=parseInt(inputB);if(v>0)setCompareB(v);setEditColB(false);}} onKeyDown={e=>e.key==='Enter'&&(setCompareB(parseInt(inputB)||1),setEditColB(false))} style={{width:36,border:'1px solid #888',borderRadius:4,fontSize:'.55rem',padding:'.08rem',textAlign:'center',fontFamily:'inherit'}}/>:fmtPLabel(compareB)}</span>
+            <button onClick={()=>setCompareB(b=>Math.min(pCourante-1,b+1))} style={{background:'none',border:'none',color:'#aaa',cursor:'pointer',fontSize:'.85rem',lineHeight:1,padding:0}}>›</button>
+          </div>
+          <GrilleJoursCA pNum={compareB} color='#888' joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj}/>
+        </div>
+
+        {/* Colonne A */}
+        <div style={{border:`1.5px solid ${C.lilas}40`,borderRadius:12,overflow:'hidden'}}>
+          <div style={{background:C.lilas+'10',padding:'.35rem .4rem .3rem',borderBottom:`1px solid ${C.lilas}20`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <button onClick={()=>setCompareA(a=>Math.max(1,a-1))} style={{background:'none',border:'none',color:C.lilas,cursor:'pointer',fontSize:'.85rem',lineHeight:1,padding:0}}>‹</button>
+            <span onClick={()=>setEditColA(true)} style={{fontSize:'.55rem',fontWeight:700,color:C.lilas,cursor:'pointer',textAlign:'center'}}>{editColA?<input type='number' autoFocus value={inputA} onChange={e=>setInputA(e.target.value)} onBlur={()=>{const v=parseInt(inputA);if(v>0)setCompareA(v);setEditColA(false);}} onKeyDown={e=>e.key==='Enter'&&(setCompareA(parseInt(inputA)||1),setEditColA(false))} style={{width:36,border:`1px solid ${C.lilas}`,borderRadius:4,fontSize:'.55rem',padding:'.08rem',textAlign:'center',fontFamily:'inherit'}}/>:fmtPLabel(compareA)}</span>
+            <button onClick={()=>setCompareA(a=>Math.min(pCourante-1,a+1))} style={{background:'none',border:'none',color:C.lilas,cursor:'pointer',fontSize:'.85rem',lineHeight:1,padding:0}}>›</button>
+          </div>
+          <GrilleJoursCA pNum={compareA} color={C.lilas} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj}/>
+        </div>
+        {/* Colonne courante */}
+        <div style={{border:`1.5px solid ${C.rose}40`,borderRadius:12,overflow:'hidden'}}>
+          <GrilleJoursCA pNum={pCourante} color={C.rose} courante={true} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj}/>
+        </div>
+      </div>
+
+      {/* Formulaire édition total */}
+      {editPeriode&&(
+        <div style={{background:C.blanc,border:`1px solid ${C.rose}`,borderRadius:12,padding:'1rem',marginBottom:'1rem'}}>
+          <div style={{fontSize:'.7rem',fontWeight:700,color:C.brun,marginBottom:'.6rem'}}>✏️ {fmtPLabel(editPeriode)} — {fmtDate(getPeriodeDebut(editPeriode))}</div>
+          <div style={{display:'flex',gap:'.5rem',marginBottom:'.6rem'}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:'.6rem',color:C.gris,marginBottom:'.2rem'}}>CA total (€)</div>
+              <input type='number' value={editCA} onChange={e=>setEditCA(e.target.value)} placeholder='0'
+                style={{width:'100%',border:`1px solid ${C.pale}`,borderRadius:8,padding:'.45rem .65rem',fontSize:'.85rem',fontFamily:'inherit',color:C.texte,background:C.creme,outline:'none',fontWeight:700}}/>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:'.6rem',color:C.gris,marginBottom:'.2rem'}}>Objectif (€)</div>
+              <input type='number' value={editObj} onChange={e=>setEditObj(e.target.value)} placeholder='0'
+                style={{width:'100%',border:`1px solid ${C.pale}`,borderRadius:8,padding:'.45rem .65rem',fontSize:'.85rem',fontFamily:'inherit',color:C.texte,background:C.creme,outline:'none',fontWeight:700}}/>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:'.4rem'}}>
+            <button onClick={saveEdit} disabled={saving}
+              style={{flex:1,background:C.brun,color:C.blanc,border:'none',borderRadius:8,padding:'.5rem',fontSize:'.78rem',fontWeight:600,fontFamily:'inherit',cursor:'pointer'}}>
+              {saving?'Sauvegarde...':'✓ Enregistrer'}
+            </button>
+            <button onClick={()=>setEditPeriode(null)}
+              style={{flex:1,background:C.pale,color:C.gris,border:'none',borderRadius:8,padding:'.5rem',fontSize:'.78rem',fontFamily:'inherit',cursor:'pointer'}}>Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {/* HISTORIQUE — par année puis période */}
+      <div style={{marginBottom:'.5rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div style={{fontSize:'.6rem',fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',color:C.gris}}>📅 Historique</div>
+        <div style={{display:'flex',gap:'.3rem'}}>
+          {anneesDispos.map(a=>(
+            <button key={a} onClick={()=>{setHistAnnee(a);setHistPeriodeOuverte(null);}}
+              style={{padding:'.22rem .55rem',fontSize:'.65rem',fontWeight:600,borderRadius:8,border:`1px solid ${histAnnee===a?C.brun:C.pale}`,background:histAnnee===a?C.brun:C.blanc,color:histAnnee===a?C.blanc:C.gris,cursor:'pointer',fontFamily:'inherit'}}>
+              {a}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {periodesDeAnnee(histAnnee).reverse().map(num=>{
+        const d3=data[`p${num}`]||{};
+        const pc3=pct(d3.ca||0,d3.obj||0);
+        const isCourante=num===pCourante;
+        const isOuverte=histPeriodeOuverte===num;
+        const numAnnee=((num-1)%PERIODES_PAR_AN+PERIODES_PAR_AN)%PERIODES_PAR_AN+1;
+        return(
+          <div key={num} style={{marginBottom:'.4rem',border:`1.5px solid ${isCourante?C.rose:isOuverte?C.brun:C.pale}`,borderRadius:isOuverte?'12px 12px 0 0':12,overflow:'hidden'}}>
+            {/* Ligne de la période */}
+            <div onClick={()=>setHistPeriodeOuverte(isOuverte?null:num)}
+              style={{display:'flex',alignItems:'center',gap:'.6rem',background:isCourante?C.brun:isOuverte?C.brun+'08':C.blanc,padding:'.5rem .85rem',cursor:'pointer'}}>
+              <div style={{width:36,height:36,borderRadius:'50%',background:isCourante?C.or+'30':C.rose+'15',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:'.65rem',fontWeight:700,color:isCourante?C.or:C.rose}}>P{numAnnee}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:'.62rem',fontWeight:600,color:isCourante?C.blanc:C.brun}}>{fmtDate(getPeriodeDebut(num))} → {fmtDate(new Date(getPeriodeDebut(num).getTime()+20*24*60*60*1000))}</div>
+                <div style={{height:4,background:isCourante?'rgba(255,255,255,.15)':C.pale,borderRadius:10,overflow:'hidden',marginTop:'.2rem'}}>
+                  <div style={{height:'100%',background:isCourante?C.or:C.rose,width:pc3+'%',borderRadius:10}}/>
+                </div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div style={{fontFamily:'Georgia,serif',fontSize:'.9rem',fontWeight:700,color:isCourante?C.blanc:C.brun}}>{d3.ca||'—'}{d3.ca?'€':''}</div>
+                <div style={{fontSize:'.58rem',color:isCourante?C.pale:C.gris}}>{d3.obj?pc3+'%':''}</div>
+              </div>
+              <div style={{fontSize:'.75rem',color:isCourante?C.pale:C.gris,transform:isOuverte?'rotate(90deg)':'none',transition:'transform .2s',flexShrink:0}}>›</div>
+            </div>
+
+            {/* Grille jour par jour dépliable */}
+            {isOuverte&&(
+              <div style={{borderTop:`1px solid ${C.pale}`,background:C.blanc}}>
+                <div style={{padding:'.5rem .65rem .2rem',background:C.creme,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div style={{fontSize:'.6rem',color:C.gris}}>Clique sur un jour pour saisir ou modifier</div>
+                  <button onClick={()=>{setEditPeriode(num);setEditCA(d3.ca||'');setEditObj(d3.obj||'');}}
+                    style={{background:C.brun,color:C.blanc,border:'none',borderRadius:6,padding:'.2rem .5rem',fontSize:'.6rem',fontWeight:600,fontFamily:'inherit',cursor:'pointer'}}>✏️ Total & Obj.</button>
+                </div>
+                <GrilleJoursCA pNum={num} color={isCourante?C.rose:C.lilas} courante={isCourante} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj}/>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function EspaceChefTab({uid, isChef}){
   const[section,setSection]=useState("");
   const[distrib,setDistrib]=useState([]);
@@ -7740,13 +13759,17 @@ function EspaceChefTab({uid, isChef}){
           style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>
           ← Retour à Espace Chef
         </button>
+        {section==="stats"&&<StatsEquipeTab uid={uid} annuaire={annuaire}/>}
+        {section==="challengeapp"&&<ChallengeAppSuiviTab annuaire={annuaire}/>}
+        {section==="suivica"&&<SuiviCATab uid={uid}/>}
+        {section==="actionsbiblio"&&<ActionsBiblioChefTab uid={uid}/>}
         {section==="membres"&&<MembresTab uid={uid}/>}
         {section==="assiduite"&&<AssiduiteTab uid={uid}/>}
-        {section==="defi"&&<DefisTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={isChef}/>}
+        {section==="defi"&&<DefisTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={true} isChef={isChef}/>}
         {section==="powerhour"&&<PowerHourTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={isChef}/>}
         {section==="distributeurs"&&<DistributeursTab distributeurs={distrib} save={saveDistrib} uid={uid}/>}
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
-        {section==="nouveaux"&&<SuiviRecruTab uid={uid}/>}
+        {section==="nouveaux"&&<SuiviRecruTab uid={uid} isChef={isChef}/>}
         {section==="admin"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<AdminTab/>}
       </div>
     );
@@ -7779,6 +13802,11 @@ function EspaceChefTab({uid, isChef}){
             </span>
           )}
         </button>
+      </div>
+
+      {/* Mise à jour app */}
+      <div style={{marginBottom:"1rem"}}>
+        <BoutonMiseAJour style={{width:"100%",justifyContent:"center"}}/>
       </div>
       {sections.map(s=>(
         <div key={s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
@@ -7916,6 +13944,27 @@ function MonEquipeTab({uid}){
                   📁 {sousEquipeCount}
                 </button>
               )}
+              <button onClick={async()=>{
+                try{
+                  const ref=doc(db,"users",m.uid);
+                  const snap=await getDoc(ref);
+                  const existing=snap.exists()&&snap.data()["db-fast-start"]?JSON.parse(snap.data()["db-fast-start"]):{};
+                  const nom=(m.prenom||"")+" "+(m.nom||"");
+                  if(!existing.startDate){
+                    await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+                    alert("✅ Fast Start assigné à "+nom.trim());
+                  } else {
+                    if(window.confirm(nom.trim()+" a déjà un Fast Start (démarré le "+existing.startDate+"). Relancer depuis le début ?")){
+                      await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+                      alert("✅ Fast Start relancé pour "+nom.trim());
+                    }
+                  }
+                }catch{alert("Erreur.");}
+              }}
+                style={{background:C.rose+"15",border:`1px solid ${C.rose}50`,borderRadius:8,padding:".35rem .55rem",fontSize:".65rem",fontWeight:600,color:C.rose,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
+                title="Assigner/relancer le Fast Start">
+                🚀
+              </button>
               <button onClick={()=>setExpanded(expanded===m.uid?null:m.uid)}
                 style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".35rem .55rem",fontSize:".68rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
                 {expanded===m.uid?"▲":"▼"}
@@ -7934,71 +13983,504 @@ function MonEquipeTab({uid}){
 }
 
 // ── ADMIN TAB (Melissa uniquement) ───────────────────────────────────────────
+function AdminConfigPeriodes(){
+  const[ancre,setAncre]=useState("2024-12-19");
+  const[saving,setSaving]=useState(false);
+  const[saved,setSaved]=useState(false);
+  const[loaded,setLoaded]=useState(false);
+  const[resetUid,setResetUid]=useState("");
+  const[resetResult,setResetResult]=useState("");
+  const[resetSearch,setResetSearch]=useState("");
+  const[membres,setMembres]=useState([]);
+  const[resetSaving,setResetSaving]=useState(false);
+  const[resetVals,setResetVals]=useState({});
+  const[resetGlobalSaving,setResetGlobalSaving]=useState(false);
+  const[resetGlobalResult,setResetGlobalResult]=useState("");
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","config_periodes"));
+        if(snap.exists()&&snap.data().ancre) setAncre(snap.data().ancre.slice(0,10));
+      }catch{}
+      // Charger aussi les membres de l'annuaire
+      try{
+        const snap2=await getDoc(doc(db,"equipe","annuaire"));
+        if(snap2.exists()) setMembres(Object.entries(snap2.data().membres||{}).map(([uid,m])=>({uid,prenom:m.prenom||"",nom:m.nom||""})).sort((a,b)=>(a.prenom+a.nom).localeCompare(b.prenom+b.nom)));
+      }catch{}
+      setLoaded(true);
+    })();
+  },[]);
+
+  const save=async()=>{
+    setSaving(true);
+    try{
+      await setDoc(doc(db,"admin","config_periodes"),{ancre:ancre+"T00:00:00"});
+      // Met à jour la variable globale immédiatement
+      PERIODE_DEBUT_ABSOLU_MS = new Date(ancre+"T00:00:00").getTime();
+      setSaved(true);setTimeout(()=>setSaved(false),2000);
+    }catch{}
+    setSaving(false);
+  };
+
+  // Prévisualisation
+  const ancreDate = new Date(ancre+"T00:00:00");
+  const today = new Date();
+  const diffMs = today.getTime() - ancreDate.getTime();
+  const n = diffMs>0 ? Math.floor(diffMs/(PERIODE_DUREE_JOURS*24*60*60*1000))+1 : 1;
+  const debut = new Date(ancreDate.getTime()+(n-1)*PERIODE_DUREE_JOURS*24*60*60*1000);
+  const fin = new Date(debut.getTime()+PERIODE_DUREE_JOURS*24*60*60*1000-1);
+  const numAnnee = ((n-1)%PERIODES_PAR_AN+PERIODES_PAR_AN)%PERIODES_PAR_AN+1;
+  const resteDays = Math.ceil((fin.getTime()-today.getTime())/(24*60*60*1000));
+
+  if(!loaded) return null;
+
+  return(
+    <div style={{background:"#FFF8E1",border:"1.5px solid #E6A817",borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+      <div style={{fontSize:".6rem",fontWeight:700,color:"#856404",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>⚙️ Configuration des Périodes Mihi</div>
+      <p style={{fontSize:".7rem",color:"#856404",marginBottom:".75rem",lineHeight:1.6}}>
+        La date d'ancre détermine le calcul de toutes les périodes pour <strong>toute l'équipe</strong>. Modifie uniquement si les dates sont incorrectes.
+      </p>
+      <div style={{marginBottom:".6rem"}}>
+        <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem",fontWeight:600}}>Date de début de P1 (ancre)</div>
+        <input type="date" value={ancre} onChange={e=>setAncre(e.target.value)}
+          style={{width:"100%",border:`1px solid #E6A817`,borderRadius:8,padding:".42rem .65rem",fontSize:".85rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",fontWeight:600}}/>
+      </div>
+      {/* Prévisualisation */}
+      <div style={{background:"white",borderRadius:8,padding:".5rem .75rem",marginBottom:".6rem",fontSize:".72rem",color:C.brun}}>
+        <strong>Prévisualisation :</strong> Aujourd'hui = <strong style={{color:C.rose}}>P{numAnnee} {debut.getFullYear()}</strong> · {debut.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} → {fin.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} · {Math.max(0,resteDays)}j restants
+      </div>
+      <button onClick={save} disabled={saving}
+        style={{width:"100%",background:"#E6A817",color:"white",border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+        {saving?"Sauvegarde...":saved?"✅ Appliqué à toute l'équipe !":"✓ Appliquer à toute l'équipe"}
+      </button>
+
+      {/* Reset global tous les membres */}
+      <div style={{marginTop:"1rem",paddingTop:"1rem",borderTop:"1px solid #E6A817"}}>
+        <div style={{fontSize:".62rem",fontWeight:700,color:"#C0392B",marginBottom:".4rem"}}>🔄 Remise à zéro de toute l'équipe</div>
+        <p style={{fontSize:".68rem",color:"#856404",marginBottom:".5rem",lineHeight:1.5}}>
+          Remet le CA et les recrues à 0 pour <strong>tous les membres</strong> (sans effacer le cumul ni l'historique). À utiliser au changement de période/campagne.
+        </p>
+        {resetGlobalResult&&<div style={{fontSize:".7rem",color:resetGlobalResult.startsWith("✅")?C.vert:"#B04040",marginBottom:".4rem"}}>{resetGlobalResult}</div>}
+        <button onClick={async()=>{
+          if(!window.confirm("Remettre CA et recrues à 0 pour TOUTE l'équipe ? Cette action est irréversible."))return;
+          setResetGlobalSaving(true);setResetGlobalResult("");
+          try{
+            const annRef=doc(db,"equipe","annuaire");
+            const annSnap=await getDoc(annRef);
+            if(!annSnap.exists()){setResetGlobalResult("❌ Annuaire introuvable.");setResetGlobalSaving(false);return;}
+            const membres2=annSnap.data().membres||{};
+            const uids=Object.keys(membres2);
+            let ok=0,err=0;
+            // Reset annuaire en une fois
+            const newMembres={};
+            uids.forEach(u=>{newMembres[u]={...membres2[u],ca:"",caPerso:"",recruesReal:"0"};});
+            await setDoc(annRef,{membres:newMembres},{merge:true});
+            // Reset objectifs individuels
+            for(const uid2 of uids){
+              try{
+                const uSnap=await getDoc(doc(db,"users",uid2));
+                if(uSnap.exists()){
+                  const d2=uSnap.data();
+                  if(d2["db-obj-perso"]){
+                    const obj2=JSON.parse(d2["db-obj-perso"]);
+                    const periode2=getPeriodeActuelle();
+                    // Sauvegarder dans historique avant reset
+                    const hist2=obj2.historique||[];
+                    if(obj2.ca||obj2.caPerso||obj2.recruesReal!=="0"){
+                      hist2.push({date:new Date().toISOString().slice(0,10),ca:+obj2.ca||0,caPerso:+obj2.caPerso||0,recruesReal:+obj2.recruesReal||0,palier:obj2.palier||"2%"});
+                    }
+                    const totalCaCumul=(+obj2.totalCaCumul||0)+(+obj2.ca||0);
+                    const totalRecruesCumul=(+obj2.totalRecruesCumul||0)+(+obj2.recruesReal||0);
+                    const nextObj2={...obj2,ca:"",caPerso:"",caEquipe:"",recruesReal:"0",nbDirecteurs:0,caDirecteurs:{},dirSelectionnes:{},historique:hist2.slice(-24),totalCaCumul:String(totalCaCumul),totalRecruesCumul:String(totalRecruesCumul)};
+                    await setDoc(doc(db,"users",uid2),{"db-obj-perso":JSON.stringify(nextObj2),"last_periode":periode2},{merge:true});
+                  } else {
+                    await setDoc(doc(db,"users",uid2),{"last_periode":getPeriodeActuelle()},{merge:true});
+                  }
+                  ok++;
+                }
+              }catch{err++;}
+            }
+            setResetGlobalResult(`✅ ${ok} membres remis à zéro${err>0?` (${err} erreurs)`:""}. Annuaire mis à jour.`);
+          }catch(e){setResetGlobalResult("Erreur : "+e.message);}
+          setResetGlobalSaving(false);
+        }} disabled={resetGlobalSaving}
+          style={{width:"100%",background:resetGlobalSaving?"#aaa":"#C0392B",color:"white",border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:resetGlobalSaving?"default":"pointer"}}>
+          {resetGlobalSaving?"Remise à zéro en cours...":"🔄 Remettre toute l'équipe à zéro"}
+        </button>
+      </div>
+
+      {/* Correction cumul individuel */}
+      <div style={{marginTop:"1rem",paddingTop:"1rem",borderTop:"1px solid #E6A817"}}>
+        <div style={{fontSize:".62rem",fontWeight:700,color:"#856404",marginBottom:".4rem"}}>🔧 Corriger les objectifs d'un membre</div>
+        <p style={{fontSize:".68rem",color:"#856404",marginBottom:".5rem",lineHeight:1.5}}>
+          Recherche un membre et modifie directement ses valeurs (cumul, CA, recrues).
+        </p>
+        <input value={resetSearch} onChange={e=>{setResetSearch(e.target.value);setResetResult("");setResetUid("");}}
+          placeholder="Rechercher par prénom ou nom..."
+          style={{width:"100%",border:"1px solid #E6A817",borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",background:"white",outline:"none",marginBottom:".4rem"}}/>
+        {resetSearch.length>=2&&(()=>{
+          const filtres=membres.filter(m=>(m.prenom+" "+m.nom).toLowerCase().includes(resetSearch.toLowerCase())).slice(0,6);
+          if(!filtres.length) return <div style={{fontSize:".7rem",color:"#B04040",marginBottom:".4rem"}}>Aucun membre trouvé</div>;
+          return(
+            <div style={{background:"white",border:"1px solid #E6A817",borderRadius:8,marginBottom:".4rem",overflow:"hidden"}}>
+              {filtres.map(m=>(
+                <div key={m.uid} onClick={async()=>{
+                  setResetUid(m.uid);setResetSearch(m.prenom+" "+m.nom);
+                  // Charger les valeurs actuelles
+                  try{
+                    const snap=await getDoc(doc(db,"users",m.uid));
+                    if(snap.exists()){
+                      const d=snap.data();
+                      const obj2=d["db-obj-perso"]?JSON.parse(d["db-obj-perso"]):{};
+                      setResetVals({
+                        ca:obj2.ca||"",caPerso:obj2.caPerso||"",recruesReal:obj2.recruesReal||"0",
+                        totalCaCumul:obj2.totalCaCumul||"0",totalRecruesCumul:obj2.totalRecruesCumul||"0",
+                      });
+                    }
+                  }catch{}
+                }}
+                  style={{padding:".45rem .65rem",cursor:"pointer",borderBottom:"1px solid #FFF3CD",display:"flex",justifyContent:"space-between",alignItems:"center",background:resetUid===m.uid?"#FFF3CD":"white"}}>
+                  <span style={{fontSize:".78rem",color:C.brun,fontWeight:resetUid===m.uid?700:400}}>{m.prenom} {m.nom}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {resetUid&&(
+          <div style={{background:"#FFF8E1",borderRadius:10,padding:".75rem",border:"1px solid #E6A817",marginBottom:".5rem"}}>
+            <div style={{fontSize:".65rem",fontWeight:700,color:"#856404",marginBottom:".6rem"}}>✏️ {resetSearch} — valeurs modifiables</div>
+            {[
+              {label:"CA total période (€)",key:"ca"},
+              {label:"Ventes perso (€)",key:"caPerso"},
+              {label:"Recrues cette période",key:"recruesReal"},
+              {label:"Cumul CA total (€)",key:"totalCaCumul"},
+              {label:"Cumul recrues total",key:"totalRecruesCumul"},
+            ].map(f=>(
+              <div key={f.key} style={{display:"flex",alignItems:"center",gap:".5rem",marginBottom:".35rem"}}>
+                <span style={{fontSize:".65rem",color:"#856404",flex:1}}>{f.label}</span>
+                <input type="number" value={resetVals[f.key]||""} onChange={e=>setResetVals(p=>({...p,[f.key]:e.target.value}))}
+                  style={{width:90,border:"1px solid #E6A817",borderRadius:6,padding:".28rem .45rem",fontSize:".8rem",fontFamily:"inherit",textAlign:"right",outline:"none",fontWeight:700}}/>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:".4rem",marginTop:".5rem"}}>
+              <button onClick={async()=>{
+                setResetSaving(true);
+                try{
+                  const ref=doc(db,"users",resetUid);
+                  const snap=await getDoc(ref);
+                  if(!snap.exists()){setResetResult("❌ Utilisateur non trouvé.");setResetSaving(false);return;}
+                  const obj2=snap.data()["db-obj-perso"]?JSON.parse(snap.data()["db-obj-perso"]):{};
+                  const next={...obj2,...resetVals};
+                  await setDoc(ref,{"db-obj-perso":JSON.stringify(next)},{merge:true});
+                  await syncAnnuaire(resetUid,resetSearch,next);
+                  setResetResult("✅ Valeurs mises à jour pour "+resetSearch);
+                  setResetUid("");setResetSearch("");setResetVals({});
+                }catch(e){setResetResult("Erreur : "+e.message);}
+                setResetSaving(false);
+              }} disabled={resetSaving}
+                style={{flex:1,background:"#856404",color:"white",border:"none",borderRadius:8,padding:".45rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                {resetSaving?"Sauvegarde...":"✓ Appliquer"}
+              </button>
+              <button onClick={()=>{setResetUid("");setResetSearch("");setResetVals({});}}
+                style={{flex:1,background:"#ccc",color:"white",border:"none",borderRadius:8,padding:".45rem",fontSize:".75rem",fontFamily:"inherit",cursor:"pointer"}}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+        {resetResult&&<div style={{fontSize:".7rem",color:resetResult.startsWith("✅")?C.vert:"#B04040",marginTop:".3rem"}}>{resetResult}</div>}
+      </div>
+    </div>
+  );
+}
+
+function AdminLinkBioSection(){
+  const[banniere,setBanniere]=useState({texte:"",couleur:"#C49A8A",lien:"",actif:false});
+  const[saving,setSaving]=useState(false);
+  const[saved,setSaved]=useState(false);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","linkbio_banniere"));
+        if(snap.exists()) setBanniere(p=>({...p,...snap.data()}));
+      }catch{}
+    })();
+  },[]);
+  const save=async()=>{
+    setSaving(true);
+    try{
+      await setDoc(doc(db,"admin","linkbio_banniere"),banniere);
+      setSaved(true);setTimeout(()=>setSaved(false),2000);
+    }catch{}
+    setSaving(false);
+  };
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".75rem"}}>🔗 Bannière Link-in-Bio (toute l'équipe)</div>
+      <p style={{fontSize:".7rem",color:C.gris,marginBottom:".75rem",lineHeight:1.6}}>
+        Cette bannière s'affichera sur la page de TOUTES les distributrices. Chaque membre peut choisir de l'afficher ou non.
+      </p>
+      <input value={banniere.texte} onChange={e=>setBanniere(p=>({...p,texte:e.target.value}))} placeholder="Ex: 🎉 Promo -20% jusqu'au 30 juin !"
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+      <input value={banniere.lien} onChange={e=>setBanniere(p=>({...p,lien:e.target.value}))} placeholder="Lien (optionnel)"
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:".75rem",marginBottom:".5rem"}}>
+        <div style={{fontSize:".7rem",color:C.gris}}>Couleur :</div>
+        <input type="color" value={banniere.couleur} onChange={e=>setBanniere(p=>({...p,couleur:e.target.value}))} style={{width:32,height:28,border:"none",borderRadius:6,cursor:"pointer"}}/>
+        <label style={{display:"flex",alignItems:"center",gap:".4rem",cursor:"pointer"}}>
+          <input type="checkbox" checked={banniere.actif} onChange={e=>setBanniere(p=>({...p,actif:e.target.checked}))}/>
+          <span style={{fontSize:".72rem",color:C.brun,fontWeight:600}}>Activer</span>
+        </label>
+      </div>
+      <button onClick={save} disabled={saving}
+        style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+        {saving?"Sauvegarde...":saved?"✅ Sauvegardé !":"✓ Appliquer à toute l'équipe"}
+      </button>
+    </div>
+  );
+}
+
+function AdminImportCatalogue(){
+  const[importing,setImporting]=useState(false);
+  const[result,setResult]=useState(null);
+  const[stats,setStats]=useState(null);
+
+  const CAT_MAP={
+    'VISAGE':'face','CORPS':'corps','CHEVEUX':'hair',
+    'Make Up':'makeup','PARFUMS':'parfums','SANTÉ':'health',
+    'Hommes':'hommes','Enfants':'enfants','HOME':'home','Sets':'sets'
+  };
+
+  const handleFile=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    setImporting(true);setResult(null);setStats(null);
+
+    try{
+      // Charger SheetJS depuis un tag script déjà présent (index.html) ou CDN via un élément script injecté
+      const xlsx = await new Promise((resolve,reject)=>{
+        if(window.XLSX){resolve(window.XLSX);return;}
+        const s=document.createElement('script');
+        s.src='https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+        s.onload=()=>resolve(window.XLSX);
+        s.onerror=()=>reject(new Error('SheetJS non chargé'));
+        document.head.appendChild(s);
+      });
+
+      const buf=await file.arrayBuffer();
+      const wb=xlsx.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=xlsx.utils.sheet_to_json(ws);
+
+      const seen=new Set();
+      const catalogue={};
+      Object.values(CAT_MAP).forEach(k=>{catalogue[k]=[];});
+
+      for(const row of rows){
+        const art=String(row['Art']||'').replace('.0','').trim();
+        if(!art||seen.has(art))continue;
+        seen.add(art);
+        const cat=row['Category']||'';
+        const key=CAT_MAP[cat];
+        if(!key)continue;
+        const priceRaw=String(row['Price']||'').replace('€','').replace(',','.').trim();
+        const prix=parseFloat(priceRaw)||0;
+        const offerPriceRaw=String(row['Offer price']||'').replace('€','').replace(',','.').trim();
+        catalogue[key].push({
+          nom:String(row['Name']||''),
+          prix,
+          ref:art,
+          serie:cat,
+          offre:row['Offer']?String(row['Offer']):'',
+          prixOffre:offerPriceRaw?parseFloat(offerPriceRaw)||0:'',
+        });
+      }
+
+      const total=Object.values(catalogue).reduce((s,v)=>s+v.length,0);
+      await setDoc(doc(db,"admin","catalogue_mihi"),catalogue);
+      const statsObj={};
+      Object.entries(catalogue).forEach(([k,v])=>{if(v.length)statsObj[k]=v.length;});
+      setStats({total,details:statsObj});
+      setResult("✅ Import réussi !");
+    }catch(err){
+      setResult("❌ Erreur : "+err.message);
+    }
+    setImporting(false);
+    e.target.value="";
+  };
+
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+      <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>📦 Import Catalogue Mihi (Excel)</div>
+      <p style={{fontSize:".72rem",color:C.gris,marginBottom:".75rem",lineHeight:1.6}}>
+        Sélectionne le fichier Excel du catalogue Mihi pour mettre à jour les produits dans l'application.
+      </p>
+      <label style={{display:"block",background:importing?C.pale:C.brun,color:"white",borderRadius:9,padding:".55rem",textAlign:"center",fontSize:".78rem",fontWeight:600,cursor:importing?"default":"pointer",fontFamily:"inherit"}}>
+        {importing?"⏳ Import en cours...":"📂 Choisir le fichier Excel (.xlsx)"}
+        <input type="file" accept=".xlsx,.xls" onChange={handleFile} style={{display:"none"}} disabled={importing}/>
+      </label>
+      {result&&<div style={{marginTop:".6rem",fontSize:".74rem",fontWeight:600,color:result.startsWith("✅")?C.vert:"#B04040"}}>{result}</div>}
+      {stats&&(
+        <div style={{background:C.creme,borderRadius:8,padding:".6rem .75rem",marginTop:".5rem"}}>
+          <div style={{fontSize:".68rem",fontWeight:700,color:C.brun,marginBottom:".35rem"}}>{stats.total} produits importés :</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:".3rem"}}>
+            {Object.entries(stats.details).map(([k,v])=>(
+              <span key={k} style={{fontSize:".62rem",background:C.pale,borderRadius:20,padding:".1rem .45rem",color:C.brun}}>{k}: {v}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminTab(){
-  const[sections,setSections]=useState([]);
+  const[items,setItems]=useState([]);
   const[loading,setLoading]=useState(true);
   const[showAdd,setShowAdd]=useState(false);
-  const[form,setForm]=useState({onglet:"demarrage",titre:"",description:"",url:"",type:"video",actif:true});
+  const[editId,setEditId]=useState(null);
   const[saving,setSaving]=useState(false);
+  const[videosFastStart,setVideosFastStart]=useState({});
+  const[savingFS,setSavingFS]=useState(false);
+  const[filterDest,setFilterDest]=useState("all");
 
-  const ONGLETS=[
-    {id:"demarrage",label:"📚 Démarrage"},
-    {id:"vente",label:"🎯 Vente"},
-    {id:"recrutement",label:"👥 Recrutement"},
-    {id:"contenu",label:"📱 Contenu"},
-    {id:"devperso",label:"🧠 Dév. Personnel"},
-    {id:"outils",label:"🛠️ Outils"},
-    {id:"formaproduits",label:"🧴 Formation Produits"},
-    {id:"formationapp",label:"🎬 Formation App"},
+  const EMPLACEMENTS=[
+    {groupe:"🎓 Formation",options:[
+      {id:"demarrage",       label:"Formation Démarrage"},
+      {id:"vente",           label:"Formation Vente"},
+      {id:"recrutement",     label:"Formation Recrutement"},
+      {id:"contenu",         label:"Formation Contenu/Réseaux"},
+      {id:"devperso",        label:"Développement Personnel Business"},
+      {id:"videoannexe",     label:"Vidéos Annexes"},
+      {id:"outils",          label:"Formation Outils"},
+      {id:"formationapp",    label:"Formation App"},
+    ]},
+    {groupe:"🧴 Produits",options:[
+      {id:"produits_parfum",      label:"Produits — Parfum"},
+      {id:"produits_makeup",      label:"Produits — Maquillage"},
+      {id:"produits_complement",  label:"Produits — Compléments alimentaires"},
+      {id:"produits_poids",       label:"Produits — Perte de poids"},
+      {id:"produits_skincare",    label:"Produits — Skincare"},
+      {id:"produits_corpsoin",    label:"Produits — Soins corps"},
+      {id:"produits_entretien",   label:"Produits — Entretien"},
+    ]},
+    {groupe:"🏠 Dashboard",options:[
+      {id:"today_top",       label:"Aujourd'hui — En-tête"},
+      {id:"today_bottom",    label:"Aujourd'hui — Bas de page"},
+      {id:"annonces",        label:"Annonces équipe (popup)"},
+    ]},
+    {groupe:"📱 Réseaux / Posts",options:[
+      {id:"posts_instagram", label:"Posts — Idées Instagram"},
+      {id:"posts_facebook",  label:"Posts — Idées Facebook"},
+      {id:"posts_stories",   label:"Posts — Idées Stories"},
+    ]},
+    {groupe:"🔗 Liens & Tunnels",options:[
+      {id:"linkbio_liens",   label:"Link-in-Bio — Liens supplémentaires"},
+      {id:"tunnel_vente",    label:"Tunnel Vente — Ressources"},
+      {id:"tunnel_recrut",   label:"Tunnel Recrutement — Ressources"},
+    ]},
   ];
+
+  const TOUS_IDS=EMPLACEMENTS.flatMap(g=>g.options.map(o=>o.id));
+  const getLabel=(id)=>{
+    for(const g of EMPLACEMENTS) for(const o of g.options) if(o.id===id)return o.label;
+    return id;
+  };
 
   const TYPES=[
-    {id:"video",label:"▶ Vidéo Zoom"},
-    {id:"youtube",label:"▶ YouTube"},
-    {id:"drive",label:"📄 Drive"},
-    {id:"doc",label:"📝 Google Doc"},
-    {id:"info",label:"💡 Info texte"},
+    {id:"video",    label:"▶ Vidéo Zoom",emoji:"🎬"},
+    {id:"youtube",  label:"▶ YouTube",   emoji:"▶️"},
+    {id:"drive",    label:"📄 Drive",    emoji:"📄"},
+    {id:"doc",      label:"📝 Google Doc",emoji:"📝"},
+    {id:"image",    label:"🖼️ Image",    emoji:"🖼️"},
+    {id:"info",     label:"💡 Texte",    emoji:"💡"},
+    {id:"lien",     label:"🔗 Lien",     emoji:"🔗"},
   ];
+
+  const emptyForm={destination:TOUS_IDS[0],titre:"",description:"",url:"",type:"video",actif:true,image:""};
+  const[form,setForm]=useState(emptyForm);
 
   useEffect(()=>{
     (async()=>{
       try{
         const snap=await getDoc(doc(db,"admin","contenus"));
-        if(snap.exists()) setSections(snap.data().items||[]);
+        if(snap.exists())setItems(snap.data().items||[]);
+      }catch{}
+      try{
+        const snap2=await getDoc(doc(db,"admin","videos_faststart"));
+        if(snap2.exists())setVideosFastStart(snap2.data().videos||{});
       }catch{}
       setLoading(false);
     })();
   },[]);
 
-  const saveItems=async(items)=>{
+  const saveItems=async(next)=>{
     setSaving(true);
-    try{await setDoc(doc(db,"admin","contenus"),{items});}catch{}
+    try{await setDoc(doc(db,"admin","contenus"),{items:next});}catch{}
     setSaving(false);
+  };
+
+  const saveVideoFS=async(v)=>{
+    setSavingFS(true);
+    try{await setDoc(doc(db,"admin","videos_faststart"),{videos:v});}catch{}
+    setVideosFastStart(v);
+    setSavingFS(false);
   };
 
   const add=async()=>{
     if(!form.titre.trim())return;
-    const item={id:`adm${Date.now()}`,...form};
-    const next=[...sections,item];
-    setSections(next);
+    let next;
+    if(editId){
+      next=items.map(it=>it.id===editId?{...it,...form}:it);
+    } else {
+      next=[...items,{id:`adm${Date.now()}`,...form}];
+    }
+    setItems(next);
     await saveItems(next);
-    setForm({onglet:"demarrage",titre:"",description:"",url:"",type:"video",actif:true});
-    setShowAdd(false);
+    setForm(emptyForm);setShowAdd(false);setEditId(null);
   };
 
   const del=async(id)=>{
-    const next=sections.filter(s=>s.id!==id);
-    setSections(next);
-    await saveItems(next);
+    if(!window.confirm("Supprimer ce contenu ?"))return;
+    const next=items.filter(it=>it.id!==id);
+    setItems(next);await saveItems(next);
   };
 
   const toggle=async(id)=>{
-    const next=sections.map(s=>s.id===id?{...s,actif:!s.actif}:s);
-    setSections(next);
-    await saveItems(next);
+    const next=items.map(it=>it.id===id?{...it,actif:!it.actif}:it);
+    setItems(next);await saveItems(next);
   };
 
-  if(loading)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
+  const startEdit=(it)=>{
+    setForm({destination:it.destination||it.onglet||TOUS_IDS[0],titre:it.titre||"",description:it.description||"",url:it.url||"",type:it.type||"video",actif:it.actif!==false,image:it.image||""});
+    setEditId(it.id);setShowAdd(true);
+  };
+
+  if(loading)return<div style={{textAlign:"center",padding:"2rem",color:C.gris}}>Chargement...</div>;
+
+  const itemsFiltres=filterDest==="all"?items:items.filter(it=>(it.destination||it.onglet)===filterDest);
+  const SEL=({label,field,options,small=false})=>(
+    <div style={{marginBottom:".5rem"}}>
+      <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{label}</div>
+      <select value={form[field]} onChange={e=>setForm(p=>({...p,[field]:e.target.value}))}
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:small?".35rem .5rem":".42rem .65rem",fontSize:small?".75rem":".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
+        {options}
+      </select>
+    </div>
+  );
+  const INP=({label,field,placeholder,textarea=false})=>(
+    <div style={{marginBottom:".5rem"}}>
+      <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{label}</div>
+      {textarea
+        ?<textarea value={form[field]||""} onChange={e=>setForm(p=>({...p,[field]:e.target.value}))} placeholder={placeholder} rows={3}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",lineHeight:1.6}}/>
+        :<input value={form[field]||""} onChange={e=>setForm(p=>({...p,[field]:e.target.value}))} placeholder={placeholder}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+      }
+    </div>
+  );
 
   return(
     <div>
@@ -8006,187 +14488,193 @@ function AdminTab(){
         Espace <em style={{fontStyle:"italic",color:C.rose}}>Admin</em>
       </div>
       <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Ajoute des formations, vidéos et ressources directement sans toucher au code.
+        Ajoute du contenu à n'importe quel endroit du site — formations, vidéos, annonces, ressources.
       </p>
 
-      <button onClick={()=>setShowAdd(p=>!p)}
-        style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".65rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:"1rem"}}>
-        ➕ Ajouter un contenu
-      </button>
+      {/* Sections fixes */}
+      <AdminLinkBioSection/>
+      <AdminConfigPeriodes/>
+      <AdminImportCatalogue/>
+      <AdminFormationProduits/>
 
-      {showAdd&&(
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-          <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouveau contenu</div>
+      {/* Fast Start vidéos */}
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+        <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".75rem"}}>🚀 Vidéos Fast Start — 7 modules</div>
+        {FAST_START_DAYS.map(d=>{
+          const key=`module${d.jour}`;
+          const cur=videosFastStart[key]||{url:"",type:"youtube"};
+          return(
+            <div key={d.jour} style={{marginBottom:".6rem",paddingBottom:".6rem",borderBottom:`1px solid ${C.pale}`}}>
+              <div style={{fontSize:".72rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>Module {d.jour} — {d.titre.split("—")[0].trim()}</div>
+              <div style={{display:"flex",gap:".4rem"}}>
+                <select value={cur.type} onChange={e=>{const v={...videosFastStart,[key]:{...cur,type:e.target.value}};saveVideoFS(v);}}
+                  style={{border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .4rem",fontSize:".72rem",fontFamily:"inherit",background:C.creme,outline:"none",flexShrink:0}}>
+                  <option value="youtube">YouTube</option>
+                  <option value="video">Zoom</option>
+                  <option value="drive">Drive</option>
+                </select>
+                <input value={cur.url} onChange={e=>{const v={...videosFastStart,[key]:{...cur,url:e.target.value}};setVideosFastStart(v);}}
+                  onBlur={()=>saveVideoFS(videosFastStart)}
+                  placeholder="URL de la vidéo"
+                  style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".75rem",fontFamily:"inherit",background:C.creme,outline:"none"}}/>
+              </div>
+            </div>
+          );
+        })}
+        {savingFS&&<div style={{fontSize:".65rem",color:C.vert,textAlign:"right"}}>Sauvegardé ✓</div>}
+      </div>
 
-          <div style={{marginBottom:".45rem"}}>
-            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".2rem"}}>Onglet de destination</div>
-            <select value={form.onglet} onChange={e=>setForm(p=>({...p,onglet:e.target.value}))}
-              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
-              {ONGLETS.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
-            </select>
-          </div>
+      {/* ── CONTENU LIBRE ── */}
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".75rem"}}>
+          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose}}>📦 Contenu libre — {items.length} éléments</div>
+          <button onClick={()=>{setShowAdd(!showAdd);setForm(emptyForm);setEditId(null);}}
+            style={{background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".35rem .75rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            {showAdd&&!editId?"✕ Annuler":"+ Ajouter"}
+          </button>
+        </div>
 
-          {/* Sous-section Formation App */}
-          {form.onglet==="formationapp"&&(
-            <div style={{marginBottom:".45rem"}}>
-              <div style={{fontSize:".62rem",color:C.gris,marginBottom:".2rem"}}>Section exacte dans Formation App</div>
-              <select value={form.onglet} onChange={e=>setForm(p=>({...p,onglet:e.target.value}))}
-                style={{width:"100%",border:`1px solid ${C.rose}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.rose+"10",outline:"none",fontWeight:600}}>
-                <option value="formationapp">👑 Formation Chef d'équipe</option>
-                <option value="dashboard">⚡ Tableau de bord (général)</option>
-                <option value="fa-dashboard-general">⚡ Tableau de bord — Général</option>
-                <option value="fa-objectifs">🎯 Tableau de bord — Objectifs</option>
-                <option value="fa-clients">🛍️ Tableau de bord — Clients</option>
-                <option value="fa-distributeurs">👑 Tableau de bord — Distributeurs</option>
-                <option value="fa-prospects">👥 Tableau de bord — Prospects</option>
-                <option value="outils">🛠️ Outils généraux</option>
+        {/* Formulaire ajout/édition */}
+        {showAdd&&(
+          <div style={{background:C.creme,borderRadius:10,padding:".85rem",marginBottom:".75rem",border:`1px solid ${C.pale}`}}>
+            <div style={{fontSize:".68rem",fontWeight:700,color:C.brun,marginBottom:".65rem"}}>{editId?"✏️ Modifier":"+ Nouveau contenu"}</div>
+
+            {/* Destination */}
+            <div style={{marginBottom:".5rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>📍 Où afficher ce contenu ?</div>
+              <select value={form.destination} onChange={e=>setForm(p=>({...p,destination:e.target.value}))}
+                style={{width:"100%",border:`1.5px solid ${C.rose}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.brun,background:"white",outline:"none",fontWeight:600}}>
+                {EMPLACEMENTS.map(g=>(
+                  <optgroup key={g.groupe} label={g.groupe}>
+                    {g.options.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
-          )}
 
-          <div style={{marginBottom:".45rem"}}>
-            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".2rem"}}>Type de contenu</div>
-            <div style={{display:"flex",gap:".3rem",flexWrap:"wrap"}}>
-              {TYPES.map(t=>(
-                <button key={t.id} onClick={()=>setForm(p=>({...p,type:t.id}))}
-                  style={{padding:".25rem .6rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1px solid ${form.type===t.id?C.rose:C.pale}`,background:form.type===t.id?C.rose:C.blanc,color:form.type===t.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
-                  {t.label}
-                </button>
-              ))}
+            <SEL label="Type de contenu" field="type" options={TYPES.map(t=><option key={t.id} value={t.id}>{t.emoji} {t.label}</option>)}/>
+            <INP label="Titre *" field="titre" placeholder="Ex: Comment aborder une inconnue sur Instagram"/>
+            <INP label="Description" field="description" placeholder="Résumé, conseils..." textarea/>
+            {["video","youtube","drive","doc","lien"].includes(form.type)&&
+              <INP label="URL" field="url" placeholder="https://..."/>
+            }
+            {form.type==="image"&&
+              <UploadPhoto label="Image" value={form.image} onChange={v=>setForm(p=>({...p,image:v}))} folder="admin-contenu"/>
+            }
+            <label style={{display:"flex",alignItems:"center",gap:".5rem",fontSize:".75rem",color:C.brun,cursor:"pointer",marginTop:".25rem"}}>
+              <input type="checkbox" checked={!!form.actif} onChange={e=>setForm(p=>({...p,actif:e.target.checked}))}/>
+              Visible immédiatement
+            </label>
+            <div style={{display:"flex",gap:".4rem",marginTop:".65rem"}}>
+              <button onClick={add} disabled={saving||!form.titre.trim()}
+                style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                {saving?"Sauvegarde...":editId?"✓ Modifier":"✓ Ajouter"}
+              </button>
+              <button onClick={()=>{setShowAdd(false);setEditId(null);setForm(emptyForm);}}
+                style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
+                Annuler
+              </button>
             </div>
           </div>
+        )}
 
-          <input placeholder="Titre (ex: Tips de vente — Session 3)" value={form.titre} onChange={e=>setForm(p=>({...p,titre:e.target.value}))}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".45rem"}}/>
-
-          <input placeholder="URL (lien Zoom, YouTube, Drive...)" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".45rem"}}/>
-
-          <textarea placeholder="Description courte (optionnel)" value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))}
-            style={{width:"100%",minHeight:60,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontFamily:"inherit",fontSize:".78rem",color:C.texte,background:C.creme,resize:"vertical",outline:"none",lineHeight:1.5,marginBottom:".6rem"}}/>
-
-          <div style={{display:"flex",gap:".4rem"}}>
-            <button onClick={add} disabled={saving||!form.titre.trim()}
-              style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".52rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-              {saving?"Sauvegarde...":"Publier"}
-            </button>
-            <button onClick={()=>setShowAdd(false)}
-              style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:8,padding:".52rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Liste par onglet */}
-      {ONGLETS.map(onglet=>{
-        const items=sections.filter(s=>s.onglet===onglet.id);
-        if(items.length===0)return null;
-        return(
-          <div key={onglet.id} style={{marginBottom:"1rem"}}>
-            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun,marginBottom:".4rem",padding:".2rem .6rem",background:C.pale,borderRadius:20,display:"inline-block"}}>{onglet.label}</div>
-            {items.map(item=>(
-              <div key={item.id} style={{background:item.actif?C.blanc:C.pale+"60",border:`1px solid ${item.actif?C.pale:"#ddd"}`,borderRadius:10,padding:".7rem .9rem",marginBottom:".4rem",opacity:item.actif?1:.6}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:".8rem",fontWeight:600,color:C.brun,marginBottom:".15rem"}}>{item.titre}</div>
-                    {item.description&&<div style={{fontSize:".7rem",color:C.gris,marginBottom:".15rem"}}>{item.description}</div>}
-                    {item.url&&<div style={{fontSize:".65rem",color:C.lilas,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:200}}>{item.url}</div>}
-                  </div>
-                  <div style={{display:"flex",gap:".3rem",flexShrink:0,marginLeft:".5rem"}}>
-                    <button onClick={()=>toggle(item.id)}
-                      style={{background:item.actif?C.vert+"20":"none",border:`1px solid ${item.actif?C.vert:C.pale}`,borderRadius:6,padding:".2rem .5rem",color:item.actif?C.vert:C.gris,cursor:"pointer",fontSize:".65rem",fontFamily:"inherit"}}>
-                      {item.actif?"✓ Actif":"Masqué"}
-                    </button>
-                    <button onClick={()=>del(item.id)}
-                      style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .45rem",color:"#B04040",cursor:"pointer",fontSize:".7rem",fontFamily:"inherit"}}>✕</button>
-                  </div>
-                </div>
-              </div>
+        {/* Filtre par destination */}
+        <div style={{marginBottom:".65rem"}}>
+          <select value={filterDest} onChange={e=>setFilterDest(e.target.value)}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .65rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
+            <option value="all">Tous les contenus ({items.length})</option>
+            {EMPLACEMENTS.map(g=>(
+              <optgroup key={g.groupe} label={g.groupe}>
+                {g.options.map(o=>{
+                  const n=items.filter(it=>(it.destination||it.onglet)===o.id).length;
+                  return<option key={o.id} value={o.id}>{o.label} ({n})</option>;
+                })}
+              </optgroup>
             ))}
-          </div>
-        );
-      })}
-
-      {sections.length===0&&(
-        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>
-          Aucun contenu ajouté.<br/>Utilise le bouton ci-dessus pour commencer.
+          </select>
         </div>
-      )}
 
-      <div style={{background:"rgba(196,154,138,.1)",border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem 1rem",marginTop:"1rem",fontSize:".73rem",color:C.brun,lineHeight:1.65}}>
-        💡 Les contenus que tu ajoutes ici apparaissent dans les onglets correspondants pour toute l'équipe. Tu peux les masquer temporairement sans les supprimer.
-      </div>
-
-      {/* ── SECTION TEXTES & CITATIONS ── */}
-      <div style={{marginTop:"1.5rem",paddingTop:"1rem",borderTop:`1px solid ${C.pale}`}}>
-        <div style={{fontSize:".7rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>💬 Citations & Messages</div>
-        <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.6,marginBottom:"1rem"}}>
-          Gère les citations motivantes affichées sur la page d'accueil (une différente chaque jour) et le message d'accueil de l'équipe.
-        </p>
-        <AdminTextesEditor/>
-      </div>
-
-      {/* ── SECTION SCRIPTS SUPPLÉMENTAIRES ── */}
-      <div style={{marginTop:"1.5rem",paddingTop:"1rem",borderTop:`1px solid ${C.pale}`}}>
-        <div style={{fontSize:".7rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>📝 Ajouter des scripts</div>
-        <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.6,marginBottom:"1rem"}}>
-          Ajoute de nouveaux scripts prêts à l'emploi. Ils apparaîtront dans la Bibliothèque Scripts pour toute l'équipe, dans une section "Ajoutés par Melissa".
-        </p>
-        <AdminScriptsEditor/>
-      </div>
-
-      {/* ── SECTION POSTS SUPPLÉMENTAIRES ── */}
-      <div style={{marginTop:"1.5rem",paddingTop:"1rem",borderTop:`1px solid ${C.pale}`}}>
-        <div style={{fontSize:".7rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>📱 Ajouter des idées de posts</div>
-        <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.6,marginBottom:"1rem"}}>
-          Ajoute de nouvelles idées de publications (hook + caption). Elles apparaîtront dans l'onglet Contenu pour toute l'équipe, dans une section "Idées ajoutées par Melissa".
-        </p>
-        <AdminPostsEditor/>
-      </div>
-
-      {/* ── SECTION ANNUAIRE DISTRIBUTEURS ── */}
-      <div style={{marginTop:"1.5rem",paddingTop:"1rem",borderTop:`1px solid ${C.pale}`}}>
-        <div style={{fontSize:".7rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>👑 Annuaire Distributeurs</div>
-        <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.6,marginBottom:"1rem"}}>
-          L'onglet Distributeurs se met à jour automatiquement à chaque connexion d'un membre. Clique ici pour ajouter immédiatement tous les membres déjà autorisés (même s'ils ne se sont pas encore reconnectés depuis cette mise à jour).
-        </p>
-        <AdminAnnuaireSync/>
-      </div>
-
-      {/* ── SECTION ANNONCE IMPORTANTE ── */}
-      <div style={{marginTop:"1.5rem",paddingTop:"1rem",borderTop:`1px solid ${C.pale}`}}>
-        <div style={{fontSize:".7rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>📣 Annonce importante</div>
-        <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.6,marginBottom:"1rem"}}>
-          Affiche un message en pop-up (une fois) + bandeau permanent sur le Tableau de bord de toute l'équipe.
-        </p>
-        <AdminAnnonceEditor/>
-      </div>
-
-      {/* ── SECTION PRIX PRODUITS ── */}
-      <div style={{marginTop:"1.5rem",paddingTop:"1rem",borderTop:`1px solid ${C.pale}`}}>
-        <div style={{fontSize:".7rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>🔍 Prix de la recherche rapide produits</div>
-        <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.6,marginBottom:"1rem"}}>
-          Renseigne les prix qui apparaîtront dans l'outil "Recherche Produits" de toute l'équipe.
-        </p>
-        <AdminProduitsEditor/>
-      </div>
-
-      {/* ── SECTION DIAGNOSTICS PRODUITS ── */}
-      <div style={{marginTop:"1.5rem",paddingTop:"1rem",borderTop:`1px solid ${C.pale}`}}>
-        <div style={{fontSize:".7rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>🩺 Personnaliser les packs diagnostics</div>
-        <p style={{fontSize:".72rem",color:C.gris,lineHeight:1.6,marginBottom:"1rem"}}>
-          Tu peux ajouter des notes ou corrections sur les produits que l'IA recommande dans les diagnostics. Ces notes seront intégrées dans les prochaines ordonnances.
-        </p>
-        <DiagAdminEditor/>
+        {/* Liste items */}
+        {itemsFiltres.length===0&&<div style={{textAlign:"center",fontSize:".72rem",color:C.gris,padding:".75rem",fontStyle:"italic"}}>Aucun contenu{filterDest!=="all"?" dans cet emplacement":""}</div>}
+        {itemsFiltres.map(it=>{
+          const T=TYPES.find(t=>t.id===it.type)||TYPES[0];
+          return(
+            <div key={it.id} style={{display:"flex",alignItems:"center",gap:".5rem",background:it.actif?C.creme:"#f0f0f0",borderRadius:9,padding:".5rem .75rem",marginBottom:".35rem",border:`1px solid ${it.actif?C.pale:"#ddd"}`,opacity:it.actif?1:.7}}>
+              <span style={{fontSize:"1rem",flexShrink:0}}>{T.emoji}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.titre}</div>
+                <div style={{fontSize:".6rem",color:C.rose,fontWeight:600}}>📍 {getLabel(it.destination||it.onglet||"")}</div>
+              </div>
+              <button onClick={()=>toggle(it.id)} title={it.actif?"Masquer":"Afficher"}
+                style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".18rem .35rem",fontSize:".65rem",color:it.actif?C.vert:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+                {it.actif?"👁️":"🙈"}
+              </button>
+              <button onClick={()=>startEdit(it)}
+                style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".18rem .35rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>✏️</button>
+              <button onClick={()=>del(it.id)}
+                style={{background:"none",border:`1px solid #E0C0C0`,borderRadius:6,padding:".18rem .35rem",fontSize:".65rem",color:"#B04040",cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>✕</button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ── ADMIN CONTENT BLOCK (injecté dans les onglets) ───────────────────────────
+function DevPersoSection({adminItems}){
+  const[dvpTab,setDvpTab]=useState("business");
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".5rem"}}>
+        Développement <em style={{fontStyle:"italic",color:C.rose}}>Personnel</em>
+      </div>
+      <div style={{display:"flex",gap:".35rem",marginBottom:"1rem"}}>
+        {[{id:"business",label:"🧠 Business"},{id:"annexe",label:"🎥 Vidéos annexes"}].map(t=>(
+          <button key={t.id} onClick={()=>setDvpTab(t.id)}
+            style={{flex:1,padding:".5rem",fontSize:".75rem",fontWeight:600,borderRadius:10,border:`1.5px solid ${dvpTab===t.id?C.rose:C.pale}`,background:dvpTab===t.id?C.rose:C.blanc,color:dvpTab===t.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {dvpTab==="business"&&(
+        <div>
+          <AdminContentBlock onglet="devperso" items={adminItems}/>
+          {[
+            {icon:"🧠",title:"Dégommer son plafond de verre",desc:"Identifier les croyances limitantes qui t'empêchent d'avancer et les transformer en force.",video:"https://us06web.zoom.us/rec/share/XzuZHzXLLZdVOz2rQmBb-7nomO9qxTj92_xluvzizpzlSaYfxRdmTARqoDTdatzs.EHObmbNT1mpbo0Ad"},
+            {icon:"🎯",title:"Fixer ses objectifs — méthode complète",desc:"Des objectifs qui fonctionnent vraiment.",video:"https://us06web.zoom.us/rec/share/E1JtWx4furUdNFt4wKKCJYcfD4ScYwhJZ3BfUnHZYOnbUzcRYLzdLq5WuoyJSjw.MsevJMjQXIrzr1rp?startTime=1771357741000"},
+            {icon:"👑",title:"Développer son leadership",desc:"Comment inspirer, guider et faire grandir son équipe.",video:"https://us06web.zoom.us/rec/share/hnDWdngAPCK_SGVTYzVhgk70t_nqqfesUvZF7hme8CaEgL-CpszXoantB-d2MSPZ.Yl7wHQ7KV9pZJnCL"},
+            {icon:"📱",title:"Personal branding",desc:"Qui tu es en ligne = qui tu attires.",video:"https://youtu.be/j5EUiKmUSgM"},
+            {icon:"🤝",title:"Humaniser son contenu",desc:"Pourquoi les gens achètent à des personnes, pas à des marques.",video:"https://youtu.be/WxJFBnigjpw"},
+            {icon:"📖",title:"Le storytelling",desc:"Raconter pour vendre, pour convaincre, pour recruter.",video:"https://youtu.be/dgylHebkai4"},
+          ].map(item=>(
+            <div key={item.title} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".6rem"}}>
+              <div style={{display:"flex",gap:".6rem",alignItems:"flex-start",marginBottom:item.video?".6rem":0}}>
+                <span style={{fontSize:"1.1rem",flexShrink:0}}>{item.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.brun,marginBottom:".15rem"}}>{item.title}</div>
+                  <div style={{fontSize:".72rem",color:C.gris,lineHeight:1.55}}>{item.desc}</div>
+                </div>
+              </div>
+              {item.video&&<YTBtn href={item.video} label="▶ Voir la formation"/>}
+            </div>
+          ))}
+        </div>
+      )}
+      {dvpTab==="annexe"&&(
+        <div>
+          <AdminContentBlock onglet="videoannexe" items={adminItems}/>
+          <div style={{background:C.creme,borderRadius:10,padding:".75rem 1rem",fontSize:".75rem",color:C.gris,lineHeight:1.65}}>
+            💡 Les vidéos annexes sont ajoutées depuis l'espace Admin.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminContentBlock({onglet,items}){
-  const filtered=items.filter(i=>i.onglet===onglet);
+  const {lang} = useLang();
+  const filtered=(items||[]).filter(i=>(i.destination||i.onglet)===onglet&&i.actif!==false);
   if(filtered.length===0)return null;
 
   const typeConfig={
@@ -8202,21 +14690,40 @@ function AdminContentBlock({onglet,items}){
       <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.rose,marginBottom:".4rem"}}>✦ Ajouté par Melissa</div>
       {filtered.map(item=>{
         const cfg=typeConfig[item.type]||typeConfig.info;
-        return(
-          <div key={item.id} style={{background:"rgba(196,154,138,.08)",border:`1px solid ${C.pale}`,borderRadius:10,padding:".65rem .85rem",marginBottom:".4rem"}}>
-            <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,marginBottom:item.description?".2rem":item.url?".35rem":0}}>{item.titre}</div>
-            {item.description&&<div style={{fontSize:".72rem",color:C.gris,lineHeight:1.5,marginBottom:item.url?".4rem":0}}>{item.description}</div>}
-            {item.url&&(
-              <a href={item.url} target="_blank" rel="noopener noreferrer"
-                style={{display:"flex",alignItems:"center",gap:".5rem",background:cfg.color,borderRadius:8,padding:".45rem .8rem",textDecoration:"none",marginTop:".1rem"}}>
-                <span style={{fontSize:".8rem",flexShrink:0}}>{cfg.icon}</span>
-                <span style={{fontSize:".72rem",fontWeight:600,color:"white"}}>Ouvrir — {cfg.label}</span>
-                <span style={{marginLeft:"auto",color:"rgba(255,255,255,.6)",fontSize:".6rem"}}>→</span>
-              </a>
-            )}
-          </div>
-        );
+        return <AdminContentItem key={item.id} item={item} cfg={cfg} lang={lang}/>;
       })}
+    </div>
+  );
+}
+
+function AdminContentItem({item,cfg,lang}){
+  const[titre,setTitre]=useState(item.titre||"");
+  const[desc,setDesc]=useState(item.description||"");
+
+  useEffect(()=>{
+    if(lang==="fr"){setTitre(item.titre||"");setDesc(item.description||"");return;}
+    const toTr=[item.titre||"",item.description||""].filter(Boolean);
+    if(!toTr.length)return;
+    translateBatch(toTr,lang).then(res=>{
+      setTitre(res[0]||item.titre);
+      if(item.description) setDesc(res[1]||item.description);
+    });
+  },[lang,item.id]);
+
+  return(
+    <div style={{background:"rgba(196,154,138,.08)",border:`1px solid ${C.pale}`,borderRadius:10,padding:".65rem .85rem",marginBottom:".4rem"}}>
+      <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,marginBottom:desc?".2rem":item.url?".35rem":0}}>{titre}</div>
+      {desc&&<div style={{fontSize:".72rem",color:C.gris,lineHeight:1.5,marginBottom:item.url?".4rem":0}}>{desc}</div>}
+      {item.url&&(
+        <a href={item.url} target="_blank" rel="noopener noreferrer"
+          style={{display:"flex",alignItems:"center",gap:".5rem",background:cfg.color,borderRadius:8,padding:".45rem .8rem",textDecoration:"none",marginTop:".1rem"}}>
+          <span style={{fontSize:".8rem",flexShrink:0}}>{cfg.icon}</span>
+          <span style={{fontSize:".72rem",fontWeight:600,color:"white"}}>
+            {lang==="pt"?"Abrir":"Ouvrir"} — {cfg.label}
+          </span>
+          <span style={{marginLeft:"auto",color:"rgba(255,255,255,.6)",fontSize:".6rem"}}>→</span>
+        </a>
+      )}
     </div>
   );
 }
@@ -8584,9 +15091,8 @@ function BanqueImagesTab({isMelissa}){
           <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouvelle image</div>
           <input placeholder="Titre (ex: Avant/Après Skincare)" value={form.titre} onChange={e=>setForm(p=>({...p,titre:e.target.value}))}
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".45rem"}}/>
-          <input placeholder="URL de l'image (Google Drive, Imgur...)" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".45rem"}}/>
-          <div style={{display:"flex",gap:".4rem",marginBottom:".45rem"}}>
+          <UploadPhoto label="Photo" value={form.url} onChange={v=>setForm(p=>({...p,url:v}))} folder="banque-images"/>
+          <div style={{display:"flex",gap:".4rem",marginBottom:".45rem",marginTop:".3rem"}}>
             <select value={form.theme} onChange={e=>setForm(p=>({...p,theme:e.target.value}))}
               style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
               {THEMES_IMAGES.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
@@ -8670,11 +15176,73 @@ function BanqueImagesTab({isMelissa}){
 
 // ── DIAGNOSTICS ───────────────────────────────────────────────────────────────
 
+// ── DIAGNOSTIC BUSINESS (recrutement / ventes / réseaux) ─────────────────────
+async function genererDiagBusiness(type, reponses, nomClient) {
+  const typeLabels = {
+    pasrecruiter: "blocage en recrutement MLM/VDI",
+    pasvendre: "blocage en ventes de produits Mihi",
+    reseaux: "inefficacité des réseaux sociaux pour son activité Mihi",
+    chargementale: "équilibre vie pro/perso et charge mentale",
+    valeurmarche: "valeur professionnelle et manque à gagner",
+    entrepreneuriat: "profil entrepreneurial et potentiel",
+    complementrevenu: "objectif de complément de revenu",
+  };
+  const reponsesText = Object.entries(reponses||{})
+    .filter(([k]) => k !== "_contact")
+    .map(([k,v]) => `- ${k}: ${v}`).join("\n") || "Pas de réponses";
+
+  const prompt = `Tu es coach en développement d'activité MLM/VDI pour la marque Mihi (cosmétiques et bien-être naturels).
+${nomClient||"Une distributrice"} a rempli un diagnostic sur son ${typeLabels[type]}.
+
+Réponses au questionnaire :
+${reponsesText}
+
+Génère un plan d'action personnalisé en JSON avec cette structure exacte (ne mets rien d'autre que le JSON) :
+{
+  "diagnostic": "2-3 phrases qui résument ce que tu observes dans ses réponses, sans la juger",
+  "points_forts": ["point fort 1", "point fort 2"],
+  "blocages": ["blocage identifié 1", "blocage identifié 2", "blocage identifié 3"],
+  "plan_action": [
+    {"priorite": "🔥 Immédiat", "action": "action concrète à faire cette semaine", "pourquoi": "explication courte"},
+    {"priorite": "📅 Cette période", "action": "action à mettre en place sur 21 jours", "pourquoi": "explication courte"},
+    {"priorite": "🚀 Long terme", "action": "habitude à ancrer sur le long terme", "pourquoi": "explication courte"}
+  ],
+  "message_encouragement": "1 phrase personnalisée d'encouragement direct, chaleureuse et motivante"
+}`;
+
+  try{
+    const response = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key":"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",
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true",
+      },
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:4000,messages:[{role:"user",content:prompt}]}),
+    });
+    const data = await response.json();
+    if(data.error) throw new Error(data.error.message);
+    const text = data.content?.map(i=>i.text||"").join("")||"";
+    const clean = text.replace(/```json|```/g,"").trim();
+    const parsed = JSON.parse(clean);
+    return {...parsed, kind:"business", type};
+  }catch(e){
+    throw e;
+  }
+}
+
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 async function genererOrdonnanceIA(type, reponses, nomClient) {
+  // Types business (pas de catalogue produits)
+  const typesBusiness = ["pasrecruiter","pasvendre","reseaux","chargementale","valeurmarche","entrepreneuriat","complementrevenu"];
+  if(typesBusiness.includes(type)){
+    return genererDiagBusiness(type, reponses, nomClient);
+  }
+
   // Charger les notes admin si elles existent
   let notesAdmin = "";
   try {
@@ -8682,94 +15250,59 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
     if(snap.exists() && snap.data()[type]) notesAdmin = snap.data()[type];
   } catch {}
 
-  // Charger le catalogue réel des produits Mihi
+  // Charger le catalogue réel des produits Mihi selon le type
   let catalogueText = "";
   try {
     const catSnap = await getDoc(doc(db,"admin","catalogue_mihi"));
     if(catSnap.exists()){
       const cat = catSnap.data();
-      const cle = type === "skincare" ? "face" : type === "cheveux" ? "hair" : "health";
-      let produits = cat[cle] || [];
-      // Limite à 40 produits max pour ne pas surcharger le prompt
-      if(produits.length > 40) produits = produits.slice(0, 40);
-      catalogueText = produits.map(p => `- ${p.nom} (série ${p.serie}) — ${p.prix}€`).join("\n");
+      let cles = [];
+      if(type==="skincare") cles=["face"];
+      else if(type==="cheveux") cles=["hair"];
+      else if(type==="sante"||type==="silhouette"||type==="detox"||type==="antiage") cles=["health"];
+      else if(type==="makeup") cles=["makeup","face"];
+      else if(type==="peaucorps") cles=["corps","health"];
+      else cles=["face","corps","hair","makeup","health"];
+      let produits=[];
+      cles.forEach(cle=>{ produits=[...produits,...(cat[cle]||[])]; });
+      if(produits.length>25) produits=produits.slice(0,25);
+      catalogueText = produits.map(p=>`${p.nom} — ${p.prix}€`).join("\n");
     }
-  } catch (e) {
-    console.error("Erreur chargement catalogue:", e);
-  }
+  } catch (e) { console.error("Erreur chargement catalogue:", e); }
 
-  if(!catalogueText){
-    console.error("Catalogue vide pour le type:", type);
-  }
-
-  const typeLabel = type === "skincare" ? "soin visage/peau" : type === "cheveux" ? "soin capillaire" : "santé et compléments alimentaires";
+  const typeLabel =
+    type==="skincare"?"soin visage/peau":
+    type==="cheveux"?"soin capillaire":
+    type==="makeup"?"maquillage et couleurs":
+    type==="peaucorps"?"soin de la peau du corps":
+    "santé et compléments alimentaires";
   
-  const reponsesText = Object.entries(reponses).map(([k,v]) => `- ${k}: ${v}`).join("\n");
+  const reponsesText = Object.entries(reponses||{})
+    .filter(([k]) => k !== "_contact")
+    .map(([k,v]) => `- ${k}: ${v}`).join("\n") || "Pas de réponses détaillées";
   
-  const prompt = `Tu es une experte en cosmétiques et bien-être pour la marque MIHI (mihi.care). 
-Une cliente vient de répondre à un diagnostic ${typeLabel}.
+  const prompt = `Experte beauté MIHI. Diagnostic ${typeLabel} pour ${nomClient||"Cliente"}.
+Réponses: ${reponsesText}
+Catalogue: ${catalogueText}
+${notesAdmin?`Notes: ${notesAdmin}`:""}
 
-Prénom cliente: ${nomClient || "Cliente"}
-Réponses au questionnaire:
-${reponsesText}
-${notesAdmin ? `\nInstructions spéciales de la distributrice:\n${notesAdmin}` : ""}
+3 packs UNIQUEMENT avec les produits du catalogue. Traduis les noms en français. JSON strict:
+{"introduction":"2 phrases personnalisées","budget":{"total":"X€","produits":[{"nom":"Nom FR","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"1 geste concret ex: appliquer sur visage humide en cercles"}],"routine":"Routine matin : étape1 → étape2. Routine soir : étape1 → étape2"},"bestseller":{"total":"X€","produits":[{"nom":"Nom FR","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"1 geste concret"}],"routine":"Routine matin : étape1 → étape2. Routine soir : étape1 → étape2"},"premium":{"total":"X€","produits":[{"nom":"Nom FR","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"1 geste concret"}],"routine":"Routine matin : étape1 → étape2. Routine soir : étape1 → étape2"},"conseil":"1 conseil final personnalisé lié au profil"}
 
-CATALOGUE RÉEL DES PRODUITS MIHI DISPONIBLES (les noms sont en anglais — utilise UNIQUEMENT ces produits et leurs prix EXACTS, n'invente JAMAIS de produit ou de prix qui n'est pas dans cette liste) :
-${catalogueText}
-
-Génère une ordonnance beauté complète avec 3 packs basés EXCLUSIVEMENT sur les produits ci-dessus :
-
-1. 💚 PACK PETIT BUDGET — 1 à 2 produits maximum, les plus essentiels pour commencer
-2. ⭐ PACK BEST SELLER — 3 à 4 produits, la routine complète recommandée
-3. 🚀 PACK BOOST — 4 à 5 produits, la routine premium avec maximum de résultats
-
-IMPORTANT — TRADUCTION DES NOMS :
-Les noms de produits du catalogue sont en anglais. Dans ta réponse, traduis chaque nom de produit en français naturel et commercial (garde le nom de la série/gamme si c'est une marque, ex: "Face Architect" peut rester tel quel, mais traduis les mots descriptifs comme "cream"→"crème", "serum"→"sérum", "shampoo"→"shampoing", "eye cream"→"crème contour des yeux", etc.). Le prix doit rester EXACTEMENT celui du catalogue.
-
-Pour chaque pack donne:
-- Les produits du catalogue ci-dessus, avec leur nom TRADUIT EN FRANÇAIS et leur prix EXACT (inchangé)
-- L'ordre d'utilisation (matin / soir)
-- Le bénéfice principal de chaque produit
-- Le total réel = somme exacte des prix des produits choisis (calcule-le toi-même, en te basant sur les prix originaux du catalogue)
-
-Réponds UNIQUEMENT en JSON valide sans markdown, sans texte avant ou après, format exact:
-{
-  "introduction": "texte personnalisé de 2 phrases pour ${nomClient || 'la cliente'} basé sur son profil",
-  "budget": {
-    "total": "29.6€",
-    "produits": [
-      {"nom": "Nom du produit traduit en français", "prix": "29.6€", "usage": "Matin et soir", "benefice": "..."}
-    ],
-    "routine": "Description courte de la routine"
-  },
-  "bestseller": {
-    "total": "65.4€", 
-    "produits": [
-      {"nom": "Nom du produit traduit en français", "prix": "21.5€", "usage": "Matin", "benefice": "..."}
-    ],
-    "routine": "Description courte de la routine"
-  },
-  "boost": {
-    "total": "102.3€",
-    "produits": [
-      {"nom": "Nom du produit traduit en français", "prix": "32.3€", "usage": "Soir", "benefice": "..."}
-    ],
-    "routine": "Description courte de la routine"
-  }
-}`;
+Règles: budget=1-2 produits, bestseller=3 produits, premium=4-5 produits. Prix exacts du catalogue.`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": "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",
+        "x-api-key": "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",
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 4000,
+        max_tokens: 8000,
         messages: [{ role: "user", content: prompt }]
       })
     });
@@ -8778,22 +15311,62 @@ Réponds UNIQUEMENT en JSON valide sans markdown, sans texte avant ou après, fo
 
     if(data.error){
       console.error("Erreur API Claude:", data.error);
-      return null;
+      throw new Error("API: " + (data.error.message || JSON.stringify(data.error)));
     }
 
     const text = data.content?.map(i => i.text || "").join("") || "";
+    console.log("=== RÉPONSE IA BRUTE ===", text);
+    console.log("=== LONGUEUR ===", text.length);
     const clean = text.replace(/```json|```/g, "").trim();
 
+    // Parse robuste : extraire les 4 blocs JSON indépendants
     try {
       return JSON.parse(clean);
-    } catch(parseErr) {
-      console.error("Erreur parsing JSON:", parseErr);
-      console.error("Texte reçu de l'IA:", text);
-      return null;
+    } catch(e) {
+      // Si le JSON est tronqué, extraire ce qui est disponible champ par champ
+      const extract = (key) => {
+        const rx = new RegExp(`"${key}"\\s*:\\s*(\\{[\\s\\S]*?)(?=,\\s*"(?:budget|bestseller|premium|conseil|introduction)"\\s*:|\\}\\s*$)`, 'i');
+        const m = clean.match(rx);
+        if(!m) return null;
+        try { return JSON.parse(m[1]); } catch { return null; }
+      };
+      const introRx = clean.match(/"introduction"\s*:\s*"([^"]+)"/);
+      const conseilRx = clean.match(/"conseil"\s*:\s*"([^"]+)"/);
+      const result = {
+        introduction: introRx?.[1] || "",
+        budget: extract("budget"),
+        bestseller: extract("bestseller"),
+        premium: extract("premium"),
+        conseil: conseilRx?.[1] || "",
+      };
+      // Si un pack est manquant, on tente de le régénérer
+      if(!result.premium) {
+        console.warn("Pack premium manquant dans la réponse IA, tentative de récupération...");
+        result._incomplet = true;
+      }
+      // Si pack premium manquant, appel séparé pour le récupérer
+      if(!result.premium && catalogueText) {
+        try {
+          const promptPremium = `Tu es une experte beauté Mihi. Génère UNIQUEMENT le Pack Boost Premium pour ${nomClient||"cette cliente"} (${typeLabel}).
+
+Profil cliente: ${reponsesText}
+
+CATALOGUE MIHI:
+${catalogueText}
+
+Génère 4 à 5 produits du catalogue pour un pack premium complet. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
+{"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom FR","prix":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;
+          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
+          const d2 = await r2.json();
+          const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
+          result.premium = JSON.parse(t2);
+        } catch(e2) { console.warn("Récupération pack premium échouée:", e2); }
+      }
+      return result;
     }
   } catch (fetchErr) {
     console.error("Erreur réseau / fetch:", fetchErr);
-    return null;
+    throw fetchErr;
   }
 }
 
@@ -9068,31 +15641,31 @@ function getBlocageOrientation(score, max, reponses){
 // ── QUESTIONS DIAGNOSTICS ────────────────────────────────────────────────────
 const QUESTIONS = {
   skincare: [
-    {id:"typePeau", question:"Quel est ton type de peau ?", options:[
+    {id:"typePeau", question:"Quel est ton type de peau ?", multi:true, options:[
       {value:"seche",label:"🌵 Sèche — tiraillements, inconfort"},
       {value:"grasse",label:"✨ Grasse — brillances, pores visibles"},
       {value:"mixte",label:"☯️ Mixte — zone T grasse, joues sèches"},
       {value:"sensible",label:"🌸 Sensible — rougeurs, réactions"},
     ]},
-    {id:"concern", question:"Ta préoccupation principale ?", options:[
+    {id:"concern", question:"Ta préoccupation principale ?", multi:true, options:[
       {value:"rides",label:"⏳ Rides & Fermeté"},
       {value:"eclat",label:"✨ Éclat & Teint terne"},
       {value:"hydratation",label:"💧 Hydratation"},
       {value:"imperfections",label:"🔍 Imperfections & Pores"},
     ]},
-    {id:"age", question:"Ton âge ?", options:[
+    {id:"age", question:"Ton âge ?", multi:true, options:[
       {value:"moins25",label:"🌱 Moins de 25 ans"},
       {value:"25_35",label:"🌿 25-35 ans"},
       {value:"35_50",label:"🌺 35-50 ans"},
       {value:"plus50",label:"🌸 Plus de 50 ans"},
     ]},
-    {id:"routine", question:"Ta routine actuelle ?", options:[
+    {id:"routine", question:"Ta routine actuelle ?", multi:true, options:[
       {value:"aucune",label:"❌ Aucune routine"},
       {value:"basique",label:"🧼 Basique — nettoyage uniquement"},
       {value:"intermediaire",label:"💆 Intermédiaire — crème quotidienne"},
       {value:"complete",label:"🌟 Complète — plusieurs étapes"},
     ]},
-    {id:"allergie", question:"As-tu des allergies ou sensibilités ?", options:[
+    {id:"allergie", question:"As-tu des allergies ou sensibilités ?", multi:true, options:[
       {value:"non",label:"✅ Non, aucune"},
       {value:"parfums",label:"🌸 Parfums & huiles essentielles"},
       {value:"alcool",label:"🍷 Alcool"},
@@ -9100,31 +15673,31 @@ const QUESTIONS = {
     ]},
   ],
   cheveux: [
-    {id:"typeCheveux", question:"Ton type de cheveux ?", options:[
+    {id:"typeCheveux", question:"Ton type de cheveux ?", multi:true, options:[
       {value:"fins",label:"🍃 Fins & plats"},
       {value:"epais",label:"🦁 Épais & volumineux"},
       {value:"boucles",label:"🌀 Bouclés & frisés"},
       {value:"lisses",label:"✨ Lisses & droits"},
     ]},
-    {id:"probleme", question:"Ton problème principal ?", options:[
+    {id:"probleme", question:"Ton problème principal ?", multi:true, options:[
       {value:"chute",label:"🍂 Chute & manque de densité"},
       {value:"sec",label:"🌵 Sécheresse & manque de brillance"},
       {value:"abime",label:"✂️ Cheveux abîmés & cassants"},
       {value:"colores",label:"🎨 Couleur à protéger"},
     ]},
-    {id:"cuirChevelu", question:"Ton cuir chevelu ?", options:[
+    {id:"cuirChevelu", question:"Ton cuir chevelu ?", multi:true, options:[
       {value:"normal",label:"✅ Normal"},
       {value:"gras",label:"💧 Gras — racines rapides"},
       {value:"sec",label:"🌵 Sec — démangeaisons"},
       {value:"pellicules",label:"❄️ Pellicules"},
     ]},
-    {id:"traitements", question:"Traitements chimiques ?", options:[
+    {id:"traitements", question:"Traitements chimiques ?", multi:true, options:[
       {value:"aucun",label:"🌿 Aucun"},
       {value:"coloration",label:"🎨 Coloration / Mèches"},
       {value:"lissage",label:"💆 Lissage / Défrisage"},
       {value:"permanente",label:"🌀 Permanente"},
     ]},
-    {id:"objectifCheveux", question:"Ton objectif principal ?", options:[
+    {id:"objectifCheveux", question:"Ton objectif principal ?", multi:true, options:[
       {value:"pousse",label:"📈 Faire pousser mes cheveux"},
       {value:"volume",label:"💨 Ajouter du volume"},
       {value:"brillance",label:"✨ Retrouver la brillance"},
@@ -9132,30 +15705,30 @@ const QUESTIONS = {
     ]},
   ],
   sante: [
-    {id:"objectif", question:"Ton objectif santé principal ?", options:[
+    {id:"objectif", question:"Ton objectif santé principal ?", multi:true, options:[
       {value:"poids",label:"⚖️ Contrôle du poids & Minceur"},
       {value:"energie",label:"⚡ Énergie & Vitalité"},
       {value:"stress",label:"🧘 Stress & Sommeil"},
       {value:"immunite",label:"🛡️ Immunité & Défenses"},
     ]},
-    {id:"mode", question:"Ton mode de vie ?", options:[
+    {id:"mode", question:"Ton mode de vie ?", multi:true, options:[
       {value:"actif",label:"🏃 Actif — sport régulier"},
       {value:"modere",label:"🚶 Modéré — marche, léger"},
       {value:"sedentaire",label:"🪑 Sédentaire — travail de bureau"},
     ]},
-    {id:"alimentation", question:"Ton alimentation ?", options:[
+    {id:"alimentation", question:"Ton alimentation ?", multi:true, options:[
       {value:"equilibree",label:"🥗 Équilibrée"},
       {value:"grignotage",label:"🍫 Grignotage fréquent"},
       {value:"restrictive",label:"🥦 Restrictive / Régime"},
       {value:"variable",label:"🎲 Variable selon les jours"},
     ]},
-    {id:"probleme_sante", question:"Un problème spécifique ?", options:[
+    {id:"probleme_sante", question:"Un problème spécifique ?", multi:true, options:[
       {value:"digestion",label:"🫃 Digestion difficile"},
       {value:"fatigue",label:"😴 Fatigue chronique"},
       {value:"articulations",label:"🦴 Articulations & Mobilité"},
       {value:"aucun",label:"✅ Aucun problème particulier"},
     ]},
-    {id:"budget", question:"Budget mensuel compléments ?", options:[
+    {id:"budget", question:"Budget mensuel compléments ?", multi:true, options:[
       {value:"petit",label:"💚 Moins de 30€"},
       {value:"moyen",label:"⭐ 30-70€"},
       {value:"confort",label:"🚀 70€ et plus"},
@@ -9163,6 +15736,271 @@ const QUESTIONS = {
   ],
   recrutement: QUIZ_RECRUTEMENT,
   blocage: QUIZ_BLOCAGE,
+  silhouette: [
+    {id:"objectif",question:"Quel est ton objectif principal ?",multi:true,options:[{value:"perdre",label:"⚖️ Perdre du poids"},{value:"tonifier",label:"💪 Tonifier ma silhouette"},{value:"energie",label:"⚡ Retrouver de l'énergie"},{value:"sommeil",label:"😴 Améliorer mon sommeil"}]},
+    {id:"alimentation",question:"Comment décrirais-tu ton alimentation ?",multi:true,options:[{value:"equilibree",label:"🥗 Plutôt équilibrée"},{value:"sucre",label:"🍫 J'ai du mal avec le sucre"},{value:"grignotage",label:"🍿 Je grignote souvent"},{value:"saute",label:"⏭️ Je saute des repas"}]},
+    {id:"activite",question:"Ton niveau d'activité physique actuel ?",options:[{value:"sedentaire",label:"🛋️ Très sédentaire"},{value:"leger",label:"🚶 Léger (marche)"},{value:"modere",label:"🏃 Modéré (2-3x/semaine)"},{value:"intense",label:"🏋️ Intense (4x+/semaine)"}]},
+    {id:"sommeil",question:"Comment est ton sommeil ?",options:[{value:"tres_bon",label:"😴 Très bon, je me réveille reposée"},{value:"moyen",label:"😐 Moyen, parfois fatiguée"},{value:"mauvais",label:"😩 Mauvais, je suis épuisée"},{value:"insomnies",label:"😫 Insomnies fréquentes"}]},
+    {id:"complementsActuels",question:"Tu prends déjà des compléments alimentaires ?",options:[{value:"non",label:"❌ Non, jamais"},{value:"vitamines",label:"💊 Vitamines basiques"},{value:"oui_efficace",label:"✅ Oui et ça marche"},{value:"oui_pas_satisfaite",label:"😕 Oui mais pas convaincue"}]},
+    {id:"motivation",question:"Qu'est-ce qui te motive à changer ?",multi:true,options:[{value:"sante",label:"❤️ Ma santé"},{value:"apparence",label:"🌸 Mon apparence"},{value:"confiance",label:"💫 Ma confiance en moi"},{value:"exemple",label:"👶 Être un bon exemple"}]},
+  ],
+  chargementale: [
+    {id:"equilibre",question:"Comment évalues-tu ton équilibre vie pro / vie perso ?",options:[{value:"excellent",label:"✅ Excellent, je gère bien"},{value:"correct",label:"😐 Correct mais perfectible"},{value:"difficile",label:"😓 Difficile, je cours tout le temps"},{value:"inexistant",label:"😩 Inexistant, je suis épuisée"}]},
+    {id:"stress",question:"Quel est ton niveau de stress au quotidien ?",options:[{value:"faible",label:"😌 Faible, je suis sereine"},{value:"modere",label:"😐 Modéré, gérable"},{value:"eleve",label:"😬 Élevé, j'ai du mal"},{value:"tres_eleve",label:"🔴 Très élevé, c'est trop"}]},
+    {id:"temps",question:"Combien de temps as-tu pour toi chaque jour ?",options:[{value:"plus1h",label:"⏰ Plus d'1 heure"},{value:"30a60",label:"⌚ 30 à 60 minutes"},{value:"moins30",label:"⏱️ Moins de 30 minutes"},{value:"rien",label:"❌ Quasiment rien"}]},
+    {id:"revenu",question:"Ta situation financière te permet de...",options:[{value:"epargner",label:"💰 Épargner et voyager"},{value:"vivre",label:"✅ Vivre confortablement"},{value:"compter",label:"😐 Compter chaque euro"},{value:"galere",label:"😟 Galérer fin de mois"}]},
+    {id:"aspiration",question:"Ton aspiration principale ?",multi:true,options:[{value:"liberte_temps",label:"⏰ Liberté de temps"},{value:"liberte_financiere",label:"💰 Liberté financière"},{value:"reconversion",label:"🔄 Me reconvertir"},{value:"complement",label:"💵 Complément de revenu"}]},
+    {id:"ouverture",question:"Face à une opportunité de revenus complémentaires, tu es...",options:[{value:"tres_ouverte",label:"🚀 Très ouverte, je cherche"},{value:"ouverte",label:"✅ Ouverte si c'est sérieux"},{value:"sceptique",label:"🤔 Sceptique mais curieuse"},{value:"fermee",label:"❌ Pas intéressée pour l'instant"}]},
+  ],
+  detox: [
+    {id:"reveil",question:"Comment te réveilles-tu le matin ?",options:[{value:"energique",label:"⚡ Energique et motivée"},{value:"normale",label:"😐 Normale, il faut quelques minutes"},{value:"fatiguee",label:"😩 Fatiguée comme si je n'avais pas dormi"},{value:"tres_fatiguee",label:"🔴 Épuisée, c'est dur de me lever"}]},
+    {id:"barres",question:"As-tu des coups de barre dans la journée ?",options:[{value:"jamais",label:"✅ Jamais"},{value:"parfois",label:"🟡 Parfois, après les repas"},{value:"souvent",label:"🟠 Souvent, surtout vers 14h-15h"},{value:"toujours",label:"🔴 Tout le temps"}]},
+    {id:"digestion",question:"Comment est ta digestion ?",multi:true,options:[{value:"ok",label:"✅ Parfaite, aucun souci"},{value:"ballonnements",label:"😮 Ballonnements fréquents"},{value:"lente",label:"🐌 Digestion lente et lourde"},{value:"irreguliere",label:"⚡ Irrégulière"}]},
+    {id:"peau_reflet",question:"Comment est ton teint et ta peau ?",multi:true,options:[{value:"eclat",label:"✨ Beau teint, je suis rayonnante"},{value:"terne",label:"😐 Teint terne et sans éclat"},{value:"imperfections",label:"🔴 Imperfections fréquentes"},{value:"cernes",label:"😴 Cernes marquées"}]},
+    {id:"sucre",question:"Ta consommation de sucre et produits transformés ?",options:[{value:"faible",label:"🥗 Faible, je mange sainement"},{value:"moderee",label:"😐 Modérée"},{value:"elevee",label:"🍫 Élevée, j'adore les sucreries"},{value:"tres_elevee",label:"🔴 Très élevée, c'est difficile de résister"}]},
+    {id:"eau",question:"Tu bois combien d'eau par jour ?",options:[{value:"plus2L",label:"💧 Plus de 2 litres"},{value:"1a2L",label:"💧 Entre 1 et 2 litres"},{value:"moins1L",label:"💧 Moins d'1 litre"},{value:"peu",label:"❌ Très peu, j'oublie de boire"}]},
+  ],
+  budget: [
+    {id:"shampoing",question:"Ton budget shampoing/après-shampoing/masque mensuel ?",options:[{value:"moins10",label:"💚 Moins de 10€"},{value:"10a25",label:"🟡 10€ à 25€"},{value:"25a50",label:"🟠 25€ à 50€"},{value:"plus50",label:"🔴 Plus de 50€"}]},
+    {id:"soins_visage",question:"Ton budget soins visage/crèmes/sérums mensuel ?",options:[{value:"moins15",label:"💚 Moins de 15€"},{value:"15a40",label:"🟡 15€ à 40€"},{value:"40a80",label:"🟠 40€ à 80€"},{value:"plus80",label:"🔴 Plus de 80€"}]},
+    {id:"maquillage",question:"Ton budget maquillage mensuel ?",options:[{value:"moins10",label:"💚 Moins de 10€"},{value:"10a30",label:"🟡 10€ à 30€"},{value:"30a60",label:"🟠 30€ à 60€"},{value:"plus60",label:"🔴 Plus de 60€"}]},
+    {id:"complements",question:"Tu achètes des vitamines/compléments en pharmacie ou grande surface ?",options:[{value:"non",label:"❌ Non jamais"},{value:"parfois",label:"🟡 Parfois"},{value:"oui_peu",label:"🟠 Oui, 10€ à 30€/mois"},{value:"oui_beaucoup",label:"🔴 Oui, plus de 30€/mois"}]},
+    {id:"satisfaction",question:"Es-tu satisfaite des résultats de tes produits actuels ?",options:[{value:"tres",label:"✅ Très satisfaite"},{value:"plutot",label:"😐 Plutôt satisfaite"},{value:"peu",label:"😕 Peu satisfaite"},{value:"non",label:"❌ Pas du tout"}]},
+    {id:"qualite_composition",question:"Tu regardes la composition de tes produits ?",options:[{value:"toujours",label:"✅ Toujours, la qualité m'importe"},{value:"parfois",label:"😐 Parfois"},{value:"rarement",label:"🤷 Rarement"},{value:"jamais",label:"❌ Jamais, je regarde surtout le prix"}]},
+  ],
+  antiage: [
+    {id:"hydratation_peau",question:"Comment tu hydrates ta peau au quotidien ?",options:[{value:"routine_complete",label:"✅ Routine complète matin et soir"},{value:"crème_basique",label:"😐 Crème basique parfois"},{value:"peu",label:"😕 Très peu ou irrégulièrement"},{value:"non",label:"❌ Je n'hydrate pas"}]},
+    {id:"soleil",question:"Ton exposition au soleil sans protection ?",options:[{value:"protegee",label:"✅ Je me protège toujours"},{value:"parfois",label:"🟡 Parfois j'oublie"},{value:"souvent",label:"🟠 Souvent sans protection"},{value:"jamais_protection",label:"🔴 Jamais de protection"}]},
+    {id:"stress_age",question:"Ton niveau de stress chronique ?",options:[{value:"faible",label:"✅ Faible"},{value:"modere",label:"🟡 Modéré"},{value:"eleve",label:"🟠 Élevé"},{value:"tres_eleve",label:"🔴 Très élevé, permanent"}]},
+    {id:"sommeil_age",question:"Ton sommeil en moyenne ?",options:[{value:"plus7h",label:"✅ Plus de 7h, réparant"},{value:"6a7h",label:"🟡 6 à 7h"},{value:"moins6h",label:"🟠 Moins de 6h"},{value:"tres_peu",label:"🔴 Très peu, je suis épuisée"}]},
+    {id:"alimentation_age",question:"Ta consommation de fruits et légumes ?",options:[{value:"quotidienne",label:"✅ Quotidienne et variée"},{value:"moderee",label:"😐 Modérée"},{value:"rare",label:"😕 Rare"},{value:"tres_rare",label:"❌ Très rare"}]},
+    {id:"premiers_signes",question:"Quels premiers signes du vieillissement tu observes ?",multi:true,options:[{value:"rides",label:"😐 Premières ridules"},{value:"teint",label:"✨ Teint qui terne"},{value:"fermete",label:"🎈 Perte de fermeté"},{value:"taches",label:"🔵 Taches"}]},
+  ],
+  valeurmarche: [
+    {id:"statut",question:"Ton statut professionnel actuel ?",options:[{value:"salariee",label:"👔 Salariée"},{value:"independante",label:"💼 Indépendante/Freelance"},{value:"sans_emploi",label:"🔍 En recherche d'emploi"},{value:"mere_foyer",label:"🏠 Mère au foyer"}]},
+    {id:"taux_horaire",question:"Ton taux horaire net approximatif ?",options:[{value:"moins10",label:"💰 Moins de 10€/h"},{value:"10a15",label:"💰 10€ à 15€/h"},{value:"15a25",label:"💰 15€ à 25€/h"},{value:"plus25",label:"💰 Plus de 25€/h"}]},
+    {id:"transport",question:"Temps de transport quotidien (aller-retour) ?",options:[{value:"non",label:"✅ Télétravail ou 0"},{value:"moins30min",label:"⏱️ Moins de 30 min"},{value:"30a60min",label:"⏰ 30 à 60 min"},{value:"plus1h",label:"🔴 Plus d'1 heure"}]},
+    {id:"augmentation",question:"As-tu eu une augmentation ces 2 dernières années ?",options:[{value:"oui_significative",label:"✅ Oui, significative"},{value:"oui_inflation",label:"😐 Oui mais sous l'inflation"},{value:"non",label:"😟 Non, stagnation"},{value:"na",label:"N/A — sans emploi"}]},
+    {id:"liberte",question:"As-tu la liberté de choisir tes horaires ?",options:[{value:"totale",label:"✅ Totale"},{value:"partielle",label:"😐 Partielle (télétravail...)"},{value:"non",label:"❌ Non, horaires fixes"},{value:"contraignants",label:"🔴 Horaires très contraignants"}]},
+    {id:"satisfaction_pro",question:"Es-tu épanouie dans ta vie professionnelle ?",options:[{value:"tres",label:"✅ Oui, je m'éclate"},{value:"plutot",label:"😐 Plutôt oui"},{value:"peu",label:"😕 Peu, j'aspire à autre chose"},{value:"non",label:"❌ Non, je veux changer"}]},
+  ],
+  entrepreneuriat: [
+    {id:"autonomie",question:"Dans ta vie, tu es plutôt...",options:[{value:"tres_autonome",label:"🦁 Très autonome, je prends mes décisions"},{value:"autonome",label:"✅ Autonome mais j'aime être guidée"},{value:"guidee",label:"🤝 J'aime qu'on me guide"},{value:"pas_sure",label:"🤷 Pas vraiment sûre"}]},
+    {id:"liberte",question:"La liberté, c'est quoi pour toi ?",multi:true,options:[{value:"temps",label:"⏰ Choisir mes horaires"},{value:"lieu",label:"🌍 Travailler d'où je veux"},{value:"argent",label:"💰 Ne pas compter mes euros"},{value:"passion",label:"💫 Faire ce qui me passionne"}]},
+    {id:"relation_autres",question:"Avec les autres, tu es naturellement...",options:[{value:"communicante",label:"💬 Communicante, j'adore échanger"},{value:"bienveillante",label:"🌸 Bienveillante, j'aime aider"},{value:"discrete",label:"😌 Plutôt discrète"},{value:"leader",label:"👑 Leader, j'aime montrer la voie"}]},
+    {id:"defi",question:"Face à un défi, tu...",options:[{value:"fonce",label:"🚀 Tu fonces et tu apprends"},{value:"planifie",label:"📋 Tu planifies avant d'agir"},{value:"hesites",label:"😐 Tu hésites un peu"},{value:"abandonnes",label:"😕 Tu tends à abandonner"}]},
+    {id:"creation",question:"Ta relation avec la créativité ?",options:[{value:"tres_creative",label:"🎨 Je suis très créative"},{value:"creative",label:"✅ Assez créative"},{value:"peu",label:"😐 Peu créative"},{value:"non",label:"❌ Pas du tout"}]},
+    {id:"objectif_pro",question:"Ton objectif dans 2 ans ?",multi:true,options:[{value:"revenu_complementaire",label:"💰 Revenu complémentaire stable"},{value:"remplacer_salaire",label:"💼 Remplacer mon salaire"},{value:"liberte_complete",label:"🌍 Liberté complète"},{value:"aider",label:"🤝 Aider d'autres femmes à réussir"}]},
+  ],
+  complementrevenu: [
+    {id:"objectif_montant",question:"De combien as-tu besoin pour vraiment respirer ce mois-ci ?",options:[{value:"300",label:"💰 300€ — pour souffler un peu"},{value:"500",label:"💰 500€ — pour les imprévus"},{value:"1000",label:"💰 1000€ — pour changer vraiment"},{value:"plus",label:"💰 Plus de 1000€ — je veux tout changer"}]},
+    {id:"temps_dispo",question:"Combien de temps tu peux libérer par jour ?",options:[{value:"30min",label:"⏱️ 30 minutes"},{value:"1h",label:"⏰ 1 heure"},{value:"2h",label:"⏰ 2 heures"},{value:"plus2h",label:"⏰ Plus de 2 heures"}]},
+    {id:"experience",question:"As-tu déjà tenté de gagner de l'argent autrement qu'avec ton emploi ?",options:[{value:"oui_reussi",label:"✅ Oui et ça a marché"},{value:"oui_echoue",label:"😕 Oui mais ça n'a pas fonctionné"},{value:"non_voulu",label:"💡 Non mais j'y pense souvent"},{value:"non_jamais",label:"❌ Non, jamais envisagé"}]},
+    {id:"competences",question:"Tes points forts naturels ?",multi:true,options:[{value:"relationnel",label:"💬 Le relationnel, j'adore le contact"},{value:"organisation",label:"📋 L'organisation"},{value:"creativite",label:"🎨 La créativité et les réseaux"},{value:"conviction",label:"🔥 La conviction, je suis persuasive"}]},
+    {id:"contraintes",question:"Tes contraintes principales ?",multi:true,options:[{value:"enfants",label:"👶 Mes enfants"},{value:"temps",label:"⏰ Manque de temps"},{value:"confiance",label:"😟 Manque de confiance"},{value:"argent_depart",label:"💰 Pas d'argent de départ"}]},
+    {id:"urgence",question:"C'est urgent pour toi ?",options:[{value:"tres",label:"🔴 Oui, j'ai besoin d'agir maintenant"},{value:"oui",label:"🟠 Oui, dans les 3 prochains mois"},{value:"moyen_terme",label:"🟡 Plutôt à moyen terme"},{value:"exploration",label:"✅ Je me renseigne, pas d'urgence"}]},
+  ],
+  pasrecruiter: [
+    {id:"depuis", question:"Depuis combien de temps tu essaies de recruter ?", multi:true, options:[
+      {value:"moins1mois",label:"Moins d'1 mois — je débute"},
+      {value:"1a3mois",label:"1 à 3 mois — j'ai essayé sans résultat"},
+      {value:"plus3mois",label:"Plus de 3 mois — je stagne vraiment"},
+      {value:"jamais",label:"Je n'ai pas encore vraiment commencé"},
+    ]},
+    {id:"approche", question:"Comment tu approches les prospects recrutement ?", multi:true, options:[
+      {value:"dm_direct",label:"📩 DM direct avec présentation Mihi"},
+      {value:"contenu",label:"📱 Je partage du contenu et j'attends"},
+      {value:"bouche",label:"👥 Bouche-à-oreille, entourage proche"},
+      {value:"rien",label:"❌ Je ne sais pas vraiment comment faire"},
+    ]},
+    {id:"objection", question:"Quelle est la réaction la plus fréquente quand tu en parles ?", multi:true, options:[
+      {value:"mlm",label:"😬 'C'est du MLM je ne veux pas'"},
+      {value:"temps",label:"⏰ 'Je n'ai pas le temps'"},
+      {value:"argent",label:"💰 'Je n'ai pas les moyens de commencer'"},
+      {value:"silence",label:"🔇 Pas de réponse, on m'ignore"},
+    ]},
+    {id:"contenu", question:"Est-ce que tu parles de ton activité sur les réseaux ?", multi:true, options:[
+      {value:"oui_regulier",label:"✅ Oui, régulièrement"},
+      {value:"oui_rare",label:"🔄 Oui mais rarement"},
+      {value:"non_peur",label:"❌ Non, j'ai peur du regard des autres"},
+      {value:"non_sais_pas",label:"❓ Non, je ne sais pas quoi dire"},
+    ]},
+    {id:"conviction", question:"Comment tu te sens quand tu parles de l'opportunité ?", multi:true, options:[
+      {value:"convaincue",label:"💪 Convaincue et enthousiaste"},
+      {value:"hesite",label:"😐 J'hésite, je ne suis pas sûre de moi"},
+      {value:"peur_juger",label:"😟 Peur d'être jugée ou rejetée"},
+      {value:"pas_legitime",label:"🤷 Je ne me sens pas légitime"},
+    ]},
+    {id:"resultat", question:"Est-ce que tu as des résultats visibles à montrer ?", multi:true, options:[
+      {value:"oui_bons",label:"✨ Oui, de bons résultats et revenus"},
+      {value:"oui_petits",label:"🌱 Oui, des petits débuts mais réels"},
+      {value:"non_encore",label:"⏳ Pas encore de résultats significatifs"},
+      {value:"non_partage",label:"🙈 J'en ai mais je ne les partage pas"},
+    ]},
+  ],
+  pasvendre: [
+    {id:"contact", question:"Combien de personnes contactes-tu en moyenne par semaine pour vendre ?", multi:true, options:[
+      {value:"zero",label:"❌ 0 — je n'ose pas contacter"},
+      {value:"1a5",label:"📩 1 à 5 personnes"},
+      {value:"5a15",label:"📨 5 à 15 personnes"},
+      {value:"plus15",label:"🚀 Plus de 15 personnes"},
+    ]},
+    {id:"suivi", question:"Est-ce que tu fais du suivi après un premier contact ?", multi:true, options:[
+      {value:"oui_sys",label:"✅ Oui, systématiquement"},
+      {value:"oui_parfois",label:"🔄 Parfois, pas régulièrement"},
+      {value:"non_gene",label:"😬 Non, j'ai peur de déranger"},
+      {value:"non_oublie",label:"❌ Non, j'oublie"},
+    ]},
+    {id:"objection_vente", question:"Quelle objection bloques-tu le plus souvent ?", multi:true, options:[
+      {value:"prix",label:"💰 'C'est trop cher'"},
+      {value:"reflechir",label:"🤔 'Je vais réfléchir' (et plus de nouvelles)"},
+      {value:"besoin",label:"❓ 'Je ne suis pas sûre d'en avoir besoin'"},
+      {value:"concurrence",label:"🔄 'J'ai déjà une autre marque'"},
+    ]},
+    {id:"presentation", question:"Comment tu présentes les produits ?", multi:true, options:[
+      {value:"perso",label:"✨ Je partage mon expérience perso"},
+      {value:"catalogue",label:"📋 J'envoie le catalogue ou des photos"},
+      {value:"copie",label:"📋 Je copie-colle des descriptions toutes faites"},
+      {value:"pas_aise",label:"😐 Je ne suis pas à l'aise pour en parler"},
+    ]},
+    {id:"clients_fideles", question:"As-tu des clientes qui reviennent régulièrement ?", multi:true, options:[
+      {value:"oui_plusieurs",label:"💚 Oui, plusieurs clientes fidèles"},
+      {value:"oui_1a2",label:"🌱 1 à 2 clientes régulières"},
+      {value:"non_encorever",label:"⏳ Pas encore, je démarre"},
+      {value:"non_achat_unique",label:"😕 Mes clientes achètent une fois et ne reviennent pas"},
+    ]},
+    {id:"contenu_vente", question:"Est-ce que tu crées du contenu sur tes produits ?", multi:true, options:[
+      {value:"oui_regulier",label:"✅ Oui, régulièrement avec des résultats"},
+      {value:"oui_peu",label:"🔄 Oui mais peu d'engagement"},
+      {value:"non_sais_pas",label:"❓ Non, je ne sais pas quoi dire"},
+      {value:"non_peur",label:"😟 Non, j'ai peur du regard des autres"},
+    ]},
+  ],
+  reseaux: [
+    {id:"publication", question:"À quelle fréquence tu publies sur tes réseaux ?", multi:true, options:[
+      {value:"quotidien",label:"📅 Tous les jours"},
+      {value:"quelques",label:"🗓️ Quelques fois par semaine"},
+      {value:"rare",label:"📆 Une fois par semaine ou moins"},
+      {value:"tres_rare",label:"❌ Très rarement ou jamais"},
+    ]},
+    {id:"format", question:"Quel format tu utilises principalement ?", multi:true, options:[
+      {value:"reels",label:"🎥 Reels / vidéos courtes"},
+      {value:"photos",label:"📸 Photos produits"},
+      {value:"stories",label:"📱 Stories uniquement"},
+      {value:"texte",label:"📝 Posts texte / carrousels"},
+    ]},
+    {id:"engagement", question:"Quel est ton niveau d'engagement habituel ?", multi:true, options:[
+      {value:"bon",label:"🔥 Beaucoup de likes, commentaires, DM"},
+      {value:"moyen",label:"📊 Quelques likes mais peu de commentaires"},
+      {value:"faible",label:"😕 Très peu de réactions"},
+      {value:"zero",label:"❌ Presque aucune réaction"},
+    ]},
+    {id:"contenu_type", question:"Qu'est-ce que tu publies principalement ?", multi:true, options:[
+      {value:"promo",label:"🛍️ Promotions et produits uniquement"},
+      {value:"perso",label:"🌸 Du contenu personnel et authentique"},
+      {value:"mixte",label:"⚖️ Un mélange des deux"},
+      {value:"copies",label:"📋 Des contenus copiés ou partagés"},
+    ]},
+    {id:"cible", question:"Est-ce que tu sais à qui tu t'adresses ?", multi:true, options:[
+      {value:"oui_clair",label:"🎯 Oui, ma cible est très claire"},
+      {value:"vague",label:"🤔 À peu près, mais c'est vague"},
+      {value:"non",label:"❌ Non, je parle à tout le monde"},
+      {value:"peur",label:"😟 Non, j'ai peur d'exclure des gens"},
+    ]},
+    {id:"regularite", question:"Est-ce que tu es régulière sur tes réseaux ?", multi:true, options:[
+      {value:"tres",label:"✅ Oui, je suis très régulière"},
+      {value:"par_vagues",label:"🌊 Par vagues — actif puis silence"},
+      {value:"non_motivation",label:"😔 Non, je manque de motivation"},
+      {value:"non_idees",label:"💡 Non, je manque d'idées"},
+    ]},
+  ],
+  makeup: [
+    {id:"carnation", question:"Quelle est ta carnation ?", multi:true, options:[
+      {value:"claire",label:"🌸 Claire — peau très pâle, teinte porcelaine"},
+      {value:"claire_rose",label:"🌷 Claire rosée — sous-tons roses/froids"},
+      {value:"mediocre",label:"🌿 Moyenne — ni trop claire ni trop foncée"},
+      {value:"dorée",label:"☀️ Dorée / Dorée — sous-tons chauds, beige doré"},
+      {value:"olive",label:"🫒 Olive — sous-tons verts/jaunes"},
+      {value:"foncée",label:"🌑 Foncée à ébène — du brun au noir intense"},
+    ]},
+    {id:"soustons", question:"Tes sous-tons dominants ?", multi:true, options:[
+      {value:"froids",label:"❄️ Froids — veines bleues/violettes, gris rosé"},
+      {value:"chauds",label:"🔥 Chauds — veines vertes, jaune/doré"},
+      {value:"neutres",label:"⚖️ Neutres — mélange des deux"},
+      {value:"je_sais_pas",label:"🤷 Je ne sais pas encore"},
+    ]},
+    {id:"problemes_peau", question:"Ta peau sous le maquillage ?", multi:true, options:[
+      {value:"brille",label:"✨ Elle brille vite (peau grasse)"},
+      {value:"tiraille",label:"💧 Elle est sèche, le fond de teint tiraille"},
+      {value:"imperfections",label:"🔍 J'ai des imperfections à couvrir"},
+      {value:"rougeurs",label:"🌹 J'ai des rougeurs / couperose"},
+      {value:"taches",label:"🟤 J'ai des taches ou une peau inégale"},
+      {value:"nickel",label:"✅ Elle est plutôt bien équilibrée"},
+    ]},
+    {id:"style", question:"Ton style makeup au quotidien ?", multi:true, options:[
+      {value:"nude",label:"🤍 Naturel / No-makeup makeup"},
+      {value:"classique",label:"💋 Classique — rouge à lèvres, mascara"},
+      {value:"smoky",label:"🖤 Smoky / Yeux intenses"},
+      {value:"coloré",label:"🌈 Coloré et créatif"},
+      {value:"couvrant",label:"💆 Peau parfaite, haute couvrance"},
+      {value:"occasion",label:"🎉 Surtout pour les occasions"},
+    ]},
+    {id:"morpho_yeux", question:"La forme de tes yeux ?", multi:true, options:[
+      {value:"amande",label:"👁️ En amande"},
+      {value:"ronds",label:"👀 Ronds et grands"},
+      {value:"tombants",label:"🌸 Légèrement tombants"},
+      {value:"petits",label:"✨ Petits — je veux les agrandir"},
+      {value:"monopalpebres",label:"🫦 Monopalpébraux / Peu de paupière mobile"},
+    ]},
+    {id:"budget", question:"Ton budget makeup mensuel ?", multi:true, options:[
+      {value:"petit",label:"💚 Petit budget — je cherche le rapport qualité/prix"},
+      {value:"moyen",label:"⭐ Moyen — j'investis dans ce qui compte"},
+      {value:"large",label:"👑 Je veux le meilleur sans regarder le prix"},
+    ]},
+  ],
+  peaucorps: [
+    {id:"zone_probleme", question:"Tes principales préoccupations sur le corps ?", multi:true, options:[
+      {value:"secheresse",label:"🌵 Sécheresse — peau très sèche, squameuse"},
+      {value:"cellulite",label:"🍊 Capitons / Cellulite"},
+      {value:"vergetures",label:"〰️ Vergetures"},
+      {value:"taches",label:"🟤 Taches brunes / Hyperpigmentation"},
+      {value:"sensibilite",label:"🌸 Peau sensible / Réactive"},
+      {value:"relachement",label:"💧 Relâchement / Peau peu ferme"},
+      {value:"poils_incarés",label:"🪮 Poils incarnés"},
+      {value:"keratose",label:"🔴 Kératose pilaire (petits boutons sur les bras)"},
+    ]},
+    {id:"zones", question:"Quelles zones te posent le plus problème ?", multi:true, options:[
+      {value:"ventre",label:"🫶 Ventre"},
+      {value:"cuisses",label:"🦵 Cuisses / Hanches"},
+      {value:"bras",label:"💪 Bras"},
+      {value:"dos",label:"🔙 Dos"},
+      {value:"decollete",label:"👗 Décolleté"},
+      {value:"jambes",label:"🦿 Jambes"},
+      {value:"tout",label:"🌍 Un peu partout"},
+    ]},
+    {id:"routine_corps", question:"Ta routine corps actuelle ?", multi:true, options:[
+      {value:"aucune",label:"❌ Aucune"},
+      {value:"douche_rapide",label:"🚿 Juste le gel douche"},
+      {value:"creme_basique",label:"🧴 Crème hydratante de temps en temps"},
+      {value:"reguliere",label:"✅ Routine régulière matin ou soir"},
+      {value:"huile",label:"🌿 J'utilise des huiles"},
+    ]},
+    {id:"texture_preferee", question:"La texture que tu préfères ?", multi:true, options:[
+      {value:"legere",label:"💨 Légère — s'absorbe vite"},
+      {value:"riche",label:"🧈 Riche et nourrissante"},
+      {value:"huileuse",label:"🌟 Huile sèche — effet peau soyeuse"},
+      {value:"gommage",label:"🍬 Gommage / Exfoliant"},
+      {value:"peu_importe",label:"🤷 Peu importe si l'efficacité est là"},
+    ]},
+    {id:"objectif", question:"Ton objectif principal ?", multi:true, options:[
+      {value:"hydratation",label:"💧 Hydratation intense"},
+      {value:"fermete",label:"💪 Fermeté & Tonicité"},
+      {value:"anti_cellulite",label:"🍊 Réduire la cellulite"},
+      {value:"eclat",label:"✨ Peau lumineuse & Éclat"},
+      {value:"cicatrisation",label:"🌿 Atténuer vergetures / Taches"},
+      {value:"confort",label:"🤍 Juste être à l'aise dans ma peau"},
+    ]},
+  ],
 };
 
 // Onglet "Formation App" — vidéos de prise en main de l'application, par catégorie
@@ -9170,7 +16008,7 @@ const FORMATION_APP_DASHBOARD_SUBS=[
   {id:"fa-dashboard-general", num:"1", icon:"⚡", title:"Tableau de bord général", desc:"Mood-check, actions du jour, citation du jour, annonces."},
   {id:"fa-objectifs", num:"2", icon:"🎯", title:"Mes Objectifs", desc:"CA, recrues, paliers de qualification, primes."},
   {id:"fa-clients", num:"3", icon:"🛍️", title:"Clients", desc:"Fiches clientes, commandes, alertes fin de flacon."},
-  {id:"fa-distributeurs", num:"4", icon:"👑", title:"Distributeurs", desc:"Annuaire, suivi nouveaux distributeurs, plan de rémunération."},
+  {id:"fa-distributeurs", num:"4", icon:"👑", title:"Distributeurs", desc:"Annuaire, filleules, plan de rémunération."},
   {id:"fa-prospects", num:"5", icon:"👥", title:"Prospects", desc:"Organiser tes prospects par catégorie, statuts et relances."},
 ];
 
@@ -9184,6 +16022,8 @@ function FormationAppTab({adminItems=[]}){
   const[openFolder,setOpenFolder]=useState(null);
   const[openSub,setOpenSub]=useState(null);
 
+  // formationapp = items généraux affichés dans la vue dossier principal
+  // sinon filtre par onglet précis
   const itemsPour=(onglet)=>adminItems.filter(i=>i.onglet===onglet);
 
   const renderItem=(item)=>{
@@ -9233,6 +16073,8 @@ function FormationAppTab({adminItems=[]}){
   if(openFolder){
     const cat=FORMATION_APP_CATEGORIES.find(c=>c.id===openFolder);
     const items=itemsPour(openFolder);
+    // Ajoute aussi les anciennes vidéos formationapp si on est dans une catégorie Formation App
+    const itemsGeneraux = openFolder!=="formationapp" ? adminItems.filter(i=>i.onglet==="formationapp") : [];
     return(
       <div>
         <button onClick={()=>setOpenFolder(null)} style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>
@@ -9241,6 +16083,12 @@ function FormationAppTab({adminItems=[]}){
         <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".2rem"}}>{cat.icon} {cat.title}</div>
         <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>{cat.desc}</p>
         {items.length>0&&<div style={{marginBottom:"1rem"}}>{items.map(renderItem)}</div>}
+        {itemsGeneraux.length>0&&!cat.folder&&(
+          <div style={{marginBottom:"1rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>✦ Vidéos disponibles</div>
+            {itemsGeneraux.map(renderItem)}
+          </div>
+        )}
         {cat.folder?cat.folder.map(sub=>{
           const subItems=itemsPour(sub.id);
           return(
@@ -9292,18 +16140,64 @@ function FormationAppTab({adminItems=[]}){
 
 
 
-function DiagnosticsTab({ uid, userName }) {
-  const [mode, setMode] = useState("choix");
-  const [type, setType] = useState("");
+function ScriptsDiagSection(){
+  const[open,setOpen]=useState(false);
+  const[copie,setCopie]=useState(null);
+  const scripts=SCRIPTS_DATA.find(s=>s.cat==="🔬 Proposer un diagnostic")?.scripts||[];
+
+  const copier=(text,i)=>{
+    navigator.clipboard?.writeText(text);
+    setCopie(i);
+    setTimeout(()=>setCopie(null),2000);
+  };
+
+  return(
+    <div style={{marginTop:"1.5rem"}}>
+      <button onClick={()=>setOpen(p=>!p)}
+        style={{width:"100%",background:C.lilas+"15",border:`1px solid ${C.lilas}40`,borderRadius:11,padding:".65rem",fontSize:".78rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span>💬 Scripts pour proposer les diagnostics ({scripts.length})</span>
+        <span style={{fontSize:".7rem"}}>{open?"▲":"▼"}</span>
+      </button>
+      {open&&(
+        <div style={{marginTop:".5rem"}}>
+          <p style={{fontSize:".68rem",color:C.gris,marginBottom:".65rem",lineHeight:1.6}}>
+            Des idées variées pour aborder le diagnostic différemment — story, DM, Reel, approche mystère, preuve sociale...
+          </p>
+          {scripts.map((s,i)=>(
+            <div key={i} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:10,padding:".7rem .85rem",marginBottom:".5rem"}}>
+              <div style={{fontSize:".65rem",fontWeight:700,color:C.lilas,marginBottom:".3rem",textTransform:"uppercase",letterSpacing:".06em"}}>{s.title}</div>
+              <div style={{fontSize:".72rem",color:C.texte,lineHeight:1.65,whiteSpace:"pre-wrap",marginBottom:".4rem"}}>{s.text}</div>
+              <button onClick={()=>copier(s.text,i)}
+                style={{background:copie===i?C.vert:C.lilas,color:"white",border:"none",borderRadius:7,padding:".28rem .65rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                {copie===i?"✓ Copié !":"📋 Copier"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="" }) {
+  const [mode, setMode] = useState(initialType?"questionnaire":"choix");
+  const [type, setType] = useState(initialType||"");
   const [step, setStep] = useState(0);
   const [reponses, setReponses] = useState({});
-  const [nomClient, setNomClient] = useState("");
+  const [reponsesFinales, setReponsesFinales] = useState(null);
+  const [nomClient, setNomClient] = useState(initialClient||"");
+  const [contactClient, setContactClient] = useState(""); // tel, email ou réseau social
+  const [prenomContact, setPrenomContact] = useState("");
+  const [nomContact, setNomContact] = useState("");
+  const [telContact, setTelContact] = useState("");
+  const [mailContact, setMailContact] = useState("");
   const [ordonnance, setOrdonnance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState("");
 
   const questions = type ? QUESTIONS[type] : [];
   const q = questions[step];
+  const TYPES_SCORING = ["recrutement","blocage"];
 
   const repondre = (val) => {
     const newRep = { ...reponses, [q.id]: val };
@@ -9312,6 +16206,10 @@ function DiagnosticsTab({ uid, userName }) {
       setStep(step + 1);
     } else if (TYPES_SCORING.includes(type)) {
       genererResultatScoring(newRep);
+    } else if (externalMode) {
+      // En mode externe : afficher le formulaire de contact avant d'envoyer
+      setReponsesFinales(newRep);
+      setMode("contact");
     } else {
       genererOrdonnance(newRep);
     }
@@ -9340,15 +16238,61 @@ function DiagnosticsTab({ uid, userName }) {
   };
 
   const genererOrdonnance = async (rep) => {
+    if(externalMode){
+      setMode("loading");
+      try{
+        // Extraire les coordonnées si présentes
+        const repSansContact={...rep};
+        let contact={};
+        if(repSansContact._contact){
+          try{contact=JSON.parse(repSansContact._contact);}catch{}
+          delete repSansContact._contact;
+        }
+        const nomFinal=contact.prenom?(contact.prenom+(contact.nom?" "+contact.nom:"")):(nomClient||"Cliente");
+
+        // Stocker dans diag_externes (pour référence)
+        const ref=doc(db,"diag_externes",`${uid}_${Date.now()}`);
+        await setDoc(ref,{
+          uid, type, nomClient:nomFinal, contact,
+          reponses:repSansContact,
+          date:new Date().toISOString().slice(0,10),
+          ts:Date.now(), traite:false
+        });
+        // Stocker aussi dans users/{uid}/db-diagnostics pour apparaître dans l'historique
+        const userRef=doc(db,"users",uid);
+        const snap=await getDoc(userRef);
+        const existing=snap.exists()&&snap.data()["db-diagnostics"]?JSON.parse(snap.data()["db-diagnostics"]):[];
+        const newDiag={
+          id:`diag${Date.now()}`,
+          type, nomClient:nomFinal, contact,
+          reponses:repSansContact,
+          date:new Date().toISOString().slice(0,10),
+          ts:Date.now(),
+          externe:true, nonLu:true,
+        };
+        await setDoc(userRef,{"db-diagnostics":JSON.stringify([newDiag,...existing].slice(0,50))},{merge:true});
+        setMode("attente");
+      }catch{
+        setErreur("Erreur lors de l'envoi. Merci de contacter ta conseillère directement.");
+        setMode("questionnaire");
+      }
+      return;
+    }
     setMode("loading");
     setErreur("");
-    const result = await genererOrdonnanceIA(type, rep, nomClient);
+    let result = null;
+    let errDetail = "";
+    try {
+      result = await genererOrdonnanceIA(type, rep, nomClient);
+    } catch(e) {
+      errDetail = e?.message || String(e);
+    }
     if (result) {
       setOrdonnance(result);
       setMode("resultat");
       saveResult(result, rep);
     } else {
-      setErreur("Erreur de génération. Réessaie.");
+      setErreur(`Erreur de génération${errDetail ? " : " + errDetail : ""}. Réessaie.`);
       setMode("questionnaire");
     }
   };
@@ -9378,45 +16322,97 @@ function DiagnosticsTab({ uid, userName }) {
 
   const copierTout = () => {
     if(!ordonnance) return;
-    const packs = ["budget","bestseller","boost"];
-    const labels = {budget:"💚 Pack Petit Budget",bestseller:"⭐ Pack Best Seller",boost:"🚀 Pack Boost"};
-    const text = `✨ ORDONNANCE BEAUTÉ — ${nomClient||"Cliente"}\n${ordonnance.introduction}\n\n${packs.map(pk=>{
+    const packs = ["budget","bestseller","premium"];
+    const labels = {budget:"💚 Pack Petit Budget",bestseller:"⭐ Pack Best Seller",premium:"🚀 Pack Boost Premium"};
+    const text = `✨ ORDONNANCE BEAUTÉ — ${nomClient||"Cliente"}\n${ordonnance.introduction||""}\n\n${packs.map(pk=>{
       const p=ordonnance[pk];
-      return `${labels[pk]} — ${p.total}\n${p.produits.map(pr=>`• ${pr.nom} (${pr.prix}) — ${pr.usage}`).join("\n")}\nRoutine: ${p.routine}`;
-    }).join("\n\n")}`;
+      if(!p)return"";
+      return `${labels[pk]} — ${p.total}\n${(p.produits||[]).map(pr=>`• ${pr.nom} (${pr.prix}) — ${pr.usage}\n  → ${pr.benefice||""}${pr.comment?"\n  💡 "+pr.comment:""}`).join("\n")}\n\n${p.routine?"📋 Routine :\n"+p.routine:""}`;
+    }).filter(Boolean).join("\n\n")}${ordonnance.conseil?"\n\n💛 "+ordonnance.conseil:""}`;
     navigator.clipboard.writeText(text).catch(()=>{});
+    alert("✅ Ordonnance complète copiée !");
   };
 
   const TYPES_DIAG = [
-    { id: "skincare", icon: "✨", label: "Diagnostic Skincare", desc: "Type de peau, préoccupations, routine" },
-    { id: "cheveux", icon: "💇", label: "Diagnostic Cheveux", desc: "Type, problèmes, traitements" },
-    { id: "sante", icon: "💊", label: "Diagnostic Santé", desc: "Objectifs, mode de vie, compléments" },
-    { id: "recrutement", icon: "🤝", label: "Diagnostic Recrutement", desc: "Profil face au marketing relationnel — pour un prospect activité" },
-    { id: "blocage", icon: "🔄", label: "Diagnostic Recrue bloquée", desc: "Identifie le levier (réseaux / bouche-à-oreille) et un plan d'action" },
+    // ── BEAUTÉ & BIEN-ÊTRE ─────────────────────────────────────────────
+    { id:"skincare",      cat:"beaute", icon:"✨", label:"Diagnostic Skincare",           desc:"Type de peau, préoccupations, routine",                    pourquoi:"Identifier les produits Mihi adaptés à ta peau et créer une routine personnalisée." },
+    { id:"makeup",        cat:"beaute", icon:"💄", label:"Diagnostic Makeup & Couleurs",  desc:"Teint, carnation, style, fond de teint adapté",            pourquoi:"Trouver la teinte parfaite, les couleurs qui valorisent ET les produits makeup Mihi adaptés.", photo:true },
+    { id:"peaucorps",     cat:"beaute", icon:"🧴", label:"Diagnostic Peau Corps",          desc:"Sécheresse, taches, vergetures, cellulite, sensibilité",   pourquoi:"Proposer une routine corps ciblée selon les vrais problèmes de peau du corps." },
+    { id:"cheveux",       cat:"beaute", icon:"💇", label:"Diagnostic Cheveux",             desc:"Type, problèmes, traitements",                             pourquoi:"Trouver la routine capillaire idéale et les produits Mihi adaptés." },
+    { id:"antiage",       cat:"beaute", icon:"🌸", label:"Diagnostic Anti-Âge",            desc:"Mode de vie, peau, prévention",                            pourquoi:"Découvrir l'âge biologique de sa peau crée une envie immédiate de solution." },
+    { id:"budget",        cat:"beaute", icon:"💡", label:"Diagnostic Budget Beauté",       desc:"Comparaison dépenses actuelles vs routine Mihi",            pourquoi:"Casser l'objection du prix en montrant qu'elles dépensent déjà cet argent ailleurs." },
+    // ── SANTÉ & BIEN-ÊTRE ──────────────────────────────────────────────
+    { id:"sante",         cat:"sante",  icon:"💊", label:"Diagnostic Santé",              desc:"Objectifs, mode de vie, compléments",                      pourquoi:"Cibler les compléments alimentaires Mihi adaptés à tes besoins." },
+    { id:"silhouette",    cat:"sante",  icon:"⚖️", label:"Diagnostic Silhouette",          desc:"Poids, énergie, alimentation, sommeil",                    pourquoi:"Évaluer les habitudes pour proposer un programme compléments ciblé." },
+    { id:"detox",         cat:"sante",  icon:"🌿", label:"Test Détox & Énergie",           desc:"Toxines, fatigue chronique, digestion",                    pourquoi:"La fatigue touche tout le monde. Mène naturellement à une cure de compléments." },
+    // ── RECRUTEMENT & ACTIVITÉ ─────────────────────────────────────────
+    { id:"recrutement",   cat:"recrutement", icon:"🤝", label:"Profil Recrutement",       desc:"Prête pour le marketing de réseau ?",                      pourquoi:"Évaluer si un prospect est prêt pour l'opportunité Mihi." },
+    { id:"complementrevenu", cat:"recrutement", icon:"💰", label:"Diagnostic Revenu Complémentaire", desc:"Objectif +300€, temps disponible, plan d'action", pourquoi:"Ultra concret et rassurant — un plan réaliste adapté à leur vie." },
+    { id:"entrepreneuriat",  cat:"recrutement", icon:"🚀", label:"Quiz Profil Entrepreneur", desc:"Personnalité, autonomie, profil entrepreneur",           pourquoi:"Valider le potentiel avant même que la personne se lance." },
+    { id:"valeurmarche",  cat:"recrutement", icon:"💼", label:"Test Valeur sur le Marché", desc:"Taux horaire, manque à gagner, temps sous-payé",          pourquoi:"Créer une frustration saine pour amener l'opportunité Mihi." },
+    { id:"chargementale", cat:"recrutement", icon:"🧠", label:"Diagnostic Charge Mentale", desc:"Équilibre vie pro/perso, stress, gestion du temps",        pourquoi:"Tu diagnoses leur quotidien et proposes naturellement ta solution MLM." },
+    { id:"libertefin",    cat:"recrutement", icon:"🏖️", label:"Diagnostic Liberté Financière", desc:"Objectifs de vie, vision à 3 ans, manques actuels",   pourquoi:"Projeter la personne dans son futur idéal puis montrer Mihi comme pont réaliste." },
+    { id:"maman",         cat:"recrutement", icon:"🌸", label:"Diagnostic Maman Entrepreneur", desc:"Concilier famille, envies personnelles et activité",   pourquoi:"Toucher les mamans qui veulent un projet à elles sans sacrifier leur famille." },
+    { id:"reconversion",  cat:"recrutement", icon:"🔄", label:"Diagnostic Reconversion",  desc:"Envie de changement, compétences, freins, tremplin",       pourquoi:"Capter les personnes insatisfaites de leur job et en quête de sens." },
+    { id:"confianceensoi",cat:"recrutement", icon:"💪", label:"Diagnostic Confiance en Soi", desc:"Légitimité, peur du regard, syndrome de l'imposteur",   pourquoi:"Très puissant : révéler les forces de la personne avant de proposer Mihi." },
+    { id:"reseauxsociaux2", cat:"recrutement", icon:"📲", label:"Audit Présence Digitale", desc:"Instagram, Facebook, personal branding, visibilité",      pourquoi:"Proposer Mihi comme moyen de monétiser une présence déjà existante." },
+    // ── SUIVI ÉQUIPE ───────────────────────────────────────────────────
+    { id:"blocage",       cat:"equipe", icon:"🔓", label:"Recrue bloquée",                desc:"Identifie le levier et un plan d'action",                  pourquoi:"Débloquer une distributrice qui stagne." },
+    { id:"pasrecruiter",  cat:"equipe", icon:"😓", label:"Je n'arrive pas à recruter",    desc:"Freins et leviers pour débloquer le recrutement",           pourquoi:"Comprendre pourquoi le recrutement ne décolle pas." },
+    { id:"pasvendre",     cat:"equipe", icon:"💸", label:"Je n'arrive pas à vendre",      desc:"Où ça coince et comment relancer",                         pourquoi:"Identifier le blocage exact dans le processus de vente." },
+    { id:"reseaux",       cat:"equipe", icon:"📱", label:"Mes réseaux ne marchent pas",   desc:"Analyse de présence et stratégie contenus",                pourquoi:"Diagnostic précis de la stratégie réseaux." },
   ];
 
-  const TYPES_SCORING = ["recrutement","blocage"];
+  const CATS_DIAG=[
+    {id:"beaute",      label:"💆 Beauté & Soins",      color:C.rose},
+    {id:"sante",       label:"💚 Santé & Bien-être",    color:C.vert},
+    {id:"recrutement", label:"🚀 Recrutement",          color:C.or},
+    {id:"equipe",      label:"👑 Suivi Équipe",         color:C.brun},
+  ];
+
+  const[catDiag,setCatDiag]=useState("beaute");
+
+  // Helper : titre lisible depuis l'id
+  const diagLabel=(id)=>TYPES_DIAG.find(t=>t.id===id)?.label||id;
 
   if (mode === "choix") return (
     <div>
       <div style={{ fontFamily: "Georgia,serif", fontSize: "1.35rem", fontWeight: 300, color: C.brun, marginBottom: ".2rem" }}>
-        Diagnostics <em style={{ fontStyle: "italic", color: C.rose }}>Clients</em>
+        Diagnostics <em style={{ fontStyle: "italic", color: C.rose }}>& Outils</em>
       </div>
-      <p style={{ fontSize: ".74rem", color: C.gris, marginBottom: "1rem", lineHeight: 1.65 }}>
-        Remplis un diagnostic avec ta cliente pour lui proposer les produits Mihi les plus adaptés. L'IA génère une ordonnance personnalisée avec les vrais produits et prix.
+      <p style={{ fontSize: ".72rem", color: C.gris, marginBottom: ".75rem", lineHeight: 1.65 }}>
+        Envoie un lien diagnostic à une cliente ou prospect — elle répond, tu reçois ses résultats et une ordonnance personnalisée.
       </p>
-      <div style={{ marginBottom: ".75rem" }}>
-        <div style={{ fontSize: ".62rem", color: C.gris, marginBottom: ".4rem" }}>Prénom de la personne (optionnel)</div>
-        <input placeholder="Ex: Sophie Martin" value={nomClient} onChange={e => setNomClient(e.target.value)}
-          style={{ width: "100%", border: `1px solid ${C.pale}`, borderRadius: 9, padding: ".5rem .8rem", fontSize: ".85rem", fontFamily: "inherit", color: C.texte, background: C.creme, outline: "none" }} />
+
+      {/* Onglets de catégories */}
+      <div style={{ display:"flex", gap:".3rem", marginBottom:".75rem", overflowX:"auto", paddingBottom:".2rem" }}>
+        {CATS_DIAG.map(c=>(
+          <button key={c.id} onClick={()=>setCatDiag(c.id)}
+            style={{ flex:"none", padding:".4rem .75rem", fontSize:".68rem", fontWeight:600, borderRadius:20, border:`1.5px solid ${catDiag===c.id?c.color:C.pale}`, background:catDiag===c.id?c.color:C.blanc, color:catDiag===c.id?"white":C.gris, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+            {c.label}
+          </button>
+        ))}
       </div>
-      {TYPES_DIAG.map(t => (
+
+      {/* Champs contact — obligatoires pour envoyer le lien */}
+      <div style={{ background:C.creme, borderRadius:12, padding:".75rem .9rem", marginBottom:".75rem", border:`1px solid ${C.pale}` }}>
+        <div style={{ fontSize:".62rem", fontWeight:700, color:C.brun, marginBottom:".5rem", textTransform:"uppercase", letterSpacing:".08em" }}>📋 Infos de la personne</div>
+        <input placeholder="Prénom (ex: Sophie)" value={nomClient} onChange={e=>setNomClient(e.target.value)}
+          style={{ width:"100%", border:`1px solid ${C.pale}`, borderRadius:8, padding:".42rem .65rem", fontSize:".82rem", fontFamily:"inherit", color:C.texte, background:"white", outline:"none", marginBottom:".4rem" }}/>
+        <input placeholder="📞 Tel / 📧 Email / 📲 @Instagram — obligatoire pour envoyer" value={contactClient} onChange={e=>setContactClient(e.target.value)}
+          style={{ width:"100%", border:`1.5px solid ${contactClient?C.vert:C.pale}`, borderRadius:8, padding:".42rem .65rem", fontSize:".78rem", fontFamily:"inherit", color:C.texte, background:"white", outline:"none" }}/>
+        {!contactClient&&<div style={{ fontSize:".62rem", color:"#B04040", marginTop:".3rem" }}>⚠️ Le contact est obligatoire pour envoyer le lien</div>}
+      </div>
+
+      {/* Liste diagnostics de la catégorie sélectionnée */}
+      {TYPES_DIAG.filter(t=>t.cat===catDiag).map(t => (
         <div key={t.id} style={{ background: C.blanc, border: `1px solid ${C.pale}`, borderRadius: 14, padding: "1rem 1.1rem", marginBottom: ".65rem" }}>
-          <div style={{ display: "flex", gap: ".8rem", alignItems: "center", marginBottom: ".65rem" }}>
+          <div style={{ display: "flex", gap: ".8rem", alignItems: "flex-start", marginBottom: ".5rem" }}>
             <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.rose+"20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", flexShrink: 0 }}>{t.icon}</div>
-            <div>
-              <div style={{ fontFamily: "Georgia,serif", fontSize: ".95rem", fontWeight: 600, color: C.brun, marginBottom: ".2rem" }}>{t.label}</div>
-              <div style={{ fontSize: ".72rem", color: C.gris }}>{t.desc}</div>
+            <div style={{flex:1}}>
+              <div style={{ fontFamily: "Georgia,serif", fontSize: ".95rem", fontWeight: 600, color: C.brun, marginBottom: ".15rem" }}>{t.label}</div>
+              <div style={{ fontSize: ".72rem", color: C.gris, marginBottom: t.pourquoi?".3rem":"0" }}>{t.desc}</div>
+              {t.pourquoi&&<div style={{ fontSize: ".68rem", color: C.rose, fontStyle: "italic", lineHeight: 1.55, background: C.rose+"08", borderRadius: 7, padding: ".3rem .5rem", borderLeft: `2px solid ${C.rose}` }}>💡 {t.pourquoi}</div>}
             </div>
           </div>
           <div style={{ display: "flex", gap: ".4rem" }}>
@@ -9431,16 +16427,44 @@ function DiagnosticsTab({ uid, userName }) {
           </div>
         </div>
       ))}
+
+      {/* Scripts pour proposer les diagnostics */}
+      <ScriptsDiagSection/>
     </div>
   );
-
   function copierLienDirect(diagType) {
+    if(!contactClient.trim()){
+      alert("⚠️ Ajoute d'abord un contact (téléphone, email ou @Instagram) avant d'envoyer le lien !");
+      return;
+    }
     const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
-    navigator.clipboard.writeText(lien).then(()=>{
-      alert(`✅ Lien copié !\n\nEnvoie ce lien à ${nomClient||"ta cliente"} par WhatsApp ou SMS.\nSes résultats arriveront dans ton tableau de bord.\n\n${lien}`);
-    }).catch(()=>{
-      prompt("Copie ce lien et envoie-le à ta cliente :", lien);
-    });
+    const msg = `Coucou ${nomClient||""}! 🌸 J'ai un diagnostic personnalisé pour toi — ça prend 2 minutes et tu repars avec une sélection de produits sur mesure. C'est gratuit ✨\n\n👉 ${lien}`;
+
+    // Détecter si c'est un @ Instagram/TikTok — proposer d'ouvrir l'appli
+    const contact = contactClient.trim();
+    const isInstagram = contact.startsWith("@") || contact.toLowerCase().includes("instagram");
+    const isTikTok = contact.toLowerCase().includes("tiktok");
+    const isEmail = contact.includes("@") && contact.includes(".");
+    const isTel = /^[0-9+\s]{8,}/.test(contact);
+
+    navigator.clipboard?.writeText(msg);
+
+    if(isInstagram||isTikTok){
+      const handle = contact.replace("@","").replace(/instagram\.com\//i,"").replace(/tiktok\.com\/@/i,"");
+      const reseau = isInstagram?"Instagram":"TikTok";
+      const openUrl = isInstagram?`https://www.instagram.com/${handle}/`:`https://www.tiktok.com/@${handle}`;
+      const choix = window.confirm(`✅ Message copié !\n\nOuvrir le profil ${reseau} de ${handle} pour lui envoyer directement ?`);
+      if(choix) window.open(openUrl,"_blank");
+    } else if(isEmail){
+      const choix = window.confirm(`✅ Message copié !\n\nOuvrir l'application email pour envoyer à ${contact} ?`);
+      if(choix) window.open(`mailto:${contact}?subject=Ton%20diagnostic%20personnalisé&body=${encodeURIComponent(msg)}`,"_blank");
+    } else if(isTel){
+      const tel = contact.replace(/\s/g,"");
+      const choix = window.confirm(`✅ Message copié !\n\nOuvrir WhatsApp pour envoyer à ${contact} ?`);
+      if(choix) window.open(`https://wa.me/${tel.replace(/^\+/,"").replace(/^0/,"33")}?text=${encodeURIComponent(msg)}`,"_blank");
+    } else {
+      alert(`✅ Message copié !\n\nColle-le dans ta conversation avec ${nomClient||"ta prospect"}.`);
+    }
   }
 
   if (mode === "loading") return (
@@ -9453,11 +16477,78 @@ function DiagnosticsTab({ uid, userName }) {
     </div>
   );
 
+  if (mode === "contact") return (
+    <div style={{padding:"1rem 0"}}>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.brun,marginBottom:".3rem"}}>
+        Presque terminé <em style={{fontStyle:"italic",color:C.rose}}>✨</em>
+      </div>
+      <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>
+        Laisse tes coordonnées pour que ta conseillère puisse te recontacter avec tes recommandations personnalisées 💛
+      </p>
+
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
+        <div style={{display:"flex",gap:".5rem",marginBottom:".6rem"}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Prénom *</div>
+            <input value={prenomContact} onChange={e=>setPrenomContact(e.target.value)} placeholder="Ton prénom"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Nom</div>
+            <input value={nomContact} onChange={e=>setNomContact(e.target.value)} placeholder="Ton nom"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          </div>
+        </div>
+
+        <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem",fontWeight:600}}>Comment te contacter ? (au choix)</div>
+        <div style={{marginBottom:".5rem"}}>
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>📱 Téléphone / WhatsApp</div>
+          <input value={telContact} onChange={e=>setTelContact(e.target.value)} placeholder="06 XX XX XX XX" type="tel"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>📧 Email</div>
+          <input value={mailContact} onChange={e=>setMailContact(e.target.value)} placeholder="ton@email.com" type="email"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+        </div>
+      </div>
+
+      <button
+        onClick={()=>{
+          const contact={prenom:prenomContact,nom:nomContact,tel:telContact,mail:mailContact};
+          genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});
+        }}
+        disabled={!prenomContact.trim()}
+        style={{width:"100%",background:prenomContact.trim()?C.brun:C.pale,color:prenomContact.trim()?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:prenomContact.trim()?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
+        Envoyer mes réponses →
+      </button>
+      <div style={{fontSize:".65rem",color:C.gris,textAlign:"center"}}>
+        * Seul le prénom est obligatoire
+      </div>
+    </div>
+  );
+
+  if (mode === "attente") return (
+    <div style={{ textAlign: "center", padding: "3rem 1rem" }}>
+      <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>💛</div>
+      <div style={{ fontFamily: "Georgia,serif", fontSize: "1.2rem", color: C.brun, marginBottom: ".75rem" }}>
+        Merci {nomClient||""} !
+      </div>
+      <p style={{ fontSize: ".82rem", color: C.gris, lineHeight: 1.7, marginBottom: "1.5rem" }}>
+        Tes réponses ont bien été envoyées à ta conseillère Mihi.<br/>
+        Elle va préparer ton diagnostic personnalisé et te recontacter très vite avec tes recommandations produits ✨
+      </p>
+      <div style={{ background: C.creme, borderRadius: 12, padding: "1rem", border: `1px solid ${C.pale}`, fontSize: ".76rem", color: C.brun, lineHeight: 1.6 }}>
+        🌸 En attendant, n'hésite pas à lui poser toutes tes questions !
+      </div>
+    </div>
+  );
+
   if (mode === "questionnaire") return (
     <div>
       <button onClick={reset} style={{ background: "none", border: "none", color: C.gris, fontSize: ".75rem", cursor: "pointer", fontFamily: "inherit", marginBottom: "1rem", padding: 0 }}>← Retour</button>
       <div style={{ fontFamily: "Georgia,serif", fontSize: "1.1rem", color: C.brun, marginBottom: ".3rem" }}>
-        {type === "skincare" ? "✨ Diagnostic Skincare" : type === "cheveux" ? "💇 Diagnostic Cheveux" : type === "sante" ? "💊 Diagnostic Santé" : type === "recrutement" ? "🤝 Diagnostic Recrutement" : "🔄 Diagnostic Recrue bloquée"}
+        {diagLabel(type)}
         {nomClient && <span style={{ fontSize: ".8rem", color: C.rose, marginLeft: ".5rem" }}>— {nomClient}</span>}
       </div>
       <div style={{ height: 4, background: C.pale, borderRadius: 10, overflow: "hidden", marginBottom: "1.5rem" }}>
@@ -9465,14 +16556,43 @@ function DiagnosticsTab({ uid, userName }) {
       </div>
       <div style={{ fontSize: ".6rem", color: C.gris, marginBottom: ".75rem" }}>Question {step+1} / {questions.length}</div>
       {erreur && <div style={{ background: "#FFF0F0", border: "1px solid #F44", borderRadius: 8, padding: ".6rem .8rem", marginBottom: ".75rem", fontSize: ".75rem", color: "#B04040" }}>{erreur}</div>}
-      <div style={{ fontFamily: "Georgia,serif", fontSize: "1.1rem", color: C.brun, fontWeight: 400, marginBottom: "1.25rem", lineHeight: 1.45 }}>{q.question}</div>
-      {q.options.map(opt => (
-        <div key={opt.value} onClick={() => repondre(opt.value)}
-          style={{ background: C.blanc, border: `1px solid ${C.pale}`, borderRadius: 12, padding: ".85rem 1rem", marginBottom: ".5rem", cursor: "pointer", fontSize: ".82rem", color: C.texte, transition: "all .15s", display: "flex", alignItems: "center", gap: ".6rem" }}>
-          <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${C.pale}`, flexShrink: 0 }} />
-          {opt.label}
-        </div>
-      ))}
+      <div style={{ fontFamily: "Georgia,serif", fontSize: "1.1rem", color: C.brun, fontWeight: 400, marginBottom: ".5rem", lineHeight: 1.45 }}>{q.question}</div>
+      {q.multi&&<div style={{fontSize:".65rem",color:C.gris,marginBottom:".75rem",fontStyle:"italic"}}>✨ Tu peux choisir plusieurs réponses</div>}
+      {!q.multi&&<div style={{height:".75rem"}}/>}
+      {q.options.map(opt => {
+        const repCourante = reponses[q.id];
+        const isSelected = q.multi
+          ? (Array.isArray(repCourante) ? repCourante.includes(opt.value) : false)
+          : repCourante === opt.value;
+        return(
+          <div key={opt.value} onClick={() => {
+            if(q.multi){
+              const current = Array.isArray(repCourante) ? repCourante : [];
+              const next = current.includes(opt.value) ? current.filter(v=>v!==opt.value) : [...current, opt.value];
+              setReponses(r=>({...r, [q.id]: next}));
+            } else {
+              repondre(opt.value);
+            }
+          }}
+            style={{ background: isSelected?C.rose+"15":C.blanc, border: `1.5px solid ${isSelected?C.rose:C.pale}`, borderRadius: 12, padding: ".85rem 1rem", marginBottom: ".5rem", cursor: "pointer", fontSize: ".82rem", color: C.texte, transition: "all .15s", display: "flex", alignItems: "center", gap: ".6rem" }}>
+            <div style={{ width: 20, height: 20, borderRadius: q.multi?"4px":"50%", border: `2px solid ${isSelected?C.rose:C.pale}`, flexShrink: 0, background: isSelected?C.rose:"transparent", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {isSelected&&<span style={{fontSize:".6rem",color:"white",fontWeight:700}}>✓</span>}
+            </div>
+            {opt.label}
+          </div>
+        );
+      })}
+      {q.multi&&(
+        <button onClick={()=>{
+          const rep = reponses[q.id];
+          if(!rep||rep.length===0) return;
+          repondre(Array.isArray(rep)?rep.join(","):rep);
+        }}
+          disabled={!reponses[q.id]||reponses[q.id].length===0}
+          style={{width:"100%",marginTop:".5rem",background:reponses[q.id]?.length>0?C.brun:C.pale,color:reponses[q.id]?.length>0?C.blanc:C.gris,border:"none",borderRadius:10,padding:".65rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:reponses[q.id]?.length>0?"pointer":"default"}}>
+          Valider ({reponses[q.id]?.length||0} sélectionné{reponses[q.id]?.length>1?"s":""}) →
+        </button>
+      )}
     </div>
   );
 
@@ -9546,11 +16666,70 @@ function DiagnosticsTab({ uid, userName }) {
     );
   }
 
+  if (mode === "resultat" && ordonnance && ordonnance.kind === "business") {
+    const typeLabels = {pasrecruiter:"😓 Je n'arrive pas à recruter",pasvendre:"💸 Je n'arrive pas à vendre",reseaux:"📱 Mes réseaux ne marchent pas"};
+    return(
+      <div>
+        <button onClick={()=>setMode("choix")} style={{background:"none",border:"none",color:C.gris,fontSize:".75rem",cursor:"pointer",fontFamily:"inherit",marginBottom:"1rem",padding:0}}>← Retour</button>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun,marginBottom:".15rem"}}>{typeLabels[ordonnance.type]}</div>
+        <div style={{fontSize:".65rem",color:C.gris,marginBottom:"1rem"}}>{nomClient||""}</div>
+
+        {/* Diagnostic */}
+        <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".9rem 1rem",marginBottom:"1rem"}}>
+          <div style={{fontSize:".58rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>🔍 Mon diagnostic</div>
+          <div style={{fontSize:".8rem",color:C.pale,lineHeight:1.7}}>{ordonnance.diagnostic}</div>
+        </div>
+
+        {/* Points forts */}
+        {ordonnance.points_forts?.length>0&&(
+          <div style={{background:C.vert+"10",border:`1px solid ${C.vert}30`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem"}}>
+            <div style={{fontSize:".58rem",fontWeight:700,color:C.vert,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>💚 Tes points forts</div>
+            {ordonnance.points_forts.map((p,i)=>(
+              <div key={i} style={{display:"flex",gap:".5rem",marginBottom:".35rem"}}>
+                <span style={{color:C.vert,flexShrink:0}}>✓</span>
+                <span style={{fontSize:".78rem",color:C.texte}}>{p}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Blocages */}
+        {ordonnance.blocages?.length>0&&(
+          <div style={{background:C.rose+"10",border:`1px solid ${C.rose}30`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem"}}>
+            <div style={{fontSize:".58rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>🔓 Ce qui te bloque</div>
+            {ordonnance.blocages.map((b,i)=>(
+              <div key={i} style={{display:"flex",gap:".5rem",marginBottom:".35rem"}}>
+                <span style={{color:C.rose,flexShrink:0}}>→</span>
+                <span style={{fontSize:".78rem",color:C.texte}}>{b}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Plan d'action */}
+        {ordonnance.plan_action?.map((a,i)=>(
+          <div key={i} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".6rem"}}>
+            <div style={{fontSize:".72rem",fontWeight:700,color:C.brun,marginBottom:".3rem"}}>{a.priorite}</div>
+            <div style={{fontSize:".82rem",fontWeight:600,color:C.texte,marginBottom:".25rem"}}>{a.action}</div>
+            <div style={{fontSize:".7rem",color:C.gris,fontStyle:"italic"}}>{a.pourquoi}</div>
+          </div>
+        ))}
+
+        {/* Message encouragement */}
+        {ordonnance.message_encouragement&&(
+          <div style={{background:C.creme,borderRadius:10,padding:".75rem 1rem",border:`1px solid ${C.or}40`,marginTop:"1rem"}}>
+            <div style={{fontSize:".8rem",color:C.brun,lineHeight:1.65,fontStyle:"italic"}}>💛 "{ordonnance.message_encouragement}"</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (mode === "resultat" && ordonnance) {
     const packs = [
       { key: "budget", label: "💚 Pack Petit Budget", color: "#5C8A60", bg: "#5C8A6015" },
       { key: "bestseller", label: "⭐ Pack Best Seller", color: C.or, bg: C.or+"15" },
-      { key: "boost", label: "🚀 Pack Boost", color: C.rose, bg: C.rose+"15" },
+      { key: "premium", label: "🚀 Pack Boost Premium", color: C.rose, bg: C.rose+"15" },
     ];
 
     return (
@@ -9603,6 +16782,13 @@ function DiagnosticsTab({ uid, userName }) {
           style={{ width: "100%", background: C.brun, color: C.blanc, border: "none", borderRadius: 10, padding: ".65rem", fontSize: ".82rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginBottom: ".5rem" }}>
           📋 Copier l'ordonnance complète
         </button>
+        {/* DEBUG TEMPORAIRE */}
+        <details style={{marginTop:".5rem"}}>
+          <summary style={{fontSize:".6rem",color:C.gris,cursor:"pointer"}}>🔍 Debug (clic pour voir)</summary>
+          <pre style={{fontSize:".55rem",color:"#333",background:"#f5f5f5",padding:".5rem",borderRadius:6,overflowX:"auto",whiteSpace:"pre-wrap",wordBreak:"break-all",marginTop:".3rem"}}>
+            {JSON.stringify({budget:!!ordonnance?.budget, bestseller:!!ordonnance?.bestseller, premium:!!ordonnance?.premium, conseil:!!ordonnance?.conseil, keys:Object.keys(ordonnance||{}), premiumData:ordonnance?.premium||"ABSENT"},null,2)}
+          </pre>
+        </details>
         <p style={{ fontSize: ".65rem", color: C.gris, textAlign: "center" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
       </div>
     );
@@ -9615,148 +16801,411 @@ function DiagResultsTab({ uid }) {
   const [diags, setDiags] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [sel, setSel] = useState(null);
+  const [prospects, setProspects] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [genLoading, setGenLoading] = useState(false);
+  const [lienProspect, setLienProspect] = useState(null);
+  const [showArchives, setShowArchives] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const snap = await getDoc(doc(db, "users", uid));
-        if (snap.exists() && snap.data()["db-diagnostics"])
-          setDiags(JSON.parse(snap.data()["db-diagnostics"]));
+        if (snap.exists()) {
+          if (snap.data()["db-diagnostics"]) setDiags(JSON.parse(snap.data()["db-diagnostics"]));
+          if (snap.data()["db-prospects"]) setProspects(JSON.parse(snap.data()["db-prospects"]));
+          if (snap.data()["db-clients"]) setClients(JSON.parse(snap.data()["db-clients"]));
+        }
       } catch {}
       setLoaded(true);
     })();
   }, [uid]);
 
-  const del = async (id) => {
-    const next = diags.filter(d => d.id !== id);
+  const saveDiags = async (next) => {
     setDiags(next);
     try { await setDoc(doc(db, "users", uid), { "db-diagnostics": JSON.stringify(next) }, { merge: true }); } catch {}
   };
 
-  const TYPE_LABELS = { skincare: "✨ Skincare", cheveux: "💇 Cheveux", sante: "💊 Santé", recrutement: "🤝 Recrutement", blocage: "🔄 Recrue bloquée" };
+  const del = async (id) => saveDiags(diags.filter(d => d.id !== id));
+
+  const marquerLu = async (id) => {
+    const next = diags.map(d => d.id===id ? {...d, nonLu:false} : d);
+    saveDiags(next);
+  };
+
+  // Générer l'ordonnance IA pour un diag externe depuis l'historique
+  const genererDepuisHistorique = async (d) => {
+    setGenLoading(d.id);
+    // Nettoyer les réponses (retirer _contact si présent)
+    const reponsesClean = {...(d.reponses||{})};
+    delete reponsesClean._contact;
+
+    const result = await genererOrdonnanceIA(d.type, reponsesClean, d.nomClient||(d.contact?.prenom)||"Cliente");
+    if (result) {
+      const next = diags.map(x => x.id===d.id ? {...x, ordonnance:result, nonLu:false} : x);
+      saveDiags(next);
+      setSel({...d, ordonnance:result});
+    } else {
+      alert("Erreur de génération. Vérifie ta connexion et réessaie.");
+    }
+    setGenLoading(null);
+  };
+
+  // Lier diag à prospect ou client
+  const lierAProspect = async (diagId, prospectId) => {
+    // Lier ET archiver (retirer de la liste principale)
+    const next = diags.map(d => d.id===diagId ? {...d, prospectId, archive:true} : d);
+    saveDiags(next);
+    setLienProspect(null);
+    setSel(null);
+  };
+
+  const archiver = async (id) => {
+    const next = diags.map(d => d.id===id ? {...d, archive:true} : d);
+    saveDiags(next);
+    setSel(null);
+  };
+
+  const desarchiver = async (id) => {
+    const next = diags.map(d => d.id===id ? {...d, archive:false} : d);
+    saveDiags(next);
+  };
+
+  // Convertir prospect en client ou distributrice
+  const convertirProspect = async (prospectId, vers) => {
+    const p = prospects.find(x => x.id===prospectId);
+    if (!p) return;
+    if (vers === "client") {
+      const newClient = {id:`c${Date.now()}`, nom:p.name, prenom:"", tel:"", email:"", produits:[], notes:p.note||"", dateAjout:new Date().toISOString().slice(0,10)};
+      const nextClients = [...clients, newClient];
+      setClients(nextClients);
+      try { await setDoc(doc(db,"users",uid), {"db-clients":JSON.stringify(nextClients)}, {merge:true}); } catch {}
+    }
+    // Marquer comme converti dans prospects
+    const nextP = prospects.map(x => x.id===prospectId ? {...x, statut:"✅ Converti", convertiVers:vers} : x);
+    setProspects(nextP);
+    try { await setDoc(doc(db,"users",uid), {"db-prospects":JSON.stringify(nextP)}, {merge:true}); } catch {}
+  };
+
+  const TYPE_LABELS = {
+    skincare: "✨ Skincare",
+    makeup: "💄 Makeup & Couleurs",
+    peaucorps: "🧴 Peau Corps",
+    cheveux: "💇 Cheveux",
+    sante: "💊 Santé",
+    silhouette: "⚖️ Silhouette",
+    detox: "🌿 Détox & Énergie",
+    antiage: "🌸 Anti-Âge",
+    budget: "💡 Budget Beauté",
+    recrutement: "🤝 Profil Recrutement",
+    complementrevenu: "💰 Revenu Complémentaire",
+    entrepreneuriat: "🚀 Profil Entrepreneur",
+    valeurmarche: "💼 Valeur sur le Marché",
+    chargementale: "🧠 Charge Mentale",
+    libertefin: "🏖️ Liberté Financière",
+    maman: "🌸 Maman Entrepreneur",
+    reconversion: "🔄 Reconversion",
+    confianceensoi: "💪 Confiance en Soi",
+    reseauxsociaux2: "📲 Audit Digital",
+    blocage: "🔓 Recrue bloquée",
+    pasrecruiter: "😓 Blocage recrutement",
+    pasvendre: "💸 Blocage ventes",
+    reseaux: "📱 Réseaux sociaux",
+  };
+  const nonLus = diags.filter(d => d.nonLu).length;
 
   if (!loaded) return <div style={{ textAlign: "center", padding: "2rem", color: C.gris, fontSize: ".8rem" }}>Chargement...</div>;
 
-  if (sel && (sel.type === "recrutement" || sel.type === "blocage")) {
-    const ord = sel.ordonnance || {};
-    const isRecrutement = sel.type === "recrutement";
-    const lvl = isRecrutement ? ord.niveau : ord.levelInfo;
-    const levelColors = { 1:"#A85C5C", 2:"#B8804A", 3:"#5C8A6A", 4:C.lilas };
-    const col = levelColors[lvl?.level] || C.rose;
-    return (
-      <div>
-        <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: C.gris, fontSize: ".75rem", cursor: "pointer", fontFamily: "inherit", marginBottom: "1rem", padding: 0 }}>← Retour</button>
-        <div style={{ fontFamily: "Georgia,serif", fontSize: "1rem", color: C.brun, marginBottom: ".3rem" }}>{sel.nomClient} — {TYPE_LABELS[sel.type]}</div>
-        <div style={{ fontSize: ".65rem", color: C.gris, marginBottom: "1rem" }}>{sel.date}</div>
-
-        <div style={{ display:"inline-block", background: col+"20", color: col, fontSize:".6rem", fontWeight:700, textTransform:"uppercase", letterSpacing:".1em", borderRadius:20, padding:".25rem .75rem", marginBottom:".6rem" }}>
-          Niveau {lvl?.level}/4 — {lvl?.label}
-        </div>
-        <div style={{ fontFamily:"Georgia,serif", fontStyle:"italic", fontSize:"1.8rem", color:C.lilas, marginBottom:".6rem" }}>{ord.score} / {ord.max}</div>
-
-        {isRecrutement ? (
-          <>
-            <p style={{ fontSize:".78rem", color:C.texte, lineHeight:1.7, marginBottom:"1rem" }}>{ord.niveau?.desc}</p>
-            {(ord.niveau?.advice||[]).map((a,i)=>(
-              <div key={i} style={{ background:C.creme, borderLeft:`4px solid ${C.lilas}`, borderRadius:"0 10px 10px 0", padding:".7rem .9rem", marginBottom:".6rem" }}>
-                <div style={{ fontSize:".78rem", fontWeight:700, color:C.brun, marginBottom:".2rem" }}>{a.h}</div>
-                <div style={{ fontSize:".73rem", color:C.texte, lineHeight:1.6 }}>{a.t}</div>
-              </div>
-            ))}
-            {ord.internalNote && (
-              <div style={{ background:C.lilas+"15", border:`1px solid ${C.lilas}40`, borderRadius:10, padding:".8rem .9rem", marginTop:".6rem" }}>
-                <div style={{ fontSize:".74rem", fontWeight:700, color:C.brun, marginBottom:".4rem" }}>👀 Pour toi (note interne)</div>
-                <div style={{ fontSize:".73rem", color:C.texte, lineHeight:1.6, marginBottom:".3rem" }}><strong>Levier conseillé :</strong> {ord.internalNote.levier}</div>
-                <div style={{ fontSize:".73rem", color:C.texte, lineHeight:1.6 }}><strong>Action recommandée :</strong> {ord.internalNote.action}</div>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <p style={{ fontSize:".78rem", color:C.texte, lineHeight:1.7, marginBottom:"1rem" }}>{ord.levelInfo?.extra}</p>
-            <div style={{ background:C.rose+"15", borderLeft:`4px solid ${C.rose}`, borderRadius:"0 10px 10px 0", padding:".7rem .9rem", marginBottom:".6rem" }}>
-              <div style={{ fontSize:".78rem", fontWeight:700, color:C.brun, marginBottom:".2rem" }}>{ord.orientation?.title}</div>
-              <div style={{ fontSize:".73rem", color:C.texte, lineHeight:1.6 }}>{ord.orientation?.desc}</div>
-            </div>
-            {(ord.orientation?.actions||[]).map((a,i)=>(
-              <div key={i} style={{ background:C.creme, borderLeft:`4px solid ${C.lilas}`, borderRadius:"0 10px 10px 0", padding:".7rem .9rem", marginBottom:".6rem" }}>
-                <div style={{ fontSize:".78rem", fontWeight:700, color:C.brun, marginBottom:".2rem" }}>{a.h}</div>
-                <div style={{ fontSize:".73rem", color:C.texte, lineHeight:1.6 }}>{a.t}</div>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-    );
-  }
-
+  // Vue détail diag
   if (sel) {
     const packs = [
       { key: "budget", label: "💚 Pack Petit Budget", color: "#5C8A60" },
       { key: "bestseller", label: "⭐ Pack Best Seller", color: C.or },
-      { key: "boost", label: "🚀 Pack Boost", color: C.rose },
+      { key: "premium", label: "🚀 Pack Boost Premium", color: C.rose },
     ];
     const ord = sel.ordonnance;
+    const isRecruDiag = sel.type === "recrutement" || sel.type === "blocage";
+    const prospectLie = prospects.find(p => p.id === sel.prospectId);
+
     return (
       <div>
-        <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: C.gris, fontSize: ".75rem", cursor: "pointer", fontFamily: "inherit", marginBottom: "1rem", padding: 0 }}>← Retour</button>
-        <div style={{ fontFamily: "Georgia,serif", fontSize: "1rem", color: C.brun, marginBottom: ".3rem" }}>{sel.nomClient} — {TYPE_LABELS[sel.type]}</div>
-        <div style={{ fontSize: ".65rem", color: C.gris, marginBottom: "1rem" }}>{sel.date}</div>
-        {ord?.introduction && (
-          <div style={{ background: C.brun, borderRadius: 12, padding: ".85rem 1rem", marginBottom: "1rem" }}>
-            <p style={{ fontSize: ".76rem", color: C.pale, lineHeight: 1.6, margin: 0 }}>{ord.introduction}</p>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+          <button onClick={() => { setSel(null); marquerLu(sel.id); }} style={{ background:"none", border:"none", color:C.gris, fontSize:".75rem", cursor:"pointer", fontFamily:"inherit", padding:0 }}>← Retour</button>
+          <button onClick={()=>{ sel.archive?desarchiver(sel.id):archiver(sel.id); setSel(null); }}
+            style={{ background:"none", border:`1px solid ${C.pale}`, borderRadius:8, padding:".25rem .65rem", fontSize:".68rem", color:C.gris, cursor:"pointer", fontFamily:"inherit" }}>
+            {sel.archive?"↩️ Restaurer":"📦 Archiver"}
+          </button>
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:".75rem" }}>
+          <div>
+            <div style={{ fontFamily:"Georgia,serif", fontSize:"1rem", color:C.brun, marginBottom:".15rem" }}>{sel.nomClient} — {TYPE_LABELS[sel.type]}</div>
+            <div style={{ fontSize:".65rem", color:C.gris }}>{sel.date}{sel.externe&&<span style={{ marginLeft:".4rem", background:C.lilas+"20", color:C.lilas, borderRadius:20, padding:".1rem .4rem", fontWeight:700 }}>📩 Externe</span>}</div>
+          </div>
+          {sel.nonLu&&<span style={{ background:C.rose, color:"white", borderRadius:20, fontSize:".6rem", fontWeight:700, padding:".2rem .6rem" }}>Nouveau</span>}
+        </div>
+
+        {/* Coordonnées de contact */}
+        {sel.contact&&(sel.contact.tel||sel.contact.mail)&&(
+          <div style={{ background:C.vert+"10", border:`1px solid ${C.vert}30`, borderRadius:10, padding:".65rem .85rem", marginBottom:"1rem" }}>
+            <div style={{ fontSize:".6rem", fontWeight:700, color:C.vert, marginBottom:".3rem" }}>📞 Coordonnées</div>
+            <div style={{ fontSize:".78rem", color:C.brun, fontWeight:600 }}>{sel.contact.prenom} {sel.contact.nom}</div>
+            {sel.contact.tel&&<div style={{ fontSize:".74rem", color:C.texte }}>📱 {sel.contact.tel}</div>}
+            {sel.contact.mail&&<div style={{ fontSize:".74rem", color:C.texte }}>📧 {sel.contact.mail}</div>}
           </div>
         )}
-        {packs.map(pack => {
-          const p = ord?.[pack.key];
-          if (!p) return null;
-          return (
-            <div key={pack.key} style={{ background: C.blanc, border: `1px solid ${pack.color}30`, borderRadius: 12, padding: ".85rem 1rem", marginBottom: ".6rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: ".5rem" }}>
-                <div style={{ fontSize: ".76rem", fontWeight: 700, color: pack.color }}>{pack.label}</div>
-                <div style={{ fontSize: ".72rem", fontWeight: 700, color: pack.color }}>{p.total}</div>
-              </div>
-              {(p.produits || []).map((pr, i) => (
-                <div key={i} style={{ fontSize: ".74rem", color: C.texte, padding: ".25rem 0", borderBottom: i < (p.produits.length-1) ? `1px solid ${C.pale}` : "none" }}>
-                  <strong>{pr.nom}</strong> — {pr.prix} | {pr.usage}
+
+        {/* Lier à un prospect — avec création auto */}
+        <div style={{ background:C.creme, borderRadius:10, padding:".65rem .85rem", marginBottom:"1rem" }}>
+          <div style={{ fontSize:".6rem", fontWeight:700, color:C.gris, marginBottom:".35rem" }}>🔗 Fiche prospect</div>
+          {prospectLie
+            ? <div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:".4rem" }}>
+                  <span style={{ fontSize:".78rem", fontWeight:600, color:C.brun }}>{prospectLie.name}</span>
                 </div>
-              ))}
-            </div>
-          );
-        })}
+                <div style={{ display:"flex", gap:".3rem", flexWrap:"wrap" }}>
+                  <button onClick={()=>convertirProspect(prospectLie.id,"client")}
+                    style={{ flex:1, background:C.vert+"20", border:`1px solid ${C.vert}`, borderRadius:8, padding:".3rem .55rem", fontSize:".65rem", fontWeight:600, color:C.vert, cursor:"pointer", fontFamily:"inherit" }}>
+                    🛍️ Assimiler en Cliente
+                  </button>
+                  <button onClick={()=>convertirProspect(prospectLie.id,"distributrice")}
+                    style={{ flex:1, background:C.or+"20", border:`1px solid ${C.or}`, borderRadius:8, padding:".3rem .55rem", fontSize:".65rem", fontWeight:600, color:C.or, cursor:"pointer", fontFamily:"inherit" }}>
+                    👑 Assimiler en Distributrice
+                  </button>
+                </div>
+              </div>
+            : <div>
+                {/* Création automatique depuis le nom/contact du diag */}
+                {(sel.nomClient||sel.contact?.prenom)&&(
+                  <div style={{ marginBottom:".4rem" }}>
+                    <button onClick={async()=>{
+                      const nom=sel.nomClient||((sel.contact?.prenom||"")+" "+(sel.contact?.nom||"")).trim()||"Inconnue";
+                      const newP={
+                        id:Date.now(),
+                        name:nom,
+                        statut:"Nouveau",
+                        interet:sel.type==="chargementale"||sel.type==="business"?"distributeur":"client",
+                        note:`Diagnostic ${sel.type||""} effectué le ${new Date(sel.date||Date.now()).toLocaleDateString("fr-FR")}`,
+                        tel:sel.contact?.tel||"",
+                        email:sel.contact?.email||"",
+                        source:"diagnostic",
+                      };
+                      const nextP=[...prospects,newP];
+                      setProspects(nextP);
+                      try{ await setDoc(doc(db,"users",uid),{"db-prospects":JSON.stringify(nextP)},{merge:true}); }catch{}
+                      // Lier ce prospect au diag
+                      const nextD=diags.map(d=>d.id===sel.id?{...d,prospectId:newP.id}:d);
+                      saveDiags(nextD);
+                      setSel(p=>({...p,prospectId:newP.id}));
+                      alert(`✅ Fiche créée pour ${nom} dans Prospects !`);
+                    }}
+                      style={{ width:"100%", background:C.rose, color:"white", border:"none", borderRadius:8, padding:".4rem", fontSize:".72rem", fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginBottom:".3rem" }}>
+                      ✨ Créer la fiche prospect automatiquement
+                    </button>
+                  </div>
+                )}
+                {lienProspect===sel.id
+                  ? <div>
+                      <select onChange={e=>lierAProspect(sel.id,e.target.value)} defaultValue=""
+                        style={{ width:"100%", border:`1px solid ${C.pale}`, borderRadius:8, padding:".4rem .6rem", fontSize:".78rem", fontFamily:"inherit", color:C.texte, background:C.blanc, outline:"none" }}>
+                        <option value="" disabled>Choisir un prospect existant...</option>
+                        {prospects.filter(p=>p.statut!=="✅ Converti").map(p=>(
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <button onClick={()=>setLienProspect(null)} style={{ marginTop:".3rem", background:"none", border:"none", color:C.gris, fontSize:".65rem", cursor:"pointer", fontFamily:"inherit" }}>Annuler</button>
+                    </div>
+                  : <button onClick={()=>setLienProspect(sel.id)}
+                      style={{ background:"none", border:`1px dashed ${C.pale}`, borderRadius:8, padding:".3rem .7rem", fontSize:".7rem", color:C.gris, cursor:"pointer", fontFamily:"inherit" }}>
+                      + Lier à un prospect existant
+                    </button>
+                }
+              </div>
+          }
+        </div>
+
+        {/* Bouton envoyer l'ordonnance directement */}
+        {ord&&(
+          <div style={{ marginBottom:"1rem" }}>
+            <button onClick={()=>{
+              const intro=ord.introduction||"";
+              const formatPack=(label,pack)=>{
+                if(!pack)return"";
+                const prods=(pack.produits||[]).map(p=>`• ${p.nom} — ${p.prix}${p.usage?` (${p.usage})`:""}${p.benefice?`\n  → ${p.benefice}`:""}`).join("\n");
+                return `${label}\n${prods}\nTotal : ${pack.total||""}\n${pack.routine||""}`;
+              };
+              const texte=[
+                `✨ Ton ordonnance personnalisée Mihi`,
+                intro&&`\n${intro}`,
+                `\n💚 PACK PETIT BUDGET\n${formatPack("",ord.budget)}`,
+                `\n⭐ PACK BEST SELLER\n${formatPack("",ord.bestseller)}`,
+                `\n🚀 PACK BOOST\n${formatPack("",ord.premium)}`,
+                ord.conseil&&`\n💛 Conseil personnalisé : ${ord.conseil}`,
+              ].filter(Boolean).join("\n");
+              navigator.clipboard?.writeText(texte);
+              alert("✅ Ordonnance copiée avec le détail complet !");
+            }}
+              style={{ width:"100%", background:`linear-gradient(135deg,${C.brun},${C.brun2})`, color:"white", border:"none", borderRadius:10, padding:".6rem", fontSize:".78rem", fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              📤 Envoyer l'ordonnance complète à la cliente
+            </button>
+          </div>
+        )}
+
+        {/* Diag externe sans ordonnance → bouton générer */}
+        {sel.externe && !ord && (
+          <div style={{ background:C.lilas+"10", border:`1px solid ${C.lilas}`, borderRadius:12, padding:"1rem", marginBottom:"1rem", textAlign:"center" }}>
+            <div style={{ fontSize:".76rem", color:C.brun, marginBottom:".5rem", fontWeight:600 }}>📩 Diagnostic reçu d'une cliente</div>
+            <p style={{ fontSize:".72rem", color:C.gris, marginBottom:".75rem", lineHeight:1.6 }}>Les réponses sont disponibles. Génère l'ordonnance IA maintenant.</p>
+            <button onClick={()=>genererDepuisHistorique(sel)} disabled={genLoading===sel.id}
+              style={{ background:C.brun, color:C.blanc, border:"none", borderRadius:10, padding:".6rem 1.2rem", fontSize:".8rem", fontWeight:600, fontFamily:"inherit", cursor:"pointer" }}>
+              {genLoading===sel.id?"✨ Génération...":"✨ Générer l'ordonnance IA"}
+            </button>
+          </div>
+        )}
+
+        {/* Ordonnance normale (skincare/cheveux/santé) */}
+        {!isRecruDiag && ord && (
+          <>
+            {ord.introduction && (
+              <div style={{ background:C.brun, borderRadius:12, padding:".85rem 1rem", marginBottom:"1rem" }}>
+                <p style={{ fontSize:".76rem", color:C.pale, lineHeight:1.6, margin:0 }}>{ord.introduction}</p>
+              </div>
+            )}
+            {packs.map(pack => {
+              const p = ord?.[pack.key];
+              if (!p) return null;
+              return (
+                <div key={pack.key} style={{ background:C.blanc, border:`1px solid ${pack.color}30`, borderRadius:12, padding:".85rem 1rem", marginBottom:".6rem" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:".5rem" }}>
+                    <div style={{ fontSize:".76rem", fontWeight:700, color:pack.color }}>{pack.label}</div>
+                    <div style={{ fontSize:".76rem", fontWeight:700, color:C.brun }}>{p.total}</div>
+                  </div>
+                  {p.produits?.map((pr,i) => (
+                    <div key={i} style={{ paddingBottom:".4rem", marginBottom:".4rem", borderBottom:`1px solid ${C.pale}` }}>
+                      <div style={{ fontSize:".76rem", fontWeight:600, color:C.brun }}>{pr.nom} <span style={{ color:C.rose, fontWeight:700 }}>{pr.prix}</span></div>
+                      <div style={{ fontSize:".68rem", color:C.gris, marginBottom:".1rem" }}>{pr.usage} · {pr.benefice}</div>
+                      {pr.comment&&<div style={{ fontSize:".65rem", color:C.brun, background:C.creme, borderRadius:6, padding:".2rem .45rem", fontStyle:"italic" }}>💡 {pr.comment}</div>}
+                    </div>
+                  ))}
+                  {p.routine && <div style={{ fontSize:".7rem", color:C.brun, fontStyle:"italic", marginTop:".3rem" }}>Routine : {p.routine}</div>}
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {/* Diag recrutement/blocage */}
+        {isRecruDiag && ord && (
+          <div style={{ background:C.creme, borderRadius:12, padding:"1rem" }}>
+            <div style={{ fontSize:".76rem", color:C.brun, lineHeight:1.6 }}>Score : {ord.score}/{ord.max}</div>
+          </div>
+        )}
+
+        {/* Réponses brutes */}
+        {sel.reponses && Object.keys(sel.reponses).length > 0 && (
+          <div style={{ marginTop:"1rem" }}>
+            <div style={{ fontSize:".6rem", fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:C.gris, marginBottom:".4rem" }}>📋 Réponses</div>
+            {Object.entries(sel.reponses).map(([k,v])=>(
+              <div key={k} style={{ fontSize:".7rem", color:C.texte, padding:".25rem 0", borderBottom:`1px solid ${C.pale}` }}>
+                <span style={{ color:C.gris }}>{k} : </span><strong>{v}</strong>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
+  // Liste principale
+  const actifs = diags.filter(d => !d.archive).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const archives = diags.filter(d => d.archive).sort((a,b)=>(b.ts||0)-(a.ts||0));
+
   return (
     <div>
-      <div style={{ fontFamily: "Georgia,serif", fontSize: "1.35rem", fontWeight: 300, color: C.brun, marginBottom: ".2rem" }}>
-        Mes <em style={{ fontStyle: "italic", color: C.rose }}>Diagnostics</em>
+      <div style={{ fontFamily:"Georgia,serif", fontSize:"1.35rem", fontWeight:300, color:C.brun, marginBottom:".2rem" }}>
+        Diagnostics <em style={{ fontStyle:"italic", color:C.rose }}>clients</em>
+        {nonLus>0&&<span style={{ marginLeft:".5rem", background:C.rose, color:"white", borderRadius:20, fontSize:".65rem", fontWeight:700, padding:".15rem .55rem", verticalAlign:"middle" }}>{nonLus} nouveau{nonLus>1?"x":""}</span>}
       </div>
-      <p style={{ fontSize: ".74rem", color: C.gris, marginBottom: "1rem", lineHeight: 1.65 }}>
-        Historique de tes diagnostics clients.
-      </p>
-      {diags.length === 0 && (
-        <div style={{ textAlign: "center", padding: "2rem", color: C.gris, fontSize: ".76rem" }}>
-          <div style={{ fontSize: "2rem", marginBottom: ".5rem" }}>🩺</div>
-          Aucun diagnostic encore. Va dans l'onglet Diagnostics pour commencer.
-        </div>
-      )}
-      {diags.map(d => (
-        <div key={d.id} style={{ background: C.blanc, border: `1px solid ${C.pale}`, borderRadius: 12, padding: ".8rem 1rem", marginBottom: ".5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div onClick={() => setSel(d)} style={{ cursor: "pointer", flex: 1 }}>
-            <div style={{ fontSize: ".82rem", fontWeight: 600, color: C.brun }}>{d.nomClient}</div>
-            <div style={{ display: "flex", gap: ".4rem", marginTop: ".2rem" }}>
-              <span style={{ background: C.rose + "20", color: C.rose, fontSize: ".6rem", fontWeight: 700, padding: ".1rem .4rem", borderRadius: 20 }}>{TYPE_LABELS[d.type]}</span>
-              <span style={{ fontSize: ".62rem", color: C.gris }}>{d.date}</span>
+
+      {/* Onglets actifs / archives */}
+      <div style={{ display:"flex", gap:".4rem", marginBottom:"1rem", marginTop:".5rem" }}>
+        <button onClick={()=>setShowArchives(false)}
+          style={{ flex:1, padding:".45rem", fontSize:".72rem", fontWeight:600, border:"none", borderBottom:`2px solid ${!showArchives?C.rose:"transparent"}`, background:"none", color:!showArchives?C.brun:C.gris, cursor:"pointer", fontFamily:"inherit" }}>
+          🩺 Actifs ({actifs.length})
+        </button>
+        <button onClick={()=>setShowArchives(true)}
+          style={{ flex:1, padding:".45rem", fontSize:".72rem", fontWeight:600, border:"none", borderBottom:`2px solid ${showArchives?C.rose:"transparent"}`, background:"none", color:showArchives?C.brun:C.gris, cursor:"pointer", fontFamily:"inherit" }}>
+          📦 Archives ({archives.length})
+        </button>
+      </div>
+
+      {!showArchives&&(
+        <>
+          {actifs.length===0&&(
+            <div style={{ textAlign:"center", padding:"2rem", color:C.gris, fontSize:".76rem" }}>
+              <div style={{ fontSize:"2rem", marginBottom:".5rem" }}>🩺</div>
+              Aucun diagnostic actif.
             </div>
-          </div>
-          <button onClick={() => del(d.id)} style={{ background: "none", border: "none", color: C.pale, cursor: "pointer", fontSize: ".75rem", padding: ".2rem", fontFamily: "inherit" }}>✕</button>
-        </div>
-      ))}
+          )}
+          {actifs.map(d=>(
+            <div key={d.id} style={{ background:d.nonLu?C.rose+"08":C.blanc, border:`1.5px solid ${d.nonLu?C.rose:C.pale}`, borderRadius:12, padding:".8rem 1rem", marginBottom:".5rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div onClick={()=>setSel(d)} style={{ cursor:"pointer", flex:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:".4rem", flexWrap:"wrap" }}>
+                  <div style={{ fontSize:".82rem", fontWeight:600, color:C.brun }}>{d.nomClient}</div>
+                  {d.externe&&<span style={{ background:C.lilas+"20", color:C.lilas, fontSize:".58rem", fontWeight:700, borderRadius:20, padding:".1rem .4rem" }}>📩 Externe</span>}
+                  {d.nonLu&&<span style={{ background:C.rose, color:"white", fontSize:".58rem", fontWeight:700, borderRadius:20, padding:".1rem .4rem" }}>Nouveau</span>}
+                  {!d.ordonnance&&d.externe&&<span style={{ background:C.or+"20", color:C.or, fontSize:".58rem", fontWeight:700, borderRadius:20, padding:".1rem .4rem" }}>⏳ À traiter</span>}
+                  {d.prospectId&&<span style={{ background:C.vert+"20", color:C.vert, fontSize:".58rem", fontWeight:700, borderRadius:20, padding:".1rem .4rem" }}>🔗 Lié</span>}
+                </div>
+                <div style={{ display:"flex", gap:".4rem", marginTop:".2rem" }}>
+                  <span style={{ background:C.rose+"20", color:C.rose, fontSize:".6rem", fontWeight:700, padding:".1rem .4rem", borderRadius:20 }}>{TYPE_LABELS[d.type]}</span>
+                  <span style={{ fontSize:".62rem", color:C.gris }}>{d.date}</span>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:".3rem" }}>
+                <button onClick={()=>archiver(d.id)} title="Archiver"
+                  style={{ background:"none", border:`1px solid ${C.pale}`, borderRadius:6, padding:".2rem .4rem", color:C.gris, cursor:"pointer", fontSize:".65rem", fontFamily:"inherit" }}>📦</button>
+                <button onClick={()=>del(d.id)}
+                  style={{ background:"none", border:"none", color:C.pale, cursor:"pointer", fontSize:".75rem", padding:".2rem", fontFamily:"inherit" }}>✕</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {showArchives&&(
+        <>
+          {archives.length===0&&(
+            <div style={{ textAlign:"center", padding:"2rem", color:C.gris, fontSize:".76rem" }}>
+              <div style={{ fontSize:"2rem", marginBottom:".5rem" }}>📦</div>
+              Aucune archive.
+            </div>
+          )}
+          {archives.map(d=>(
+            <div key={d.id} style={{ background:C.creme, border:`1px solid ${C.pale}`, borderRadius:12, padding:".8rem 1rem", marginBottom:".5rem", display:"flex", justifyContent:"space-between", alignItems:"center", opacity:.8 }}>
+              <div onClick={()=>setSel(d)} style={{ cursor:"pointer", flex:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:".4rem", flexWrap:"wrap" }}>
+                  <div style={{ fontSize:".82rem", fontWeight:600, color:C.brun }}>{d.nomClient}</div>
+                  {d.prospectId&&<span style={{ background:C.vert+"20", color:C.vert, fontSize:".58rem", fontWeight:700, borderRadius:20, padding:".1rem .4rem" }}>🔗 Lié</span>}
+                </div>
+                <div style={{ display:"flex", gap:".4rem", marginTop:".2rem" }}>
+                  <span style={{ background:C.rose+"20", color:C.rose, fontSize:".6rem", fontWeight:700, padding:".1rem .4rem", borderRadius:20 }}>{TYPE_LABELS[d.type]}</span>
+                  <span style={{ fontSize:".62rem", color:C.gris }}>{d.date}</span>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:".3rem" }}>
+                <button onClick={()=>desarchiver(d.id)} title="Restaurer"
+                  style={{ background:"none", border:`1px solid ${C.pale}`, borderRadius:6, padding:".2rem .4rem", color:C.gris, cursor:"pointer", fontSize:".65rem", fontFamily:"inherit" }}>↩️</button>
+                <button onClick={()=>del(d.id)}
+                  style={{ background:"none", border:"none", color:C.pale, cursor:"pointer", fontSize:".75rem", padding:".2rem", fontFamily:"inherit" }}>✕</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
+
 
 // ── DIAG ADMIN EDITOR ────────────────────────────────────────────────────────
 function DiagAdminEditor(){
