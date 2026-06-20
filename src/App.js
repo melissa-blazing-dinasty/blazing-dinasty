@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, createContext, useContext } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
@@ -289,7 +289,7 @@ async function translateBatch(texts, targetLang){
     try{
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:`Traduz do francês para português europeu (Portugal). Responde APENAS com JSON array na mesma ordem:\n${JSON.stringify(chunk)}`}]})
       });
       const data=await res.json();
@@ -1232,7 +1232,7 @@ function ChallengeAppPopup({uid, onClose, setTab}){
   );
 }
 
-export default function App(){
+function App(){
   const[screen,setScreen]=useState("login");
   const[loginStep,setLoginStep]=useState(1); // 1=identité, 2=chef équipe
   const[userId,setUserId]=useState("");
@@ -1248,7 +1248,7 @@ export default function App(){
       try{
         const snap=await getDoc(doc(db,"acces","membres"));
         const chefs=snap.exists()?snap.data().chefs||[]:[];
-        setIsChefApp(chefs.includes(userId.replace(/-/g," ")));
+        setIsChefApp((Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(userId.replace(/-/g," ")));
       }catch{setIsChefApp(false);}
       try{
         const annSnap=await getDoc(doc(db,"equipe","annuaire"));
@@ -1311,7 +1311,7 @@ export default function App(){
           const existing=accSnap.exists()?accSnap.data():{};
           const chefs=existing.chefs||[];
           const melissaId="melissa da silveira";
-          if(!chefs.includes(melissaId)){
+          if(!(Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(melissaId)){
             await setDoc(accRef,{...existing,chefs:[...chefs,melissaId]},{merge:true});
           }
         }catch{}
@@ -1573,6 +1573,7 @@ export default function App(){
   const[showBanner,setShowBanner]=useState(()=>{try{return isDebutPeriodeInit&&!localStorage.getItem(bannerKeyInit);}catch{return false;}});
   const[showChallengeApp,setShowChallengeApp]=useState(false);
   const[dismissedPeriode,setDismissedPeriode]=useState(false);
+  const[objPosesLocal,setObjPosesLocal]=useState(false);
 
   // ── Admin items ──
   const[adminItems,setAdminItems]=useState([]);
@@ -1746,7 +1747,7 @@ export default function App(){
   // J1 seulement = moins de 24h depuis le début de la période
   const isJ1Periode = periodeInfo.pctElapsed<=Math.round(100/21);
   const periodeCourante = getPeriodeActuelle();
-  const objPeriodeRemplis = homeObjPerso?.objectifsPosesPeriode===periodeCourante;
+  const objPeriodeRemplis = objPosesLocal || homeObjPerso?.objectifsPosesPeriode===periodeCourante;
   const showPeriodeBanner = isJ1Periode && !objPeriodeRemplis;
   const bannerKey=`bd-banner-p${periodeCourante}`;
   const closeBanner=()=>{try{localStorage.setItem(bannerKey,"1");}catch{}setShowBanner(false);};
@@ -1779,6 +1780,7 @@ export default function App(){
               <button onClick={async()=>{
                 const newObj={...(homeObjPerso||{}),objectifsPosesPeriode:periodeCourante};
                 setHomeObjPerso(newObj);
+                setObjPosesLocal(true);
                 const existingRaw=JSON.stringify(newObj);
                 try{
                   await setDoc(doc(db,"users",userId),{"db-obj-perso":existingRaw},{merge:true});
@@ -3553,7 +3555,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       try{
         const snap=await getDoc(doc(db,"acces","membres"));
         const chefs=snap.exists()?snap.data().chefs||[]:[];
-        setIsChefDash(chefs.includes(uid.replace(/-/g," ")));
+        setIsChefDash((Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(uid.replace(/-/g," ")));
       }catch{}
     })();
     return()=>{cancelled=true;};
@@ -3572,8 +3574,9 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
         try{
           const hist = data["db-assiduite"] ? JSON.parse(data["db-assiduite"]) : {};
           const periode = hist[periodeKey] || {jours:[]};
-          if(!periode.jours.includes(today)){
-            periode.jours = [...periode.jours, today];
+          const joursArr=Array.isArray(periode.jours)?periode.jours:Object.values(periode.jours||{});
+          if(!joursArr.includes(today)){
+            periode.jours = [...joursArr, today];
             hist[periodeKey] = periode;
             ss(uid,"db-assiduite",JSON.stringify(hist));
           }
@@ -3702,6 +3705,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const {t} = useLang();
   const DTABS=[
     {id:"today",        label:"⚡ Aujourd'hui"},
+    {id:"entonnoir",    label:"?? Entonnoir"},
     // Fast Start — visible seulement si assigné ET pas encore terminé
     ...((hasFastStart&&!fastStartDone)?[{id:"faststart",label:"🚀 Fast Start"}]:[]),
     {id:"objperso",     label:"🎯 Objectifs"},
@@ -3730,7 +3734,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       </div>
 
       {/* FAST START J1-J7 */}
-      {dtab==="faststart"&&<FastStartTab uid={uid} userName={userName} goToFormation={goToFormation}/>}
+      {dtab==="faststart"&&<FastStartTab uid={uid} userName={userName} goToFormation={goToFormation}/>}{dtab==="entonnoir"&&<EntonnoirTab prospects={prospects} clients={clients} distributeurs={distributeurs}/>}
 
       {/* TODAY */}
       {dtab==="today"&&(
@@ -6874,7 +6878,7 @@ FORMAT JSON SI TEXTE (type="texte", business ou mood) :
 
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
       });
       const data=await res.json();
@@ -7111,7 +7115,7 @@ RÈGLES IMPORTANTES :
         method:"POST",
         headers:{
           "Content-Type":"application/json",
-          "x-api-key":"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",
+          "x-api-key":"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",
           "anthropic-version":"2023-06-01",
           "anthropic-dangerous-direct-browser-access":"true"
         },
@@ -11934,8 +11938,9 @@ function MembresTab({uid}){
       try{
         const snap=await getDoc(doc(db,"acces","membres"));
         if(snap.exists()){
-          setMembres(snap.data().liste||[]);
-          setChefs(snap.data().chefs||[]);
+          const data=snap.data();
+          setMembres(Array.isArray(data.liste)?data.liste:Object.values(data.liste||{}));
+          setChefs(Array.isArray(data.chefs)?data.chefs:Object.values(data.chefs||{}));
         }
         const annSnap=await getDoc(doc(db,"equipe","annuaire"));
         setAnnuaire(annSnap.exists()?annSnap.data().membres||{}:{});
@@ -11968,10 +11973,11 @@ function MembresTab({uid}){
   const add=async()=>{
     if(!newMembre.prenom.trim()||!newMembre.nom.trim())return;
     const full=`${newMembre.prenom.trim().toLowerCase()} ${newMembre.nom.trim().toLowerCase()}`;
-    if(membres.includes(full))return;
-    const next=[...membres,full];
+    const listeActuelle=Array.isArray(membres)?membres:[];
+    if(listeActuelle.includes(full))return;
+    const next=[...listeActuelle,full];
     setMembres(next);
-    await saveAll(next,chefs);
+    await saveAll(next,Array.isArray(chefs)?chefs:[]);
     setNewMembre({prenom:"",nom:""});
   };
 
@@ -12011,7 +12017,7 @@ function MembresTab({uid}){
   },[]);
 
   const toggleChef=async(m)=>{
-    const isChef=chefs.includes(m);
+    const isChef=(Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(m);
     const nextC=isChef?chefs.filter(x=>x!==m):[...chefs,m];
     setChefs(nextC);
     await saveAll(membres,nextC);
@@ -12055,7 +12061,7 @@ function MembresTab({uid}){
         {membres.length} membre{membres.length>1?"s":""} · {chefs.length} chef{chefs.length>1?"s":""} d'équipe
       </div>
       {membres.filter(m=>!search||m.toLowerCase().includes(search.toLowerCase())).map(m=>{
-        const isChef=chefs.includes(m);
+        const isChef=(Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(m);
         const mUid = m.toLowerCase().replace(/\s+/g,"-");
         const currentMarraine = annuaire[mUid]?.marraine || "";
         const currentMarraineLabel = currentMarraine ? fmt(currentMarraine) : "";
@@ -12417,7 +12423,7 @@ function AssiduiteTab({uid}){
         const isMelissa = uid==="melissa"||uid==="melissa-da-silveira";
         const accesSnap=await getDoc(doc(db,"acces","membres"));
         const chefs=accesSnap.exists()?accesSnap.data().chefs||[]:[];
-        const isChef = isMelissa || chefs.includes(uid.replace(/-/g," "));
+        const isChef = isMelissa || (Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(uid.replace(/-/g," "));
         if(!isChef){ setIsAuthorized(false); setLoading(false); return; }
         setIsAuthorized(true);
 
@@ -13840,7 +13846,7 @@ function MonEquipeTab({uid}){
       try{
         const accesSnap=await getDoc(doc(db,"acces","membres"));
         const chefs=accesSnap.exists()?accesSnap.data().chefs||[]:[];
-        const chef=chefs.includes(uid.replace(/-/g," "))||uid==="melissa-da-silveira"||uid==="melissa";
+        const chef=(Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(uid.replace(/-/g," "))||uid==="melissa-da-silveira"||uid==="melissa";
         setIsChef(chef);
 
         const annSnap=await getDoc(doc(db,"equipe","annuaire"));
@@ -15215,7 +15221,7 @@ Génère un plan d'action personnalisé en JSON avec cette structure exacte (ne 
       method:"POST",
       headers:{
         "Content-Type":"application/json",
-        "x-api-key":"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",
+        "x-api-key":"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",
         "anthropic-version":"2023-06-01",
         "anthropic-dangerous-direct-browser-access":"true",
       },
@@ -15296,7 +15302,7 @@ Règles: budget=1-2 produits, bestseller=3 produits, premium=4-5 produits. Prix 
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": "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",
+        "x-api-key": "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",
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true"
       },
@@ -15356,7 +15362,7 @@ ${catalogueText}
 
 Génère 4 à 5 produits du catalogue pour un pack premium complet. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
 {"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom FR","prix":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;
-          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
+          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
           const d2 = await r2.json();
           const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
           result.premium = JSON.parse(t2);
@@ -16191,6 +16197,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   const [nomContact, setNomContact] = useState("");
   const [telContact, setTelContact] = useState("");
   const [mailContact, setMailContact] = useState("");
+  const [reseauContact, setReseauContact] = useState("");
   const [ordonnance, setOrdonnance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState("");
@@ -16394,14 +16401,12 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         ))}
       </div>
 
-      {/* Champs contact — obligatoires pour envoyer le lien */}
-      <div style={{ background:C.creme, borderRadius:12, padding:".75rem .9rem", marginBottom:".75rem", border:`1px solid ${C.pale}` }}>
-        <div style={{ fontSize:".62rem", fontWeight:700, color:C.brun, marginBottom:".5rem", textTransform:"uppercase", letterSpacing:".08em" }}>📋 Infos de la personne</div>
-        <input placeholder="Prénom (ex: Sophie)" value={nomClient} onChange={e=>setNomClient(e.target.value)}
-          style={{ width:"100%", border:`1px solid ${C.pale}`, borderRadius:8, padding:".42rem .65rem", fontSize:".82rem", fontFamily:"inherit", color:C.texte, background:"white", outline:"none", marginBottom:".4rem" }}/>
-        <input placeholder="📞 Tel / 📧 Email / 📲 @Instagram — obligatoire pour envoyer" value={contactClient} onChange={e=>setContactClient(e.target.value)}
-          style={{ width:"100%", border:`1.5px solid ${contactClient?C.vert:C.pale}`, borderRadius:8, padding:".42rem .65rem", fontSize:".78rem", fontFamily:"inherit", color:C.texte, background:"white", outline:"none" }}/>
-        {!contactClient&&<div style={{ fontSize:".62rem", color:"#B04040", marginTop:".3rem" }}>⚠️ Le contact est obligatoire pour envoyer le lien</div>}
+      {/* Prénom de la cliente — juste pour personnaliser le lien */}
+      <div style={{ background:C.creme, borderRadius:12, padding:".65rem .9rem", marginBottom:".75rem", border:`1px solid ${C.pale}` }}>
+        <div style={{ fontSize:".62rem", fontWeight:700, color:C.brun, marginBottom:".35rem", textTransform:"uppercase", letterSpacing:".08em" }}>👤 Prénom de la cliente (optionnel)</div>
+        <input placeholder="Ex: Sophie" value={nomClient} onChange={e=>setNomClient(e.target.value)}
+          style={{ width:"100%", border:`1px solid ${C.pale}`, borderRadius:8, padding:".42rem .65rem", fontSize:".82rem", fontFamily:"inherit", color:C.texte, background:"white", outline:"none" }}/>
+        <div style={{ fontSize:".6rem", color:C.gris, marginTop:".3rem" }}>La cliente renseignera ses coordonnées elle-même à la fin du diagnostic.</div>
       </div>
 
       {/* Liste diagnostics de la catégorie sélectionnée */}
@@ -16433,38 +16438,10 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     </div>
   );
   function copierLienDirect(diagType) {
-    if(!contactClient.trim()){
-      alert("⚠️ Ajoute d'abord un contact (téléphone, email ou @Instagram) avant d'envoyer le lien !");
-      return;
-    }
     const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
     const msg = `Coucou ${nomClient||""}! 🌸 J'ai un diagnostic personnalisé pour toi — ça prend 2 minutes et tu repars avec une sélection de produits sur mesure. C'est gratuit ✨\n\n👉 ${lien}`;
-
-    // Détecter si c'est un @ Instagram/TikTok — proposer d'ouvrir l'appli
-    const contact = contactClient.trim();
-    const isInstagram = contact.startsWith("@") || contact.toLowerCase().includes("instagram");
-    const isTikTok = contact.toLowerCase().includes("tiktok");
-    const isEmail = contact.includes("@") && contact.includes(".");
-    const isTel = /^[0-9+\s]{8,}/.test(contact);
-
     navigator.clipboard?.writeText(msg);
-
-    if(isInstagram||isTikTok){
-      const handle = contact.replace("@","").replace(/instagram\.com\//i,"").replace(/tiktok\.com\/@/i,"");
-      const reseau = isInstagram?"Instagram":"TikTok";
-      const openUrl = isInstagram?`https://www.instagram.com/${handle}/`:`https://www.tiktok.com/@${handle}`;
-      const choix = window.confirm(`✅ Message copié !\n\nOuvrir le profil ${reseau} de ${handle} pour lui envoyer directement ?`);
-      if(choix) window.open(openUrl,"_blank");
-    } else if(isEmail){
-      const choix = window.confirm(`✅ Message copié !\n\nOuvrir l'application email pour envoyer à ${contact} ?`);
-      if(choix) window.open(`mailto:${contact}?subject=Ton%20diagnostic%20personnalisé&body=${encodeURIComponent(msg)}`,"_blank");
-    } else if(isTel){
-      const tel = contact.replace(/\s/g,"");
-      const choix = window.confirm(`✅ Message copié !\n\nOuvrir WhatsApp pour envoyer à ${contact} ?`);
-      if(choix) window.open(`https://wa.me/${tel.replace(/^\+/,"").replace(/^0/,"33")}?text=${encodeURIComponent(msg)}`,"_blank");
-    } else {
-      alert(`✅ Message copié !\n\nColle-le dans ta conversation avec ${nomClient||"ta prospect"}.`);
-    }
+    alert(`✅ Message copié !\n\nColle-le dans ta conversation avec ${nomClient||"ta prospect"}.\n\nLa cliente renseignera ses coordonnées elle-même à la fin du questionnaire.`);
   }
 
   if (mode === "loading") return (
@@ -16500,30 +16477,42 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           </div>
         </div>
 
-        <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem",fontWeight:600}}>Comment te contacter ? (au choix)</div>
+        <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem",fontWeight:600}}>Comment te contacter ? <span style={{color:"#B04040"}}>* au moins un obligatoire</span></div>
         <div style={{marginBottom:".5rem"}}>
           <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>📱 Téléphone / WhatsApp</div>
           <input value={telContact} onChange={e=>setTelContact(e.target.value)} placeholder="06 XX XX XX XX" type="tel"
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            style={{width:"100%",border:`1.5px solid ${telContact.trim()?C.vert:C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
         </div>
-        <div>
+        <div style={{marginBottom:".5rem"}}>
           <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>📧 Email</div>
           <input value={mailContact} onChange={e=>setMailContact(e.target.value)} placeholder="ton@email.com" type="email"
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            style={{width:"100%",border:`1.5px solid ${mailContact.trim()?C.vert:C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>💬 Messenger / Instagram / Facebook</div>
+          <input value={reseauContact} onChange={e=>setReseauContact(e.target.value)} placeholder="@tonpseudo ou lien profil"
+            style={{width:"100%",border:`1.5px solid ${reseauContact.trim()?C.vert:C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
         </div>
       </div>
 
+      {/* Message d'alerte si contact manquant */}
+      {prenomContact.trim() && !telContact.trim() && !mailContact.trim() && !reseauContact.trim() && (
+        <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".55rem .75rem",marginBottom:".6rem",fontSize:".72rem",color:"#B04040",display:"flex",gap:".4rem",alignItems:"center"}}>
+          ⚠️ Ajoute ton téléphone, email ou réseau social pour recevoir tes recommandations
+        </div>
+      )}
+
       <button
         onClick={()=>{
-          const contact={prenom:prenomContact,nom:nomContact,tel:telContact,mail:mailContact};
+          const contact={prenom:prenomContact,nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact};
           genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});
         }}
-        disabled={!prenomContact.trim()}
-        style={{width:"100%",background:prenomContact.trim()?C.brun:C.pale,color:prenomContact.trim()?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:prenomContact.trim()?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
+        disabled={!prenomContact.trim() || (!telContact.trim() && !mailContact.trim() && !reseauContact.trim())}
+        style={{width:"100%",background:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.brun:C.pale,color:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
         Envoyer mes réponses →
       </button>
       <div style={{fontSize:".65rem",color:C.gris,textAlign:"center"}}>
-        * Seul le prénom est obligatoire
+        * Prénom + au moins un moyen de contact obligatoires
       </div>
     </div>
   );
@@ -16945,12 +16934,13 @@ function DiagResultsTab({ uid }) {
         </div>
 
         {/* Coordonnées de contact */}
-        {sel.contact&&(sel.contact.tel||sel.contact.mail)&&(
+        {sel.contact&&(sel.contact.tel||sel.contact.mail||sel.contact.reseau)&&(
           <div style={{ background:C.vert+"10", border:`1px solid ${C.vert}30`, borderRadius:10, padding:".65rem .85rem", marginBottom:"1rem" }}>
             <div style={{ fontSize:".6rem", fontWeight:700, color:C.vert, marginBottom:".3rem" }}>📞 Coordonnées</div>
             <div style={{ fontSize:".78rem", color:C.brun, fontWeight:600 }}>{sel.contact.prenom} {sel.contact.nom}</div>
             {sel.contact.tel&&<div style={{ fontSize:".74rem", color:C.texte }}>📱 {sel.contact.tel}</div>}
             {sel.contact.mail&&<div style={{ fontSize:".74rem", color:C.texte }}>📧 {sel.contact.mail}</div>}
+            {sel.contact.reseau&&<div style={{ fontSize:".74rem", color:C.texte }}>💬 {sel.contact.reseau}</div>}
           </div>
         )}
 
@@ -17264,3 +17254,120 @@ function DiagAdminEditor(){
     </div>
   );
 }
+
+function LinkBioPublicPage({slug}){
+  const [profil,setProfil]=useState(null);
+  const [loading,setLoading]=useState(true);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const s=await getDoc(doc(db,"linkbio",slug));
+        if(s.exists()) setProfil(s.data());
+        else{
+          const q=query(collection(db,"linkbio"),where("slug","==",slug));
+          const qs=await getDocs(q);
+          if(!qs.empty) setProfil(qs.docs[0].data());
+          else setProfil("404");
+        }
+      }catch(e){setProfil("404");}
+      setLoading(false);
+    })();
+  },[slug]);
+
+  if(loading) return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#FAF7F2"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.5rem",color:"#3D1F0E"}}>Blazing <em style={{color:"#C49A8A"}}>Dynasty</em></div>
+        <div style={{fontSize:".75rem",color:"#888",marginTop:".5rem"}}>Chargement...</div>
+      </div>
+    </div>
+  );
+
+  if(!profil||profil==="404") return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#FAF7F2"}}>
+      <div style={{textAlign:"center",padding:"2rem"}}>
+        <div style={{fontSize:"2.5rem",marginBottom:"1rem"}}>🔍</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",color:"#3D1F0E",marginBottom:".5rem"}}>Page introuvable</div>
+        <div style={{fontSize:".78rem",color:"#888"}}>Ce lien ne correspond à aucune distributrice active.</div>
+      </div>
+    </div>
+  );
+
+  const THEMES_PUB=[
+    {id:"rose_dore",bg:"#FAF7F2",header:"#3D1F0E",accent:"#C49A8A",btnP:"#C49A8A",btnT:"#A89BB5",light:true},
+    {id:"lilas",bg:"#F5F0FA",header:"#A89BB5",accent:"#A89BB5",btnP:"#A89BB5",btnT:"#C49A8A",light:true},
+    {id:"nature",bg:"#F0F7F2",header:"#7FAF8A",accent:"#7FAF8A",btnP:"#7FAF8A",btnT:"#C49A8A",light:true},
+    {id:"nuit",bg:"#1A1A2E",header:"#16213E",accent:"#C49A8A",btnP:"#C49A8A",btnT:"#A89BB5",light:false},
+    {id:"soleil",bg:"#FFF8E7",header:"#C4A882",accent:"#C4A882",btnP:"#C4A882",btnT:"#C49A8A",light:true},
+    {id:"or_noir",bg:"#0D0D0D",header:"#1A1A1A",accent:"#C4A882",btnP:"#C4A882",btnT:"#888",light:false},
+  ];
+  const theme=THEMES_PUB.find(t=>t.id===profil.theme)||THEMES_PUB[0];
+  const sub=theme.light?"#888":"rgba(255,255,255,.65)";
+
+  return(
+    <div style={{minHeight:"100vh",background:theme.bg,fontFamily:"'Trebuchet MS',sans-serif"}}>
+      <div style={{maxWidth:480,margin:"0 auto",minHeight:"100vh",background:theme.bg}}>
+        <div style={{background:theme.header,padding:"2rem 1rem 1.5rem",textAlign:"center"}}>
+          {profil.photo
+            ?<img src={profil.photo} alt="" style={{width:90,height:90,borderRadius:"50%",objectFit:"cover",border:"3px solid rgba(255,255,255,.3)",marginBottom:".75rem",display:"block",margin:"0 auto .75rem"}}/>
+            :<div style={{width:90,height:90,borderRadius:"50%",background:"rgba(255,255,255,.2)",margin:"0 auto .75rem",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2.4rem",color:"#fff",fontFamily:"Georgia,serif"}}>
+              {(profil.prenom||"B")[0].toUpperCase()}
+            </div>
+          }
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.15rem",fontWeight:600,color:"#fff"}}>{profil.prenom} {profil.nom||""}</div>
+          {profil.slogan&&<div style={{fontSize:".72rem",color:"rgba(255,255,255,.8)",marginTop:".3rem",lineHeight:1.5,padding:"0 1rem"}}>{profil.slogan}</div>}
+        </div>
+        {profil.histoire&&<div style={{padding:".85rem 1.1rem",fontSize:".78rem",lineHeight:1.7,color:sub,background:theme.bg}}>{profil.histoire}</div>}
+        {(profil.temoignages||[]).filter(t=>t.texte).length>0&&(
+          <div style={{padding:".75rem 1rem",background:theme.bg}}>
+            {profil.temoignages.filter(t=>t.texte).map((t,i)=>(
+              <div key={i} style={{background:theme.accent+"15",borderRadius:10,padding:".65rem .85rem",marginBottom:".4rem",borderLeft:`3px solid ${theme.accent}`}}>
+                <div style={{fontSize:".75rem",fontStyle:"italic",color:sub,lineHeight:1.6,marginBottom:".2rem"}}>"{t.texte}"</div>
+                {t.auteur&&<div style={{fontSize:".62rem",fontWeight:600,color:theme.accent}}>— {t.auteur}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{padding:"1rem 1rem 2rem",background:theme.bg,display:"flex",flexDirection:"column",gap:".5rem"}}>
+          {profil.lienBoutique&&(
+            <a href={profil.lienBoutique} target="_blank" rel="noopener noreferrer"
+              style={{display:"block",background:theme.btnP,color:"#fff",borderRadius:12,padding:".75rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".85rem",fontWeight:700}}>
+              🛍️ Découvrir les produits
+            </a>
+          )}
+          {(profil.liensDiag||[]).filter(d=>d.url).map((d,i)=>(
+            <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
+              style={{display:"block",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:600}}>
+              {d.label||"✨ Faire mon diagnostic"}
+            </a>
+          ))}
+          {!(profil.liensDiag||[]).filter(d=>d.url).length&&profil.lienDiag&&(
+            <a href={profil.lienDiag} target="_blank" rel="noopener noreferrer"
+              style={{display:"block",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:600}}>
+              ✨ Faire mon diagnostic
+            </a>
+          )}
+          <a href={profil.lienRecrutement||`https://blazing-dinasty-1fad9.web.app?recrutement=true&uid=${slug}`}
+            target="_blank" rel="noopener noreferrer"
+            style={{display:"block",background:theme.btnT,color:"#fff",borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:700}}>
+            👑 Rejoindre l'équipe
+          </a>
+        </div>
+        <div style={{padding:"1rem",textAlign:"center",fontSize:".6rem",color:theme.accent,opacity:.6}}>Blazing Dynasty × Mihi France</div>
+      </div>
+    </div>
+  );
+}
+
+function Root(){
+  const p=new URLSearchParams(window.location.search);
+  const bioSlug=p.get("bio");
+  if(bioSlug) return <LinkBioPublicPage slug={bioSlug}/>;
+  return <App/>;
+}
+
+export default Root;
+
+
+
+function EntonnoirTab({prospects=[],clients=[],distributeurs=[]}){const totalP=prospects.length;const totalC=clients.length;const totalD=distributeurs.length;const caTotal=clients.reduce((s,c)=>s+(c.commandes||[]).reduce((cs,cmd)=>cs+(parseFloat(cmd.montant)||0),0),0);const clientsEndormis=clients.filter(c=>{const cmds=c.commandes||[];if(!cmds.length)return false;const d=[...cmds].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];return Math.floor((new Date()-new Date(d.date))/(864e5))>=60;}).length;const tauxPC=totalP>0?Math.round(totalC/totalP*100):0;const tauxCD=totalC>0?Math.round(totalD/totalC*100):0;const maxV=Math.max(totalP,totalC,totalD,1);return(<div style={{paddingBottom:'2rem'}}><div style={{fontFamily:'Georgia,serif',fontSize:'1.35rem',fontWeight:300,color:'#3D1F0E',marginBottom:'.2rem'}}>Entonnoir <em style={{fontStyle:'italic',color:'#C49A8A'}}>activit�</em></div><p style={{fontSize:'.74rem',color:'#888',marginBottom:'1.25rem',lineHeight:1.65}}>Ton pipeline complet � de la prospect � la distributrice.</p>{[{label:'Prospects',val:totalP,color:'#C49A8A',emoji:'??'},{label:'Clientes',val:totalC,color:'#7FAF8A',emoji:'???'},{label:'Distributrices',val:totalD,color:'#C4A882',emoji:'??'}].map((e,i)=>(<div key={i} style={{marginBottom:'.5rem'}}><div style={{display:'flex',justifyContent:'center'}}><div style={{width:Math.max(35,Math.round(e.val/maxV*100))+'%',background:e.color,borderRadius:8,padding:'.55rem .85rem',display:'flex',justifyContent:'space-between',alignItems:'center',minWidth:140}}><span style={{fontSize:'.78rem',fontWeight:700,color:'white'}}>{e.emoji} {e.label}</span><span style={{fontSize:'1.1rem',fontWeight:700,color:'white'}}>{e.val}</span></div></div>{i<2&&<div style={{textAlign:'center',color:'#E8DDD4',margin:'.1rem 0'}}>?</div>}</div>))}<div style={{background:'#FAF7F2',borderRadius:14,padding:'1rem',marginTop:'1rem',border:'1px solid #E8DDD4'}}><div style={{fontSize:'.6rem',fontWeight:700,color:'#3D1F0E',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'.65rem'}}>Taux de conversion</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.5rem'}}>{[[${tauxPC}%,'Prospect ? Cliente','#C49A8A'],[${tauxCD}%,'Cliente ? Distrib','#C4A882'],[${caTotal.toFixed(0)}�,'CA total','#7FAF8A']].map(([v,l,c])=>(<div key={l} style={{background:'white',borderRadius:10,padding:'.65rem .5rem',textAlign:'center',border:'1px solid #E8DDD4'}}><div style={{fontSize:'1rem',fontWeight:700,color:c}}>{v}</div><div style={{fontSize:'.58rem',color:'#888',marginTop:'.1rem'}}>{l}</div></div>))}</div></div>{clientsEndormis>0&&<div style={{background:'#FFF0F0',border:'1px solid #E57373',borderRadius:10,padding:'.65rem .85rem',marginTop:'.75rem',fontSize:'.72rem',color:'#C62828'}}>?? {clientsEndormis} cliente{clientsEndormis>1?'s':''} endormie{clientsEndormis>1?'s':''} � pense � les relancer ??</div>}</div>);}
