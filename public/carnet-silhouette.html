@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carnet Silhouette – 7 jours de recettes gourmandes</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --vert: #4A7C59;
+  --vert-light: #7FAF8A;
+  --vert-pale: #E8F2EC;
+  --orange: #E07B39;
+  --orange-pale: #FDF0E8;
+  --jaune: #F2C94C;
+  --rose: #E8A598;
+  --texte: #2D3A2E;
+  --gris: #6B7B6C;
+  --creme: #FAFAF5;
+  --blanc: #FFFFFF;
+}
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: #F0F4F0;
+  color: var(--texte);
+  line-height: 1.7;
+}
+
+.carnet {
+  max-width: 820px;
+  margin: 0 auto;
+  background: white;
+  box-shadow: 0 0 80px rgba(74,124,89,.15);
+}
+
+/* ═══ COUVERTURE ═══ */
+.cover {
+  position: relative;
+  height: 100vh;
+  min-height: 620px;
+  overflow: hidden;
+  background: var(--vert);
+}
+
+.cover-bg {
+  position: absolute;
+  inset: 0;
+  background: url('https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=900&q=80') center/cover;
+  opacity: 0.55;
+}
+
+.cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(74,124,89,.3) 0%, rgba(45,58,46,.92) 65%);
+}
+
+.cover-content {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 3rem;
+}
+
+.cover-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  background: var(--orange);
+  color: white;
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: .4rem .9rem;
+  border-radius: 30px;
+  margin-bottom: 1.5rem;
+  width: fit-content;
+}
+
+.cover-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  font-weight: 700;
+  color: white;
+  line-height: 1.1;
+  margin-bottom: .75rem;
+}
+
+.cover-title em {
+  color: var(--jaune);
+  font-style: italic;
+}
+
+.cover-sub {
+  font-size: 1rem;
+  color: rgba(255,255,255,.8);
+  font-weight: 300;
+  margin-bottom: 2rem;
+  max-width: 380px;
+  line-height: 1.6;
+}
+
+.cover-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: 2rem;
+}
+
+.cover-pill {
+  background: rgba(255,255,255,.15);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.25);
+  color: white;
+  font-size: .72rem;
+  font-weight: 600;
+  padding: .3rem .75rem;
+  border-radius: 20px;
+}
+
+.cover-brand {
+  font-size: .68rem;
+  color: rgba(255,255,255,.5);
+  letter-spacing: .1em;
+  font-weight: 600;
+}
+
+.cover-corner {
+  position: absolute;
+  top: 2.5rem;
+  right: 2.5rem;
+  width: 90px;
+  height: 90px;
+  background: var(--jaune);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(242,201,76,.4);
+}
+
+.cover-corner-text {
+  font-weight: 800;
+  font-size: .65rem;
+  color: var(--vert);
+  text-align: center;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.cover-corner-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--vert);
+  line-height: 1;
+}
+
+/* ═══ INTRO ═══ */
+.intro {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 400px;
+}
+
+.intro-photo {
+  overflow: hidden;
+}
+
+.intro-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.intro-content {
+  padding: 3rem 2.5rem;
+  background: var(--vert-pale);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.label {
+  font-size: .6rem;
+  font-weight: 800;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--vert);
+  margin-bottom: 1rem;
+}
+
+.intro-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--texte);
+  line-height: 1.3;
+  margin-bottom: 1rem;
+}
+
+.intro-text {
+  font-size: .88rem;
+  color: var(--gris);
+  line-height: 1.8;
+  margin-bottom: 1.25rem;
+}
+
+.intro-promise {
+  background: white;
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.promise-item {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-size: .8rem;
+  color: var(--texte);
+  font-weight: 600;
+}
+
+.promise-check {
+  width: 20px;
+  height: 20px;
+  background: var(--vert);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: .7rem;
+  flex-shrink: 0;
+}
+
+/* ═══ PRINCIPES ═══ */
+.principes {
+  padding: 3.5rem 3rem;
+  background: white;
+}
+
+.section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--texte);
+  margin-bottom: .4rem;
+}
+
+.section-title em {
+  color: var(--vert);
+  font-style: italic;
+}
+
+.section-sub {
+  font-size: .85rem;
+  color: var(--gris);
+  margin-bottom: 2rem;
+}
+
+.principes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.principe-card {
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--creme);
+  border: 1px solid #EEF2EE;
+}
+
+.principe-photo {
+  height: 130px;
+  overflow: hidden;
+}
+
+.principe-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.principe-body {
+  padding: 1rem;
+}
+
+.principe-icon { font-size: 1.3rem; margin-bottom: .4rem; }
+
+.principe-titre {
+  font-weight: 800;
+  font-size: .82rem;
+  color: var(--texte);
+  margin-bottom: .3rem;
+}
+
+.principe-text {
+  font-size: .73rem;
+  color: var(--gris);
+  line-height: 1.55;
+}
+
+/* ═══ JOUR / RECETTE ═══ */
+.jour {
+  border-top: 4px solid var(--vert-pale);
+}
+
+.jour-header {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+}
+
+.jour-header img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.jour-header-content {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(45,58,46,.9) 40%, transparent 75%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 2rem;
+}
+
+.jour-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  background: var(--orange);
+  color: white;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .3rem .75rem;
+  border-radius: 20px;
+  margin-bottom: .75rem;
+  width: fit-content;
+}
+
+.jour-num {
+  font-family: 'Playfair Display', serif;
+  font-size: .85rem;
+  font-weight: 400;
+  font-style: italic;
+  color: rgba(255,255,255,.7);
+  margin-bottom: .25rem;
+}
+
+.jour-titre {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: white;
+  line-height: 1.2;
+}
+
+.jour-body {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 0;
+}
+
+.jour-main {
+  padding: 2.5rem;
+  background: white;
+}
+
+.jour-sidebar {
+  padding: 2rem;
+  background: var(--creme);
+  border-left: 1px solid #EEF2EE;
+}
+
+/* Macro badges */
+.macros {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.macro {
+  background: var(--vert-pale);
+  border-radius: 20px;
+  padding: .3rem .7rem;
+  text-align: center;
+}
+
+.macro-val {
+  font-weight: 800;
+  font-size: .85rem;
+  color: var(--vert);
+}
+
+.macro-label {
+  font-size: .58rem;
+  color: var(--gris);
+  font-weight: 600;
+}
+
+/* Recette */
+.recette-intro {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--vert);
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed #DDE8DD;
+}
+
+.recette-section-titre {
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: .75rem;
+}
+
+.ingredients-liste {
+  list-style: none;
+  margin-bottom: 1.75rem;
+}
+
+.ingredient-item {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: .4rem 0;
+  border-bottom: 1px solid #F5F7F5;
+  font-size: .85rem;
+}
+
+.ingredient-item:last-child { border-bottom: none; }
+
+.ingredient-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--vert);
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: .55rem;
+}
+
+.ingredient-qty {
+  font-weight: 800;
+  color: var(--vert);
+  min-width: 50px;
+  font-size: .82rem;
+}
+
+.ingredient-name { color: var(--texte); }
+
+/* Étapes */
+.etapes { margin-bottom: 1.75rem; }
+
+.etape {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: .85rem;
+  align-items: flex-start;
+}
+
+.etape-num {
+  width: 28px;
+  height: 28px;
+  background: var(--vert);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: .75rem;
+  flex-shrink: 0;
+}
+
+.etape-text {
+  font-size: .85rem;
+  color: var(--texte);
+  line-height: 1.65;
+  padding-top: .2rem;
+}
+
+/* Sidebar */
+.sidebar-card {
+  background: white;
+  border-radius: 14px;
+  padding: 1.1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #EEF2EE;
+}
+
+.sidebar-card-title {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-weight: 800;
+  font-size: .8rem;
+  color: var(--texte);
+  margin-bottom: .65rem;
+}
+
+.sidebar-card-icon { font-size: 1rem; }
+
+.sidebar-item {
+  font-size: .78rem;
+  color: var(--gris);
+  line-height: 1.6;
+  padding: .3rem 0;
+  border-bottom: 1px solid #F5F7F5;
+}
+.sidebar-item:last-child { border-bottom: none; }
+
+.time-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: .4rem;
+  text-align: center;
+}
+
+.time-item {
+  background: var(--vert-pale);
+  border-radius: 8px;
+  padding: .5rem .3rem;
+}
+
+.time-val {
+  font-weight: 800;
+  font-size: .9rem;
+  color: var(--vert);
+}
+
+.time-lab {
+  font-size: .58rem;
+  color: var(--gris);
+}
+
+.astuce-mihi {
+  background: linear-gradient(135deg, var(--vert), #2D5A3D);
+  border-radius: 14px;
+  padding: 1.1rem;
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.astuce-mihi-title {
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--jaune);
+  margin-bottom: .4rem;
+}
+
+.astuce-mihi-text {
+  font-size: .78rem;
+  color: rgba(255,255,255,.9);
+  line-height: 1.6;
+}
+
+/* ═══ SEMAINE VUE D'ENSEMBLE ═══ */
+.vue-semaine {
+  padding: 3rem;
+  background: var(--vert-pale);
+}
+
+.semaine-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: .5rem;
+  margin-top: 1.5rem;
+}
+
+.semaine-jour {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(74,124,89,.08);
+}
+
+.semaine-jour-header {
+  background: var(--vert);
+  color: white;
+  text-align: center;
+  padding: .4rem .2rem;
+  font-size: .6rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+
+.semaine-jour-body {
+  padding: .5rem .4rem;
+  text-align: center;
+}
+
+.semaine-emoji { font-size: 1.2rem; margin-bottom: .2rem; }
+
+.semaine-nom {
+  font-size: .6rem;
+  font-weight: 700;
+  color: var(--texte);
+  line-height: 1.3;
+  margin-bottom: .2rem;
+}
+
+.semaine-kcal {
+  font-size: .55rem;
+  color: var(--vert);
+  font-weight: 800;
+}
+
+/* ═══ CONCLUSION ═══ */
+.conclusion {
+  position: relative;
+  overflow: hidden;
+  padding: 4rem 3rem;
+  background: var(--texte);
+  text-align: center;
+}
+
+.conclusion-bg {
+  position: absolute;
+  inset: 0;
+  background: url('https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80') center/cover;
+  opacity: 0.12;
+}
+
+.conclusion-content { position: relative; }
+
+.conclusion-label {
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--jaune);
+  margin-bottom: 1.25rem;
+}
+
+.conclusion-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 1rem;
+  line-height: 1.3;
+}
+
+.conclusion-title em { color: var(--vert-light); font-style: italic; }
+
+.conclusion-text {
+  font-size: .88rem;
+  color: rgba(255,255,255,.75);
+  line-height: 1.85;
+  max-width: 500px;
+  margin: 0 auto 2rem;
+}
+
+.conclusion-pills {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: 2rem;
+}
+
+.conclusion-pill {
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.2);
+  color: white;
+  font-size: .75rem;
+  font-weight: 700;
+  padding: .4rem .9rem;
+  border-radius: 20px;
+}
+
+.conclusion-brand {
+  margin-top: 2.5rem;
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: .85rem;
+  color: rgba(255,255,255,.35);
+}
+
+@media (max-width: 640px) {
+  .intro { grid-template-columns: 1fr; }
+  .intro-photo { height: 220px; }
+  .jour-body { grid-template-columns: 1fr; }
+  .jour-sidebar { border-left: none; border-top: 1px solid #EEF2EE; }
+  .principes-grid { grid-template-columns: 1fr; }
+  .semaine-grid { grid-template-columns: repeat(4, 1fr); }
+  .cover-content, .jour-main, .jour-sidebar, .vue-semaine, .principes, .conclusion { padding: 1.75rem 1.25rem; }
+}
+
+@media print {
+  body { background: white; }
+  .carnet { box-shadow: none; }
+  .jour-header { height: 240px; }
+  .cover { height: 100vh; page-break-after: always; }
+}
+</style>
+</head>
+<body>
+<div class="carnet">
+
+<!-- ═══ COUVERTURE ═══ -->
+<section class="cover">
+  <div class="cover-bg"></div>
+  <div class="cover-overlay"></div>
+  <div class="cover-corner">
+    <div class="cover-corner-num">7</div>
+    <div class="cover-corner-text">jours de<br>recettes</div>
+  </div>
+  <div class="cover-content">
+    <div class="cover-badge">🌿 Guide Offert · Blazing Dynasty</div>
+    <h1 class="cover-title">Carnet<br><em>Silhouette</em></h1>
+    <p class="cover-sub">7 jours de recettes gourmandes pour te sentir plus légère — sans te priver, sans te culpabiliser.</p>
+    <div class="cover-pills">
+      <span class="cover-pill">🥗 Recettes équilibrées</span>
+      <span class="cover-pill">⚡ Énergie naturelle</span>
+      <span class="cover-pill">💚 Sans frustration</span>
+      <span class="cover-pill">⏱️ Moins de 20 min</span>
+    </div>
+    <div class="cover-brand">BLAZING DYNASTY × MIHI — PROGRAMME SILHOUETTE</div>
+  </div>
+</section>
+
+<!-- ═══ INTRO ═══ -->
+<section class="intro">
+  <div class="intro-photo">
+    <img src="https://images.unsplash.com/photo-1511690743698-d9d85f2fbf38?w=600&q=80" alt="Repas sain et coloré">
+  </div>
+  <div class="intro-content">
+    <div class="label">✦ La philosophie</div>
+    <h2 class="intro-title">Manger bien<br>sans se priver</h2>
+    <p class="intro-text">Ce carnet n'est pas un régime. C'est une invitation à redécouvrir le plaisir de manger sainement — des assiettes colorées, des saveurs vraies, du rassasiement sans culpabilité.</p>
+    <div class="intro-promise">
+      <div class="promise-item"><div class="promise-check">✓</div>Recettes rapides (max 20 min)</div>
+      <div class="promise-item"><div class="promise-check">✓</div>Ingrédients simples du quotidien</div>
+      <div class="promise-item"><div class="promise-check">✓</div>Équilibre protéines / fibres / bons gras</div>
+      <div class="promise-item"><div class="promise-check">✓</div>Des desserts inclus — oui, des vrais</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ PRINCIPES ═══ -->
+<section class="principes">
+  <div class="label">✦ Les bases</div>
+  <h2 class="section-title">Manger pour <em>briller</em></h2>
+  <p class="section-sub">3 principes simples qui font toute la différence sur 7 jours.</p>
+  <div class="principes-grid">
+    <div class="principe-card">
+      <div class="principe-photo">
+        <img src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80" alt="Légumes colorés">
+      </div>
+      <div class="principe-body">
+        <div class="principe-icon">🌈</div>
+        <div class="principe-titre">L'assiette colorée</div>
+        <div class="principe-text">Plus il y a de couleurs dans ton assiette, plus tu as de nutriments variés. Vise au moins 3 couleurs par repas.</div>
+      </div>
+    </div>
+    <div class="principe-card">
+      <div class="principe-photo">
+        <img src="https://images.unsplash.com/photo-1559181567-c3190ca9d222?w=400&q=80" alt="Protéines">
+      </div>
+      <div class="principe-body">
+        <div class="principe-icon">💪</div>
+        <div class="principe-titre">La protéine en star</div>
+        <div class="principe-text">Une bonne source de protéine à chaque repas = tu restes rassasiée plus longtemps et tu préserves ta masse musculaire.</div>
+      </div>
+    </div>
+    <div class="principe-card">
+      <div class="principe-photo">
+        <img src="https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=400&q=80" alt="Eau">
+      </div>
+      <div class="principe-body">
+        <div class="principe-icon">💧</div>
+        <div class="principe-titre">L'hydratation</div>
+        <div class="principe-text">1,5 à 2L d'eau par jour. La faim est souvent de la soif déguisée. Commence chaque repas par un grand verre d'eau.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ VUE SEMAINE ═══ -->
+<section class="vue-semaine">
+  <div class="label">✦ Le programme</div>
+  <h2 class="section-title">Ta semaine <em>en un coup d'œil</em></h2>
+  <div class="semaine-grid">
+    <div class="semaine-jour">
+      <div class="semaine-jour-header">Lun</div>
+      <div class="semaine-jour-body">
+        <div class="semaine-emoji">🥑</div>
+        <div class="semaine-nom">Bowl Avocat</div>
+        <div class="semaine-kcal">~420 kcal</div>
+      </div>
+    </div>
+    <div class="semaine-jour">
+      <div class="semaine-jour-header">Mar</div>
+      <div class="semaine-jour-body">
+        <div class="semaine-emoji">🍋</div>
+        <div class="semaine-nom">Poulet citron</div>
+        <div class="semaine-kcal">~380 kcal</div>
+      </div>
+    </div>
+    <div class="semaine-jour">
+      <div class="semaine-jour-header">Mer</div>
+      <div class="semaine-jour-body">
+        <div class="semaine-emoji">🥗</div>
+        <div class="semaine-nom">Salade Niçoise</div>
+        <div class="semaine-kcal">~350 kcal</div>
+      </div>
+    </div>
+    <div class="semaine-jour">
+      <div class="semaine-jour-header">Jeu</div>
+      <div class="semaine-jour-body">
+        <div class="semaine-emoji">🍜</div>
+        <div class="semaine-nom">Soupe miso</div>
+        <div class="semaine-kcal">~290 kcal</div>
+      </div>
+    </div>
+    <div class="semaine-jour">
+      <div class="semaine-jour-header">Ven</div>
+      <div class="semaine-jour-body">
+        <div class="semaine-emoji">🐟</div>
+        <div class="semaine-nom">Saumon vapeur</div>
+        <div class="semaine-kcal">~410 kcal</div>
+      </div>
+    </div>
+    <div class="semaine-jour">
+      <div class="semaine-jour-header">Sam</div>
+      <div class="semaine-jour-body">
+        <div class="semaine-emoji">🥙</div>
+        <div class="semaine-nom">Wrap veggie</div>
+        <div class="semaine-kcal">~360 kcal</div>
+      </div>
+    </div>
+    <div class="semaine-jour">
+      <div class="semaine-jour-header">Dim</div>
+      <div class="semaine-jour-body">
+        <div class="semaine-emoji">🍫</div>
+        <div class="semaine-nom">Dessert choco</div>
+        <div class="semaine-kcal">~280 kcal</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ JOUR 1 ═══ -->
+<article class="jour">
+  <div class="jour-header">
+    <img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&q=80" alt="Bowl avocat">
+    <div class="jour-header-content">
+      <div class="jour-tag">🥑 Lundi · Jour 1</div>
+      <div class="jour-num">La recette du lundi</div>
+      <h2 class="jour-titre">Bowl Avocat<br>Quinoa & Œuf poché</h2>
+    </div>
+  </div>
+  <div class="jour-body">
+    <div class="jour-main">
+      <div class="macros">
+        <div class="macro"><div class="macro-val">420</div><div class="macro-label">kcal</div></div>
+        <div class="macro"><div class="macro-val">22g</div><div class="macro-label">protéines</div></div>
+        <div class="macro"><div class="macro-val">18g</div><div class="macro-label">bons gras</div></div>
+        <div class="macro"><div class="macro-val">8g</div><div class="macro-label">fibres</div></div>
+      </div>
+      <p class="recette-intro">"Le bowl du lundi qui redonne envie de la semaine. Rassasiant, coloré, et prêt en 15 minutes."</p>
+      
+      <div class="recette-section-titre">Les ingrédients (1 personne)</div>
+      <ul class="ingredients-liste">
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">80g</span><span class="ingredient-name">quinoa cuit</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">½</span><span class="ingredient-name">avocat bien mûr</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">2</span><span class="ingredient-name">œufs frais</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Poignée</span><span class="ingredient-name">roquette ou épinards</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">½</span><span class="ingredient-name">concombre en rondelles</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 cs</span><span class="ingredient-name">graines de sésame</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Sauce</span><span class="ingredient-name">citron + huile d'olive + sel</span></li>
+      </ul>
+
+      <div class="recette-section-titre">La préparation</div>
+      <div class="etapes">
+        <div class="etape"><div class="etape-num">1</div><div class="etape-text">Fais chauffer de l'eau avec un filet de vinaigre blanc. Casse les œufs délicatement et poches-les 3 minutes.</div></div>
+        <div class="etape"><div class="etape-num">2</div><div class="etape-text">Dispose le quinoa dans un bol, ajoute la roquette, le concombre en rondelles et l'avocat coupé en tranches.</div></div>
+        <div class="etape"><div class="etape-num">3</div><div class="etape-text">Dépose les œufs pochés sur le dessus. Arrose d'un filet de citron et d'huile d'olive.</div></div>
+        <div class="etape"><div class="etape-num">4</div><div class="etape-text">Saupoudre de graines de sésame, sel et poivre. Mange immédiatement — et régale-toi !</div></div>
+      </div>
+    </div>
+    <div class="jour-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">⏱️</div>Temps</div>
+        <div class="time-grid">
+          <div class="time-item"><div class="time-val">5'</div><div class="time-lab">Prep</div></div>
+          <div class="time-item"><div class="time-val">10'</div><div class="time-lab">Cuisson</div></div>
+          <div class="time-item"><div class="time-val">15'</div><div class="time-lab">Total</div></div>
+        </div>
+      </div>
+      <div class="astuce-mihi">
+        <div class="astuce-mihi-title">✦ Astuce Mihi</div>
+        <div class="astuce-mihi-text">Ajoute une cuillère de compléments Mihi Silhouette dans ton eau du matin pour booster les effets de cette journée saine.</div>
+      </div>
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">💡</div>Variantes</div>
+        <div class="sidebar-item">Sans gluten : le quinoa est naturellement sans gluten</div>
+        <div class="sidebar-item">Version végane : remplace les œufs par du tofu fumé</div>
+        <div class="sidebar-item">Batch cooking : prépare le quinoa pour 3 jours d'avance</div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ═══ JOUR 2 ═══ -->
+<article class="jour">
+  <div class="jour-header">
+    <img src="https://images.unsplash.com/photo-1604908177522-6d0090dc9e8e?w=800&q=80" alt="Poulet citron">
+    <div class="jour-header-content">
+      <div class="jour-tag">🍋 Mardi · Jour 2</div>
+      <div class="jour-num">La recette du mardi</div>
+      <h2 class="jour-titre">Poulet rôti<br>Citron & Herbes fraîches</h2>
+    </div>
+  </div>
+  <div class="jour-body">
+    <div class="jour-main">
+      <div class="macros">
+        <div class="macro"><div class="macro-val">380</div><div class="macro-label">kcal</div></div>
+        <div class="macro"><div class="macro-val">38g</div><div class="macro-label">protéines</div></div>
+        <div class="macro"><div class="macro-val">9g</div><div class="macro-label">lipides</div></div>
+        <div class="macro"><div class="macro-val">5g</div><div class="macro-label">fibres</div></div>
+      </div>
+      <p class="recette-intro">"La recette qui fait croire qu'on a passé des heures en cuisine. Spoiler : 20 minutes suffisent."</p>
+
+      <div class="recette-section-titre">Les ingrédients (1 personne)</div>
+      <ul class="ingredients-liste">
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">150g</span><span class="ingredient-name">filet de poulet</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1</span><span class="ingredient-name">citron (jus + zestes)</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 cs</span><span class="ingredient-name">huile d'olive</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Bouquet</span><span class="ingredient-name">thym, romarin, persil</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">200g</span><span class="ingredient-name">haricots verts vapeur</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 gousse</span><span class="ingredient-name">ail</span></li>
+      </ul>
+
+      <div class="recette-section-titre">La préparation</div>
+      <div class="etapes">
+        <div class="etape"><div class="etape-num">1</div><div class="etape-text">Marine le poulet 10 min dans le jus de citron, l'huile d'olive, l'ail écrasé et les herbes.</div></div>
+        <div class="etape"><div class="etape-num">2</div><div class="etape-text">Fais chauffer une poêle à feu moyen-vif. Cuis le poulet 6-7 min de chaque côté.</div></div>
+        <div class="etape"><div class="etape-num">3</div><div class="etape-text">Pendant ce temps, cuis les haricots verts à la vapeur ou à l'eau bouillante 5 minutes.</div></div>
+        <div class="etape"><div class="etape-num">4</div><div class="etape-text">Dresse le plat, zeste le citron par-dessus, ajoute une pincée de fleur de sel.</div></div>
+      </div>
+    </div>
+    <div class="jour-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">⏱️</div>Temps</div>
+        <div class="time-grid">
+          <div class="time-item"><div class="time-val">10'</div><div class="time-lab">Prep</div></div>
+          <div class="time-item"><div class="time-val">15'</div><div class="time-lab">Cuisson</div></div>
+          <div class="time-item"><div class="time-val">25'</div><div class="time-lab">Total</div></div>
+        </div>
+      </div>
+      <div class="astuce-mihi">
+        <div class="astuce-mihi-title">✦ Astuce Mihi</div>
+        <div class="astuce-mihi-text">Le poulet + les compléments protéinés Mihi = combo idéal pour maintenir ta masse musculaire pendant ton programme.</div>
+      </div>
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">💡</div>Le + du chef</div>
+        <div class="sidebar-item">Ajoute des tomates cerises rôties pour encore plus de couleur</div>
+        <div class="sidebar-item">Remplace les haricots par du brocoli ou du chou-fleur</div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ═══ JOUR 3 ═══ -->
+<article class="jour">
+  <div class="jour-header">
+    <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80" alt="Salade colorée">
+    <div class="jour-header-content">
+      <div class="jour-tag">🥗 Mercredi · Jour 3</div>
+      <div class="jour-num">La recette du mercredi</div>
+      <h2 class="jour-titre">Grande Salade<br>façon Niçoise revisitée</h2>
+    </div>
+  </div>
+  <div class="jour-body">
+    <div class="jour-main">
+      <div class="macros">
+        <div class="macro"><div class="macro-val">350</div><div class="macro-label">kcal</div></div>
+        <div class="macro"><div class="macro-val">28g</div><div class="macro-label">protéines</div></div>
+        <div class="macro"><div class="macro-val">15g</div><div class="macro-label">bons gras</div></div>
+        <div class="macro"><div class="macro-val">10g</div><div class="macro-label">fibres</div></div>
+      </div>
+      <p class="recette-intro">"La salade qui réconcilie tout le monde avec les légumes. Généreuse, savoureuse, et vraiment rassasiante."</p>
+
+      <div class="recette-section-titre">Les ingrédients (1 personne)</div>
+      <ul class="ingredients-liste">
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">100g</span><span class="ingredient-name">thon en conserve (au naturel)</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">2</span><span class="ingredient-name">œufs durs</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Poignée</span><span class="ingredient-name">mesclun ou laitue</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">8</span><span class="ingredient-name">tomates cerises</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">100g</span><span class="ingredient-name">haricots verts blanchis</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">10</span><span class="ingredient-name">olives noires</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Vinaigrette</span><span class="ingredient-name">moutarde + citron + huile d'olive</span></li>
+      </ul>
+
+      <div class="recette-section-titre">La préparation</div>
+      <div class="etapes">
+        <div class="etape"><div class="etape-num">1</div><div class="etape-text">Blanchi les haricots verts 3 min dans l'eau bouillante salée, puis plonge-les dans l'eau froide pour garder leur couleur.</div></div>
+        <div class="etape"><div class="etape-num">2</div><div class="etape-text">Dispose la salade dans un grand bol. Ajoute les tomates coupées en deux, les haricots, les olives.</div></div>
+        <div class="etape"><div class="etape-num">3</div><div class="etape-text">Émiette le thon par-dessus. Coupe les œufs durs en quartiers et place-les harmonieusement.</div></div>
+        <div class="etape"><div class="etape-num">4</div><div class="etape-text">Prépare la vinaigrette, verse-la au moment de servir. Une pincée de fleur de sel, et voilà.</div></div>
+      </div>
+    </div>
+    <div class="jour-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">⏱️</div>Temps</div>
+        <div class="time-grid">
+          <div class="time-item"><div class="time-val">10'</div><div class="time-lab">Prep</div></div>
+          <div class="time-item"><div class="time-val">8'</div><div class="time-lab">Cuisson</div></div>
+          <div class="time-item"><div class="time-val">18'</div><div class="time-lab">Total</div></div>
+        </div>
+      </div>
+      <div class="astuce-mihi">
+        <div class="astuce-mihi-title">✦ Astuce Mihi</div>
+        <div class="astuce-mihi-text">Cette salade est riche en oméga-3 (thon) et en antioxydants. Parfaite avec les compléments Mihi Beauté pour une peau lumineuse.</div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ═══ JOUR 4 ═══ -->
+<article class="jour">
+  <div class="jour-header">
+    <img src="https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800&q=80" alt="Soupe chaude">
+    <div class="jour-header-content">
+      <div class="jour-tag">🍜 Jeudi · Jour 4</div>
+      <div class="jour-num">La recette du jeudi</div>
+      <h2 class="jour-titre">Soupe Miso<br>Tofu & Légumes</h2>
+    </div>
+  </div>
+  <div class="jour-body">
+    <div class="jour-main">
+      <div class="macros">
+        <div class="macro"><div class="macro-val">290</div><div class="macro-label">kcal</div></div>
+        <div class="macro"><div class="macro-val">16g</div><div class="macro-label">protéines</div></div>
+        <div class="macro"><div class="macro-val">8g</div><div class="macro-label">lipides</div></div>
+        <div class="macro"><div class="macro-val">6g</div><div class="macro-label">fibres</div></div>
+      </div>
+      <p class="recette-intro">"Le repas réconfort qui prend soin de toi de l'intérieur. Le miso est un probiotique naturel — cadeau pour ton microbiote."</p>
+
+      <div class="recette-section-titre">Les ingrédients (1 personne)</div>
+      <ul class="ingredients-liste">
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">500ml</span><span class="ingredient-name">bouillon de légumes chaud</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 cs</span><span class="ingredient-name">pâte miso blanche (supermarché)</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">80g</span><span class="ingredient-name">tofu ferme en dés</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1</span><span class="ingredient-name">feuille de nori coupée</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">2</span><span class="ingredient-name">champignons shiitake (ou normaux)</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1</span><span class="ingredient-name">oignon vert ciselé</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Optionnel</span><span class="ingredient-name">vermicelles de riz</span></li>
+      </ul>
+
+      <div class="recette-section-titre">La préparation</div>
+      <div class="etapes">
+        <div class="etape"><div class="etape-num">1</div><div class="etape-text">Chauffe le bouillon sans le faire bouillir. Y faire revenir les champignons 2 minutes.</div></div>
+        <div class="etape"><div class="etape-num">2</div><div class="etape-text">Dans un bol, dilue la pâte miso avec 2 cs de bouillon chaud (ne pas faire bouillir — ça tuerait les probiotiques).</div></div>
+        <div class="etape"><div class="etape-num">3</div><div class="etape-text">Ajoute le miso dilué dans le bouillon, puis le tofu en dés et les vermicelles si tu en utilises.</div></div>
+        <div class="etape"><div class="etape-num">4</div><div class="etape-text">Verse dans un bol, ajoute le nori et l'oignon vert. Savour lentement — c'est un soin autant qu'un repas.</div></div>
+      </div>
+    </div>
+    <div class="jour-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">⏱️</div>Temps</div>
+        <div class="time-grid">
+          <div class="time-item"><div class="time-val">5'</div><div class="time-lab">Prep</div></div>
+          <div class="time-item"><div class="time-val">10'</div><div class="time-lab">Cuisson</div></div>
+          <div class="time-item"><div class="time-val">15'</div><div class="time-lab">Total</div></div>
+        </div>
+      </div>
+      <div class="astuce-mihi">
+        <div class="astuce-mihi-title">✦ Le saviez-vous ?</div>
+        <div class="astuce-mihi-text">Le miso contient des probiotiques naturels qui soutiennent la flore intestinale — un axe clé pour la silhouette et le bien-être.</div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ═══ JOUR 5 ═══ -->
+<article class="jour">
+  <div class="jour-header">
+    <img src="https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=800&q=80" alt="Saumon grillé">
+    <div class="jour-header-content">
+      <div class="jour-tag">🐟 Vendredi · Jour 5</div>
+      <div class="jour-num">La recette du vendredi</div>
+      <h2 class="jour-titre">Saumon en papillote<br>Vapeur & Gingembre</h2>
+    </div>
+  </div>
+  <div class="jour-body">
+    <div class="jour-main">
+      <div class="macros">
+        <div class="macro"><div class="macro-val">410</div><div class="macro-label">kcal</div></div>
+        <div class="macro"><div class="macro-val">35g</div><div class="macro-label">protéines</div></div>
+        <div class="macro"><div class="macro-val">22g</div><div class="macro-label">oméga-3</div></div>
+        <div class="macro"><div class="macro-val">4g</div><div class="macro-label">fibres</div></div>
+      </div>
+      <p class="recette-intro">"Le vendredi mérite quelque chose de spécial. Ce saumon en papillote est à la fois léger, luxueux et en 20 minutes chrono."</p>
+
+      <div class="recette-section-titre">Les ingrédients (1 personne)</div>
+      <ul class="ingredients-liste">
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">150g</span><span class="ingredient-name">pavé de saumon</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 cs</span><span class="ingredient-name">sauce soja légère</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 cc</span><span class="ingredient-name">gingembre frais râpé</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 cc</span><span class="ingredient-name">miel ou sirop d'agave</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">½</span><span class="ingredient-name">citron vert</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">150g</span><span class="ingredient-name">brocoli en petits bouquets</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 cs</span><span class="ingredient-name">graines de sésame</span></li>
+      </ul>
+
+      <div class="recette-section-titre">La préparation</div>
+      <div class="etapes">
+        <div class="etape"><div class="etape-num">1</div><div class="etape-text">Préchauffer le four à 200°C. Mélange soja, gingembre, miel et jus de citron vert pour la marinade.</div></div>
+        <div class="etape"><div class="etape-num">2</div><div class="etape-text">Pose le saumon sur une feuille de papier cuisson. Verse la marinade par-dessus. Referme en papillote hermétique.</div></div>
+        <div class="etape"><div class="etape-num">3</div><div class="etape-text">Cuis 15-18 min au four. Pendant ce temps, cuis le brocoli à la vapeur 5 minutes.</div></div>
+        <div class="etape"><div class="etape-num">4</div><div class="etape-text">Ouvre la papillote devant tes convives (ou juste pour toi — tu le mérites). Sésame et citron vert par-dessus.</div></div>
+      </div>
+    </div>
+    <div class="jour-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">⏱️</div>Temps</div>
+        <div class="time-grid">
+          <div class="time-item"><div class="time-val">5'</div><div class="time-lab">Prep</div></div>
+          <div class="time-item"><div class="time-val">18'</div><div class="time-lab">Cuisson</div></div>
+          <div class="time-item"><div class="time-val">23'</div><div class="time-lab">Total</div></div>
+        </div>
+      </div>
+      <div class="astuce-mihi">
+        <div class="astuce-mihi-title">✦ Astuce Mihi</div>
+        <div class="astuce-mihi-text">Les oméga-3 du saumon + les compléments Mihi Beauté = une peau hydratée et lumineuse en 7 jours.</div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ═══ JOUR 6 ═══ -->
+<article class="jour">
+  <div class="jour-header">
+    <img src="https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&q=80" alt="Wrap coloré">
+    <div class="jour-header-content">
+      <div class="jour-tag">🥙 Samedi · Jour 6</div>
+      <div class="jour-num">La recette du samedi</div>
+      <h2 class="jour-titre">Wrap Veggie<br>Houmous & Légumes grillés</h2>
+    </div>
+  </div>
+  <div class="jour-body">
+    <div class="jour-main">
+      <div class="macros">
+        <div class="macro"><div class="macro-val">360</div><div class="macro-label">kcal</div></div>
+        <div class="macro"><div class="macro-val">14g</div><div class="macro-label">protéines</div></div>
+        <div class="macro"><div class="macro-val">12g</div><div class="macro-label">lipides</div></div>
+        <div class="macro"><div class="macro-val">12g</div><div class="macro-label">fibres</div></div>
+      </div>
+      <p class="recette-intro">"Le samedi c'est décontracté. Ce wrap se mange chaud ou froid, seule ou en famille — il s'adapte à tout."</p>
+
+      <div class="recette-section-titre">Les ingrédients (1 personne)</div>
+      <ul class="ingredients-liste">
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1</span><span class="ingredient-name">grande tortilla de blé complet</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">3 cs</span><span class="ingredient-name">houmous maison ou du commerce</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">½</span><span class="ingredient-name">courgette en lamelles</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">½</span><span class="ingredient-name">poivron rouge en lanières</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">½</span><span class="ingredient-name">avocat</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Poignée</span><span class="ingredient-name">roquette ou pousses d'épinards</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Jus</span><span class="ingredient-name">de citron + sel + cumin</span></li>
+      </ul>
+
+      <div class="recette-section-titre">La préparation</div>
+      <div class="etapes">
+        <div class="etape"><div class="etape-num">1</div><div class="etape-text">Fais griller les lamelles de courgette et les lanières de poivron dans une poêle avec un filet d'huile, 5 min.</div></div>
+        <div class="etape"><div class="etape-num">2</div><div class="etape-text">Étale généreusement le houmous sur la tortilla. Saupoudre de cumin.</div></div>
+        <div class="etape"><div class="etape-num">3</div><div class="etape-text">Dispose les légumes grillés, l'avocat tranché et la roquette sur la moitié de la tortilla.</div></div>
+        <div class="etape"><div class="etape-num">4</div><div class="etape-text">Presse un peu de citron, roule fermement et coupe en deux. Si tu veux le griller : 2 min côté piqué d'abord.</div></div>
+      </div>
+    </div>
+    <div class="jour-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">⏱️</div>Temps</div>
+        <div class="time-grid">
+          <div class="time-item"><div class="time-val">8'</div><div class="time-lab">Prep</div></div>
+          <div class="time-item"><div class="time-val">7'</div><div class="time-lab">Cuisson</div></div>
+          <div class="time-item"><div class="time-val">15'</div><div class="time-lab">Total</div></div>
+        </div>
+      </div>
+      <div class="astuce-mihi">
+        <div class="astuce-mihi-title">✦ Astuce Mihi</div>
+        <div class="astuce-mihi-text">Le houmous = protéines végétales + fibres. Associé aux compléments Mihi, c'est un duo gagnant pour la satiété.</div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ═══ JOUR 7 ═══ -->
+<article class="jour">
+  <div class="jour-header">
+    <img src="https://images.unsplash.com/photo-1606313564200-e75d5e31dc8c?w=800&q=80" alt="Dessert chocolat">
+    <div class="jour-header-content">
+      <div class="jour-tag">🍫 Dimanche · Jour 7</div>
+      <div class="jour-num">La recette du dimanche</div>
+      <h2 class="jour-titre">Mousse Chocolat<br>Noir & Avocat</h2>
+    </div>
+  </div>
+  <div class="jour-body">
+    <div class="jour-main">
+      <div class="macros">
+        <div class="macro"><div class="macro-val">280</div><div class="macro-label">kcal</div></div>
+        <div class="macro"><div class="macro-val">5g</div><div class="macro-label">protéines</div></div>
+        <div class="macro"><div class="macro-val">18g</div><div class="macro-label">bons gras</div></div>
+        <div class="macro"><div class="macro-val">7g</div><div class="macro-label">fibres</div></div>
+      </div>
+      <p class="recette-intro">"Un dessert décadent qui cache bien son secret : l'avocat remplace la crème et donne une texture de velours. Personne ne le devine jamais."</p>
+
+      <div class="recette-section-titre">Les ingrédients (2 personnes)</div>
+      <ul class="ingredients-liste">
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">2</span><span class="ingredient-name">avocats bien mûrs</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">3 cs</span><span class="ingredient-name">cacao en poudre non sucré</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">3 cs</span><span class="ingredient-name">sirop d'érable ou miel</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">1 cc</span><span class="ingredient-name">extrait de vanille</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Pincée</span><span class="ingredient-name">sel</span></li>
+        <li class="ingredient-item"><div class="ingredient-dot"></div><span class="ingredient-qty">Garniture</span><span class="ingredient-name">framboises fraîches ou noisettes</span></li>
+      </ul>
+
+      <div class="recette-section-titre">La préparation</div>
+      <div class="etapes">
+        <div class="etape"><div class="etape-num">1</div><div class="etape-text">Mixe les avocats pelés dans un blender avec le cacao, le sirop d'érable, la vanille et la pincée de sel.</div></div>
+        <div class="etape"><div class="etape-num">2</div><div class="etape-text">Mixe jusqu'à obtenir une texture parfaitement lisse et crémeuse (environ 1 minute). Goûte et ajuste la douceur.</div></div>
+        <div class="etape"><div class="etape-num">3</div><div class="etape-text">Répartis dans 2 petits ramequins ou verrines. Réfrigère 30 minutes minimum.</div></div>
+        <div class="etape"><div class="etape-num">4</div><div class="etape-text">Sors du frigo, garnis de framboises ou de noisettes concassées. Savoure sans culpabilité — tu l'as mérité !</div></div>
+      </div>
+    </div>
+    <div class="jour-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">⏱️</div>Temps</div>
+        <div class="time-grid">
+          <div class="time-item"><div class="time-val">5'</div><div class="time-lab">Prep</div></div>
+          <div class="time-item"><div class="time-val">30'</div><div class="time-lab">Frigo</div></div>
+          <div class="time-item"><div class="time-val">35'</div><div class="time-lab">Total</div></div>
+        </div>
+      </div>
+      <div class="astuce-mihi">
+        <div class="astuce-mihi-title">✦ Le petit + Mihi</div>
+        <div class="astuce-mihi-text">Ajoute une cc de poudre de collagène Mihi dans la mousse pour une texture encore plus crémeuse et un boost beauté.</div>
+      </div>
+      <div class="sidebar-card">
+        <div class="sidebar-card-title"><div class="sidebar-card-icon">🏆</div>Tu l'as fait !</div>
+        <div class="sidebar-item">7 jours de cuisine saine et gourmande. Tu as prouvé que manger bien peut être un plaisir.</div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ═══ CONCLUSION ═══ -->
+<section class="conclusion">
+  <div class="conclusion-bg"></div>
+  <div class="conclusion-content">
+    <div class="conclusion-label">✦ BRAVO · TU L'AS FAIT ✦</div>
+    <h2 class="conclusion-title">Et après<br>ces <em>7 jours ?</em></h2>
+    <p class="conclusion-text">Ces recettes ne sont pas un régime — c'est une nouvelle façon de te nourrir que tu peux maintenir indéfiniment. Continue à deux ou trois de ces plats par semaine, écoute ton corps, et récompense-toi.</p>
+    <p class="conclusion-text">Pour aller encore plus loin dans ton programme silhouette, les compléments Mihi sont formulés pour t'accompagner : drainants, coupe-faim naturels, protéinés. Demande à ta conseillère Mihi sa recommandation personnalisée.</p>
+    <div class="conclusion-pills">
+      <span class="conclusion-pill">🌿 Produits Mihi Silhouette</span>
+      <span class="conclusion-pill">💬 Accompagnement personnalisé</span>
+      <span class="conclusion-pill">🌸 Blazing Dynasty</span>
+    </div>
+    <div class="conclusion-brand">Blazing Dynasty · Équipe Mihi France · guide offert avec amour 🌸</div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

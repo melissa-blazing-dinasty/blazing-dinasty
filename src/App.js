@@ -405,6 +405,18 @@ function T({children, k}){
 }
 
 // Collecte tous les textes d'interface à traduire (clé → texte FR)
+const UI_TEXTS_PT = {
+  "nav.dashboard":"Painel","nav.formation":"Formação","nav.linkbio":"Link-in-Bio","nav.tunnel":"Meu Funil",
+  "dtab.today":"⚡ Hoje","dtab.objperso":"🎯 Meus objetivos","dtab.faststart":"🚀 Fast Start",
+  "dtab.clients":"🛍️ Clientes","dtab.distributeurs":"👑 Distribuidoras","dtab.prospects":"👥 Prospects",
+  "dtab.diagnostics":"🩺 Meus diagnósticos","dtab.posts":"📱 Posts","dtab.equipe":"🏆 Equipa",
+  "btn.sauvegarder":"Guardar","btn.annuler":"Cancelar","btn.ajouter":"Adicionar","btn.retour":"← Voltar","btn.copier":"Copiar",
+  "diag.commencer":"Começar o diagnóstico","diag.suivant":"Próxima pergunta →","diag.voir_resultats":"Ver os meus resultados",
+  "clients.ajouter":"Adicionar uma cliente","prospects.ajouter":"Adicionar uma prospect",
+  "ph.lancer":"🚀 Lançar uma Power Hour","ph.en_cours":"⚡ POWER HOUR EM CURSO",
+  "form.demarrage":"Início","form.vente":"Vendas","form.recrutement":"Recrutamento","form.contenu":"Conteúdo",
+};
+
 const UI_TEXTS = {
   // Navigation
   "nav.dashboard": "Tableau de bord",
@@ -1234,6 +1246,7 @@ function ChallengeAppPopup({uid, onClose, setTab}){
 
 function App(){
   const[screen,setScreen]=useState("login");
+  const[showWelcome,setShowWelcome]=useState(false);
   const[loginStep,setLoginStep]=useState(1); // 1=identité, 2=chef équipe
   const[userId,setUserId]=useState("");
   const[isChefApp,setIsChefApp]=useState(false);
@@ -1284,6 +1297,7 @@ function App(){
         if(uid&&n&&codeOk===true){
           setUserId(uid);setName(n);
           setScreen("app");load(uid);verifierChangementPeriode(uid);
+          try{const fk="bd-first-"+uid;if(!localStorage.getItem(fk)){localStorage.setItem(fk,"1");setTimeout(()=>setShowWelcome(true),1500);}}catch{}
         } else {
           // Session invalide - effacer et forcer reconnexion
           localStorage.removeItem("bd-user");
@@ -1360,10 +1374,12 @@ function App(){
       // Démarrer automatiquement le challenge app si première connexion
       try{
         const snap2=await getDoc(doc(db,"users",uid));
-        if(snap2.exists()&&!snap2.data()["db-challenge-app"]){
-          const tomorrow=new Date();
-          tomorrow.setDate(tomorrow.getDate()+1);
-          const ca={startDate:tomorrow.toISOString().slice(0,10),joursValides:[],auto:true};
+        const existingCA=snap2.exists()?snap2.data()["db-challenge-app"]:null;
+        let caData=null;
+        if(existingCA){try{caData=JSON.parse(existingCA);}catch{}}
+        if(!caData||!caData.startDate){
+          const today=new Date();
+          const ca={startDate:today.toISOString().slice(0,10),joursValides:[],auto:true};
           await setDoc(doc(db,"users",uid),{"db-challenge-app":JSON.stringify(ca)},{merge:true});
         }
       }catch{}
@@ -1401,6 +1417,7 @@ function App(){
       }
       try{localStorage.setItem("bd-user",JSON.stringify({uid:pendingUid,n:pendingName,codeOk:true}));}catch{}
       setUserId(pendingUid);setName(pendingName);setScreen("app");load(pendingUid);verifierChangementPeriode(pendingUid);
+      try{const fk="bd-first-"+pendingUid;if(!localStorage.getItem(fk)){localStorage.setItem(fk,"1");setTimeout(()=>setShowWelcome(true),1500);}}catch{}
       saveFCMToken(pendingUid);
       sg(pendingUid,"db-obj-perso").then(data=>{
         syncAnnuaire(pendingUid, pendingName, data?JSON.parse(data):null, marraineUid);
@@ -1423,6 +1440,19 @@ function App(){
     }
   },[tab, lang]);
 
+  // MutationObserver : retraduire auto quand le DOM change en mode PT
+  useEffect(()=>{
+    if(lang!=="pt") return;
+    let timer=null;
+    const obs=new MutationObserver(()=>{
+      clearTimeout(timer);
+      timer=setTimeout(()=>{ try{translateDOM("pt");}catch{} },800);
+    });
+    const root=document.getElementById("root");
+    if(root) obs.observe(root,{childList:true,subtree:true,characterData:false});
+    return()=>{obs.disconnect();clearTimeout(timer);};
+  },[lang]);
+
   const toggleLang=async()=>{
     const newLang=lang==="fr"?"pt":"fr";
     if(newLang==="fr"){
@@ -1437,8 +1467,7 @@ function App(){
     setLang(newLang);
     setTranslating(false);
   };
-  const[showWelcome,setShowWelcome]=useState(false);
-  const[checks,setChecks]=useState({});
+    const[checks,setChecks]=useState({});
   const[tasks,setTasks]=useState({});
   const[posts,setPosts]=useState({});
   const[kpis,setKpis]=useState({k1:"",k2:"",k3:"",k4:""});
@@ -1753,13 +1782,15 @@ function App(){
   const closeBanner=()=>{try{localStorage.setItem(bannerKey,"1");}catch{}setShowBanner(false);};
 
   return(
-    <LangContext.Provider value={{lang, translations, t:(k)=>translations[k]||UI_TEXTS[k]||k}}>
+    <LangContext.Provider value={{lang, translations, t:(k)=>translations[k]||(lang==="pt"?UI_TEXTS_PT[k]:null)||UI_TEXTS[k]||k}}>
     <div
       style={{minHeight:"100vh",background:C.creme,fontFamily:"'DM Sans',system-ui,sans-serif",color:C.texte,userSelect:"none"}}
       onContextMenu={e=>e.preventDefault()}
       onCopy={e=>e.preventDefault()}
       onCut={e=>e.preventDefault()}
     >
+
+      {showWelcome&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:20,maxWidth:420,width:"100%",overflow:"hidden"}}><div style={{background:"#3D1F0E",padding:"1.5rem 1.3rem",textAlign:"center"}}><div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>👑</div><div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",color:"white",fontWeight:300}}>Bienvenue {name&&name.split(" ")[0]} !</div><div style={{fontSize:".78rem",color:"#C49A8A",marginTop:".25rem"}}>Tu fais maintenant partie de Blazing Dynasty ✨</div></div><div style={{padding:"1.25rem 1.3rem"}}><div style={{background:"#FAF7F2",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",fontSize:".78rem",color:"#3D2B1F",lineHeight:1.7}}>🌸 Nous sommes tellement heureuses de t'accueillir dans notre équipe. Tu as fait le bon choix — maintenant on est là pour t'accompagner à chaque étape. Let's go ! 🔥</div><div style={{fontSize:".6rem",fontWeight:700,color:"#888",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>✦ TES ACCÈS DU MOMENT</div>{[{icon:"🚀",titre:"Fast Start",desc:"7 modules progressifs pour bien démarrer — commence par là !"},{icon:"📱",titre:"Formation Application",desc:"Apprends à utiliser l'appli pour te faciliter la vie"}].map((item,i)=>(<div key={i} onClick={()=>{setShowWelcome(false);setTab("formation");}} style={{display:"flex",alignItems:"center",gap:".75rem",background:"#3D1F0E",borderRadius:10,padding:".7rem .85rem",marginBottom:".4rem",cursor:"pointer"}}><span style={{fontSize:"1.3rem"}}>{item.icon}</span><div style={{flex:1}}><div style={{fontSize:".82rem",fontWeight:700,color:"white"}}>{item.titre}</div><div style={{fontSize:".68rem",color:"#C49A8A"}}>{item.desc}</div></div><span style={{color:"#C49A8A"}}>→</span></div>))}<button onClick={()=>setShowWelcome(false)} style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:".75rem"}}>Commencer mon aventure → 🚀</button></div></div></div>)}
 
       {/* BANNIÈRE NOUVELLE PÉRIODE */}
       {showPeriodeBanner&&(
@@ -1806,11 +1837,11 @@ function App(){
           </div>
           <div style={{display:"flex",alignItems:"center",gap:".5rem"}}>
             {/* Langue */}
-            <button onClick={toggleLang} disabled={translating}
+            <a href={"https://translate.google.com/translate?sl=fr&tl=pt&u="+encodeURIComponent(window.location.href)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}} title="Traduzir para português"><button disabled={false}
               style={{background:"rgba(196,168,130,.15)",border:`1px solid ${C.or}40`,borderRadius:20,padding:".22rem .55rem",cursor:translating?"default":"pointer",fontFamily:"inherit",fontSize:".62rem",fontWeight:700,color:C.or,opacity:translating?.6:1}}
               title={lang==="fr"?"Traduzir para português":"Revenir en français"}>
-              {translating?"⏳":lang==="fr"?"🇵🇹":"🇫🇷"}
-            </button>
+              🇵🇹
+            </button></a>
             {/* Notification actions du jour */}
             {actionsIncomplete&&(
               <button onClick={()=>setTab("dashboard")}
@@ -2838,6 +2869,118 @@ function App(){
 }
 
 // ── HOME RECAP (page d'accueil) ──────────────────────────────────────────────
+
+function HistoriquePeriodes({uid}){
+  const [suiviCA,setSuiviCA]=useState({});
+  const [loading,setLoading]=useState(true);
+  const [ouvert,setOuvert]=useState(null);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,'users',uid));
+        if(snap.exists()&&snap.data()['db-suivi-ca']) setSuiviCA(JSON.parse(snap.data()['db-suivi-ca']));
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+  const caMap={};
+  const ANCRE_H=new Date('2026-01-22T00:00:00').getTime();
+  Object.entries(suiviCA).forEach(([key,val])=>{
+    const pNum=parseInt(key.replace('p',''));
+    if(!pNum||isNaN(pNum)) return;
+    const deb=new Date(ANCRE_H+(pNum-1)*PERIODE_DUREE_JOURS*24*60*60*1000);
+    const fin2=new Date(deb.getTime()+PERIODE_DUREE_JOURS*24*60*60*1000-1);
+    const fmtD=(dt)=>dt.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+    caMap[key]={ca:val.ca||0,obj:val.obj||0,cmds:[],label:'P'+pNum,dates:fmtD(deb)+' au '+fmtD(fin2),num:pNum};
+  });;
+  const periodes=Object.values(caMap).sort((a,b)=>b.num-a.num);
+  const maxCA=Math.max(...periodes.map(p=>p.ca),1);
+  const pActuelle=getPeriodeActuelle();
+  const pActAnn=((pActuelle-1)%PERIODES_PAR_AN+PERIODES_PAR_AN)%PERIODES_PAR_AN+1;
+  Object.values(caMap).forEach(p=>{const deb=new Date(PERIODE_DEBUT_ABSOLU_MS+(p.num-1)*PERIODE_DUREE_JOURS*24*60*60*1000);const fin2=new Date(deb.getTime()+PERIODE_DUREE_JOURS*24*60*60*1000-1);const ann2=((p.num-1)%PERIODES_PAR_AN+PERIODES_PAR_AN)%PERIODES_PAR_AN+1;p.label='P'+ann2;p.dates=deb.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' au '+fin2.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});});
+  if(loading) return <div style={{textAlign:'center',padding:'2rem',color:C.gris}}>Chargement...</div>;
+  return(
+    <div style={{paddingBottom:'2rem'}}>
+      <div style={{fontFamily:'Georgia,serif',fontSize:'1.35rem',fontWeight:300,color:C.brun,marginBottom:'.2rem'}}>Historique <em style={{fontStyle:'italic',color:C.rose}}>periodes</em></div>
+      <p style={{fontSize:'.74rem',color:C.gris,marginBottom:'1rem'}}>Periode actuelle : <strong style={{color:C.brun}}>P{pActAnn}</strong></p>
+      {periodes.length===0&&<div style={{textAlign:'center',padding:'2rem',color:C.gris}}>Aucune commande enregistree</div>}
+      {periodes.map(p=>{
+        const isOpen=ouvert===p.num;
+        const isCur=p.num===pActuelle;
+        const bar=Math.round(p.ca/maxCA*100);
+        return(
+          <div key={p.num} style={{background:C.blanc,border:'1.5px solid '+(isCur?C.rose:C.pale),borderRadius:12,marginBottom:'.5rem',overflow:'hidden'}}>
+            <div onClick={()=>setOuvert(isOpen?null:p.num)} style={{padding:'.75rem 1rem',cursor:'pointer',display:'flex',alignItems:'center',gap:'.75rem'}}>
+              <div style={{width:40,height:40,borderRadius:10,background:isCur?C.rose:C.creme,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <div style={{fontSize:'.7rem',fontWeight:700,color:isCur?'white':C.brun}}>{p.label}</div>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.3rem'}}>
+                  <div style={{fontSize:'.82rem',fontWeight:700,color:C.brun}}>{p.label}{isCur&&<span style={{background:C.rose,color:'white',borderRadius:20,padding:'.1rem .4rem',fontSize:'.58rem',marginLeft:'.3rem'}}>En cours</span>}</div>
+                  <div style={{fontSize:'.88rem',fontWeight:700,color:C.brun}}>{p.ca.toFixed(0)}EUR</div>
+                </div>
+                <div style={{height:4,background:C.pale,borderRadius:2,overflow:'hidden'}}>
+                  <div style={{height:'100%',background:isCur?C.rose:C.or,width:bar+'%',borderRadius:2}}/>
+                </div>
+                <div style={{fontSize:'.62rem',color:C.gris,marginTop:'.2rem'}}>{p.cmds.length} commande{p.cmds.length>1?'s':''}</div>
+              </div>
+              <span style={{color:C.gris,transform:isOpen?'rotate(90deg)':'none',transition:'transform .2s'}}>›</span>
+            </div>
+            {isOpen&&(
+              <div style={{padding:'0 1rem 1rem',borderTop:'1px solid '+C.pale}}>
+                {p.cmds.sort((a,b)=>new Date(b.date)-new Date(a.date)).map((cmd,i)=>(
+                  <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'.35rem 0',borderBottom:i<p.cmds.length-1?'1px solid '+C.creme:'none'}}>
+                    <div>
+                      <div style={{fontSize:'.78rem',fontWeight:600,color:C.brun}}>{cmd.client}</div>
+                      <div style={{fontSize:'.6rem',color:C.gris}}>{new Date(cmd.date).toLocaleDateString('fr-FR')}</div>
+                    </div>
+                    <div style={{fontSize:'.82rem',fontWeight:700,color:C.brun}}>{cmd.montant.toFixed(0)}EUR</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div style={{background:C.creme,borderRadius:10,padding:'.75rem 1rem',marginTop:'.75rem',border:'1px solid '+C.pale,fontSize:'.7rem',color:C.gris,lineHeight:1.6}}>
+        Si la periode affichee ne correspond pas, ajuste la date dans Admin - Configuration des Periodes.
+      </div>
+    </div>
+  );
+}
+
+const NOTICES = {
+  clients:{titre:"Mes Clientes",icon:"🛍️",explication:"Centralise toutes tes clientes, leurs commandes et suivis automatiques J+8 et J+21.",comment:["Ajoute une cliente avec le bouton +","Clique sur la fiche pour voir l'historique complet","Programme une relance depuis la fiche","Le suivi J+8 et J+21 se declenche apres chaque commande"],apport:"Tu ne perds plus aucune cliente. Les endormies sont detectees apres 60 jours automatiquement."},
+  prospects:{titre:"Mes Prospects",icon:"👥",explication:"Suis tes prospects du premier contact jusqu'a la conversion en cliente ou distributrice.",comment:["Ajoute avec son statut chaud tiede ou froid","Programme une date de relance","Note chaque echange dans le journal","Convertis en cliente ou distributrice en un clic"],apport:"Vision claire de ton pipeline. Tu sais exactement qui relancer chaque jour."},
+  relances:{titre:"Relances du jour",icon:"🔔",explication:"Toutes tes relances au meme endroit — prospects a recontacter et clientes endormies depuis 60 jours.",comment:["Consulte chaque matin pendant 10 minutes","Copie le message pret en un clic","Marque comme fait ou reporte de 3 ou 7 jours","Copie tous les messages endormies en une fois"],apport:"Tes relances deviennent un rituel de 10 minutes. Plus personne ne tombe dans l'oubli."},
+  editorial:{titre:"Editorial IA",icon:"✍️",explication:"Planning de contenu automatique. L'IA genere hooks, legendes et stories pour 2 posts et 3 stories par jour.",comment:["Clique sur un jour pour voir les themes","Appuie sur Generer pour creer le contenu","Copie hooks et legendes en un clic","Coche A faire quand tu as publie"],apport:"Plus jamais la panne d'inspiration. Planning structure sur 4 semaines avec du contenu varie."},
+  diagnostics:{titre:"Diagnostics Produits",icon:"🩺",explication:"Tes clientes repondent a 5 questions et l'IA genere une ordonnance produit personnalisee.",comment:["Choisis le type de diagnostic","Envoie le lien a ta cliente","L'ordonnance est generee automatiquement","Partage en PDF ou par lien public"],apport:"Experience personnalisee qui justifie ton role de conseillere et augmente la conversion."},
+  business:{titre:"Espace Business",icon:"📊",explication:"Vue complete de ton activite — CA par periode, entonnoir de conversion et historique.",comment:["Saisis ton CA dans Suivi CA","Consulte l'Entonnoir pour voir tes taux","L'Historique montre toutes tes periodes"],apport:"Tu pilotes avec des chiffres reels et tu identifies tes axes d'amelioration."},
+  distributeurs:{titre:"Mes Distributrices",icon:"👑",explication:"Gestion de tes recrues — coordonnees, statut Fast Start, challenge decouverte et suivi.",comment:["Ajoute une distributrice manuellement","Assigne le Fast Start depuis la fiche","Lance le Challenge Decouverte","Suis la progression dans Nouveaux Distrib"],apport:"Tu as une vue d'ensemble de ton equipe et tu peux animer facilement."},
+  scripts:{titre:"Scripts et Fils DM",icon:"💬",explication:"Scripts prets et guides de conversation selon le CTA recu — MINCEUR, EQUIPE, DIAGNOSTIC, SILHOUETTE.",comment:["Va dans Fils DM et choisis le CTA recu","Suis le fil etape par etape","Copie et adapte le prenom de la personne"],apport:"Tu sais toujours quoi repondre. Chaque CTA a son fil conducteur jusqu'a la vente."},
+};
+
+function NoticePanel({cleOutil,onClose,videoUrl}){
+  const n=NOTICES[cleOutil];if(!n)return null;
+  return(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9998,background:"rgba(61,31,14,.8)"}} onClick={onClose}>
+    <div style={{position:"absolute",top:0,right:0,width:"85%",maxWidth:360,height:"100vh",background:"white",overflowY:"auto",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:"#3D1F0E",padding:"1.1rem 1.2rem",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:".65rem"}}>
+          <span style={{fontSize:"1.5rem"}}>{n.icon}</span>
+          <div><div style={{fontSize:".5rem",fontWeight:700,letterSpacing:".12em",color:"#C4A882",marginBottom:".1rem"}}>GUIDE D'UTILISATION</div><div style={{fontFamily:"Georgia,serif",fontSize:".95rem",color:"white",fontWeight:300}}>{n.titre}</div></div>
+        </div>
+        <button onClick={onClose} style={{background:"none",border:"none",color:"#C49A8A",fontSize:"1.4rem",cursor:"pointer",lineHeight:1}}>✕</button>
+      </div>
+      <div style={{padding:"1rem",flex:1}}>
+        {videoUrl?<div style={{marginBottom:"1rem",borderRadius:10,overflow:"hidden",aspectRatio:"16/9",background:"#000"}}><iframe src={videoUrl.replace("watch?v=","embed/").replace("youtu.be/","youtube.com/embed/")} style={{width:"100%",height:"100%",border:"none"}} allowFullScreen title="tuto"/></div>:<div style={{background:"#FAF7F2",borderRadius:10,padding:".65rem",marginBottom:"1rem",textAlign:"center",border:"1px solid #E8DDD4",fontSize:".68rem",color:"#888"}}>🎬 Vidéo tuto à venir — configure depuis Admin → Vidéos outils</div>}
+        <div style={{marginBottom:"1rem"}}><div style={{fontSize:".6rem",fontWeight:700,color:"#3D1F0E",textTransform:"uppercase",letterSpacing:".08em",marginBottom:".4rem"}}>📖 C'est quoi ?</div><div style={{fontSize:".78rem",color:"#3D2B1F",lineHeight:1.7,background:"#FAF7F2",borderRadius:10,padding:".65rem .85rem",border:"1px solid #E8DDD4"}}>{n.explication}</div></div>
+        <div style={{marginBottom:"1rem"}}><div style={{fontSize:".6rem",fontWeight:700,color:"#3D1F0E",textTransform:"uppercase",letterSpacing:".08em",marginBottom:".4rem"}}>🛠️ Comment l'utiliser ?</div>{n.comment.map((s,i)=>(<div key={i} style={{display:"flex",gap:".6rem",alignItems:"flex-start",marginBottom:".4rem"}}><div style={{width:22,height:22,borderRadius:"50%",background:"#C49A8A",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".65rem",fontWeight:700,flexShrink:0}}>{i+1}</div><div style={{fontSize:".76rem",color:"#3D2B1F",lineHeight:1.55}}>{s}</div></div>))}</div>
+        <div style={{background:"#3D1F0E",borderRadius:12,padding:".85rem 1rem"}}><div style={{fontSize:".58rem",fontWeight:700,color:"#C4A882",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".3rem"}}>✦ Ce que ca t'apporte</div><div style={{fontSize:".78rem",color:"white",lineHeight:1.65}}>{n.apport}</div></div>
+      </div>
+    </div>
+  </div>);
+}
+
 function HomeRecap({name, objPerso, textes}){
   const periodeInfo=getPeriodeInfo();
   const citation=getCitationDuJour(textes?.citations);
@@ -3163,6 +3306,14 @@ function SuiviRecruTab({uid, isChef=false}){
     }catch{}
   };
 
+  const retirerFastStart=async(mUid,nom)=>{
+    if(!window.confirm("Retirer le Fast Start de "+nom+" ?")) return;
+    try{
+      await setDoc(doc(db,"users",mUid),{"db-fast-start":""},  {merge:true});
+      alert("Fast Start retiré pour "+nom);
+    }catch(e){alert("Erreur");}
+  };
+
   const assignerFastStart=async(mUid,nom)=>{
     try{
       const ref=doc(db,"users",mUid);
@@ -3295,7 +3446,15 @@ function SuiviRecruTab({uid, isChef=false}){
                           <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose}}>🚀 Suivi Fast Start</div>
                           <div style={{display:"flex",gap:".4rem",alignItems:"center"}}>
                             <span style={{fontSize:".6rem",color:C.gris}}>J1 : {fs.startDate?new Date(fs.startDate).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"-"}</span>
-                            <button onClick={()=>assignerFastStart(f.uid,f.prenom+" "+f.nom)}
+                            <button onClick={()=>retirerFastStart(f.uid,f.prenom+" "+f.nom)}
+                              style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .55rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",marginRight:".3rem"}}>
+                              ✕ Retirer FS
+                            </button>
+                            <button onClick={()=>retirerFastStart(f.uid,f.prenom+" "+f.nom)}
+                          style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .55rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",marginRight:".3rem"}}>
+                          ✕ Retirer FS
+                        </button>
+                        <button onClick={()=>assignerFastStart(f.uid,f.prenom+" "+f.nom)}
                               style={{background:C.rose+"15",border:`1px solid ${C.rose}40`,borderRadius:6,padding:".15rem .45rem",fontSize:".6rem",color:C.rose,cursor:"pointer",fontFamily:"inherit"}}>🔄 Relancer</button>
                           </div>
                         </div>
@@ -3355,6 +3514,10 @@ function SuiviRecruTab({uid, isChef=false}){
                       </div>
                       :<div style={{background:C.creme,borderRadius:9,padding:".75rem",textAlign:"center"}}>
                         <div style={{fontSize:".72rem",color:C.gris,marginBottom:".5rem"}}>🚀 Pas de Fast Start assigné</div>
+                        <button onClick={()=>retirerFastStart(f.uid,f.prenom+" "+f.nom)}
+                          style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .55rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",marginRight:".3rem"}}>
+                          ✕ Retirer FS
+                        </button>
                         <button onClick={()=>assignerFastStart(f.uid,f.prenom+" "+f.nom)}
                           style={{background:C.rose,color:"white",border:"none",borderRadius:8,padding:".42rem .85rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
                           Assigner le Fast Start
@@ -3446,6 +3609,9 @@ function ConversionPopup({prospect:p, clients, distributeurs, saveClients, saveD
 
 function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}}){
   const[dtab,setDtab]=useState("today");
+  const[showNotice,setShowNotice]=useState(false);
+  const[noticeVideos,setNoticeVideos]=useState({});
+  const[btab,setBtab]=useState("suivica");
 
   // Rafraîchir automatiquement les prospects à chaque ouverture de l'onglet
   useEffect(()=>{
@@ -3514,7 +3680,13 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       }
       if(data["db-actions-cumul"]) setTotalActionsValidees(+data["db-actions-cumul"]||0);
       if(data["db-actions-custom"]){
-        try{ setActionsCustomRaw(JSON.parse(data["db-actions-custom"])); }catch{}
+        try{
+          const cd=JSON.parse(data["db-actions-custom"]);
+          const tod=new Date().toISOString().slice(0,10);
+          if(Array.isArray(cd)){setActionsCustomRaw(cd);}
+          else if(cd._date===tod){setActionsCustomRaw(cd.actions||[]);}
+          else{setActionsCustomRaw([]);ss(uid,"db-actions-custom",JSON.stringify({_date:tod,actions:[]}));}
+        }catch{}
       }
       if(data["db-cmd-periode"]){
         try{
@@ -3609,7 +3781,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const setActionsCustom=(updater)=>{
     setActionsCustomRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
-      ss(uid,"db-actions-custom",JSON.stringify(next));
+      ss(uid,"db-actions-custom",JSON.stringify({_date:new Date().toISOString().slice(0,10),actions:next}));
       return next;
     });
   };
@@ -3684,7 +3856,8 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
     const unlockedIds = badges.filter(b=>b.unlocked).map(b=>b.id);
     if(unlockedIds.length===0) return;
     sg(uid,"db-badges-unlocked").then(stored=>{
-      const prev = stored ? JSON.parse(stored) : [];
+      const prevRaw = stored ? JSON.parse(stored) : [];
+      const prev = Array.isArray(prevRaw) ? prevRaw : Object.values(prevRaw||{});
       const nouveaux = unlockedIds.filter(id=>!prev.includes(id));
       if(nouveaux.length>0){
         nouveaux.forEach(id=>{
@@ -3705,7 +3878,6 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const {t} = useLang();
   const DTABS=[
     {id:"today",        label:"⚡ Aujourd'hui"},
-    {id:"entonnoir",    label:"?? Entonnoir"},
     // Fast Start — visible seulement si assigné ET pas encore terminé
     ...((hasFastStart&&!fastStartDone)?[{id:"faststart",label:"🚀 Fast Start"}]:[]),
     {id:"objperso",     label:"🎯 Objectifs"},
@@ -3713,9 +3885,10 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
     {id:"distributeurs",label:"👑 Distributeurs"},
     {id:"prospects",    label:"👥 Prospects"},
     // Suivi CA — visible seulement pour les chefs
-    {id:"suivica",label:"📊 Suivi CA"},
+    {id:"relances",label:"🔔 Relances"},
+    {id:"editorial",label:"✍️ Éditorial"},{id:"business",label:"📊 Business"},
     {id:"diagnostics",  label:"🩺 Diagnostics"},
-    {id:"posts",        label:"📱 Posts"},
+    
     {id:"equipe-fun",   label:"🏆 Équipe"},
   ];
 
@@ -3734,7 +3907,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       </div>
 
       {/* FAST START J1-J7 */}
-      {dtab==="faststart"&&<FastStartTab uid={uid} userName={userName} goToFormation={goToFormation}/>}{dtab==="entonnoir"&&<EntonnoirTab prospects={prospects} clients={clients} distributeurs={distributeurs}/>}
+      {dtab==="faststart"&&<FastStartTab uid={uid} userName={userName} goToFormation={goToFormation}/>}
 
       {/* TODAY */}
       {dtab==="today"&&(
@@ -3856,6 +4029,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       {/* PROSPECTS */}
       {dtab==="prospects"&&(
         <div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="prospects" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["prospects"]||""}/>}
           <button onClick={async()=>{
             try{
               const snap=await getDoc(doc(db,"users",uid));
@@ -3995,6 +4169,15 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
                 )}
               </div>
 
+              {/* Journal conversation */}
+              <div style={{marginTop:".5rem",paddingTop:".5rem",borderTop:"1px solid #E8DDD4"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".3rem"}}>
+                  <div style={{fontSize:".6rem",fontWeight:700,color:"#3D1F0E",textTransform:"uppercase",letterSpacing:".08em"}}>Journal</div>
+                  <button onClick={()=>{const msg=prompt("Message envoyé ou reçu");if(!msg)return;const j=[...(p.journal||[]),{date:new Date().toLocaleDateString("fr-FR"),msg}];saveProspects(prospects.map(x=>x.id===p.id?{...x,journal:j}:x));}} style={{background:"none",border:"1px solid #E8DDD4",borderRadius:6,padding:".15rem .45rem",fontSize:".62rem",color:"#888",cursor:"pointer",fontFamily:"inherit"}}>+ Ajouter</button>
+                </div>
+                {(p.journal||[]).length===0?<div style={{fontSize:".65rem",color:"#888",fontStyle:"italic"}}>Aucun echange</div>:(p.journal||[]).slice(-3).reverse().map((e,i)=>(<div key={i} style={{display:"flex",gap:".4rem",marginBottom:".2rem"}}><span style={{fontSize:".6rem",color:"#888",flexShrink:0}}>{e.date}</span><span style={{fontSize:".7rem",color:"#3D2B1F"}}>{e.msg}</span></div>))}
+              </div>
+
               {/* Bouton conversion si statut Converti */}
               {p.statut==="✅ Converti"&&(
                 <div style={{marginTop:".5rem",paddingTop:".5rem",borderTop:`1px solid ${C.pale}`}}>
@@ -4060,6 +4243,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       {/* CLIENTS (+ sous-onglet Objections) */}
       {dtab==="clients"&&(
         <div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)",display:"flex",alignItems:"center",gap:".35rem"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="clients" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["clients"]||""}/>}
           <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
             <button onClick={()=>setClientsSubTab("clients")}
               style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${clientsSubTab==="clients"?C.rose:C.pale}`,background:clientsSubTab==="clients"?C.rose:C.blanc,color:clientsSubTab==="clients"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
@@ -4107,12 +4291,17 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
           {equipeFunTab==="powerhour"&&<PowerHourTab uid={uid} userName={userName} canCreate={isChefDash||uid===MELISSA||uid==="melissa-da-silveira"}/>}
         </div>
       )}
-      {dtab==="suivica"&&<SuiviCATab uid={uid}/>}
+      {dtab==="editorial"&&<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)",display:"flex",alignItems:"center",gap:".35rem"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="editorial" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["editorial"]||""}/>}<EditorialTab uid={uid} userName={userName}/></div>}
+      {dtab==="relances"&&<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)",display:"flex",alignItems:"center",gap:".35rem"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="relances" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["relances"]||""}/>}<RelancesTab prospects={prospects} clients={clients} saveProspects={saveProspects} saveClients={saveClients}/></div>}
+      {dtab==="business"&&(<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="business" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["business"]||""}/>}<div style={{display:"flex",gap:".3rem",marginBottom:"1rem",overflowX:"auto"}}>{[{id:"suivica",label:"CA"},{id:"entonnoir",label:"Entonnoir"},{id:"historique",label:"Historique"}].map(t=>(<button key={t.id} onClick={()=>setBtab(t.id)} style={{flex:"none",padding:".4rem .85rem",fontSize:".7rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(btab===t.id?"#C49A8A":"#E8DDD4"),background:btab===t.id?"#C49A8A":"white",color:btab===t.id?"white":"#888",cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>))}</div>{btab==="suivica"&&<SuiviCATab uid={uid}/>}
+          {btab==="entonnoir"&&<div><div style={{background:"#FAF7F2",borderRadius:10,padding:".65rem .85rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".7rem",color:"#3D1F0E",lineHeight:1.6}}><strong>Comment lire l entonnoir ?</strong><br/>Les barres montrent combien de personnes passent d une etape a l autre. P vers C = % de prospects devenus clientes. C vers D = % de clientes qui ont rejoint l equipe. Plus ces taux sont eleves, meilleure est ta conversion.</div><EntonnoirTab prospects={prospects} clients={clients} distributeurs={distributeurs}/></div>}
+          {btab==="historique"&&<div><div style={{background:"#FAF7F2",borderRadius:10,padding:".65rem .85rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".7rem",color:"#3D1F0E",lineHeight:1.6}}><strong>Comment lire l historique ?</strong><br/>Chaque barre = une periode de 21 jours. La barre la plus longue = ta meilleure periode. Clique sur une periode pour voir le detail des commandes. Si la periode affichee ne correspond pas (ex: P9 au lieu de P8), corrige la date dans Admin - Configuration des Periodes.</div><HistoriquePeriodes uid={uid}/></div>}</div>)}
       {dtab==="diagnostics"&&<DiagResultsTab uid={uid}/>}
 
       {/* DISTRIBUTEURS (+ sous-onglet Nouveaux Distributeurs) */}
       {dtab==="distributeurs"&&(
         <div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="distributeurs" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["distributeurs"]||""}/>}
           <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
             <button onClick={()=>setDistriSubTab("distributeurs")}
               style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${distriSubTab==="distributeurs"?C.rose:C.pale}`,background:distriSubTab==="distributeurs"?C.rose:C.blanc,color:distriSubTab==="distributeurs"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
@@ -4129,7 +4318,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       )}
 
       {/* POSTS */}
-      {dtab==="posts"&&(
+      {dtab==="posts_disabled"&&(
         <div>
           <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
             <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".65rem"}}>➕ Planifier un contenu</div>
@@ -4931,6 +5120,68 @@ const TEXTES_RELANCE=[
   {id:"t3",label:"Offre exclusive",texte:`Hello [Prénom] ! 👋\n\nJ'ai une petite surprise pour mes clientes fidèles — [offre/nouveauté]. Je pense que ça pourrait vraiment t'intéresser vu [raison personnalisée].\n\nDis-moi si tu veux qu'on en parle ! 🌿`},
 ];
 
+
+function RelancesTab({prospects,clients,saveProspects,saveClients}){
+  prospects=prospects||[];clients=clients||[];
+  const [section,setSection]=useState("prospects");
+  const [copied,setCopied]=useState(null);
+  const today=new Date().toISOString().slice(0,10);
+  const todayFr=new Date().toLocaleDateString("fr-FR");
+  const aRecontacter=prospects.filter(p=>p.relance&&p.relance<=today&&p.statut!=="Converti"&&p.statut!=="Archive").sort((a,b)=>a.relance<b.relance?-1:1);
+  const sansContact=prospects.filter(p=>!p.relance&&p.statut!=="Converti"&&p.statut!=="Archive"&&p.date).filter(p=>{try{const pts=p.date.split("/");const d=new Date(pts[2],pts[1]-1,pts[0]);return(new Date()-d)>14*24*60*60*1000;}catch{return false;}});
+  const endormies=clients.filter(c=>{const cmds=c.commandes||[];if(!cmds.length)return false;const d=[...cmds].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];return Math.floor((new Date()-new Date(d.date))/(864e5))>=60;}).map(c=>{const cmds=[...c.commandes].sort((a,b)=>new Date(b.date)-new Date(a.date));return{...c,joursSans:Math.floor((new Date()-new Date(cmds[0].date))/(864e5)),derniereCmd:cmds[0]};}).sort((a,b)=>b.joursSans-a.joursSans);
+  const copy=(text,id)=>{navigator.clipboard?.writeText(text);setCopied(id);setTimeout(()=>setCopied(null),2000);};
+  const msgP=(p)=>"Coucou "+(p.name&&p.name.split(" ")[0]||"")+" ! On avait echange il y a quelques jours. Tu as eu le temps de reflechir ? Je suis la si tu as des questions";
+  const msgE=(c)=>"Coucou "+c.prenom+" ! Ca fait un moment qu'on ne s'est pas parlees. J'ai pense a toi avec nos nouvelles references. Tu veux qu'on fasse le point sur ta routine ?";
+  const marquerFait=(p)=>saveProspects(prospects.map(x=>x.id===p.id?{...x,relance:"",journal:[...(x.journal||[]),{date:todayFr,msg:"Relance effectuee"}]}:x));
+  const progRelance=(p,j)=>{const d=new Date();d.setDate(d.getDate()+j);saveProspects(prospects.map(x=>x.id===p.id?{...x,relance:d.toISOString().slice(0,10)}:x));};
+  return(
+    <div style={{paddingBottom:"2rem"}}>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>Relances <em style={{fontStyle:"italic",color:C.rose}}>du jour</em></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:".4rem",marginBottom:"1rem"}}>
+        {[[aRecontacter.length,"A recontacter",C.rose],[sansContact.length,"Sans contact 14j+",C.or],[endormies.length,"Endormies 60j+",C.lilas]].map(([val,label,col])=>(<div key={label} style={{background:C.creme,borderRadius:10,padding:".65rem .5rem",textAlign:"center",border:"1px solid "+C.pale}}><div style={{fontSize:"1.2rem",fontWeight:700,color:col}}>{val}</div><div style={{fontSize:".58rem",color:C.gris,lineHeight:1.3}}>{label}</div></div>))}
+      </div>
+      <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
+        {[{id:"prospects",label:"Prospects ("+(aRecontacter.length+sansContact.length)+")"},{id:"endormies",label:"Endormies ("+endormies.length+")"}].map(t=>(<button key={t.id} onClick={()=>setSection(t.id)} style={{flex:1,padding:".4rem .5rem",fontSize:".7rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(section===t.id?C.rose:C.pale),background:section===t.id?C.rose:"white",color:section===t.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>))}
+      </div>
+      {section==="prospects"&&<div>
+        {aRecontacter.length===0&&sansContact.length===0&&<div style={{textAlign:"center",padding:"2rem",color:C.gris}}><div style={{fontSize:"2rem"}}>✅</div><div style={{fontSize:".82rem"}}>Aucun prospect a relancer !</div></div>}
+        {aRecontacter.length>0&&<div style={{marginBottom:"1rem"}}>
+          <div style={{fontSize:".62rem",fontWeight:700,color:"#C44B1A",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>A recontacter ({aRecontacter.length})</div>
+          {aRecontacter.map(p=>(<div key={p.id} style={{background:"white",border:"1.5px solid #C44B1A40",borderRadius:12,padding:".85rem 1rem",marginBottom:".5rem"}}>
+            <div style={{fontSize:".85rem",fontWeight:700,color:C.brun,marginBottom:".3rem"}}>{p.name}</div>
+            <div style={{background:C.creme,borderRadius:8,padding:".5rem .7rem",fontSize:".72rem",color:C.texte,lineHeight:1.6,marginBottom:".5rem",fontStyle:"italic"}}>"{msgP(p)}"</div>
+            <div style={{display:"flex",gap:".3rem",flexWrap:"wrap"}}>
+              <button onClick={()=>copy(msgP(p),"m"+p.id)} style={{background:copied==="m"+p.id?C.vert:C.brun,color:"white",border:"none",borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>{copied==="m"+p.id?"Copie !":"Copier"}</button>
+              <button onClick={()=>marquerFait(p)} style={{background:"none",border:"1px solid "+C.vert,color:C.vert,borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Fait</button>
+              <button onClick={()=>progRelance(p,3)} style={{background:"none",border:"1px solid "+C.pale,color:C.gris,borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontFamily:"inherit",cursor:"pointer"}}>+3j</button>
+              <button onClick={()=>progRelance(p,7)} style={{background:"none",border:"1px solid "+C.pale,color:C.gris,borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontFamily:"inherit",cursor:"pointer"}}>+7j</button>
+            </div>
+          </div>))}
+        </div>}
+        {sansContact.length>0&&<div>
+          <div style={{fontSize:".62rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>Sans contact 14j+ ({sansContact.length})</div>
+          {sansContact.map(p=>(<div key={p.id} style={{background:"white",border:"1px solid "+C.pale,borderRadius:12,padding:".85rem 1rem",marginBottom:".5rem"}}>
+            <div style={{fontSize:".85rem",fontWeight:700,color:C.brun,marginBottom:".3rem"}}>{p.name}</div>
+            <div style={{display:"flex",gap:".3rem"}}><button onClick={()=>copy(msgP(p),"m2"+p.id)} style={{background:copied==="m2"+p.id?C.vert:C.brun,color:"white",border:"none",borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>{copied==="m2"+p.id?"Copie !":"Copier message"}</button><button onClick={()=>progRelance(p,3)} style={{background:"none",border:"1px solid "+C.rose,color:C.rose,borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontFamily:"inherit",cursor:"pointer"}}>Programmer relance</button></div>
+          </div>))}
+        </div>}
+      </div>}
+      {section==="endormies"&&<div>
+        {endormies.length===0&&<div style={{textAlign:"center",padding:"2rem",color:C.gris}}><div style={{fontSize:"2rem"}}>🌟</div><div style={{fontSize:".82rem"}}>Toutes tes clientes sont actives !</div></div>}
+        {endormies.map(c=>(<div key={c.id} style={{background:"white",border:"1.5px solid #A89BB540",borderRadius:12,padding:".85rem 1rem",marginBottom:".5rem"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:".4rem"}}>
+            <div><div style={{fontSize:".85rem",fontWeight:700,color:C.brun}}>{c.prenom} {c.nom||""}</div><div style={{fontSize:".65rem",color:"#C62828"}}>{c.joursSans}j sans commande</div></div>
+            <div style={{fontSize:".7rem",fontWeight:700,color:C.brun}}>{(c.commandes||[]).reduce((s,cmd)=>s+(parseFloat(cmd.montant)||0),0).toFixed(0)}EUR</div>
+          </div>
+          <div style={{background:"#FFF3F0",borderRadius:8,padding:".5rem .7rem",fontSize:".72rem",color:C.texte,lineHeight:1.6,marginBottom:".5rem",fontStyle:"italic"}}>"{msgE(c)}"</div>
+          <button onClick={()=>copy(msgE(c),"e"+c.id)} style={{background:copied==="e"+c.id?C.vert:C.brun,color:"white",border:"none",borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>{copied==="e"+c.id?"Copie !":"Copier"}</button>
+        </div>))}
+        {endormies.length>0&&<button onClick={()=>{copy(endormies.map(c=>c.prenom+": "+msgE(c)).join("\n\n"),"all");}} style={{width:"100%",background:copied==="all"?C.vert:C.lilas,color:"white",border:"none",borderRadius:8,padding:".5rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginTop:".5rem"}}>{copied==="all"?"Tous copies !":"Copier tous les messages"}</button>}
+      </div>}
+    </div>
+  );
+}
 function ClientsRelanceTab({clients,save,uid}){
   const[openClient,setOpenClient]=useState(null);
   const[openTexte,setOpenTexte]=useState(null);
@@ -5391,7 +5642,11 @@ function DistributeursTab({distributeurs,save,uid}){
       const nom = m.nom || parts.slice(1).join(" ") || "";
       return {...m, prenom, nom, id:"auto-"+m.uid, auto:true};
     });
-  const allEntries = [...autoEntries, ...distributeurs.map(d=>({...d, auto:false}))];
+  const manualFiltered = isMelissa ? distributeurs : distributeurs.filter(d=>{
+    const dUid=(d.prenom+"-"+d.nom).toLowerCase().replace(/\s+/g,"-").replace(/-+$/,"");
+    return !descendants||descendants.has(dUid)||Object.values(annuaire).some(m=>(m.prenom===d.prenom&&m.nom===d.nom)&&descendants.has(m.uid));
+  });
+  const allEntries = [...autoEntries, ...manualFiltered.map(d=>({...d, auto:false}))];
 
   // Helpers navigation par équipe (basé sur le champ marraine de l'annuaire)
   const fmtNom=(u)=>u.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
@@ -7559,6 +7814,449 @@ const FETES_IMPORTANTES=[
   {title:"🎆 Réveillon du Nouvel An",date:"2026-12-31",type:"fete",notes:"Bilan de l'année + lancement nouvelles résolutions — excellent pour le storytelling"},
 ];
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CALENDRIER ÉDITORIAL IA — Planning contenu automatique
+// ══════════════════════════════════════════════════════════════════════════════
+const THEMES_SEMAINE = [
+  { // Lundi
+    post1:{ type:"Storytelling", theme:"Ma vie avant/après Mihi", angle:"Transformation personnelle", hook:"Je n'avais pas prévu que ça changerait autant ma vie...", cta:"", conseil_photo:"Dyptique avant/après — lumière naturelle côté fenêtre, expression authentique" },
+    post2:{ type:"Conversion", theme:"CTA Minceur", angle:"Appel à l'action produit minceur", hook:"Tu veux perdre du poids sans régime draconien ?", cta:"MINCEUR", conseil_photo:"Produit posé sur surface blanche avec feuille verte" },
+    stories:["📸 Coulisses de ton lundi — montre ta vraie vie (café, bureau, enfant)","❓ Sondage : Tu te bats plus contre la fatigue ou la balance ? (A/B)","🔥 Glisse vers ma bio pour le diagnostic GRATUIT →"]
+  },
+  { // Mardi
+    post1:{ type:"Identification", theme:"La douleur de la maman épuisée", angle:"Miroir émotionnel", hook:"Lever à 6h, coucher à 23h, et toujours l'impression de ne rien faire de bien.", cta:"", conseil_photo:"Selfie spontané — pas de maquillage parfait, expression vraie, lumière douce" },
+    post2:{ type:"Diagnostic", theme:"CTA Diagnostic beauté", angle:"Personnalisation", hook:"Ton profil beauté/bien-être dit tout sur tes besoins. Tu le connais ?", cta:"DIAGNOSTIC", conseil_photo:"Flatlay soins sur marbre — lumière naturelle, pas de flash" },
+    stories:["🌅 Ton matin en 3 photos — sans filtres, sans mise en scène","🎯 Question : Qu'est-ce qui t'épuise le plus en ce moment ?","💊 Le produit qui a tout changé pour moi → voir en bio"]
+  },
+  { // Mercredi
+    post1:{ type:"Expertise Produit", theme:"Focus produit star", angle:"Bénéfice concret + résultat", hook:"3 semaines. C'est le temps qu'il a fallu pour voir la différence.", cta:"", conseil_photo:"Produit en main avec ongles soignés — fond neutre clair" },
+    post2:{ type:"Recrutement", theme:"CTA Équipe", angle:"Opportunité discrète", hook:"Je cherche 3 femmes motivées pour développer leur activité depuis chez elles.", cta:"ÉQUIPE", conseil_photo:"Photo de toi au travail — ordinateur, sourire, lumière naturelle" },
+    stories:["💡 Astuce du jour : Le rituel matin qui a transformé ma peau","📊 Sondage : Tu préfères les compléments ou les soins topiques ?","👉 Rejoins mon équipe — détails en DM : tape ÉQUIPE"]
+  },
+  { // Jeudi
+    post1:{ type:"Preuve Sociale", theme:"Témoignage cliente", angle:"Résultat réel", hook:"Elle était sceptique. Moi aussi j'aurais été. Et pourtant...", cta:"", conseil_photo:"Capture écran témoignage sur fond de ta couleur de marque" },
+    post2:{ type:"Objection Destroyer", theme:"Ce qu'on dit sur le MLM", angle:"Vérité cash", hook:"'C'est une arnaque' — voilà ce qu'on m'a dit quand j'ai commencé.", cta:"", conseil_photo:"Toi face caméra — direct, confiant, lumière frontale douce" },
+    stories:["⭐ Résultat d'une cliente cette semaine — sans filtre","🤔 Sondage : Tu as déjà essayé des compléments alimentaires ?","📩 Tu veux ce résultat ? Écris-moi en DM"]
+  },
+  { // Vendredi
+    post1:{ type:"Lifestyle", theme:"Mon vendredi sans patron", angle:"Liberté concrète", hook:"Vendredi 14h. Je récupère mon enfant à l'école. Pas de permission demandée.", cta:"", conseil_photo:"Photo extérieure — lifestyle réel, sourire naturel, tenue décontractée" },
+    post2:{ type:"Cadeau", theme:"CTA Silhouette", angle:"Lead magnet carnet", hook:"7 jours de recettes gourmandes pour te sentir plus légère — OFFERT.", cta:"SILHOUETTE", conseil_photo:"Carnet ouvert avec recette visible — fond bois clair, herbes fraîches" },
+    stories:["✨ Mon vendredi en images — liberté d'horaires, c'est possible","🎁 Qui veut le carnet silhouette OFFERT ? Réponds à cette story","🌿 Recette du vendredi : smoothie détox express"]
+  },
+  { // Samedi
+    post1:{ type:"Humour / Coulisses", theme:"La réalité de l'entrepreneuriat", angle:"Humour authentique", hook:"La réalité de travailler en pyjama (spoiler : c'est pas toujours glamour 😅)", cta:"", conseil_photo:"Photo candide — pyjama assumé, café, sourire complice" },
+    post2:{ type:"Question Interactive", theme:"Sondage communauté", angle:"Engagement fort", hook:"Dis-moi : tu préfères les routines courtes ou les rituels complets ?", cta:"", conseil_photo:"Toi avec tes produits — mise en scène simple, fond uni" },
+    stories:["😂 Coulisses honnêtes — le truc qui a mal tourné cette semaine","🗳️ Vote : Routine 5 min ou rituel 20 min ? (A/B)","💬 Raconte-moi ta routine bien-être en DM !"]
+  },
+  { // Dimanche
+    post1:{ type:"Bilan / Inspiration", theme:"Résultats de la semaine", angle:"Preuve que ça marche", hook:"Cette semaine dans mon équipe : voilà ce qui s'est passé.", cta:"", conseil_photo:"Flat lay de la semaine — agenda, produits, chiffres" },
+    post2:{ type:"Recrutement Fort", theme:"Places ouvertes nouvelle période", angle:"Urgence douce + opportunité", hook:"La nouvelle période commence. Les premières places sont disponibles.", cta:"ÉQUIPE", conseil_photo:"Toi devant tes produits — posture confiante, regard caméra" },
+    stories:["📊 Mon bilan semaine — chiffres et apprentissages","🌟 Cette semaine dans l'équipe — les victoires","💫 Tu veux commencer la semaine prochaine ? DM-moi"]
+  },
+];
+
+
+// ── BIBLIOTHÈQUE D'IDÉES DE POSTS ────────────────────────────────────────────
+const IDEES_POSTS = {
+  storytelling: [
+    "Ma vie avant/après Mihi — la vraie transformation",
+    "Le jour où j'ai dit oui à cette opportunité",
+    "Ce que personne ne voit derrière mes posts",
+    "Mon plus grand doute quand j'ai commencé",
+    "La semaine où tout a failli s'arrêter",
+    "Comment je concilie maternité et entrepreneuriat",
+    "Mon premier chèque Mihi — ce que j'ai ressenti",
+    "Pourquoi j'ai quitté mon ancien job",
+  ],
+  identification: [
+    "Tu te reconnais ? Lever à 6h coucher à 23h...",
+    "Maman épuisée qui rêve d'autre chose 🙋",
+    "Quand tu passes 8h au bureau pour un salaire qui ne suit pas",
+    "Le syndrome de la femme qui fait tout pour tout le monde",
+    "Quand l'agenda des autres dicte ta vie",
+    "Tu mérites mieux qu'un salaire minimum à 45 ans",
+    "Bosser dur sans voir la couleur de ton argent",
+  ],
+  produit: [
+    "3 semaines pour voir la différence — voici le résultat",
+    "Le produit qui a remplacé ma routine complète",
+    "Pourquoi je ne peux plus me passer de X",
+    "Avant/après — et non c'est pas un filtre",
+    "Le secret de ma peau à 35 ans",
+    "J'ai testé pendant 30 jours — voilà ce que j'en pense",
+    "Mes 3 essentiels Mihi du mois",
+    "Focus sur notre best-seller — pourquoi il cartonne",
+  ],
+  preuve_sociale: [
+    "Elle était sceptique. Résultat après 1 mois →",
+    "Témoignage de la semaine — elle a tout essayé avant",
+    "Quand une cliente me dit ça, mon coeur 🥺",
+    "Message reçu ce matin qui m'a fait pleurer",
+    "Elle a perdu X kg en X semaines avec cette routine",
+    "Mon équipe cette semaine — je suis trop fière",
+  ],
+  recrutement: [
+    "Je cherche 3 femmes motivées pour rejoindre mon équipe",
+    "Ce que personne ne te dit sur le MLM (la vérité)",
+    "Comment je gagne un revenu complémentaire depuis chez moi",
+    "Tu veux travailler depuis n'importe où ?",
+    "Les places pour P9 sont ouvertes — qui est partante ?",
+    "Rejoindre Mihi c'est quoi concrètement ?",
+    "Mon équipe grandit — tu veux en faire partie ?",
+  ],
+  lifestyle: [
+    "Vendredi 14h — je récupère mon enfant. Pas de permission.",
+    "Mon bureau aujourd'hui (indice : c'est un café)",
+    "Travailler en pyjama — la réalité vs le fantasme 😅",
+    "Ce que la liberté financière change vraiment",
+    "Une journée dans ma vie de maman-entrepreneuse",
+    "Mon matin sans alarme 🌅",
+    "Le luxe de choisir ses horaires",
+  ],
+  conversion: [
+    "CTA MINCEUR — Tu veux perdre du poids sans régime ?",
+    "CTA DIAGNOSTIC — Ton profil beauté dit tout",
+    "CTA EQUIPE — Opportunité de revenu complémentaire",
+    "CTA SILHOUETTE — Carnet recettes gourmandes offert",
+    "Question sondage — Tu préfères routine courte ou rituel complet ?",
+    "Appel direct — DM-moi le mot MINCEUR",
+  ],
+  humour: [
+    "La réalité de bosser depuis chez soi (thread honnête)",
+    "Les questions qu'on me pose sur Mihi 😂",
+    "Ce que ma famille pense de mon activité vs la réalité",
+    "Mon bureau vu par les réseaux vs mon bureau IRL",
+    "Les 5 phases de la distributrice Mihi",
+  ],
+};
+
+const CATEGORIES_IDEES = [
+  {id:"storytelling", label:"✨ Storytelling", color:"#C49A8A"},
+  {id:"identification", label:"🪞 Identification", color:"#A89BB5"},
+  {id:"produit", label:"💊 Produit", color:"#7FAF8A"},
+  {id:"preuve_sociale", label:"⭐ Preuve sociale", color:"#C4A882"},
+  {id:"recrutement", label:"👑 Recrutement", color:"#3D1F0E"},
+  {id:"lifestyle", label:"🌸 Lifestyle", color:"#C49A8A"},
+  {id:"conversion", label:"🔥 Conversion CTA", color:"#B04040"},
+  {id:"humour", label:"😄 Humour", color:"#5A8A7A"},
+];
+
+function EditorialTab({ uid, userName }) {
+  const [vue, setVue] = useState("semaine");
+  const [contenu, setContenu] = useState({});
+  const [generating, setGenerating] = useState(null);
+  const [jourOuvert, setJourOuvert] = useState(null);
+  const [copied, setCopied] = useState(null);
+  const [savedDays, setSavedDays] = useState({});
+  const [editMode, setEditMode] = useState(null); // {dateStr, postIdx}
+  const [showIdees, setShowIdees] = useState(null); // {dateStr, postIdx}
+  const [customThemes, setCustomThemes] = useState({}); // {dateStr: {p1Override, p2Override}}
+
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0,10);
+  const JOURS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+  const MOIS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+  const API_KEY = "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";
+
+  const THEMES = [
+    {p1:{type:"Storytelling",hook:"Je n'avais pas prévu que ça changerait ma vie...",conseil:"Dyptique avant/après, lumière naturelle"},p2:{type:"Conversion Minceur",hook:"Tu veux perdre du poids sans régime draconien ?",cta:"MINCEUR",conseil:"Produit sur fond blanc avec feuille verte"},s:["Coulisses de ton lundi — café, enfant, bureau","Sondage : tu te bats plus contre la fatigue ou la balance ?","Diagnostic GRATUIT → lien en bio"]},
+    {p1:{type:"Identification",hook:"Lever à 6h, coucher à 23h, toujours l'impression de ne rien faire de bien.",conseil:"Selfie spontané, lumière douce"},p2:{type:"Diagnostic",hook:"Ton profil beauté dit tout sur tes besoins. Tu le connais ?",cta:"DIAGNOSTIC",conseil:"Flatlay soins sur marbre, lumière naturelle"},s:["Ton matin en 3 photos — sans filtres","Question : qu'est-ce qui t'épuise le plus ?","Le produit qui a tout changé → bio"]},
+    {p1:{type:"Expertise Produit",hook:"3 semaines. C'est le temps qu'il a fallu pour voir la différence.",conseil:"Produit en main, fond neutre clair"},p2:{type:"Recrutement",hook:"Je cherche 3 femmes motivées pour développer leur activité.",cta:"EQUIPE",conseil:"Toi au travail, sourire, lumière naturelle"},s:["Astuce du jour sur ma routine","Sondage : compléments ou soins topiques ?","Rejoins mon équipe — tape EQUIPE en DM"]},
+    {p1:{type:"Preuve Sociale",hook:"Elle était sceptique. Et pourtant...",conseil:"Screenshot témoignage sur fond marque"},p2:{type:"Objection MLM",hook:"'C'est une arnaque' — voilà ce qu'on m'a dit quand j'ai commencé.",conseil:"Toi face caméra, direct, confiant"},s:["Résultat d'une cliente cette semaine","Sondage : tu as déjà essayé des compléments ?","Tu veux ce résultat ? DM-moi"]},
+    {p1:{type:"Lifestyle",hook:"Vendredi 14h. Je récupère mon enfant. Pas de permission demandée.",conseil:"Photo extérieure, sourire naturel"},p2:{type:"Cadeau Silhouette",hook:"7 jours de recettes gourmandes — OFFERT.",cta:"SILHOUETTE",conseil:"Carnet ouvert, fond bois clair"},s:["Mon vendredi en images — liberté d'horaires","Carnet silhouette OFFERT ? Réponds à cette story","Recette du vendredi : smoothie détox"]},
+    {p1:{type:"Humour Coulisses",hook:"La réalité de travailler en pyjama (c'est pas toujours glamour 😅)",conseil:"Photo candide, café, sourire complice"},p2:{type:"Question Interactive",hook:"Tu préfères les routines courtes ou les rituels complets ?",conseil:"Toi avec tes produits, fond uni"},s:["Coulisses honnêtes — le truc qui a mal tourné","Vote : Routine 5 min ou rituel 20 min ?","Ta routine en DM !"]},
+    {p1:{type:"Bilan Semaine",hook:"Cette semaine dans mon équipe : voilà ce qui s'est passé.",conseil:"Flatlay agenda + produits"},p2:{type:"Recrutement Fort",hook:"La nouvelle période commence. Les premières places sont disponibles.",cta:"EQUIPE",conseil:"Toi face caméra, posture confiante"},s:["Mon bilan semaine — chiffres et apprentissages","Victoires de l'équipe cette semaine","Tu veux commencer la semaine prochaine ? DM-moi"]},
+  ];
+
+  const getTheme = (dateStr) => {
+    const d = new Date(dateStr);
+    const base = THEMES[d.getDay()];
+    const custom = customThemes[dateStr];
+    return {
+      ...base,
+      p1: {...base.p1, ...(custom?.p1||{})},
+      p2: {...base.p2, ...(custom?.p2||{})},
+    };
+  };
+
+  const genDays = (n=28) => { const r=[]; for(let i=0;i<n;i++){const d=new Date(today);d.setDate(today.getDate()+i);r.push(d.toISOString().slice(0,10));} return r; };
+  const copy = (t,id) => { navigator.clipboard?.writeText(t); setCopied(id); setTimeout(()=>setCopied(null),2000); };
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap = await getDoc(doc(db,"editorial",uid));
+        if(snap.exists()){
+          const data = snap.data();
+          setContenu(data.contenu||{});
+          setCustomThemes(data.customThemes||{});
+          setSavedDays(data.savedDays||{});
+        }
+      }catch{}
+    })();
+  },[uid]);
+
+  const saveToFirestore = async(newContenu, newCustom, newSaved) => {
+    try{
+      await setDoc(doc(db,"editorial",uid),{
+        contenu: newContenu !== undefined ? newContenu : contenu,
+        customThemes: newCustom !== undefined ? newCustom : customThemes,
+        savedDays: newSaved !== undefined ? newSaved : savedDays,
+      },{merge:true});
+    }catch{}
+  };
+
+  const toggleSaved = (dateStr, key) => {
+    const newSaved = {...savedDays, [dateStr+key]: !savedDays[dateStr+key]};
+    setSavedDays(newSaved);
+    saveToFirestore(undefined, undefined, newSaved);
+  };
+
+  const updateCustomTheme = (dateStr, postKey, field, value) => {
+    const newCustom = {
+      ...customThemes,
+      [dateStr]: {
+        ...(customThemes[dateStr]||{}),
+        [postKey]: {
+          ...(customThemes[dateStr]?.[postKey]||{}),
+          [field]: value
+        }
+      }
+    };
+    setCustomThemes(newCustom);
+    saveToFirestore(undefined, newCustom, undefined);
+  };
+
+  const generer = async(dateStr) => {
+    setGenerating(dateStr);
+    const th = getTheme(dateStr);
+    const d = new Date(dateStr);
+    const jn = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"][d.getDay()];
+    try{
+      const prompt = "Tu es experte content marketing pour Melissa, distributrice Mihi France, maman authentique.\nJour: "+jn+" "+d.getDate()+"/"+d.getMonth()+"\nPost1: "+th.p1.type+" - "+th.p1.hook+"\nPost2: "+th.p2.type+" - "+th.p2.hook+(th.p2.cta?" CTA:"+th.p2.cta:"")+"\nStories: "+th.s.join("|")+"\nReponds UNIQUEMENT en JSON valide sans backticks:\n{\"post1\":{\"hooks\":[\"h1\",\"h2\",\"h3\"],\"legende\":\"150 mots avec emojis\",\"hashtags\":\"#tag1 #tag2 etc\"},\"post2\":{\"hooks\":[\"h1\",\"h2\",\"h3\"],\"legende\":\"avec CTA clair\",\"hashtags\":\"#tag1 #tag2 etc\"},\"stories\":[{\"num\":1,\"script\":\"texte\",\"conseil\":\"visuel\"},{\"num\":2,\"script\":\"sondage\",\"conseil\":\"visuel\"},{\"num\":3,\"script\":\"CTA\",\"conseil\":\"visuel\"}]}";
+      const resp = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
+      });
+      const data = await resp.json();
+      const txt = (data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim();
+      const parsed = JSON.parse(txt);
+      const newContenu = {...contenu,[dateStr]:parsed};
+      setContenu(newContenu);
+      saveToFirestore(newContenu, undefined, undefined);
+    }catch(e){console.error("Editorial IA:",e);}
+    setGenerating(null);
+  };
+
+  // Popup bibliothèque d'idées
+  const BiblioPopup = ({dateStr, postIdx, onClose}) => {
+    const [catActive, setCatActive] = useState(CATEGORIES_IDEES[0].id);
+    return(
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)"}} onClick={onClose}>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,background:"white",borderRadius:"20px 20px 0 0",maxHeight:"80vh",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+          <div style={{padding:"1rem 1.2rem .5rem",borderBottom:"1px solid #E8DDD4",flexShrink:0}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"#3D1F0E",marginBottom:".5rem"}}>Bibliothèque d'idées <em style={{color:"#C49A8A"}}>Post {postIdx+1}</em></div>
+            <div style={{display:"flex",gap:".3rem",overflowX:"auto",paddingBottom:".3rem"}}>
+              {CATEGORIES_IDEES.map(cat=>(
+                <button key={cat.id} onClick={()=>setCatActive(cat.id)}
+                  style={{flexShrink:0,padding:".3rem .65rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(catActive===cat.id?cat.color:"#E8DDD4"),background:catActive===cat.id?cat.color:"white",color:catActive===cat.id?"white":"#888",cursor:"pointer",fontFamily:"inherit"}}>
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{overflowY:"auto",padding:".75rem 1.2rem 1.5rem"}}>
+            {(IDEES_POSTS[catActive]||[]).map((idee,i)=>(
+              <div key={i} onClick={()=>{
+                updateCustomTheme(dateStr, postIdx===0?"p1":"p2", "hook", idee);
+                onClose();
+              }}
+                style={{padding:".65rem .85rem",borderRadius:10,border:"1px solid #E8DDD4",marginBottom:".4rem",cursor:"pointer",fontSize:".78rem",color:"#3D2B1F",lineHeight:1.55,background:"#FAF7F2"}}>
+                {idee}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const VUE = () => (
+    <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
+      {[["jour","Aujourd'hui"],["semaine","Semaine"],["mois","Mois"]].map(([v,l])=>(
+        <button key={v} onClick={()=>setVue(v)}
+          style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(vue===v?C.rose:C.pale),background:vue===v?C.rose:"white",color:vue===v?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+
+  const PostBlock = ({th, postKey, postIdx, dateStr, ct}) => {
+    const thPost = th[postKey];
+    const ctPost = ct?.[postKey==="p1"?"post1":"post2"];
+    const isSaved = savedDays[dateStr+"p"+postIdx];
+    const [localHook, setLocalHook] = useState(thPost.hook);
+    const isEditing = editMode?.dateStr===dateStr && editMode?.postIdx===postIdx;
+
+    return(
+      <div style={{background:"white",borderRadius:10,padding:".75rem",marginBottom:".5rem",border:"1.5px solid "+(isSaved?"#7FAF8A":C.pale)}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:".35rem"}}>
+          <div>
+            <span style={{background:postIdx===0?C.rose:C.brun,color:"white",borderRadius:20,padding:".1rem .45rem",fontSize:".58rem",fontWeight:700,marginRight:".35rem"}}>Post {postIdx+1}</span>
+            <span style={{fontSize:".65rem",color:C.gris}}>{thPost.type}</span>
+          </div>
+          <div style={{display:"flex",gap:".3rem",alignItems:"center"}}>
+            <button onClick={()=>setShowIdees({dateStr,postIdx})}
+              style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:20,padding:".15rem .5rem",fontSize:".6rem",color:C.brun,cursor:"pointer",fontFamily:"inherit"}}>
+              💡 Idées
+            </button>
+            <button onClick={()=>setEditMode(isEditing?null:{dateStr,postIdx})}
+              style={{background:isEditing?C.rose:C.creme,border:`1px solid ${isEditing?C.rose:C.pale}`,borderRadius:20,padding:".15rem .5rem",fontSize:".6rem",color:isEditing?"white":C.brun,cursor:"pointer",fontFamily:"inherit"}}>
+              ✏️ Modifier
+            </button>
+            <button onClick={()=>toggleSaved(dateStr,"p"+postIdx)}
+              style={{background:isSaved?"#7FAF8A":"none",color:isSaved?"white":C.gris,border:`1px solid ${isSaved?"#7FAF8A":C.pale}`,borderRadius:20,padding:".15rem .45rem",fontSize:".6rem",cursor:"pointer",fontFamily:"inherit"}}>
+              {isSaved?"✅":"○"}
+            </button>
+          </div>
+        </div>
+
+        {isEditing ? (
+          <div>
+            <textarea value={localHook} onChange={e=>setLocalHook(e.target.value)}
+              style={{width:"100%",border:`1px solid ${C.rose}`,borderRadius:8,padding:".4rem .55rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,resize:"none",outline:"none",minHeight:60}}/>
+            <button onClick={()=>{
+              updateCustomTheme(dateStr, postKey, "hook", localHook);
+              setEditMode(null);
+            }}
+              style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".3rem .75rem",fontSize:".68rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginTop:".3rem"}}>
+              Sauvegarder
+            </button>
+          </div>
+        ) : (
+          <div style={{fontSize:".78rem",color:C.texte,lineHeight:1.6,fontStyle:"italic",marginBottom:".3rem"}}>"{thPost.hook}"</div>
+        )}
+
+        {thPost.cta&&<div style={{background:C.brun+"15",borderRadius:6,padding:".2rem .5rem",fontSize:".65rem",color:C.brun,fontWeight:600,marginBottom:".3rem"}}>CTA : {thPost.cta}</div>}
+        {thPost.conseil&&<div style={{background:"#FFF8E1",borderRadius:6,padding:".2rem .5rem",fontSize:".63rem",color:"#856404"}}>📸 {thPost.conseil}</div>}
+
+        {ctPost&&<div style={{marginTop:".5rem"}}>
+          {(ctPost.hooks||[]).map((h,i)=>(
+            <div key={i} style={{display:"flex",gap:".4rem",background:C.creme,borderRadius:7,padding:".3rem .5rem",marginBottom:".2rem"}}>
+              <span style={{fontSize:".7rem",flex:1,fontStyle:"italic"}}>{h}</span>
+              <button onClick={()=>copy(h,"h"+postIdx+i+dateStr)} style={{background:copied==="h"+postIdx+i+dateStr?C.vert:C.brun,color:"white",border:"none",borderRadius:5,padding:".15rem .4rem",fontSize:".6rem",cursor:"pointer",flexShrink:0}}>{copied==="h"+postIdx+i+dateStr?"✓":"📋"}</button>
+            </div>
+          ))}
+          {ctPost.legende&&<div style={{marginTop:".3rem"}}><div style={{background:C.creme,borderRadius:7,padding:".4rem .55rem",fontSize:".7rem",lineHeight:1.6,marginBottom:".2rem"}}>{ctPost.legende}</div><button onClick={()=>copy(ctPost.legende,"l"+postIdx+dateStr)} style={{background:copied==="l"+postIdx+dateStr?C.vert:C.brun,color:"white",border:"none",borderRadius:7,padding:".25rem .55rem",fontSize:".63rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>{copied==="l"+postIdx+dateStr?"✅ Copié":"📋 Copier légende"}</button></div>}
+        </div>}
+      </div>
+    );
+  };
+
+  const JourCard = ({dateStr, expanded=false}) => {
+    const th = getTheme(dateStr);
+    const d = new Date(dateStr);
+    const isT = dateStr===todayStr;
+    const isOpen = expanded || jourOuvert===dateStr;
+    const ct = contenu[dateStr];
+    const isGen = generating===dateStr;
+    const nbFait = [0,1].filter(i=>savedDays[dateStr+"p"+i]).length + [0,1,2].filter(i=>savedDays[dateStr+"s"+i]).length;
+
+    return(
+      <div style={{background:C.blanc,border:"1.5px solid "+(isT?C.rose:C.pale),borderRadius:12,marginBottom:".6rem",overflow:"hidden"}}>
+        <div onClick={()=>!expanded&&setJourOuvert(isOpen?null:dateStr)}
+          style={{padding:".75rem 1rem",cursor:expanded?"default":"pointer",display:"flex",alignItems:"center",gap:".75rem"}}>
+          <div style={{width:46,height:46,borderRadius:10,background:isT?C.rose:C.creme,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <div style={{fontSize:".58rem",fontWeight:700,color:isT?"white":C.gris}}>{JOURS[d.getDay()]}</div>
+            <div style={{fontSize:"1.1rem",fontWeight:700,color:isT?"white":C.brun}}>{d.getDate()}</div>
+            <div style={{fontSize:".52rem",color:isT?"rgba(255,255,255,.7)":C.gris}}>{MOIS[d.getMonth()]}</div>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",gap:".3rem",marginBottom:".2rem",flexWrap:"wrap"}}>
+              <span style={{background:C.rose+"20",color:C.rose,borderRadius:20,padding:".1rem .4rem",fontSize:".58rem",fontWeight:700}}>{th.p1.type}</span>
+              <span style={{background:C.brun+"15",color:C.brun,borderRadius:20,padding:".1rem .4rem",fontSize:".58rem",fontWeight:700}}>{th.p2.type}</span>
+              {ct&&<span style={{background:C.vert+"20",color:C.vert,borderRadius:20,padding:".1rem .4rem",fontSize:".58rem",fontWeight:700}}>✅ IA</span>}
+            </div>
+            <div style={{height:4,background:C.pale,borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",background:nbFait>0?C.rose:C.pale,width:(nbFait/5*100)+"%",transition:"width .3s"}}/></div>
+          </div>
+          {!expanded&&<span style={{color:C.gris,fontSize:".75rem",transform:isOpen?"rotate(90deg)":"none",transition:"transform .2s"}}>›</span>}
+        </div>
+
+        {isOpen&&<div style={{padding:"0 1rem 1rem",borderTop:"1px solid "+C.pale}}>
+          <button onClick={()=>generer(dateStr)} disabled={!!generating}
+            style={{width:"100%",background:isGen?C.pale:C.brun,color:isGen?C.gris:"white",border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:isGen?"wait":"pointer",margin:".65rem 0",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}>
+            {isGen?<>⏳ Génération...</>:<>✨ {ct?"Regénérer le contenu IA":"Générer le contenu IA"}</>}
+          </button>
+
+          <PostBlock th={th} postKey="p1" postIdx={0} dateStr={dateStr} ct={ct}/>
+          <PostBlock th={th} postKey="p2" postIdx={1} dateStr={dateStr} ct={ct}/>
+
+          <div style={{background:C.creme,borderRadius:10,padding:".75rem",border:"1px solid "+C.pale}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.or,textTransform:"uppercase",marginBottom:".35rem"}}>📱 3 Stories</div>
+            {th.s.map((s,i)=>(
+              <div key={i} style={{display:"flex",gap:".5rem",alignItems:"flex-start",padding:".3rem 0",borderBottom:i<2?"1px solid "+C.creme:"none"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:C.or+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".62rem",fontWeight:700,color:C.or,flexShrink:0}}>{i+1}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:".72rem",color:C.texte}}>{s}</div>
+                  {ct?.stories?.[i]&&<div style={{fontSize:".68rem",color:C.lilas,marginTop:".1rem",fontStyle:"italic"}}>{ct.stories[i].script}</div>}
+                </div>
+                <button onClick={()=>toggleSaved(dateStr,"s"+i)}
+                  style={{background:savedDays[dateStr+"s"+i]?"#7FAF8A":"none",color:savedDays[dateStr+"s"+i]?"white":C.gris,border:"1px solid "+(savedDays[dateStr+"s"+i]?"#7FAF8A":C.pale),borderRadius:20,padding:".1rem .4rem",fontSize:".58rem",cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+                  {savedDays[dateStr+"s"+i]?"✅":"○"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>}
+      </div>
+    );
+  };
+
+  const days = genDays(28);
+
+  return(
+    <div style={{paddingBottom:"2rem"}}>
+      {showIdees&&<BiblioPopup dateStr={showIdees.dateStr} postIdx={showIdees.postIdx} onClose={()=>setShowIdees(null)}/>}
+
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:"1rem"}}>
+        Éditorial <em style={{color:C.rose}}>IA</em>
+      </div>
+      <VUE/>
+
+      {vue==="mois"&&(
+        <div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:".2rem",marginBottom:".3rem"}}>
+            {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:".58rem",fontWeight:700,color:C.gris}}>{j}</div>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:".2rem"}}>
+            {days.map(dateStr=>{
+              const d=new Date(dateStr);const isT=dateStr===todayStr;const has=!!contenu[dateStr];
+              return(<div key={dateStr} onClick={()=>{setJourOuvert(dateStr);setVue("semaine");}}
+                style={{background:isT?C.rose:has?"#E8F5E9":"white",border:"1px solid "+(isT?C.rose:C.pale),borderRadius:7,padding:".3rem .2rem",cursor:"pointer",textAlign:"center",minHeight:44}}>
+                <div style={{fontSize:".72rem",fontWeight:700,color:isT?"white":C.brun}}>{d.getDate()}</div>
+                {has&&!isT&&<div style={{fontSize:".5rem",color:C.vert}}>✅</div>}
+              </div>);
+            })}
+          </div>
+        </div>
+      )}
+
+      {vue==="semaine"&&[0,1,2,3].map(si=>{
+        const sem=days.slice(si*7,(si+1)*7);
+        return(<div key={si} style={{marginBottom:"1rem"}}>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.brun,textTransform:"uppercase",marginBottom:".4rem",letterSpacing:".1em"}}>Semaine {si+1}</div>
+          {sem.map(d=><JourCard key={d} dateStr={d}/>)}
+        </div>);
+      })}
+
+      {vue==="jour"&&<JourCard dateStr={todayStr} expanded={true}/>}
+    </div>
+  );
+}
+
 function CalendrierTab({uid,userName,isMelissa,isChef}){
   const[events,setEvents]=useState([]);
   const[loaded,setLoaded]=useState(false);
@@ -7840,12 +8538,13 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
 // Période de 21 jours, commence un mercredi
 // Référence : période en cours se termine dans 6j 12h à partir d'aujourd'hui (11/06/2026)
 function getPeriodeInfo(){
-  const now = new Date();
+  const ANCRE = new Date("2026-01-22T00:00:00").getTime();
   const PERIOD_MS = PERIODE_DUREE_JOURS * 24 * 60 * 60 * 1000;
-  const periodNum = getPeriodeActuelle();
-  const periodStart = getPeriodeDebut(periodNum);
+  const now = Date.now();
+  const periodNum = Math.max(1, Math.floor((now - ANCRE) / PERIOD_MS) + 1);
+  const periodStart = new Date(ANCRE + (periodNum-1)*PERIOD_MS);
   const periodEnd = new Date(periodStart.getTime() + PERIOD_MS);
-  const msLeft = periodEnd - now;
+  const msLeft = periodEnd.getTime() - now;
   const daysLeft = Math.max(0, Math.floor(msLeft / (1000*60*60*24)));
   const hoursLeft = Math.max(0, Math.floor((msLeft % (1000*60*60*24)) / (1000*60*60)));
   const pctElapsed = Math.round((1 - msLeft/PERIOD_MS)*100);
@@ -9108,7 +9807,8 @@ function LinkBioTab({uid, userName}){
   const[activeSection,setActiveSection]=useState("theme"); // theme|profil|liens|banniere|photos
 
   const slug=(userName||uid).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"-");
-  const bioUrl=`https://blazing-dinasty-1fad9.web.app/bio/${slug}`;
+  const bioUrl=`https://blazing-dinasty-1fad9.web.app?bio=${slug}`;
+  const tunnelUrl=`https://blazing-dinasty-1fad9.web.app?tunnel=${slug}`;
   const theme=THEMES_LINKBIO.find(t=>t.id===profil.theme)||THEMES_LINKBIO[0];
 
   useEffect(()=>{
@@ -11224,7 +11924,7 @@ const PALIERS_QUALIFICATION=[
 
 // Périodes Mihi — ancre chargée depuis Firebase admin (modifiable)
 // Valeur par défaut : 19/12/2024
-let PERIODE_DEBUT_ABSOLU_MS = new Date("2024-12-19T00:00:00").getTime();
+let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-22T00:00:00").getTime();
 const PERIODE_DUREE_JOURS = 21;
 const PERIODES_PAR_AN = 18;
 
@@ -11233,7 +11933,9 @@ async function chargerAncrePeriodesFirebase(){
   try{
     const snap = await getDoc(doc(db,"admin","config_periodes"));
     if(snap.exists()&&snap.data().ancre){
-      PERIODE_DEBUT_ABSOLU_MS = new Date(snap.data().ancre).getTime();
+      const savedAncre = new Date(snap.data().ancre).getTime();
+      // Utiliser l'ancre sauvegardée seulement si elle est récente (2026+)
+      if(savedAncre >= new Date("2026-01-01").getTime()) PERIODE_DEBUT_ABSOLU_MS = savedAncre;
     }
   }catch{}
 }
@@ -11246,9 +11948,8 @@ function getPeriodeDebut(nAbsolu){
 }
 
 function getPeriodeActuelle(){
-  const now = new Date();
-  const diffMs = now.getTime() - PERIODE_DEBUT_ABSOLU_MS;
-  const diffJours = Math.floor(diffMs / (24*60*60*1000));
+  const ANCRE = new Date("2026-01-22T00:00:00").getTime();
+  const diffJours = Math.floor((Date.now() - ANCRE) / (24*60*60*1000));
   return Math.max(1, Math.floor(diffJours / PERIODE_DUREE_JOURS) + 1);
 }
 
@@ -11276,9 +11977,8 @@ function getPeriodKeys(n=12){
 // Label court d'une période : "P7 2026"
 function fmtPLabel(nAbsolu){
   const debut = getPeriodeDebut(nAbsolu);
-  // Notre ancre (n=1) = P18 2024 dans la vraie numérotation Mihi
-  // Offset = 17 (P18 = dernière de l'année = index 17 dans 0-based)
-  const OFFSET_MIHI = 17; // n=1 → P18, n=2 → P1 suivante
+  // Ancre 22/01/2026 = P1 Mihi
+  const OFFSET_MIHI = 0;
   const numAnnee = ((nAbsolu - 1 + OFFSET_MIHI) % PERIODES_PAR_AN + PERIODES_PAR_AN) % PERIODES_PAR_AN + 1;
   return `P${numAnnee} ${debut.getFullYear()}`;
 }
@@ -11851,8 +12551,9 @@ function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
           </div>
         </div>
         <div style={{background:C.creme,borderRadius:9,padding:".45rem .7rem",marginBottom:".5rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:".68rem",color:C.gris}}>🛍️ Dont mes ventes perso</span>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%"}}><span style={{fontSize:".68rem",color:C.gris}}>🛍️ Dont mes ventes perso</span><span style={{fontSize:".62rem",color:C.gris}}>Objectif : <input type="number" placeholder="0" value={obj.caPersoObj||""} onChange={e=>save({...obj,caPersoObj:e.target.value})} style={{width:55,border:"1px solid "+C.rose+"40",borderRadius:6,padding:".2rem .35rem",fontSize:".72rem",fontFamily:"inherit",color:C.rose,background:"white",outline:"none",textAlign:"center"}}/> €</span></div>
           <div style={{display:"flex",gap:".4rem",alignItems:"center"}}>
+            <span style={{fontSize:".62rem",color:C.gris,fontWeight:600,marginRight:".25rem"}}>Réalisé</span>
             <input type="number" placeholder="0" value={obj.caPerso||""} onChange={e=>{
               const perso=parseFloat(e.target.value)||0;
               save({...obj,caPerso:e.target.value,caEquipe:String(Math.max(0,(parseFloat(obj.ca)||0)-perso))});
@@ -13719,6 +14420,59 @@ function SuiviCATab({uid}){
   );
 }
 
+
+function ResumeSemaineChef({annuaire}){
+  const [resume,setResume]=useState(null);
+  const [ouvert,setOuvert]=useState(false);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const membres=Object.entries(annuaire||{});
+        if(!membres.length) return;
+        const lundi=new Date();lundi.setDate(lundi.getDate()-lundi.getDay()+1);
+        const lundiStr=lundi.toISOString().slice(0,10);
+        const snaps=await Promise.all(membres.map(([mUid])=>getDoc(doc(db,"users",mUid)).catch(()=>null)));
+        let actives=0,diags=0,cmds=0,ca=0,det=[];
+        snaps.forEach((snap,i)=>{
+          if(!snap?.exists()) return;
+          const d=snap.data();const [mUid,mData]=membres[i];
+          const nom=mData.prenom||mUid.split("-").map(w=>w[0]?.toUpperCase()+w.slice(1)).join(" ");
+          const actif=(d["db-last-login"]||"")>=lundiStr;if(actif)actives++;
+          const nd=(d["db-diagnostics"]?JSON.parse(d["db-diagnostics"]):[]).filter(dg=>dg.date>=lundiStr).length;diags+=nd;
+          let nc=0,nca=0;
+          (d["db-clients"]?JSON.parse(d["db-clients"]):[]).forEach(cl=>{(cl.commandes||[]).filter(cmd=>cmd.date>=lundiStr).forEach(cmd=>{nc++;nca+=parseFloat(cmd.montant)||0;});});
+          cmds+=nc;ca+=nca;
+          det.push({nom,actif,nd,nc,nca:Math.round(nca)});
+        });
+        setResume({actives,total:membres.length,diags,cmds,ca:Math.round(ca),det:det.sort((a,b)=>(b.actif?1:0)-(a.actif?1:0)||b.nd-a.nd)});
+      }catch{}
+    })();
+  },[annuaire]);
+  if(!resume) return null;
+  return(
+    <div style={{background:C.brun,borderRadius:14,padding:"1rem 1.1rem",marginBottom:"1rem"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".65rem"}}>
+        <div><div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".15em",color:C.or,marginBottom:".2rem"}}>CETTE SEMAINE</div><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>{resume.actives} active{resume.actives>1?"s":""} / {resume.total}</div></div>
+        <button onClick={()=>setOuvert(!ouvert)} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:".3rem .65rem",color:"rgba(255,255,255,.8)",fontSize:".68rem",cursor:"pointer",fontFamily:"inherit"}}>{ouvert?"Fermer":"Détails"}</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:".4rem",marginBottom:ouvert?".75rem":"0"}}>
+        {[[resume.diags,"Diagnostics",C.rose],[resume.cmds,"Commandes",C.or],[resume.ca+"EUR","CA",C.vert]].map(([val,label,col])=>(<div key={label} style={{textAlign:"center",background:"rgba(255,255,255,.08)",borderRadius:8,padding:".45rem .3rem"}}><div style={{fontSize:"1.1rem",fontWeight:700,color:col}}>{val}</div><div style={{fontSize:".58rem",color:"rgba(255,255,255,.55)"}}>{label}</div></div>))}
+      </div>
+      {ouvert&&<div style={{borderTop:"1px solid rgba(255,255,255,.1)",paddingTop:".65rem"}}>
+        {resume.det.map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:".6rem",padding:".35rem 0",borderBottom:i<resume.det.length-1?"1px solid rgba(255,255,255,.06)":"none"}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:m.actif?C.vert:"rgba(255,255,255,.2)",flexShrink:0}}/>
+          <div style={{flex:1,fontSize:".75rem",color:m.actif?"white":"rgba(255,255,255,.4)",fontWeight:m.actif?600:400}}>{m.nom}</div>
+          <div style={{display:"flex",gap:".5rem"}}>
+            {m.nd>0&&<span style={{fontSize:".62rem",color:C.rose,fontWeight:600}}>{m.nd} diag</span>}
+            {m.nc>0&&<span style={{fontSize:".62rem",color:C.or,fontWeight:600}}>{m.nc} cmd</span>}
+            {m.nca>0&&<span style={{fontSize:".62rem",color:C.vert,fontWeight:600}}>{m.nca}EUR</span>}
+            {!m.actif&&<span style={{fontSize:".6rem",color:"rgba(255,255,255,.3)"}}>Absente</span>}
+          </div>
+        </div>))}
+      </div>}
+    </div>
+  );
+}
 function EspaceChefTab({uid, isChef}){
   const[section,setSection]=useState("");
   const[distrib,setDistrib]=useState([]);
@@ -13814,6 +14568,9 @@ function EspaceChefTab({uid, isChef}){
       <div style={{marginBottom:"1rem"}}>
         <BoutonMiseAJour style={{width:"100%",justifyContent:"center"}}/>
       </div>
+
+      <ResumeSemaineChef annuaire={annuaire}/>
+
       {sections.map(s=>(
         <div key={s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
           style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
@@ -13990,7 +14747,9 @@ function MonEquipeTab({uid}){
 
 // ── ADMIN TAB (Melissa uniquement) ───────────────────────────────────────────
 function AdminConfigPeriodes(){
-  const[ancre,setAncre]=useState("2024-12-19");
+  const[ancre,setAncre]=useState("2026-01-22");
+  const[periodeNum,setPeriodeNum]=useState("");
+  const[periodeDebut,setPeriodeDebut]=useState("");
   const[saving,setSaving]=useState(false);
   const[saved,setSaved]=useState(false);
   const[loaded,setLoaded]=useState(false);
@@ -14048,6 +14807,11 @@ function AdminConfigPeriodes(){
         La date d'ancre détermine le calcul de toutes les périodes pour <strong>toute l'équipe</strong>. Modifie uniquement si les dates sont incorrectes.
       </p>
       <div style={{marginBottom:".6rem"}}>
+        <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem",fontWeight:600}}>Je suis en periode :</div>
+        <div style={{display:"flex",gap:".3rem",flexWrap:"wrap",marginBottom:".6rem"}}>{[6,7,8,9,10,11,12,13,14,15,16,17,18].map(n=>(<button key={n} onClick={()=>setPeriodeNum(String(n))} style={{padding:".3rem .55rem",fontSize:".72rem",fontWeight:700,borderRadius:8,border:"1.5px solid "+(periodeNum===String(n)?"#E6A817":"#E8DDD4"),background:periodeNum===String(n)?"#E6A817":"white",color:periodeNum===String(n)?"white":"#3D1F0E",cursor:"pointer",fontFamily:"inherit"}}>P{n}</button>))}</div>
+        <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem",fontWeight:600}}>Date de debut de cette periode</div>
+        <input type="date" value={periodeDebut||""} onChange={e=>setPeriodeDebut(e.target.value)} style={{width:"100%",border:"1px solid #E6A817",borderRadius:8,padding:".42rem .65rem",fontSize:".85rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",marginBottom:".4rem"}}/>
+        {periodeNum&&periodeDebut&&<div style={{fontSize:".7rem",color:"#856404",background:"#FFF8E1",borderRadius:6,padding:".4rem .6rem",marginBottom:".4rem"}}>P{periodeNum} commence le {new Date(periodeDebut+"T00:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}</div>}
         <div style={{fontSize:".62rem",color:C.gris,marginBottom:".25rem",fontWeight:600}}>Date de début de P1 (ancre)</div>
         <input type="date" value={ancre} onChange={e=>setAncre(e.target.value)}
           style={{width:"100%",border:`1px solid #E6A817`,borderRadius:8,padding:".42rem .65rem",fontSize:".85rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",fontWeight:600}}/>
@@ -15029,6 +15793,7 @@ const THEMES_IMAGES=[
   {id:"parfums",icon:"🌸",label:"Parfums"},
   {id:"corps",icon:"🧴",label:"Soin corps"},
   {id:"home",icon:"🏠",label:"HOME"},
+  {id:"perte_poids",icon:"⚖️",label:"Perte de poids"},
   {id:"recrutement",icon:"👑",label:"Recrutement"},
   {id:"outils",icon:"🛠️",label:"Outils équipe"},
 ];
@@ -15645,7 +16410,271 @@ function getBlocageOrientation(score, max, reponses){
 }
 
 // ── QUESTIONS DIAGNOSTICS ────────────────────────────────────────────────────
+const PARFUMS_CATALOGUE = [
+  {id:"tuscany",nom:"Tuscany Citron",serie:"Voyage Collection",genre:"F",famille:"Floral Fruité",occasion:["quotidien","printemps_ete"],intensite:"leger",caractere:["naturel","frais","raffiné"],ambiance:["frais","floral","ensoleille"],desc:"Léger, frais et radieux. Agrumes ensoleillés, jasmin délicat, notes boisées douces. Idéal pour celles qui aiment le naturel et la sophistication.",prix:"18.5€"},
+  {id:"mythos",nom:"Mythos",serie:"Voyage Collection",genre:"F",famille:"Oriental Gourmand",occasion:["quotidien","printemps_ete","romantique"],intensite:"leger",caractere:["gourmand","doux","sensuel"],ambiance:["gourmand","floral","ensoleille"],desc:"Citron rafraîchissant, fleur d'oranger délicate, douceur de vanille et praline. Pour celles qui aiment les parfums sensuels et joyeux.",prix:"18.5€"},
+  {id:"wioletta",nom:"Wioletta",serie:"Unique",genre:"F",famille:"Floral Fruité",occasion:["quotidien","travail","polyvalent"],intensite:"moyen",caractere:["universel","elegant","feminin"],ambiance:["floral","agrumes","universel"],desc:"Fraîche et séduisante, violettes et agrumes en harmonie. Accompagne aussi bien un costume qu'une robe romantique.",prix:"20.9€"},
+  {id:"karolina",nom:"Karolina",serie:"Unique",genre:"F",famille:"Oriental Épicé",occasion:["soiree","romantique","automne_hiver"],intensite:"intense",caractere:["chaleureux","mysterieux","epice"],ambiance:["epice","chaleureux","oriental"],desc:"Épicé et profond, enveloppé de chaleur. Lavande et agrumes, cœur miel-cannelle-jasmin, fond vanille et tabac. Pour une femme audacieuse.",prix:"20.9€"},
+  {id:"monika",nom:"Monika",serie:"Unique",genre:"F",famille:"Boisé Aromatique",occasion:["quotidien","polyvalent","romantique"],intensite:"moyen",caractere:["dynamique","sensuel","ludique"],ambiance:["agrumes","boise","epice"],desc:"Légère mais sensuelle. Agrumes vifs, épices séduisantes, fond boisé santal. Option parfaite au quotidien et pour les occasions spéciales.",prix:"20.9€"},
+  {id:"jarca",nom:"Jarča",serie:"Unique",genre:"F",famille:"Floral Fruité",occasion:["polyvalent","quotidien","toutes_saisons"],intensite:"moyen",caractere:["polyvalent","frais","feminin"],ambiance:["floral","fruité","universel"],desc:"Fraîche et vivifiante, chaude et profonde. Un caméléon qui s'adapte à chaque moment. Agrumes et fruit de la passion, bouquet floral, musc.",prix:"20.9€"},
+  {id:"w1",nom:"W1",serie:"Perfume W",genre:"F",famille:"Chypré Floral",occasion:["quotidien","travail","soiree"],intensite:"moyen",caractere:["elegant","moderne","subtil"],ambiance:["floral","boise","elegant"],desc:"Élégant et discret, structure soyeuse. Cassis capiteux, freesia délicat, sillage boisé vanillé. Pour une femme moderne au fort charisme.",prix:"18.5€"},
+  {id:"w3",nom:"W3",serie:"Perfume W",genre:"F",famille:"Floral Oriental",occasion:["romantique","soiree","quotidien"],intensite:"moyen",caractere:["feminin","sensuel","libre"],ambiance:["floral","gourmand","sensuel"],desc:"Féminité, charme et sensualité. Cassis et poire, bouquet floral d'iris et jasmin, fond praline et vanille. Pour une femme libre et heureuse.",prix:"18.5€"},
+  {id:"w4",nom:"W4",serie:"Perfume W",genre:"F",famille:"Floral Oriental",occasion:["soiree","romantique","automne_hiver"],intensite:"intense",caractere:["mysterieux","sensuel","profond"],ambiance:["oriental","floral","profond"],desc:"Oriental doux et chaud avec fleurs délicates. Café et amande, tubéreuse audacieuse, fond vanille séduisant. Pour une femme mystérieuse.",prix:"18.5€"},
+  {id:"w8",nom:"W8",serie:"Perfume W",genre:"F",famille:"Floral Fruité",occasion:["quotidien","printemps_ete","romantique"],intensite:"leger",caractere:["romantique","joyeux","raffiné"],ambiance:["floral","fruité","frais"],desc:"Excitant et tonique. Citron de Sicile et pomme, bouquet jasmin-rose, fond cèdre et musc. Comme une brise estivale sicilienne.",prix:"18.5€"},
+  {id:"w9",nom:"W9",serie:"Perfume W",genre:"F",famille:"Floral Boisé",occasion:["polyvalent","quotidien","soiree"],intensite:"moyen",caractere:["universel","feminin","inspire"],ambiance:["floral","boise","universel"],desc:"Multiforme et harmonieux. Fleur d'oranger et bergamote, tubéreuse et jasmin indien, fond vanille et musc blanc. Universel jour et soir.",prix:"18.5€"},
+  {id:"w10",nom:"W10",serie:"Perfume W",genre:"F",famille:"Floral Fruité",occasion:["soiree","evenement","romantique"],intensite:"intense",caractere:["luxueux","sur_de_soi","glamour"],ambiance:["floral","fruité","luxueux"],desc:"Pour une femme sûre d'elle. Framboise et néroli, bouquet gardénia-jasmin, fond ambré et miel blanc. Comme un diamant.",prix:"18.5€"},
+  {id:"w12",nom:"W12",serie:"Perfume W",genre:"F",famille:"Floral",occasion:["quotidien","polyvalent"],intensite:"leger",caractere:["ensoleille","positif","universel"],ambiance:["floral","frais","joyeux"],desc:"Ensoleillé et floral. Fleur de cactus, bouquet rose-jasmin-freesia, fond boisé et cèdre. Pour une femme qui rayonne de l'intérieur.",prix:"18.5€"},
+  {id:"just_for_her",nom:"Just For Her",serie:"Perfume W",genre:"F",famille:"Floral Oriental",occasion:["quotidien","soiree","romantique"],intensite:"intense",caractere:["sensuel","audacieux","moderne"],ambiance:["oriental","fruité","sensuel"],desc:"Composition sensuelle et orientale. Framboise et mandarine, fleurs exotiques, fond caramel-vanille-santal. Pour une femme qui ose.",prix:"19.5€"},
+  {id:"just_for_love_f",nom:"Just For Love (F)",serie:"Perfume W",genre:"F",famille:"Floral Oriental",occasion:["soiree","romantique","seduction"],intensite:"intense",caractere:["passionné","sensuel","seducteur"],ambiance:["floral","oriental","seduction"],desc:"Parfum phéromonique. Cassis et bergamote, jasmin sambac et muguet, fond vanille et santal. Pour une femme passionnée.",prix:"22.5€"},
+  {id:"futuristic",nom:"Futuristic",serie:"Perfume W",genre:"F",famille:"Floral Boisé",occasion:["soiree","polyvalent"],intensite:"intense",caractere:["audacieux","classique_moderne","profond"],ambiance:["floral","boise","profond"],desc:"Pour les classiques qui osent l'audace. Narcisse et tubéreuse, massepain, fond musqué noble avec vétiver et ambre gris.",prix:"16.9€"},
+  {id:"oscar",nom:"Oscar",serie:"Perfume W",genre:"F",famille:"Boisé Floral Gourmand",occasion:["soiree","automne_hiver","evenement"],intensite:"intense",caractere:["glamour","profond","gourmand"],ambiance:["gourmand","boise","luxueux"],desc:"Un parfum de star. Poire et whisky, cœur caramel-jasmin-guimauve, fond santal et vétiver velouté. Pour chaque apparition un événement.",prix:"23.9€"},
+  {id:"m1",nom:"M1",serie:"Perfume M",genre:"M",famille:"Fougère",occasion:["polyvalent","travail","soiree"],intensite:"intense",caractere:["viril","sensuel","elegant"],ambiance:["boise","fougere","oriental"],desc:"Intense et polyvalent. Bergamote et poivre, lavande fraîche et vétiver, fond ambré sexy. Pour l'homme épris de liberté.",prix:"18.5€"},
+  {id:"m2",nom:"M2",serie:"Perfume M",genre:"M",famille:"Fougère Boisé",occasion:["soiree","romantique","evenement"],intensite:"intense",caractere:["masculin","sensuel","charismatique"],ambiance:["boise","fougere","sensuel"],desc:"Masculinité et force intérieure. Menthe et pomme, fève tonka et géranium, fond boisé cèdre-vanille. Pour les soirées.",prix:"18.5€"},
+  {id:"m4",nom:"M4",serie:"Perfume M",genre:"M",famille:"Aquatique Boisé",occasion:["quotidien","sport","polyvalent"],intensite:"leger",caractere:["dynamique","frais","masculin"],ambiance:["aquatique","frais","boise"],desc:"Discret et frais pour tous les jours. Notes marines et agrumes, laurier et jasmin, fond boisé ambré. Orienté sport.",prix:"18.5€"},
+  {id:"m5",nom:"M5",serie:"Perfume M",genre:"M",famille:"Aquatique Boisé",occasion:["polyvalent","sport","voyage"],intensite:"moyen",caractere:["actif","aventurier","raffiné"],ambiance:["agrumes","aquatique","boise"],desc:"Pour un homme actif et aventurier. Agrumes explosifs, notes marines, fond boisé cèdre et mousse de chêne.",prix:"18.5€"},
+  {id:"m6",nom:"M6",serie:"Perfume M",genre:"M",famille:"Boisé Épicé",occasion:["soiree","romantique","seduction"],intensite:"intense",caractere:["puissant","seducteur","luxueux"],ambiance:["boise","epice","seduction"],desc:"Manifeste de succès. Mandarine et menthe, rose cannelle, fond cuir-ambre-patchouli. Pour ceux qui n'ont pas peur de briller.",prix:"18.5€"},
+  {id:"just_for_him",nom:"Just For Him",serie:"Perfume M",genre:"M",famille:"Fougère Aromatique",occasion:["quotidien","soiree","polyvalent"],intensite:"moyen",caractere:["energique","moderne","charismatique"],ambiance:["fougere","frais","epice"],desc:"Énergie et dynamisme. Cardamome et menthe, ananas et lavande, fond cèdre-vanille-châtaigne. Pour l'homme sûr de lui.",prix:"19.5€"},
+  {id:"just_for_love_m",nom:"Just For Love (H)",serie:"Perfume M",genre:"M",famille:"Floral Oriental Boisé",occasion:["quotidien","soiree","romantique"],intensite:"intense",caractere:["noble","elegant","passionné"],ambiance:["boise","oriental","nature"],desc:"Parfum phéromonique boisé-épicé. Orange et pamplemousse, poivre et pélargonium, fond vétiver-cèdre-patchouli.",prix:"22.5€"},
+];
+
+const QUESTIONS_PARFUM = [
+  {id:"genre", question:"Ce parfum est pour :", options:[
+    {value:"F", label:"👩 Une femme"},
+    {value:"M", label:"👨 Un homme"},
+    {value:"U", label:"✨ Les deux (mixte)"},
+  ]},
+  {id:"famille", question:"Quel univers olfactif vous attire le plus ?", options:[
+    {value:"floral", label:"🌸 Floral — roses, jasmin, fleurs délicates"},
+    {value:"fruité", label:"🍋 Fruité/Agrumes — frais, pétillant, vitaminé"},
+    {value:"gourmand", label:"🍬 Gourmand — vanille, caramel, douceurs"},
+    {value:"boisé", label:"🌲 Boisé — cèdre, santal, vétiver, profond"},
+    {value:"oriental", label:"🌙 Oriental/Épicé — chaleureux, envoûtant, mystérieux"},
+    {value:"aquatique", label:"🌊 Marin/Frais — brise marine, air pur, légèreté"},
+  ]},
+  {id:"occasion", question:"Pour quelle occasion principalement ?", options:[
+    {value:"quotidien", label:"☀️ Tous les jours — discret et polyvalent"},
+    {value:"travail", label:"💼 Travail/Bureau — élégant et professionnel"},
+    {value:"soiree", label:"🌙 Soirée/Événement — marquer les esprits"},
+    {value:"romantique", label:"❤️ Moment romantique — séduire et attirer"},
+    {value:"sport", label:"⚡ Sport/Plein air — frais et dynamique"},
+    {value:"polyvalent", label:"🔄 Polyvalent — toutes les occasions"},
+  ]},
+  {id:"intensite", question:"Vous préférez un parfum :", options:[
+    {value:"leger", label:"🕊️ Léger et discret — présence subtile"},
+    {value:"moyen", label:"🌺 Modéré — équilibré, remarqué sans envahir"},
+    {value:"intense", label:"💥 Intense et puissant — laisser un sillage fort"},
+  ]},
+  {id:"saison", question:"Votre saison préférée pour ce parfum ?", options:[
+    {value:"printemps_ete", label:"🌸 Printemps/Été — légèreté et fraîcheur"},
+    {value:"automne_hiver", label:"🍂 Automne/Hiver — chaleur et profondeur"},
+    {value:"toutes_saisons", label:"🌍 Toutes saisons — versatilité totale"},
+  ]},
+  {id:"caractere", question:"Quel mot vous correspond le mieux ?", options:[
+    {value:"elegant", label:"👑 Élégante/Raffinée — classe et sophistication"},
+    {value:"sensuel", label:"🔥 Sensuelle/Mystérieuse — attirer et séduire"},
+    {value:"naturel", label:"🌿 Naturelle/Authentique — simplicité et fraîcheur"},
+    {value:"dynamique", label:"⚡ Dynamique/Moderne — énergie et modernité"},
+    {value:"gourmand", label:"🍭 Gourmande/Douce — douceur et tendresse"},
+    {value:"luxueux", label:"💎 Luxueuse/Audacieuse — se démarquer"},
+  ]},
+  {id:"aversion", question:"Qu'est-ce que vous voulez absolument éviter ?", options:[
+    {value:"rien_trop_fleuri", label:"🚫 Rien de trop fleuri ou sucré"},
+    {value:"pas_lourd", label:"🚫 Rien de trop lourd ou entêtant"},
+    {value:"pas_frais", label:"🚫 Rien de trop frais ou neutre"},
+    {value:"pas_sucre", label:"🚫 Rien de trop sucré ou gourmand"},
+    {value:"aucune", label:"✅ Pas de préférence particulière"},
+  ]},
+];
+
+function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onResultat=null}){
+  const [step, setStep] = useState(-1); // -1 = accueil
+  const [reponses, setReponses] = useState({});
+  const [resultat, setResultat] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [nom, setNom] = useState("");
+
+  const calculerResultat = (rep) => {
+    setLoading(true);
+    const genre = rep.genre;
+    const famille = rep.famille;
+    const occasion = rep.occasion;
+    const intensite = rep.intensite;
+    const saison = rep.saison;
+    const caractere = rep.caractere;
+    const aversion = rep.aversion;
+
+    // Filtrer par genre
+    let candidates = PARFUMS_CATALOGUE.filter(p => {
+      if(genre === "F") return p.genre === "F";
+      if(genre === "M") return p.genre === "M";
+      return true; // U = tous
+    });
+
+    // Scorer chaque parfum
+    const scored = candidates.map(p => {
+      let score = 0;
+      // Famille olfactive
+      if(p.ambiance.includes(famille)) score += 3;
+      if(p.famille.toLowerCase().includes(famille)) score += 2;
+      // Occasion
+      if(p.occasion.includes(occasion)) score += 3;
+      if(p.occasion.includes("polyvalent")) score += 1;
+      // Intensité
+      if(p.intensite === intensite) score += 2;
+      // Saison
+      if(p.occasion.includes(saison)) score += 2;
+      if(p.occasion.includes("toutes_saisons")) score += 1;
+      // Caractère
+      if(p.caractere.includes(caractere)) score += 2;
+      // Anti-avversions
+      if(aversion === "rien_trop_fleuri" && !p.famille.includes("Floral") && !p.caractere.includes("gourmand")) score += 1;
+      if(aversion === "pas_lourd" && p.intensite === "leger") score += 2;
+      if(aversion === "pas_frais" && p.intensite !== "leger" && !p.ambiance.includes("aquatique")) score += 1;
+      if(aversion === "pas_sucre" && !p.caractere.includes("gourmand") && !p.ambiance.includes("gourmand")) score += 1;
+      return {...p, score};
+    });
+
+    // Trier et prendre le top 3
+    const top3 = scored.sort((a,b) => b.score - a.score).slice(0, 3);
+    setResultat(top3);
+    setLoading(false);
+  };
+
+  const repondre = (val) => {
+    const q = QUESTIONS_PARFUM[step];
+    const newRep = {...reponses, [q.id]: val};
+    setReponses(newRep);
+    if(step < QUESTIONS_PARFUM.length - 1){
+      setStep(step + 1);
+    } else {
+      calculerResultat(newRep);
+    }
+  };
+
+  const reset = () => { setStep(-1); setReponses({}); setResultat(null); setNom(""); };
+
+  // Accueil
+  if(step === -1) return(
+    <div style={{paddingBottom:"2rem"}}>
+      {!externalMode&&<div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".5rem"}}>Diagnostic <em style={{color:C.rose}}>Parfum</em></div>}
+      {externalMode&&<div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".5rem",textAlign:"center"}}>Trouver <em style={{color:C.rose}}>mon parfum</em></div>}
+      <div style={{background:"linear-gradient(135deg,#9B59B6,#6C3483)",borderRadius:16,padding:"1.5rem",marginBottom:"1.25rem",textAlign:"center"}}>
+        <div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>🌸</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"white",fontWeight:300,marginBottom:".5rem"}}>Quel parfum vous ressemble ?</div>
+        <div style={{fontSize:".78rem",color:"rgba(255,255,255,.85)",lineHeight:1.65}}>7 questions pour trouver votre parfum Mihi idéal parmi 26 fragrances. Résultat personnalisé en moins de 2 minutes.</div>
+      </div>
+      {externalMode&&<div style={{marginBottom:"1rem"}}>
+        <input placeholder="Votre prénom (facultatif)" value={nom} onChange={e=>setNom(e.target.value)}
+          style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".55rem .75rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"#FAF7F2",outline:"none"}}/>
+      </div>}
+      <div style={{display:"flex",flexDirection:"column",gap:".6rem",marginBottom:"1rem"}}>
+        {[["✨","26 parfums Mihi analysés"],["🎯","Recommandation personnalisée top 3"],["💰","Prix à partir de 11.83€"],["⏱️","Résultat en 2 minutes"]].map(([icon,txt])=>(
+          <div key={txt} style={{display:"flex",gap:".65rem",alignItems:"center",background:"white",borderRadius:10,padding:".6rem .85rem",border:"1px solid #E8DDD4"}}>
+            <span style={{fontSize:"1.2rem"}}>{icon}</span>
+            <span style={{fontSize:".78rem",color:"#3D2B1F"}}>{txt}</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={()=>setStep(0)}
+        style={{width:"100%",background:"linear-gradient(135deg,#9B59B6,#6C3483)",color:"white",border:"none",borderRadius:12,padding:".8rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+        🌸 Commencer le diagnostic →
+      </button>
+    </div>
+  );
+
+  // Questions
+  if(!resultat){
+    const q = QUESTIONS_PARFUM[step];
+    const pct = Math.round((step / QUESTIONS_PARFUM.length) * 100);
+    return(
+      <div style={{paddingBottom:"2rem"}}>
+        {/* Barre de progression */}
+        <div style={{height:4,background:"#E8DDD4",borderRadius:2,marginBottom:"1.25rem",overflow:"hidden"}}>
+          <div style={{height:"100%",background:"#9B59B6",width:pct+"%",transition:"width .3s"}}/>
+        </div>
+        <div style={{fontSize:".65rem",color:"#888",textAlign:"right",marginBottom:"1rem"}}>Question {step+1}/{QUESTIONS_PARFUM.length}</div>
+
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:300,color:"#3D1F0E",marginBottom:"1.25rem",lineHeight:1.5}}>
+          {q.question}
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}>
+          {q.options.map(opt=>(
+            <button key={opt.value} onClick={()=>repondre(opt.value)}
+              style={{background:"white",border:"1.5px solid #E8DDD4",borderRadius:12,padding:".75rem 1rem",textAlign:"left",fontSize:".82rem",color:"#3D2B1F",cursor:"pointer",fontFamily:"inherit",lineHeight:1.5,transition:"all .2s"}}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {step > 0&&<button onClick={()=>setStep(step-1)}
+          style={{background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit",marginTop:"1rem",padding:".3rem"}}>
+          ← Question précédente
+        </button>}
+      </div>
+    );
+  }
+
+  // Résultat
+  const SERIE_COLORS = {"Voyage Collection":"#C49A8A","Unique":"#A89BB5","Perfume W":"#9B59B6","Perfume M":"#2E4057"};
+  return(
+    <div style={{paddingBottom:"2rem"}}>
+      <div style={{textAlign:"center",marginBottom:"1.5rem"}}>
+        <div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>🌸</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:"#3D1F0E",marginBottom:".3rem"}}>
+          {nom?`${nom}, voici`:"Voici"} <em style={{color:"#9B59B6"}}>vos parfums idéaux</em>
+        </div>
+        <div style={{fontSize:".72rem",color:"#888"}}>Sélectionnés parmi 26 parfums Mihi selon vos réponses</div>
+      </div>
+
+      {resultat.map((p,i)=>(
+        <div key={p.id} style={{background:"white",borderRadius:14,marginBottom:".75rem",overflow:"hidden",border:`2px solid ${i===0?"#9B59B6":"#E8DDD4"}`,boxShadow:i===0?"0 4px 20px rgba(155,89,182,.15)":"none"}}>
+          {i===0&&<div style={{background:"#9B59B6",padding:".35rem 1rem",fontSize:".62rem",fontWeight:700,color:"white",letterSpacing:".1em"}}>⭐ RECOMMANDATION PRINCIPALE</div>}
+          {i===1&&<div style={{background:"#E8DDD4",padding:".35rem 1rem",fontSize:".62rem",fontWeight:700,color:"#3D1F0E",letterSpacing:".1em"}}>✨ ALTERNATIVE 2</div>}
+          {i===2&&<div style={{background:"#FAF7F2",padding:".35rem 1rem",fontSize:".62rem",fontWeight:700,color:"#888",letterSpacing:".1em"}}>🌸 ALTERNATIVE 3</div>}
+          <div style={{padding:"1rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:".5rem"}}>
+              <div>
+                <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>{p.nom}</div>
+                <div style={{display:"flex",gap:".3rem",alignItems:"center"}}>
+                  <span style={{background:SERIE_COLORS[p.serie]+"20",color:SERIE_COLORS[p.serie],borderRadius:20,padding:".1rem .5rem",fontSize:".6rem",fontWeight:700}}>{p.serie}</span>
+                  <span style={{background:"#FAF7F2",borderRadius:20,padding:".1rem .5rem",fontSize:".6rem",color:"#888"}}>{p.famille}</span>
+                </div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:"1rem",fontWeight:700,color:"#9B59B6"}}>{p.prix}</div>
+                <div style={{fontSize:".6rem",color:"#888"}}>50ml · 18% conc.</div>
+              </div>
+            </div>
+            <div style={{fontSize:".78rem",color:"#3D2B1F",lineHeight:1.65,background:"#FAF7F2",borderRadius:10,padding:".65rem .85rem",marginBottom:".5rem"}}>
+              {p.desc}
+            </div>
+            <div style={{display:"flex",gap:".35rem",flexWrap:"wrap"}}>
+              {p.ambiance.map(a=>(
+                <span key={a} style={{background:"#9B59B620",color:"#9B59B6",borderRadius:20,padding:".1rem .45rem",fontSize:".6rem",fontWeight:600}}>{a}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div style={{background:"#3D1F0E",borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,color:"#C4A882",letterSpacing:".1em",marginBottom:".35rem"}}>💡 CONSEIL DE VOTRE CONSEILLÈRE</div>
+        <div style={{fontSize:".78rem",color:"white",lineHeight:1.65}}>
+          {distributeurNom?`${distributeurNom} est`:"Je suis"} disponible pour vous faire sentir ces parfums et vous guider dans votre choix. Tous nos parfums sont à 18% de concentration et tiennent jusqu'à 12h.
+        </div>
+      </div>
+
+      <button onClick={reset}
+        style={{width:"100%",background:"none",border:"1.5px solid #E8DDD4",borderRadius:10,padding:".55rem",fontSize:".78rem",color:"#888",cursor:"pointer",fontFamily:"inherit"}}>
+        🔄 Recommencer le diagnostic
+      </button>
+    </div>
+  );
+}
+
 const QUESTIONS = {
+  parfum: QUESTIONS_PARFUM,
   skincare: [
     {id:"typePeau", question:"Quel est ton type de peau ?", multi:true, options:[
       {value:"seche",label:"🌵 Sèche — tiraillements, inconfort"},
@@ -16202,8 +17231,12 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState("");
 
-  const questions = type ? QUESTIONS[type] : [];
+  const questions = type ? (QUESTIONS[type]||[]) : [];
   const q = questions[step];
+  // Si type sélectionné mais pas de questions définies => générer directement
+  if(mode==="questionnaire" && type && questions.length===0 && !TYPES_SCORING.includes(type)){
+    // Pour les types equipe sans questions, afficher un message simple
+  }
   const TYPES_SCORING = ["recrutement","blocage"];
 
   const repondre = (val) => {
@@ -16342,6 +17375,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
   const TYPES_DIAG = [
     // ── BEAUTÉ & BIEN-ÊTRE ─────────────────────────────────────────────
+    { id:"parfum",        cat:"beaute", icon:"🌸", label:"Diagnostic Parfum",             desc:"Trouver votre parfum ideal parmi 26 fragrances Mihi",     pourquoi:"7 questions pour identifier votre univers olfactif et recevoir votre top 3 personnalise." },
     { id:"skincare",      cat:"beaute", icon:"✨", label:"Diagnostic Skincare",           desc:"Type de peau, préoccupations, routine",                    pourquoi:"Identifier les produits Mihi adaptés à ta peau et créer une routine personnalisée." },
     { id:"makeup",        cat:"beaute", icon:"💄", label:"Diagnostic Makeup & Couleurs",  desc:"Teint, carnation, style, fond de teint adapté",            pourquoi:"Trouver la teinte parfaite, les couleurs qui valorisent ET les produits makeup Mihi adaptés.", photo:true },
     { id:"peaucorps",     cat:"beaute", icon:"🧴", label:"Diagnostic Peau Corps",          desc:"Sécheresse, taches, vergetures, cellulite, sensibilité",   pourquoi:"Proposer une routine corps ciblée selon les vrais problèmes de peau du corps." },
@@ -16381,6 +17415,25 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
   // Helper : titre lisible depuis l'id
   const diagLabel=(id)=>TYPES_DIAG.find(t=>t.id===id)?.label||id;
+
+  // Types equipe sans questions définies - affichage spécial  
+  if(mode==="questionnaire" && type && questions.length===0 && !TYPES_SCORING.includes(type)){
+    return(<div style={{paddingBottom:"2rem"}}>
+      <button onClick={()=>setMode("choix")} style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>← Retour</button>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",color:C.brun,marginBottom:".75rem"}}>{TYPES_DIAG.find(t=>t.id===type)?.label}</div>
+      <div style={{background:C.creme,borderRadius:12,padding:"1rem",marginBottom:"1rem",border:"1px solid "+C.pale,fontSize:".78rem",color:C.gris,lineHeight:1.65}}>
+        {TYPES_DIAG.find(t=>t.id===type)?.pourquoi}
+      </div>
+      <button onClick={()=>genererOrdonnance({})} style={{width:"100%",background:C.brun,color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+        ✨ Générer le diagnostic IA
+      </button>
+    </div>);
+  }
+
+  // Rendu spécial parfum
+  if(type==="parfum" && mode==="questionnaire"){
+    return <DiagnosticParfumTab uid={uid} externalMode={externalMode} distributeurNom={userName||""}/>;
+  }
 
   if (mode === "choix") return (
     <div>
@@ -16771,6 +17824,32 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           style={{ width: "100%", background: C.brun, color: C.blanc, border: "none", borderRadius: 10, padding: ".65rem", fontSize: ".82rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginBottom: ".5rem" }}>
           📋 Copier l'ordonnance complète
         </button>
+
+        {/* Bouton PDF côté cliente */}
+        <button onClick={()=>{
+          if(!ordonnance) return;
+          const fmt=(pk)=>{if(!pk)return"";return(pk.produits||[]).map(pr=>"<div class='produit'><div class='nom'>"+pr.nom+" — "+(pr.prix||"")+"</div><div class='usage'>"+(pr.usage||"")+"</div><div class='ben'>"+(pr.benefice||"")+"</div>"+(pr.comment?"<div class='tip'>💡 "+pr.comment+"</div>":"")+"</div>").join("")+(pk.routine?"<div class='routine'>📋 "+pk.routine+"</div>":"");};
+          const html="<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:'Trebuchet MS',sans-serif;max-width:600px;margin:0 auto;padding:2rem;color:#3D2B1F;background:#FAF7F2;}h1{font-family:Georgia,serif;color:#3D1F0E;font-weight:300;font-size:1.5rem;margin-bottom:.25rem;}.sub{color:#C49A8A;font-size:.85rem;margin-bottom:1.5rem;}.intro{background:#F5EFE8;border-radius:10px;padding:1rem;margin-bottom:1.5rem;font-size:.9rem;line-height:1.7;}.pack{background:white;border:1.5px solid #E8DDD4;border-radius:12px;padding:1rem;margin-bottom:1rem;}.pt{font-weight:700;color:#3D1F0E;margin-bottom:.75rem;font-size:1rem;}.produit{padding:.5rem 0;border-bottom:1px solid #FAF7F2;}.nom{font-weight:600;font-size:.88rem;}.usage{font-size:.75rem;color:#C49A8A;font-weight:600;margin-top:.1rem;}.ben{font-size:.8rem;color:#555;margin-top:.1rem;}.tip{font-size:.75rem;color:#888;font-style:italic;}.routine{background:#FAF7F2;border-radius:8px;padding:.65rem;margin-top:.65rem;font-size:.78rem;line-height:1.6;}.conseil{background:#3D1F0E;color:white;border-radius:10px;padding:1rem;margin-top:1.5rem;font-size:.85rem;line-height:1.6;}.footer{text-align:center;margin-top:2rem;font-size:.72rem;color:#aaa;}</style></head><body>"
+          +"<h1>Ton ordonnance personnalisee</h1>"
+          +"<div class='sub'>Blazing Dynasty x Mihi France</div>"
+          +(ordonnance.introduction?"<div class='intro'>"+ordonnance.introduction+"</div>":"")
+          +(ordonnance.budget?"<div class='pack'><div class='pt'>Pack Essentiel — "+(ordonnance.budget.total||"")+"</div>"+fmt(ordonnance.budget)+"</div>":"")
+          +(ordonnance.bestseller?"<div class='pack'><div class='pt'>Pack Best Seller — "+(ordonnance.bestseller.total||"")+"</div>"+fmt(ordonnance.bestseller)+"</div>":"")
+          +(ordonnance.premium?"<div class='pack'><div class='pt'>Pack Premium — "+(ordonnance.premium.total||"")+"</div>"+fmt(ordonnance.premium)+"</div>":"")
+          +(ordonnance.conseil?"<div class='conseil'>"+ordonnance.conseil+"</div>":"")
+          +"<div class='footer'>Blazing Dynasty · Mihi France · "+new Date().toLocaleDateString("fr-FR")+"</div>"
+          +"</body></html>";
+          const w=window.open("","_blank");
+          w.document.write(html);
+          w.document.close();
+          setTimeout(()=>w.print(),600);
+        }}
+          style={{width:"100%",background:C.rose,color:"white",border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginTop:".4rem"}}>
+          🖨️ Sauvegarder mon ordonnance en PDF
+        </button>
+
+        <button onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:new Date().toISOString().slice(0,10),ts:Date.now()});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
+
         {/* DEBUG TEMPORAIRE */}
         <details style={{marginTop:".5rem"}}>
           <summary style={{fontSize:".6rem",color:C.gris,cursor:"pointer"}}>🔍 Debug (clic pour voir)</summary>
@@ -17035,8 +18114,34 @@ function DiagResultsTab({ uid }) {
               alert("✅ Ordonnance copiée avec le détail complet !");
             }}
               style={{ width:"100%", background:`linear-gradient(135deg,${C.brun},${C.brun2})`, color:"white", border:"none", borderRadius:10, padding:".6rem", fontSize:".78rem", fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-              📤 Envoyer l'ordonnance complète à la cliente
+              📋 Copier l'ordonnance complète
             </button>
+
+            {/* Bouton PDF */}
+            <button onClick={()=>{
+              const ord = sel?.ordonnance;
+              if(!ord) return;
+              const fmt=(pk)=>{if(!pk)return"";return(pk.produits||[]).map(pr=>"<div class='produit'><div class='nom'>"+pr.nom+" — "+pr.prix+"</div><div class='usage'>"+pr.usage+"</div><div class='ben'>"+(pr.benefice||"")+"</div>"+(pr.comment?"<div class='tip'>💡 "+pr.comment+"</div>":"")+"</div>").join("")+(pk.routine?"<div class='routine'>📋 "+pk.routine+"</div>":"");};
+              const html="<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{font-family:'Trebuchet MS',sans-serif;max-width:600px;margin:0 auto;padding:2rem;color:#3D2B1F;background:#FAF7F2;}h1{font-family:Georgia,serif;color:#3D1F0E;font-weight:300;font-size:1.5rem;}.intro{background:#F5EFE8;border-radius:10px;padding:1rem;margin-bottom:1.5rem;font-size:.9rem;line-height:1.7;}.pack{background:white;border:1.5px solid #E8DDD4;border-radius:12px;padding:1rem;margin-bottom:1rem;}.pack-titre{font-weight:700;color:#3D1F0E;margin-bottom:.75rem;font-size:1rem;}.produit{padding:.5rem 0;border-bottom:1px solid #FAF7F2;}.nom{font-weight:600;font-size:.88rem;}.usage{font-size:.75rem;color:#C49A8A;font-weight:600;margin-top:.15rem;}.ben{font-size:.8rem;color:#555;margin-top:.15rem;}.tip{font-size:.75rem;color:#888;font-style:italic;margin-top:.1rem;}.routine{background:#FAF7F2;border-radius:8px;padding:.65rem;margin-top:.65rem;font-size:.78rem;line-height:1.6;}.conseil{background:#3D1F0E;color:white;border-radius:10px;padding:1rem;margin-top:1.5rem;font-size:.85rem;line-height:1.6;}.footer{text-align:center;margin-top:2rem;font-size:.72rem;color:#aaa;}</style></head><body>"
+              +"<h1>Ordonnance personnalisee</h1>"
+              +"<div style='color:#C49A8A;font-size:.85rem;margin-bottom:1.5rem;'>Blazing Dynasty x Mihi France</div>"
+              +(ord.introduction?"<div class='intro'>"+ord.introduction+"</div>":"")
+              +(ord.budget?"<div class='pack'><div class='pack-titre'>Pack Essentiel — "+(ord.budget.total||"")+"</div>"+fmt(ord.budget)+"</div>":"")
+              +(ord.bestseller?"<div class='pack'><div class='pack-titre'>Pack Best Seller — "+(ord.bestseller.total||"")+"</div>"+fmt(ord.bestseller)+"</div>":"")
+              +(ord.premium?"<div class='pack'><div class='pack-titre'>Pack Premium — "+(ord.premium.total||"")+"</div>"+fmt(ord.premium)+"</div>":"")
+              +(ord.conseil?"<div class='conseil'>"+ord.conseil+"</div>":"")
+              +"<div class='footer'>Blazing Dynasty · Mihi France · "+new Date().toLocaleDateString("fr-FR")+"</div>"
+              +"</body></html>";
+              const w=window.open("","_blank");
+              w.document.write(html);
+              w.document.close();
+              setTimeout(()=>w.print(),600);
+            }}
+              style={{ width:"100%", background:C.rose, color:"white", border:"none", borderRadius:10, padding:".6rem", fontSize:".78rem", fontWeight:600, cursor:"pointer", fontFamily:"inherit", marginTop:".4rem" }}>
+              🖨️ Générer PDF / Imprimer
+            </button>
+
+            <button onClick={async()=>{const ord=sel?.ordonnance;if(!ord)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ord,nomClient:sel?.nomClient||sel?.contact?.prenom||'Cliente',date:new Date().toISOString().slice(0,10),ts:Date.now()});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - envoie-le a la cliente');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Envoyer le lien a la cliente</button>
           </div>
         )}
 
@@ -17359,15 +18464,156 @@ function LinkBioPublicPage({slug}){
   );
 }
 
+
+function OrdonnancePubliquePage({ordId}){
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [notFound,setNotFound]=useState(false);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,'ordonnances_publiques',ordId));
+        if(snap.exists()) setData(snap.data());
+        else setNotFound(true);
+      }catch{setNotFound(true);}
+      setLoading(false);
+    })();
+  },[ordId]);
+  if(loading) return <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#FAF7F2'}}><div style={{textAlign:'center'}}><div style={{fontFamily:'Georgia,serif',fontSize:'1.5rem',color:'#3D1F0E'}}>Chargement...</div></div></div>;
+  if(notFound||!data) return <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#FAF7F2'}}><div style={{textAlign:'center',padding:'2rem'}}><div style={{fontSize:'2rem'}}>404</div><div>Ordonnance introuvable</div></div></div>;
+  const ord=data.ordonnance;
+  const packs=[{key:'budget',label:'Pack Essentiel',color:'#5C8A60'},{key:'bestseller',label:'Pack Best Seller',color:'#C4A882'},{key:'premium',label:'Pack Premium',color:'#C49A8A'}];
+  return(
+    <div style={{minHeight:'100vh',background:'#FAF7F2',fontFamily:'Trebuchet MS,sans-serif'}}>
+      <div style={{maxWidth:480,margin:'0 auto',padding:'1rem 1rem 3rem'}}>
+        <div style={{background:'#3D1F0E',borderRadius:14,padding:'1.25rem',marginBottom:'1.25rem',textAlign:'center'}}>
+          <div style={{fontSize:'.55rem',fontWeight:700,letterSpacing:'.15em',color:'#C4A882',marginBottom:'.3rem'}}>ORDONNANCE PERSONNALISEE</div>
+          <div style={{fontFamily:'Georgia,serif',fontSize:'1.1rem',color:'white',fontWeight:300}}>Pour {data.nomClient||'toi'}</div>
+          {data.distribName&&<div style={{fontSize:'.7rem',color:'#C49A8A',marginTop:'.2rem'}}>Conseillere : {data.distribName}</div>}
+        </div>
+        {ord?.introduction&&<div style={{background:'white',borderRadius:12,padding:'.85rem 1rem',marginBottom:'1rem',border:'1px solid #E8DDD4',fontSize:'.82rem',color:'#3D2B1F',lineHeight:1.7,fontStyle:'italic'}}>{ord.introduction}</div>}
+        {packs.map(pack=>{
+          const p=ord?.[pack.key];
+          if(!p||(p.produits||[]).length===0) return null;
+          return(
+            <div key={pack.key} style={{background:'white',border:'1.5px solid #E8DDD4',borderRadius:14,padding:'1rem',marginBottom:'.75rem'}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.65rem'}}>
+                <div style={{fontSize:'.82rem',fontWeight:700,color:pack.color}}>{pack.label}</div>
+                <div style={{fontSize:'.82rem',fontWeight:700,color:'#3D1F0E'}}>{p.total}</div>
+              </div>
+              {(p.produits||[]).map((pr,i)=>(
+                <div key={i} style={{paddingBottom:'.5rem',marginBottom:'.5rem',borderBottom:i<p.produits.length-1?'1px solid #FAF7F2':'none'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.1rem'}}>
+                    <div style={{fontSize:'.8rem',fontWeight:700,color:'#3D1F0E'}}>{pr.nom}</div>
+                    <div style={{fontSize:'.75rem',fontWeight:600,color:pack.color}}>{pr.prix}</div>
+                  </div>
+                  {pr.usage&&<div style={{fontSize:'.7rem',color:pack.color,fontWeight:600}}>{pr.usage}</div>}
+                  {pr.benefice&&<div style={{fontSize:'.74rem',color:'#555'}}>{pr.benefice}</div>}
+                  {pr.comment&&<div style={{fontSize:'.68rem',color:'#888',fontStyle:'italic'}}>💡 {pr.comment}</div>}
+                </div>
+              ))}
+              {p.routine&&<div style={{background:'#FAF7F2',borderRadius:8,padding:'.6rem',marginTop:'.5rem',fontSize:'.72rem',color:'#3D2B1F',lineHeight:1.6}}>{p.routine}</div>}
+            </div>
+          );
+        })}
+        {ord?.conseil&&<div style={{background:'#3D1F0E',borderRadius:12,padding:'1rem',marginBottom:'1rem'}}><div style={{fontSize:'.6rem',fontWeight:700,color:'#C4A882',marginBottom:'.4rem'}}>CONSEIL PERSONNALISE</div><div style={{fontSize:'.8rem',color:'white',lineHeight:1.7}}>{ord.conseil}</div></div>}
+        <button onClick={()=>window.print()} style={{width:'100%',background:'#C49A8A',color:'white',border:'none',borderRadius:10,padding:'.7rem',fontSize:'.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Imprimer / Sauvegarder en PDF</button>
+        <div style={{textAlign:'center',fontSize:'.62rem',color:'#888',marginTop:'1rem'}}>Blazing Dynasty x Mihi France</div>
+      </div>
+    </div>
+  );
+}
+
+function EntonnoirTab(p){
+  const pr=p.prospects||[],cl=p.clients||[],di=p.distributeurs||[];
+  const tP=pr.length,tC=cl.length,tD=di.length;
+  const ca=cl.reduce((s,x)=>s+(x.commandes||[]).reduce((a,b)=>a+(parseFloat(b.montant)||0),0),0);
+  const mx=Math.max(tP,tC,tD,1);
+  const r1=tP>0?Math.round(tC/tP*100):0;
+  const r2=tC>0?Math.round(tD/tC*100):0;
+  return(
+    <div style={{paddingBottom:"2rem"}}>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",color:"#3D1F0E",marginBottom:"1rem"}}>Entonnoir activite</div>
+      {[{l:"Prospects",v:tP,c:"#C49A8A"},{l:"Clientes",v:tC,c:"#7FAF8A"},{l:"Distributrices",v:tD,c:"#C4A882"}].map((e,i)=>(
+        <div key={i} style={{marginBottom:".6rem"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:".2rem"}}>
+            <span style={{fontSize:".78rem",color:"#3D2B1F",fontWeight:600}}>{e.l}</span>
+            <span style={{fontSize:".85rem",fontWeight:700,color:e.c}}>{e.v}</span>
+          </div>
+          <div style={{height:10,background:"#E8DDD4",borderRadius:5,overflow:"hidden"}}>
+            <div style={{height:"100%",background:e.c,borderRadius:5,width:Math.max(3,Math.round(e.v/mx*100))+"%"}}/>
+          </div>
+        </div>
+      ))}
+      <div style={{background:"#FAF7F2",borderRadius:12,padding:"1rem",marginTop:".75rem",border:"1px solid #E8DDD4",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:".4rem"}}>
+        {[[r1+"%","P vers C","#C49A8A"],[r2+"%","C vers D","#C4A882"],[ca.toFixed(0)+"e","CA total","#7FAF8A"]].map(([v,l,col])=>(
+          <div key={l} style={{background:"white",borderRadius:10,padding:".6rem .5rem",textAlign:"center"}}>
+            <div style={{fontSize:"1rem",fontWeight:700,color:col}}>{v}</div>
+            <div style={{fontSize:".6rem",color:"#888"}}>{l}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+function TunnelHybridePage({slug}){
+  const [profil,setProfil]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [etape,setEtape]=useState("accueil");
+  const [parcours,setParcours]=useState("");
+  const [ebookChoisi,setEbookChoisi]=useState("");
+  const [coords,setCoords]=useState({prenom:"",email:"",tel:"",reseau:""});
+  const [saving,setSaving]=useState(false);
+  const isPT=(navigator.language||"fr").slice(0,2)==="pt";
+  const txt=(fr,pt)=>isPT?pt:fr;
+  const C2={brun:"#3D1F0E",rose:"#C49A8A",or:"#C4A882",vert:"#7FAF8A",lilas:"#A89BB5",creme:"#FAF7F2",blanc:"#FFFFFF",texte:"#3D2B1F",gris:"#888888",pale:"#E8DDD4"};
+  const EBOOKS=[{id:"maman",icon:"M",titre:"Le Guide de la Maman Active",sous:"5 cles pour gagner 1h par jour",couleur:"#3D1F0E"},{id:"silhouette",icon:"S",titre:"Carnet Silhouette",sous:"7 jours de recettes gourmandes",couleur:"#7FAF8A"}];
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"linkbio",slug));
+        if(snap.exists()) setProfil(snap.data());
+        else{
+          const q=query(collection(db,"linkbio"),where("slug","==",slug));
+          const qs=await getDocs(q);
+          if(!qs.empty) setProfil(qs.docs[0].data());
+        }
+      }catch{}
+      setLoading(false);
+    })();
+  },[slug]);
+  const nomDistrib=profil&&profil.prenom||"ta conseillere";
+  const coordsOk=coords.prenom.trim()&&(coords.email.trim()||coords.tel.trim()||coords.reseau.trim());
+  const enregistrerCoords=async()=>{
+    setSaving(true);
+    try{
+      await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:coords,date:new Date().toISOString().slice(0,10),ts:Date.now()});
+    }catch(e){console.error(e);}
+    setSaving(false);
+    if(parcours==="produits") setEtape("diagnostic");
+    else setEtape("recrutement");
+  };
+  if(loading) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#FAF7F2"}}><div style={{textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.5rem",color:"#3D1F0E"}}>Chargement...</div></div></div>;
+  const W={maxWidth:480,margin:"0 auto",padding:"1rem 1rem 3rem"};
+  const Hdr=()=>(<div style={{textAlign:"center",padding:"1.5rem 0 1rem"}}>{profil&&profil.photo?<img src={profil.photo} alt="" style={{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:"3px solid #C49A8A",display:"block",margin:"0 auto .6rem"}}/>:<div style={{width:72,height:72,borderRadius:"50%",background:"#3D1F0E",margin:"0 auto .6rem",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.8rem",color:"white"}}>{(profil&&profil.prenom||"B")[0]}</div>}<div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"#3D1F0E",fontWeight:600}}>{profil&&profil.prenom} {profil&&profil.nom||""}</div>{profil&&profil.slogan&&<div style={{fontSize:".72rem",color:"#888",marginTop:".2rem"}}>{profil.slogan}</div>}</div>);
+  if(etape==="accueil") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/>{profil&&profil.histoire&&<div style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".82rem",color:"#3D2B1F",lineHeight:1.75,fontStyle:"italic"}}>"{profil.histoire}"</div>}<div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"white",fontWeight:300}}>Qu'est-ce qui t'amene aujourd'hui ? </div></div><div style={{display:"flex",flexDirection:"column",gap:".6rem"}}><div onClick={()=>{setParcours("produits");setEtape("ebook");}} style={{background:"white",border:"2px solid #C49A8A",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#C49A8A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>P</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je veux decouvrir les produits</div><div style={{fontSize:".72rem",color:"#888"}}>Recois tes recommandations personnalisees + un cadeau offert</div></div><span style={{color:"#C49A8A",fontSize:"1.1rem",flexShrink:0}}>→</span></div><div onClick={()=>{setParcours("recrutement");setEtape("ebook");}} style={{background:"white",border:"2px solid #A89BB5",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#A89BB530",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>O</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je cherche une opportunite</div><div style={{fontSize:".72rem",color:"#888"}}>Decouvre si cette aventure est faite pour toi + un cadeau offert</div></div><span style={{color:"#A89BB5",fontSize:"1.1rem",flexShrink:0}}>→</span></div></div></div></div>);
+  if(etape==="ebook") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontSize:".6rem",fontWeight:700,color:"#C4A882",marginBottom:".3rem"}}>CADEAU OFFERT</div><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Choisis ton guide gratuit</div></div>{EBOOKS.map(eb=>(<div key={eb.id} onClick={()=>{setEbookChoisi(eb.id);setEtape("coordonnees");}} style={{background:"white",border:"2px solid "+(ebookChoisi===eb.id?eb.couleur:"#E8DDD4"),borderRadius:14,padding:"1.1rem",marginBottom:".65rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".75rem"}}><div style={{fontSize:"2rem",flexShrink:0}}>{eb.icon}</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>{eb.titre}</div><div style={{fontSize:".72rem",color:"#888"}}>{eb.sous}</div></div><span style={{color:eb.couleur,fontSize:"1.1rem",flexShrink:0}}>→</span></div>))}</div></div>);
+  if(etape==="coordonnees") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Ou est-ce que je t'envoie ton guide ?</div></div>{[["prenom","Prenom *","Ton prenom"],["email","Email","ton@email.com"],["tel","Tel / WhatsApp","06 XX XX XX XX"],["reseau","Messenger / Instagram","@tonpseudo"]].map(([k,l,ph])=>(<div key={k} style={{marginBottom:".4rem"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".2rem",fontWeight:600}}>{l}</div><input value={coords[k]||""} onChange={e=>setCoords(c=>({...c,[k]:e.target.value}))} placeholder={ph} style={{width:"100%",border:"1.5px solid "+(coords[k]?"#7FAF8A":"#E8DDD4"),borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none"}}/></div>))}<button onClick={enregistrerCoords} disabled={!coordsOk||saving} style={{width:"100%",background:coordsOk?"#3D1F0E":"#E8DDD4",color:coordsOk?"white":"#888",border:"none",borderRadius:10,padding:".75rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:coordsOk?"pointer":"default",marginTop:".5rem"}}>{saving?"Envoi...":"Recevoir mon guide gratuit →"}</button></div></div>);
+  if(etape==="diagnostic") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={{maxWidth:480,margin:"0 auto"}}><DiagnosticsTab uid={profil&&profil.uid||slug} userName={nomDistrib} externalMode={true} initialClient={coords.prenom}/></div></div>);
+  if(etape==="recrutement"){window.location.href="?recrutement=true&uid="+(profil&&profil.uid||slug);return null;}
+  return null;
+}
 function Root(){
   const p=new URLSearchParams(window.location.search);
   const bioSlug=p.get("bio");
   if(bioSlug) return <LinkBioPublicPage slug={bioSlug}/>;
+  const ordId=p.get("ordonnance");
+  if(ordId) return <OrdonnancePubliquePage ordId={ordId}/>;
+  const tunnelSlug=p.get("tunnel");
+  if(tunnelSlug) return <TunnelHybridePage slug={tunnelSlug}/>;
   return <App/>;
 }
 
 export default Root;
-
-
-
-function EntonnoirTab({prospects=[],clients=[],distributeurs=[]}){const totalP=prospects.length;const totalC=clients.length;const totalD=distributeurs.length;const caTotal=clients.reduce((s,c)=>s+(c.commandes||[]).reduce((cs,cmd)=>cs+(parseFloat(cmd.montant)||0),0),0);const clientsEndormis=clients.filter(c=>{const cmds=c.commandes||[];if(!cmds.length)return false;const d=[...cmds].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];return Math.floor((new Date()-new Date(d.date))/(864e5))>=60;}).length;const tauxPC=totalP>0?Math.round(totalC/totalP*100):0;const tauxCD=totalC>0?Math.round(totalD/totalC*100):0;const maxV=Math.max(totalP,totalC,totalD,1);return(<div style={{paddingBottom:'2rem'}}><div style={{fontFamily:'Georgia,serif',fontSize:'1.35rem',fontWeight:300,color:'#3D1F0E',marginBottom:'.2rem'}}>Entonnoir <em style={{fontStyle:'italic',color:'#C49A8A'}}>activit�</em></div><p style={{fontSize:'.74rem',color:'#888',marginBottom:'1.25rem',lineHeight:1.65}}>Ton pipeline complet � de la prospect � la distributrice.</p>{[{label:'Prospects',val:totalP,color:'#C49A8A',emoji:'??'},{label:'Clientes',val:totalC,color:'#7FAF8A',emoji:'???'},{label:'Distributrices',val:totalD,color:'#C4A882',emoji:'??'}].map((e,i)=>(<div key={i} style={{marginBottom:'.5rem'}}><div style={{display:'flex',justifyContent:'center'}}><div style={{width:Math.max(35,Math.round(e.val/maxV*100))+'%',background:e.color,borderRadius:8,padding:'.55rem .85rem',display:'flex',justifyContent:'space-between',alignItems:'center',minWidth:140}}><span style={{fontSize:'.78rem',fontWeight:700,color:'white'}}>{e.emoji} {e.label}</span><span style={{fontSize:'1.1rem',fontWeight:700,color:'white'}}>{e.val}</span></div></div>{i<2&&<div style={{textAlign:'center',color:'#E8DDD4',margin:'.1rem 0'}}>?</div>}</div>))}<div style={{background:'#FAF7F2',borderRadius:14,padding:'1rem',marginTop:'1rem',border:'1px solid #E8DDD4'}}><div style={{fontSize:'.6rem',fontWeight:700,color:'#3D1F0E',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'.65rem'}}>Taux de conversion</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.5rem'}}>{[[${tauxPC}%,'Prospect ? Cliente','#C49A8A'],[${tauxCD}%,'Cliente ? Distrib','#C4A882'],[${caTotal.toFixed(0)}�,'CA total','#7FAF8A']].map(([v,l,c])=>(<div key={l} style={{background:'white',borderRadius:10,padding:'.65rem .5rem',textAlign:'center',border:'1px solid #E8DDD4'}}><div style={{fontSize:'1rem',fontWeight:700,color:c}}>{v}</div><div style={{fontSize:'.58rem',color:'#888',marginTop:'.1rem'}}>{l}</div></div>))}</div></div>{clientsEndormis>0&&<div style={{background:'#FFF0F0',border:'1px solid #E57373',borderRadius:10,padding:'.65rem .85rem',marginTop:'.75rem',fontSize:'.72rem',color:'#C62828'}}>?? {clientsEndormis} cliente{clientsEndormis>1?'s':''} endormie{clientsEndormis>1?'s':''} � pense � les relancer ??</div>}</div>);}

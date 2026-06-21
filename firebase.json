@@ -8,18 +8,6 @@
     ],
     "rewrites": [
       {
-        "source": "/bio/**",
-        "destination": "/bio/index.html"
-      },
-      {
-        "source": "/funnel/**",
-        "destination": "/funnel/index.html"
-      },
-      {
-        "source": "/recommande/**",
-        "destination": "/recommande/index.html"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }

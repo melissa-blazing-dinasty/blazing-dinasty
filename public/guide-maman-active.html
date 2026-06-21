@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Le Guide de la Maman Active – Blazing Dynasty</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  :root {
+    --brun: #3D1F0E;
+    --brun2: #5C3A22;
+    --rose: #C49A8A;
+    --rose-light: #E8D5CC;
+    --or: #C4A882;
+    --creme: #FAF7F2;
+    --creme2: #F0E8E0;
+    --texte: #3D2B1F;
+    --gris: #888;
+    --vert: #7FAF8A;
+  }
+
+  body {
+    font-family: 'Lato', sans-serif;
+    background: #F5EDE6;
+    color: var(--texte);
+    line-height: 1.7;
+  }
+
+  .ebook {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    box-shadow: 0 0 60px rgba(61,31,14,.15);
+  }
+
+  /* ── COUVERTURE ── */
+  .cover {
+    position: relative;
+    height: 100vh;
+    min-height: 600px;
+    background: var(--brun);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 3rem;
+  }
+
+  .cover-photo {
+    position: absolute;
+    inset: 0;
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+    opacity: 0.35;
+  }
+
+  .cover-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(61,31,14,.95) 40%, rgba(61,31,14,.2) 100%);
+  }
+
+  .cover-badge {
+    position: relative;
+    font-family: 'Lato', sans-serif;
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .25em;
+    text-transform: uppercase;
+    color: var(--or);
+    margin-bottom: 1.5rem;
+  }
+
+  .cover-badge span {
+    display: inline-block;
+    border: 1px solid var(--or);
+    padding: .3rem .8rem;
+    border-radius: 20px;
+  }
+
+  .cover-title {
+    position: relative;
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2.2rem, 6vw, 3.8rem);
+    font-weight: 700;
+    color: white;
+    line-height: 1.15;
+    margin-bottom: .75rem;
+  }
+
+  .cover-title em {
+    color: var(--rose);
+    font-style: italic;
+  }
+
+  .cover-subtitle {
+    position: relative;
+    font-size: 1rem;
+    color: rgba(255,255,255,.75);
+    font-weight: 300;
+    margin-bottom: 2.5rem;
+    max-width: 400px;
+  }
+
+  .cover-author {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .cover-author-line {
+    width: 40px;
+    height: 1px;
+    background: var(--rose);
+  }
+
+  .cover-author-text {
+    font-size: .8rem;
+    color: var(--rose-light);
+    letter-spacing: .05em;
+  }
+
+  .cover-deco {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    width: 120px;
+    height: 120px;
+    border: 1px solid rgba(196,168,130,.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .cover-deco-inner {
+    border: 1px solid rgba(196,168,130,.2);
+    border-radius: 50%;
+    width: 90px;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+
+  .cover-deco-text {
+    font-family: 'Playfair Display', serif;
+    font-size: .7rem;
+    color: var(--or);
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  /* ── INTRO ── */
+  .intro {
+    padding: 4rem 3rem;
+    background: var(--creme);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .intro::before {
+    content: '❝';
+    position: absolute;
+    top: 1rem;
+    left: 2rem;
+    font-size: 8rem;
+    color: var(--rose-light);
+    font-family: 'Playfair Display', serif;
+    line-height: 1;
+  }
+
+  .intro-label {
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--rose);
+    margin-bottom: 1.5rem;
+  }
+
+  .intro-quote {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--brun);
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+    position: relative;
+    max-width: 520px;
+  }
+
+  .intro-text {
+    font-size: .92rem;
+    color: var(--texte);
+    line-height: 1.8;
+    max-width: 560px;
+  }
+
+  .intro-text p { margin-bottom: 1rem; }
+
+  .intro-signature {
+    margin-top: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .signature-line {
+    width: 30px;
+    height: 1px;
+    background: var(--rose);
+  }
+
+  .signature-name {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    color: var(--brun);
+    font-size: 1rem;
+  }
+
+  /* ── SOMMAIRE ── */
+  .sommaire {
+    padding: 3rem;
+    background: white;
+    border-top: 3px solid var(--rose-light);
+  }
+
+  .section-label {
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--rose);
+    margin-bottom: 1.5rem;
+  }
+
+  .sommaire-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem;
+  }
+
+  .sommaire-item {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .85rem 1rem;
+    background: var(--creme);
+    border-radius: 12px;
+    border-left: 3px solid var(--rose);
+  }
+
+  .sommaire-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--rose);
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .sommaire-content {}
+
+  .sommaire-titre {
+    font-weight: 700;
+    font-size: .82rem;
+    color: var(--brun);
+    margin-bottom: .15rem;
+  }
+
+  .sommaire-desc {
+    font-size: .72rem;
+    color: var(--gris);
+    line-height: 1.4;
+  }
+
+  /* ── CHAPITRES ── */
+  .chapitre {
+    border-top: 1px solid var(--creme2);
+  }
+
+  .chapitre-hero {
+    position: relative;
+    height: 280px;
+    overflow: hidden;
+  }
+
+  .chapitre-hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .chapitre-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(61,31,14,.85) 50%, rgba(61,31,14,.2));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 2.5rem 3rem;
+  }
+
+  .chapitre-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 5rem;
+    font-weight: 700;
+    color: rgba(255,255,255,.12);
+    line-height: 1;
+    margin-bottom: -.5rem;
+  }
+
+  .chapitre-label {
+    font-size: .62rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--or);
+    margin-bottom: .5rem;
+  }
+
+  .chapitre-titre {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: white;
+    line-height: 1.25;
+  }
+
+  .chapitre-body {
+    padding: 3rem;
+    background: white;
+  }
+
+  .chapitre-intro {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 1.05rem;
+    color: var(--brun2);
+    line-height: 1.7;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--creme2);
+  }
+
+  .chapitre-text {
+    font-size: .9rem;
+    line-height: 1.85;
+    color: var(--texte);
+    margin-bottom: 1.5rem;
+  }
+
+  /* Tips */
+  .tips-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.75rem 0;
+  }
+
+  .tip {
+    background: var(--creme);
+    border-radius: 12px;
+    padding: 1.1rem;
+    border-top: 3px solid var(--rose);
+  }
+
+  .tip-icon {
+    font-size: 1.4rem;
+    margin-bottom: .5rem;
+  }
+
+  .tip-title {
+    font-weight: 700;
+    font-size: .82rem;
+    color: var(--brun);
+    margin-bottom: .35rem;
+  }
+
+  .tip-text {
+    font-size: .78rem;
+    color: var(--texte);
+    line-height: 1.6;
+  }
+
+  /* Action box */
+  .action-box {
+    background: linear-gradient(135deg, var(--brun), var(--brun2));
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    color: white;
+  }
+
+  .action-box-label {
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--or);
+    margin-bottom: .5rem;
+  }
+
+  .action-box-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: white;
+    margin-bottom: .75rem;
+  }
+
+  .action-box ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+  }
+
+  .action-box ul li {
+    font-size: .82rem;
+    color: rgba(255,255,255,.88);
+    display: flex;
+    gap: .5rem;
+    align-items: flex-start;
+  }
+
+  .action-box ul li::before {
+    content: '✓';
+    color: var(--or);
+    flex-shrink: 0;
+    font-weight: 700;
+  }
+
+  /* Mihi box */
+  .mihi-box {
+    background: var(--creme);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    border: 1px solid var(--rose-light);
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .mihi-box-icon {
+    width: 44px;
+    height: 44px;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(196,154,138,.25);
+  }
+
+  .mihi-box-content {}
+
+  .mihi-box-label {
+    font-size: .6rem;
+    font-weight: 700;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--rose);
+    margin-bottom: .3rem;
+  }
+
+  .mihi-box-text {
+    font-size: .82rem;
+    color: var(--texte);
+    line-height: 1.65;
+  }
+
+  /* Routine card */
+  .routine {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--creme2);
+    margin: 1.75rem 0;
+    box-shadow: 0 2px 16px rgba(61,31,14,.06);
+  }
+
+  .routine-header {
+    background: var(--rose);
+    padding: .75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+  }
+
+  .routine-header-icon { font-size: 1.2rem; }
+
+  .routine-header-title {
+    font-weight: 700;
+    font-size: .85rem;
+    color: white;
+    letter-spacing: .03em;
+  }
+
+  .routine-items {
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+  }
+
+  .routine-item {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+  }
+
+  .routine-time {
+    font-size: .68rem;
+    font-weight: 700;
+    color: var(--rose);
+    min-width: 42px;
+    padding-top: .1rem;
+  }
+
+  .routine-task {
+    font-size: .82rem;
+    color: var(--texte);
+    line-height: 1.5;
+  }
+
+  /* Stat highlight */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin: 1.75rem 0;
+  }
+
+  .stat-card {
+    text-align: center;
+    padding: 1.25rem .75rem;
+    background: var(--creme);
+    border-radius: 12px;
+  }
+
+  .stat-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--brun);
+    line-height: 1;
+    margin-bottom: .25rem;
+  }
+
+  .stat-label {
+    font-size: .72rem;
+    color: var(--gris);
+    line-height: 1.4;
+  }
+
+  /* ── CONCLUSION ── */
+  .conclusion {
+    background: linear-gradient(135deg, var(--brun), #1A0A04);
+    padding: 4rem 3rem;
+    text-align: center;
+    color: white;
+  }
+
+  .conclusion-deco {
+    font-size: .65rem;
+    letter-spacing: .25em;
+    text-transform: uppercase;
+    color: var(--or);
+    margin-bottom: 1.5rem;
+  }
+
+  .conclusion-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 1rem;
+    line-height: 1.3;
+  }
+
+  .conclusion-title em {
+    color: var(--rose);
+    font-style: italic;
+  }
+
+  .conclusion-text {
+    font-size: .9rem;
+    color: rgba(255,255,255,.78);
+    line-height: 1.8;
+    max-width: 480px;
+    margin: 0 auto 2.5rem;
+  }
+
+  .conclusion-cta {
+    display: inline-block;
+    background: var(--rose);
+    color: white;
+    text-decoration: none;
+    padding: .85rem 2.5rem;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: .9rem;
+    letter-spacing: .05em;
+    margin-bottom: 2rem;
+  }
+
+  .conclusion-logo {
+    margin-top: 3rem;
+    font-family: 'Playfair Display', serif;
+    font-size: .9rem;
+    font-style: italic;
+    color: rgba(255,255,255,.4);
+    letter-spacing: .1em;
+  }
+
+  /* Checklist */
+  .checklist {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    border: 1px solid var(--creme2);
+    margin: 1.75rem 0;
+  }
+
+  .checklist-title {
+    font-weight: 700;
+    font-size: .85rem;
+    color: var(--brun);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  .checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .5rem 0;
+    border-bottom: 1px solid var(--creme);
+  }
+
+  .checklist-item:last-child { border-bottom: none; }
+
+  .check-box {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--rose-light);
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: .1rem;
+  }
+
+  .checklist-text {
+    font-size: .82rem;
+    color: var(--texte);
+    line-height: 1.5;
+  }
+
+  /* Séparateur décoratif */
+  .sep {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+
+  .sep-line {
+    flex: 1;
+    height: 1px;
+    background: var(--creme2);
+  }
+
+  .sep-icon {
+    font-size: .8rem;
+    color: var(--rose);
+  }
+
+  @media print {
+    body { background: white; }
+    .ebook { box-shadow: none; max-width: 100%; }
+    .chapitre-hero { height: 220px; }
+    .cover { height: 100vh; page-break-after: always; }
+  }
+
+  @media (max-width: 600px) {
+    .cover { padding: 2rem; }
+    .chapitre-body, .intro, .sommaire { padding: 2rem 1.5rem; }
+    .tips-grid, .sommaire-grid, .stat-row { grid-template-columns: 1fr; }
+    .chapitre-hero-overlay { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="ebook">
+
+  <!-- ══ COUVERTURE ══ -->
+  <section class="cover">
+    <img class="cover-photo" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&q=80" alt="Maman active">
+    <div class="cover-overlay"></div>
+    <div class="cover-deco">
+      <div class="cover-deco-inner">
+        <div class="cover-deco-text">GUIDE<br>OFFERT<br>2025</div>
+      </div>
+    </div>
+    <div class="cover-badge"><span>✦ BLAZING DYNASTY × MIHI</span></div>
+    <h1 class="cover-title">Le Guide de la<br><em>Maman Active</em></h1>
+    <p class="cover-subtitle">5 clés pour gagner 1 heure par jour — sans culpabilité et sans sacrifier ce qui compte vraiment.</p>
+    <div class="cover-author">
+      <div class="cover-author-line"></div>
+      <span class="cover-author-text">Par ton équipe Blazing Dynasty</span>
+    </div>
+  </section>
+
+  <!-- ══ INTRO ══ -->
+  <section class="intro">
+    <div class="intro-label">✦ Avant de commencer</div>
+    <blockquote class="intro-quote">
+      "Tu peux tout avoir — pas forcément en même temps, mais tu peux avoir ta vie et tes ambitions."
+    </blockquote>
+    <div class="intro-text">
+      <p>Ce guide n'est pas un manuel de productivité de plus. Ce n'est pas une liste de choses à faire qui va alourdir encore ta to-do list.</p>
+      <p>C'est une invitation à regarder ta journée différemment. À repérer les fuites d'énergie. À créer de l'espace — pour toi, pour ce qui te fait vibrer, pour ce projet qui sommeille depuis trop longtemps.</p>
+      <p>Tu es maman. Tu es femme. Tu as des rêves. Les trois ne s'excluent pas. Ce guide est là pour te le prouver, 5 clés à la fois.</p>
+    </div>
+    <div class="intro-signature">
+      <div class="signature-line"></div>
+      <span class="signature-name">Avec bienveillance, Blazing Dynasty</span>
+    </div>
+  </section>
+
+  <!-- ══ SOMMAIRE ══ -->
+  <section class="sommaire">
+    <div class="section-label">✦ Au programme</div>
+    <div class="sommaire-grid">
+      <div class="sommaire-item">
+        <div class="sommaire-num">01</div>
+        <div class="sommaire-content">
+          <div class="sommaire-titre">La règle des 3 priorités</div>
+          <div class="sommaire-desc">Choisir ce qui compte vraiment chaque matin</div>
+        </div>
+      </div>
+      <div class="sommaire-item">
+        <div class="sommaire-num">02</div>
+        <div class="sommaire-content">
+          <div class="sommaire-titre">Ton rituel du matin</div>
+          <div class="sommaire-desc">15 minutes qui changent toute la journée</div>
+        </div>
+      </div>
+      <div class="sommaire-item">
+        <div class="sommaire-num">03</div>
+        <div class="sommaire-content">
+          <div class="sommaire-titre">Déléguer sans culpabilité</div>
+          <div class="sommaire-desc">Libérer du temps sans tout contrôler</div>
+        </div>
+      </div>
+      <div class="sommaire-item">
+        <div class="sommaire-num">04</div>
+        <div class="sommaire-content">
+          <div class="sommaire-titre">L'énergie avant le temps</div>
+          <div class="sommaire-desc">Recharger pour donner le meilleur de toi</div>
+        </div>
+      </div>
+      <div class="sommaire-item">
+        <div class="sommaire-num">05</div>
+        <div class="sommaire-content">
+          <div class="sommaire-titre">Construire ton projet</div>
+          <div class="sommaire-desc">Avancer même avec 20 minutes par jour</div>
+        </div>
+      </div>
+      <div class="sommaire-item" style="border-left-color: var(--or);">
+        <div class="sommaire-num" style="color: var(--or);">+</div>
+        <div class="sommaire-content">
+          <div class="sommaire-titre">Ta checklist gratuite</div>
+          <div class="sommaire-desc">30 jours pour transformer ta routine</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ CHAPITRE 1 ══ -->
+  <article class="chapitre">
+    <div class="chapitre-hero">
+      <img src="https://images.unsplash.com/photo-1484863137850-59afcfe05386?w=800&q=80" alt="Maman qui planifie">
+      <div class="chapitre-hero-overlay">
+        <div class="chapitre-num">01</div>
+        <div class="chapitre-label">✦ Clé numéro un</div>
+        <h2 class="chapitre-titre">La règle<br>des 3 priorités</h2>
+      </div>
+    </div>
+    <div class="chapitre-body">
+      <p class="chapitre-intro">"Si tout est prioritaire, rien ne l'est vraiment." — chaque matin, choisir 3 choses. Pas 10. Pas 15. Trois.</p>
+      <p class="chapitre-text">On nous a appris à remplir nos journées jusqu'à débordement. Le résultat ? On finit la journée épuisée, et on a l'impression de n'avoir rien fait de vraiment important. La règle des 3 priorités change tout ça.</p>
+      <p class="chapitre-text">Chaque matin, avant d'ouvrir tes applis et avant même de regarder tes messages, tu poses 3 choses sur papier — ou dans ton application Blazing Dynasty. Ces 3 choses sont les seules qui comptent aujourd'hui. Tout le reste est du bonus.</p>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-number">73%</div>
+          <div class="stat-label">des mamans se sentent débordées chaque matin</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">3</div>
+          <div class="stat-label">priorités suffisent pour une journée accomplie</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">21j</div>
+          <div class="stat-label">pour transformer une habitude en réflexe</div>
+        </div>
+      </div>
+
+      <div class="tips-grid">
+        <div class="tip">
+          <div class="tip-icon">🌅</div>
+          <div class="tip-title">Le soir d'avant</div>
+          <div class="tip-text">Prépare tes 3 priorités du lendemain la veille, quand ton esprit est encore clair et pas encore dans l'urgence.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">🎯</div>
+          <div class="tip-title">La règle de la taille</div>
+          <div class="tip-text">Une priorité ne doit pas prendre plus de 2h. Si c'est plus long, découpe-la en plus petites actions.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">✋</div>
+          <div class="tip-title">Pas plus de 3</div>
+          <div class="tip-text">Si tu en as 4, repose-en une demain. La discipline ici c'est de savoir dire non, même à toi-même.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">🎉</div>
+          <div class="tip-title">La célébration</div>
+          <div class="tip-text">Quand les 3 sont faites, c'est une victoire complète. Permets-toi de le ressentir vraiment.</div>
+        </div>
+      </div>
+
+      <div class="action-box">
+        <div class="action-box-label">✦ À faire aujourd'hui</div>
+        <div class="action-box-title">Mes 3 priorités de demain</div>
+        <ul>
+          <li>Ouvre ton agenda ou ton carnet maintenant</li>
+          <li>Écris exactement 3 choses — pas une de plus</li>
+          <li>À côté de chacune, note le temps estimé</li>
+          <li>Dès demain matin, commence par la plus importante</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <!-- ══ CHAPITRE 2 ══ -->
+  <article class="chapitre">
+    <div class="chapitre-hero">
+      <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&q=80" alt="Rituel du matin">
+      <div class="chapitre-hero-overlay">
+        <div class="chapitre-num">02</div>
+        <div class="chapitre-label">✦ Clé numéro deux</div>
+        <h2 class="chapitre-titre">Ton rituel<br>du matin</h2>
+      </div>
+    </div>
+    <div class="chapitre-body">
+      <p class="chapitre-intro">Les 15 premières minutes de ta journée définissent ton énergie pour les 15 heures qui suivent. Pas de pression — juste un rituel simple et puissant.</p>
+      <p class="chapitre-text">On n'a pas besoin d'une heure de méditation ou d'un lever à 5h du matin. On a besoin d'un rituel court, réaliste et ancré dans notre vraie vie de maman. Un rituel qui nous appartient.</p>
+      <p class="chapitre-text">La clé : commencer avant les autres. Avant les demandes, avant les notifications, avant le petit-déjeuner à préparer. Même 10-15 minutes suffisent pour te créer une bulle d'ancrage.</p>
+
+      <div class="routine">
+        <div class="routine-header">
+          <div class="routine-header-icon">☀️</div>
+          <div class="routine-header-title">Rituel matin en 15 minutes chrono</div>
+        </div>
+        <div class="routine-items">
+          <div class="routine-item">
+            <div class="routine-time">3 min</div>
+            <div class="routine-task"><strong>Respiration consciente.</strong> 3 grandes respirations. Ça peut sembler ridicule. Ça ne l'est pas.</div>
+          </div>
+          <div class="routine-item">
+            <div class="routine-time">2 min</div>
+            <div class="routine-task"><strong>Une gratitude.</strong> Une seule chose pour laquelle tu es reconnaissante aujourd'hui.</div>
+          </div>
+          <div class="routine-item">
+            <div class="routine-time">5 min</div>
+            <div class="routine-task"><strong>Tes 3 priorités.</strong> Note-les si tu ne l'as pas fait la veille. C'est ton cap pour aujourd'hui.</div>
+          </div>
+          <div class="routine-item">
+            <div class="routine-time">5 min</div>
+            <div class="routine-task"><strong>Pour toi.</strong> Café en silence, 5 minutes de lecture, une chanson qui t'élève. À toi de choisir.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mihi-box">
+        <div class="mihi-box-icon">🌿</div>
+        <div class="mihi-box-content">
+          <div class="mihi-box-label">✦ Astuce bien-être Mihi</div>
+          <div class="mihi-box-text">Associe ton rituel matin à une routine beauté express. 2 minutes pour ta crème visage et ton parfum, c'est déjà prendre soin de toi. Les compléments alimentaires Mihi pris le matin avec ton café peuvent aussi booster ton énergie sur la durée.</div>
+        </div>
+      </div>
+
+      <div class="sep"><div class="sep-line"></div><div class="sep-icon">✦</div><div class="sep-line"></div></div>
+
+      <p class="chapitre-text">La régularité prime sur la durée. Un rituel de 5 minutes chaque jour vaut mieux qu'une heure de méditation une fois par semaine. Ton cerveau adore la prévisibilité.</p>
+    </div>
+  </article>
+
+  <!-- ══ CHAPITRE 3 ══ -->
+  <article class="chapitre">
+    <div class="chapitre-hero">
+      <img src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80" alt="Famille ensemble">
+      <div class="chapitre-hero-overlay">
+        <div class="chapitre-num">03</div>
+        <div class="chapitre-label">✦ Clé numéro trois</div>
+        <h2 class="chapitre-titre">Déléguer<br>sans culpabilité</h2>
+      </div>
+    </div>
+    <div class="chapitre-body">
+      <p class="chapitre-intro">Déléguer n'est pas abandonner. C'est faire confiance. C'est aussi permettre aux autres de grandir — y compris tes enfants.</p>
+      <p class="chapitre-text">Le syndrome de la femme qui fait tout. Tu le connais, tu le vis peut-être. Cette conviction profonde que si tu ne le fais pas toi-même, ce sera mal fait. Ou que demander de l'aide, c'est avouer une faiblesse. C'est faux. Et ça t'épuise.</p>
+      <p class="chapitre-text">Déléguer, c'est une compétence. Comme n'importe quelle autre, ça s'apprend et ça se développe. Et non, tu n'as pas à tout porter seule.</p>
+
+      <div class="tips-grid">
+        <div class="tip">
+          <div class="tip-icon">👧</div>
+          <div class="tip-title">Les enfants aussi</div>
+          <div class="tip-text">Mettre la table, ranger les jouets, préparer leur sac — dès 3 ans, les enfants peuvent contribuer. C'est bon pour leur développement et pour ton énergie.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">📱</div>
+          <div class="tip-title">L'automatisation</div>
+          <div class="tip-text">Livraisons à domicile, courses en ligne, prélèvements automatiques — chaque tâche administrative éliminée est du temps retrouvé.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">💬</div>
+          <div class="tip-title">Communiquer clairement</div>
+          <div class="tip-text">Déléguer, c'est expliquer. Prends 5 minutes pour montrer comment, une seule fois. Tu n'auras plus à le refaire.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">🤝</div>
+          <div class="tip-title">Le troc entre mamans</div>
+          <div class="tip-text">Tu gardes les enfants d'une amie mercredi, elle garde les tiens vendredi. Simple, gratuit, efficace.</div>
+        </div>
+      </div>
+
+      <div class="action-box">
+        <div class="action-box-label">✦ Exercice pratique</div>
+        <div class="action-box-title">Audit de ta semaine</div>
+        <ul>
+          <li>Liste 5 tâches répétitives qui te prennent de l'énergie</li>
+          <li>Pour chacune : est-ce que quelqu'un d'autre pourrait le faire ?</li>
+          <li>Identifie LA délégation que tu vas faire cette semaine</li>
+          <li>Lâche prise sur le résultat — pas besoin que ce soit parfait</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <!-- ══ CHAPITRE 4 ══ -->
+  <article class="chapitre">
+    <div class="chapitre-hero">
+      <img src="https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=800&q=80" alt="Bien-être femme">
+      <div class="chapitre-hero-overlay">
+        <div class="chapitre-num">04</div>
+        <div class="chapitre-label">✦ Clé numéro quatre</div>
+        <h2 class="chapitre-titre">L'énergie<br>avant le temps</h2>
+      </div>
+    </div>
+    <div class="chapitre-body">
+      <p class="chapitre-intro">Ce n'est pas le temps qui manque. C'est l'énergie. Avec de l'énergie, une heure suffit. Sans elle, même une journée entière ne sert à rien.</p>
+      <p class="chapitre-text">On parle tout le temps de gestion du temps. Mais personne ne parle de gestion de l'énergie. Et pourtant, c'est là que tout se joue. Une maman épuisée qui a 3 heures libres ne peut rien en faire. Une maman ressourcée avec 45 minutes peut déplacer des montagnes.</p>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-number">68%</div>
+          <div class="stat-label">des mamans manquent de sommeil chroniquement</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">2L</div>
+          <div class="stat-label">d'eau par jour pour maintenir concentration et humeur</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">20min</div>
+          <div class="stat-label">de marche quotidienne = moins de fatigue mentale</div>
+        </div>
+      </div>
+
+      <div class="mihi-box">
+        <div class="mihi-box-icon">💊</div>
+        <div class="mihi-box-content">
+          <div class="mihi-box-label">✦ Booster naturel Mihi</div>
+          <div class="mihi-box-text">Les compléments alimentaires Mihi sont formulés pour soutenir l'énergie, le tonus et l'équilibre des mamans actives. Fabriqués par ElfaPharm avec plus de 90% d'ingrédients naturels — demande à ta conseillère Mihi sa recommandation personnalisée.</div>
+        </div>
+      </div>
+
+      <div class="tips-grid">
+        <div class="tip">
+          <div class="tip-icon">😴</div>
+          <div class="tip-title">Le sommeil d'abord</div>
+          <div class="tip-text">7-8h de sommeil ne sont pas un luxe. C'est la condition de base. Coucher 30 min plus tôt ce soir.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">🥗</div>
+          <div class="tip-title">Manger pour performer</div>
+          <div class="tip-text">Protéines le matin, moins de sucre dans la journée. L'alimentation impacte directement ta concentration.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">📵</div>
+          <div class="tip-title">Les pauses sans écran</div>
+          <div class="tip-text">Ton cerveau se recharge sans stimulation numérique. 10 minutes de silence = carburant pur.</div>
+        </div>
+        <div class="tip">
+          <div class="tip-icon">🌸</div>
+          <div class="tip-title">Ce qui te ressource</div>
+          <div class="tip-text">Bain chaud, musique, jardin, lecture... Identifie ton "recharge rapide" et protège ce temps.</div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- ══ CHAPITRE 5 ══ -->
+  <article class="chapitre">
+    <div class="chapitre-hero">
+      <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80" alt="Femme qui travaille">
+      <div class="chapitre-hero-overlay">
+        <div class="chapitre-num">05</div>
+        <div class="chapitre-label">✦ Clé numéro cinq</div>
+        <h2 class="chapitre-titre">Construire<br>ton projet</h2>
+      </div>
+    </div>
+    <div class="chapitre-body">
+      <p class="chapitre-intro">20 minutes par jour. 7 jours sur 7. Ça représente plus de 120 heures en un an. C'est largement suffisant pour construire quelque chose de beau.</p>
+      <p class="chapitre-text">Tu n'as pas besoin d'un bureau, de 3 heures consécutives ou des enfants chez la grand-mère. Tu as besoin d'un créneau régulier — même petit — et d'une intention claire. Le reste vient avec la pratique.</p>
+      <p class="chapitre-text">La plupart des femmes qui réussissent à développer un projet en étant mamans ne le font pas pendant de grands blocs de temps. Elles le font par petites touches, régulièrement, avec une discipline douce mais constante.</p>
+
+      <div class="routine">
+        <div class="routine-header" style="background: var(--brun);">
+          <div class="routine-header-icon">📅</div>
+          <div class="routine-header-title">Planifier ta semaine projet en 10 min</div>
+        </div>
+        <div class="routine-items">
+          <div class="routine-item">
+            <div class="routine-time" style="color: var(--or);">Dim.</div>
+            <div class="routine-task"><strong>Revue de la semaine passée.</strong> 3 victoires, 1 apprentissage.</div>
+          </div>
+          <div class="routine-item">
+            <div class="routine-time" style="color: var(--or);">Dim.</div>
+            <div class="routine-task"><strong>Plan de la semaine.</strong> 3 actions concrètes pour avancer sur ton projet.</div>
+          </div>
+          <div class="routine-item">
+            <div class="routine-time" style="color: var(--or);">Lun-Sam</div>
+            <div class="routine-task"><strong>20 minutes quotidiennes.</strong> Bloque ce créneau dans ton agenda. Traite-le comme un RDV médical.</div>
+          </div>
+          <div class="routine-item">
+            <div class="routine-time" style="color: var(--or);">Vend.</div>
+            <div class="routine-task"><strong>Mini-célébration.</strong> Reconnais ce que tu as avancé cette semaine. Même si c'est petit.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mihi-box">
+        <div class="mihi-box-icon">👑</div>
+        <div class="mihi-box-content">
+          <div class="mihi-box-label">✦ Et si ton projet, c'était Mihi ?</div>
+          <div class="mihi-box-text">Des milliers de mamans en France ont créé un revenu complémentaire avec Mihi — en travaillant depuis chez elles, à leurs heures, avec un smartphone. Pas besoin d'être experte. Pas besoin d'un stock. Juste l'envie de changer quelque chose. Demande à la personne qui t'a partagé ce guide — elle peut te montrer comment.</div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- ══ CHECKLIST ══ -->
+  <section style="padding: 3rem; background: var(--creme);">
+    <div class="section-label">✦ Ton plan d'action</div>
+    <div style="font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 700; color: var(--brun); margin-bottom: .5rem;">Checklist 30 jours</div>
+    <p style="font-size: .85rem; color: var(--gris); margin-bottom: 1.75rem; line-height: 1.7;">Coche chaque action accomplie. Un petit geste par jour, 30 jours de transformation.</p>
+
+    <div class="checklist">
+      <div class="checklist-title">🌅 Semaine 1 — Installer les fondations</div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai défini mes 3 priorités pour demain</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai commencé mon rituel matin (même 5 minutes)</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai délégué une tâche que je faisais seule</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai identifié mon activité "recharge rapide"</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai bloqué 20 min/jour pour mon projet dans mon agenda</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai dit non à une demande non prioritaire</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai célébré une victoire de la semaine</div></div>
+    </div>
+
+    <div class="checklist">
+      <div class="checklist-title">🌿 Semaine 2 — Créer la régularité</div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">Mon rituel matin est maintenant ancré dans ma routine</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai tenu mes 20 min/jour sur le projet</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai eu une conversation sur mon projet avec quelqu'un de confiance</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai pris soin de mon énergie cette semaine (sommeil, alimentation)</div></div>
+    </div>
+
+    <div class="checklist">
+      <div class="checklist-title">🌸 Semaines 3 & 4 — Accélérer</div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai progressé sur mon projet de façon visible</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">Je me sens plus sereine et moins débordée qu'il y a 30 jours</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai gagné au moins 1 heure par semaine grâce à ces clés</div></div>
+      <div class="checklist-item"><div class="check-box"></div><div class="checklist-text">J'ai partagé ce guide avec une amie qui en a besoin</div></div>
+    </div>
+  </section>
+
+  <!-- ══ CONCLUSION ══ -->
+  <section class="conclusion">
+    <div class="conclusion-deco">✦ BLAZING DYNASTY × MIHI ✦</div>
+    <h2 class="conclusion-title">Tu es prête à<br><em>changer quelque chose.</em></h2>
+    <p class="conclusion-text">Ce guide est un point de départ. Le vrai changement commence dans les 24 heures qui suivent. Commence par une seule clé. Juste une. Et reviens pour les autres.</p>
+    <p class="conclusion-text" style="margin-top: -1rem;">Et si tu veux aller plus loin — créer un revenu depuis chez toi tout en continuant à être la maman que tu es — parle à ta conseillère Mihi. Elle a peut-être une place pour toi dans son équipe.</p>
+    <div class="conclusion-logo">Blazing Dynasty · Équipe Mihi France</div>
+  </section>
+
+</div>
+</body>
+</html>
