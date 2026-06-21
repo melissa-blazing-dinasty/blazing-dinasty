@@ -1,17 +1,13 @@
 const fs = require('fs');
 let c = fs.readFileSync('src/App.js', 'utf8');
 
-// Remplacer le bouton PT par un lien Google Translate
-c = c.replace(
-  '<button onClick={toggleLang} disabled={translating}',
-  '<a href={"https://translate.google.com/translate?sl=fr&tl=pt&u="+encodeURIComponent(window.location.href)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}} title="Traduzir para português"><button disabled={false}'
-);
+// Chercher toutes les occurrences de blocage/recrue bloquée
+const idx = c.indexOf('Recru. bloquée');
+console.log('Trouvé:', idx > -1 ? 'OUI' : 'NON');
+if(idx > -1) console.log(JSON.stringify(c.substring(idx-50, idx+50)));
 
-// Fermer le <a> après le bouton
-c = c.replace(
-  '{translating?"⏳":lang==="fr"?"🇵🇹":"🇫🇷"}\n            </button>',
-  '🇵🇹\n            </button></a>'
-);
+c = c.replace(/Diagnostic Recru\. bloquée/g, 'Diagnostic Maman Entrepreneur');
+c = c.replace(/🔓 Diagnostic/g, '👩‍👧 Diagnostic');
 
 fs.writeFileSync('src/App.js', c, 'utf8');
-console.log('OK:', c.includes('translate.google.com') ? 'OUI' : 'NON');
+console.log('Maman Entrepreneur:', c.includes('Maman Entrepreneur') ? 'OK' : 'NON');

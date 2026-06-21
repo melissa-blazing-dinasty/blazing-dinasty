@@ -289,7 +289,7 @@ async function translateBatch(texts, targetLang){
     try{
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:`Traduz do francês para português europeu (Portugal). Responde APENAS com JSON array na mesma ordem:\n${JSON.stringify(chunk)}`}]})
       });
       const data=await res.json();
@@ -2884,7 +2884,7 @@ function HistoriquePeriodes({uid}){
     })();
   },[uid]);
   const caMap={};
-  const ANCRE_H=new Date('2026-01-22T00:00:00').getTime();
+  const ANCRE_H=new Date('2026-01-01T12:00:00').getTime();
   Object.entries(suiviCA).forEach(([key,val])=>{
     const pNum=parseInt(key.replace('p',''));
     if(!pNum||isNaN(pNum)) return;
@@ -7133,7 +7133,7 @@ FORMAT JSON SI TEXTE (type="texte", business ou mood) :
 
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
       });
       const data=await res.json();
@@ -7370,7 +7370,7 @@ RÈGLES IMPORTANTES :
         method:"POST",
         headers:{
           "Content-Type":"application/json",
-          "x-api-key":"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",
+          "x-api-key":"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",
           "anthropic-version":"2023-06-01",
           "anthropic-dangerous-direct-browser-access":"true"
         },
@@ -7757,7 +7757,7 @@ function ObjectifsTab({uid,userName,isMelissa}){
 // ── CALENDRIER ────────────────────────────────────────────────────────────────
 const FETES_IMPORTANTES=[
   // ── JANVIER ──
-  {title:"🎆 Nouvel An",date:"2026-01-01",type:"fete",notes:"Bonne résolution beauté & bien-être — moment idéal pour pitcher"},
+  {title:"🎆 Nouvel An",date:"2026-01-03",type:"fete",notes:"Bonne résolution beauté & bien-être — moment idéal pour pitcher"},
   {title:"👑 Épiphanie / Galette des rois",date:"2026-01-06",type:"fete",notes:"Moment convivial — contenu lifestyle, partage en famille"},
   {title:"🌙 Nouvel An chinois",date:"2026-02-17",type:"fete",notes:"Symbole de renouveau — bon thème pour parler de nouveaux départs"},
 
@@ -7957,7 +7957,7 @@ function EditorialTab({ uid, userName }) {
   const todayStr = today.toISOString().slice(0,10);
   const JOURS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
   const MOIS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-  const API_KEY = "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";
+  const API_KEY = "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";
 
   const THEMES = [
     {p1:{type:"Storytelling",hook:"Je n'avais pas prévu que ça changerait ma vie...",conseil:"Dyptique avant/après, lumière naturelle"},p2:{type:"Conversion Minceur",hook:"Tu veux perdre du poids sans régime draconien ?",cta:"MINCEUR",conseil:"Produit sur fond blanc avec feuille verte"},s:["Coulisses de ton lundi — café, enfant, bureau","Sondage : tu te bats plus contre la fatigue ou la balance ?","Diagnostic GRATUIT → lien en bio"]},
@@ -8538,9 +8538,9 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
 // Période de 21 jours, commence un mercredi
 // Référence : période en cours se termine dans 6j 12h à partir d'aujourd'hui (11/06/2026)
 function getPeriodeInfo(){
-  const ANCRE = new Date("2026-01-22T00:00:00").getTime();
+  const ANCRE = new Date("2026-01-01T12:00:00").getTime();
   const PERIOD_MS = PERIODE_DUREE_JOURS * 24 * 60 * 60 * 1000;
-  const now = Date.now();
+  const d = new Date(); const now = new Date(d.getFullYear(),d.getMonth(),d.getDate(),12,0,0).getTime();
   const periodNum = Math.max(1, Math.floor((now - ANCRE) / PERIOD_MS) + 1);
   const periodStart = new Date(ANCRE + (periodNum-1)*PERIOD_MS);
   const periodEnd = new Date(periodStart.getTime() + PERIOD_MS);
@@ -9796,6 +9796,7 @@ function LinkBioTab({uid, userName}){
     lienBoutique:"",lienRecrutement:"",lienDiag:"",
     liensBonusLabel:[],liensBonusUrl:[],liensBonusPhoto:[],
     photos:[],temoignages:[],produitsStar:[],faq:[],
+    diagChoisis:["parfum","skincare","silhouette","sante"],
     showBanniere:true,
     bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,
   });
@@ -9896,9 +9897,9 @@ function LinkBioTab({uid, userName}){
 
       {/* Liens */}
       <div style={{padding:".75rem",background:theme.cardBg,display:"flex",flexDirection:"column",gap:".4rem"}}>
-        {profil.lienBoutique&&<a href={profil.lienBoutique} target="_blank" rel="noopener noreferrer" style={{display:"block",background:theme.btnPrimary,color:theme.id==="soleil"||theme.id==="nature"?"white":theme.text,borderRadius:10,padding:".55rem .85rem",textAlign:"center",textDecoration:"none",fontSize:".78rem",fontWeight:600}}>🛍️ Découvrir les produits</a>}
+        <button onClick={()=>{window.location.href="?bio="+slug+"&tunnel=produits_page";}} style={{display:"block",width:"100%",background:theme.btnPrimary,color:"white",border:"none",borderRadius:10,padding:".7rem .85rem",textAlign:"center",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
         {profil.lienDiag&&<a href={profil.lienDiag} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:10,padding:".55rem .85rem",textAlign:"center",textDecoration:"none",fontSize:".78rem",fontWeight:600}}>✨ Faire mon diagnostic</a>}
-        {profil.lienRecrutement&&<a href={profil.lienRecrutement} target="_blank" rel="noopener noreferrer" style={{display:"block",background:theme.btnTertiary,color:"white",borderRadius:10,padding:".55rem .85rem",textAlign:"center",textDecoration:"none",fontSize:".78rem",fontWeight:600}}>👑 Rejoindre l'équipe</a>}
+        <button onClick={()=>{window.location.href="?bio="+slug+"&tunnel=recrutement_page";}} style={{display:"block",width:"100%",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:10,padding:".7rem .85rem",textAlign:"center",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👑 Rejoindre l'équipe</button>
         {(profil.liensBonusLabel||[]).map((lbl,i)=>lbl&&profil.liensBonusUrl?.[i]&&(
           <a key={i} href={profil.liensBonusUrl[i]} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:".5rem",background:theme.accent+"15",border:`1.5px solid ${theme.accent}30`,borderRadius:10,padding:".45rem .75rem",textDecoration:"none"}}>
             {profil.liensBonusPhoto?.[i]&&<img src={profil.liensBonusPhoto[i]} alt="" style={{width:30,height:30,borderRadius:6,objectFit:"cover",flexShrink:0}}/>}
@@ -10010,7 +10011,33 @@ function LinkBioTab({uid, userName}){
 
           {/* Témoignages */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem"}}>
-            <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Témoignages clientes</div>
+            
+          {/* ── Choix des diagnostics ── */}
+          <div style={{marginBottom:".75rem",padding:".75rem",background:C.creme,borderRadius:10,border:`1px solid ${C.pale}`}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>🩺 Diagnostics affichés sur ton LinkBio</div>
+            {[
+              {id:"parfum",label:"🌸 Diagnostic Parfum"},
+              {id:"skincare",label:"✨ Diagnostic Skincare"},
+              {id:"silhouette",label:"⚖️ Diagnostic Silhouette"},
+              {id:"sante",label:"💚 Diagnostic Bien-être"},
+              {id:"cheveux",label:"💇 Diagnostic Cheveux"},
+              {id:"makeup",label:"💄 Diagnostic Makeup"},
+              {id:"recrutement",label:"👑 Diagnostic Opportunité"},
+              {id:"blocage",label:"👩‍👧 Diagnostic Maman Entrepreneur"},
+            ].map(d=>{
+              const checked=(profil.diagChoisis||["parfum","skincare","silhouette","sante"]).includes(d.id);
+              return(<label key={d.id} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",cursor:"pointer",fontSize:".78rem",color:C.texte}}>
+                <input type="checkbox" checked={checked} onChange={()=>{
+                  const current=profil.diagChoisis||["parfum","skincare","silhouette","sante"];
+                  const next=checked?current.filter(x=>x!==d.id):[...current,d.id];
+                  setProfil(p=>({...p,diagChoisis:next}));
+                }} style={{accentColor:C.rose,width:15,height:15}}/>
+                {d.label}
+              </label>);
+            })}
+          </div>
+
+          <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Témoignages clientes</div>
             <button onClick={()=>setProfil(p=>({...p,temoignages:[...(p.temoignages||[]),{texte:"",auteur:""}]}))}
               style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
           </div>
@@ -10428,9 +10455,10 @@ function UploadPhoto({value, onChange, label="Photo", folder="produits"}){
         {preview&&<img src={preview} alt="" style={{width:52,height:52,borderRadius:8,objectFit:"cover",flexShrink:0,border:`1px solid ${C.pale}`}}/>}
         <div style={{flex:1}}>
           <label style={{display:"block",background:uploading?"#aaa":C.brun,color:"white",borderRadius:8,padding:".38rem .65rem",fontSize:".72rem",fontWeight:600,textAlign:"center",cursor:uploading?"default":"pointer",fontFamily:"inherit",marginBottom:".25rem"}}>
-            {uploading?"⏳ Envoi en cours...":"📷 Choisir une photo"}
-            <input type="file" accept="image/*" onChange={handleFile} style={{display:"none"}} disabled={uploading}/>
+            {uploading?"⏳ Envoi en cours...":preview?"🔄 Changer la photo":"📷 Choisir une photo"}
+            <input type="file" accept="image/*" onChange={handleFile} style={{display:"none"}} disabled={uploading} key={preview}/>
           </label>
+          {preview&&<button onClick={()=>{setPreview("");onChange("");}} style={{display:"block",width:"100%",background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".22rem .5rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",marginBottom:".25rem"}}>✕ Supprimer</button>}
           <input value={value||""} onChange={e=>{onChange(e.target.value);setPreview(e.target.value);}} placeholder="...ou coller une URL"
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".32rem .5rem",fontSize:".7rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
         </div>
@@ -11924,7 +11952,7 @@ const PALIERS_QUALIFICATION=[
 
 // Périodes Mihi — ancre chargée depuis Firebase admin (modifiable)
 // Valeur par défaut : 19/12/2024
-let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-22T00:00:00").getTime();
+let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-01T12:00:00").getTime();
 const PERIODE_DUREE_JOURS = 21;
 const PERIODES_PAR_AN = 18;
 
@@ -11935,7 +11963,7 @@ async function chargerAncrePeriodesFirebase(){
     if(snap.exists()&&snap.data().ancre){
       const savedAncre = new Date(snap.data().ancre).getTime();
       // Utiliser l'ancre sauvegardée seulement si elle est récente (2026+)
-      if(savedAncre >= new Date("2026-01-01").getTime()) PERIODE_DEBUT_ABSOLU_MS = savedAncre;
+      if(savedAncre >= new Date("2025-01-01").getTime()) PERIODE_DEBUT_ABSOLU_MS = savedAncre;
     }
   }catch{}
 }
@@ -11948,8 +11976,8 @@ function getPeriodeDebut(nAbsolu){
 }
 
 function getPeriodeActuelle(){
-  const ANCRE = new Date("2026-01-22T00:00:00").getTime();
-  const diffJours = Math.floor((Date.now() - ANCRE) / (24*60*60*1000));
+  const ANCRE = new Date("2026-01-01T12:00:00").getTime();
+  const now = new Date(); const todayLocal = new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(); const diffJours = Math.floor((todayLocal - ANCRE) / (24*60*60*1000));
   return Math.max(1, Math.floor(diffJours / PERIODE_DUREE_JOURS) + 1);
 }
 
@@ -14747,7 +14775,7 @@ function MonEquipeTab({uid}){
 
 // ── ADMIN TAB (Melissa uniquement) ───────────────────────────────────────────
 function AdminConfigPeriodes(){
-  const[ancre,setAncre]=useState("2026-01-22");
+  const[ancre,setAncre]=useState("2026-01-03");
   const[periodeNum,setPeriodeNum]=useState("");
   const[periodeDebut,setPeriodeDebut]=useState("");
   const[saving,setSaving]=useState(false);
@@ -14780,9 +14808,9 @@ function AdminConfigPeriodes(){
   const save=async()=>{
     setSaving(true);
     try{
-      await setDoc(doc(db,"admin","config_periodes"),{ancre:ancre+"T00:00:00"});
+      await setDoc(doc(db,"admin","config_periodes"),{ancre:ancre+"T12:00:00"});
       // Met à jour la variable globale immédiatement
-      PERIODE_DEBUT_ABSOLU_MS = new Date(ancre+"T00:00:00").getTime();
+      PERIODE_DEBUT_ABSOLU_MS = new Date(ancre+"T12:00:00").getTime();
       setSaved(true);setTimeout(()=>setSaved(false),2000);
     }catch{}
     setSaving(false);
@@ -15986,7 +16014,7 @@ Génère un plan d'action personnalisé en JSON avec cette structure exacte (ne 
       method:"POST",
       headers:{
         "Content-Type":"application/json",
-        "x-api-key":"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",
+        "x-api-key":"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",
         "anthropic-version":"2023-06-01",
         "anthropic-dangerous-direct-browser-access":"true",
       },
@@ -16067,7 +16095,7 @@ Règles: budget=1-2 produits, bestseller=3 produits, premium=4-5 produits. Prix 
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": "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",
+        "x-api-key": "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",
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true"
       },
@@ -16127,7 +16155,7 @@ ${catalogueText}
 
 Génère 4 à 5 produits du catalogue pour un pack premium complet. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
 {"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom FR","prix":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;
-          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
+          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
           const d2 = await r2.json();
           const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
           result.premium = JSON.parse(t2);
@@ -16492,6 +16520,10 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
   const [resultat, setResultat] = useState(null);
   const [loading, setLoading] = useState(false);
   const [nom, setNom] = useState("");
+  const [capturePrenom, setCapturePrenom] = useState("");
+  const [captureContact, setCaptureContact] = useState("");
+  const [captureEnvoyee, setCaptureEnvoyee] = useState(false);
+  const [suiteParfum, setSuiteParfum] = useState("");
 
   const calculerResultat = (rep) => {
     setLoading(true);
@@ -16551,7 +16583,16 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
     }
   };
 
-  const reset = () => { setStep(-1); setReponses({}); setResultat(null); setNom(""); };
+  const reset = () => { setStep(-1); setReponses({}); setResultat(null); setNom(""); setCapturePrenom(""); setCaptureContact(""); setCaptureEnvoyee(false); setSuiteParfum(""); };
+
+  // Rediriger vers tunnel si suite choisie
+  if(suiteParfum==="produits"){
+    return <TunnelHybridePage slug={distributeurNom} forceParcours="produits"/>;
+  }
+  if(suiteParfum==="recrutement"){
+    if(typeof window !== "undefined") window.location.href="?recrutement=true&uid="+distributeurNom;
+    return null;
+  }
 
   // Accueil
   if(step === -1) return(
@@ -16663,6 +16704,51 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
         <div style={{fontSize:".78rem",color:"white",lineHeight:1.65}}>
           {distributeurNom?`${distributeurNom} est`:"Je suis"} disponible pour vous faire sentir ces parfums et vous guider dans votre choix. Tous nos parfums sont à 18% de concentration et tiennent jusqu'à 12h.
         </div>
+      </div>
+
+      {/* Formulaire de capture */}
+      {!captureEnvoyee ? (
+        <div style={{background:"#3D1F0E",borderRadius:14,padding:"1.25rem",marginBottom:"1rem",color:"white"}}>
+          <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".15em",color:"#C4A882",marginBottom:".4rem"}}>✦ RECEVOIR MA SÉLECTION PAR MESSAGE</div>
+          <div style={{fontSize:".8rem",color:"rgba(255,255,255,.85)",marginBottom:".85rem",lineHeight:1.6}}>Entre tes coordonnées pour recevoir ta sélection et être contactée par ta conseillère.</div>
+          <input placeholder="Ton prénom" value={capturePrenom} onChange={e=>setCapturePrenom(e.target.value)}
+            style={{width:"100%",border:"none",borderRadius:8,padding:".5rem .75rem",fontSize:".82rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+          <input placeholder="Ton Instagram, WhatsApp ou email" value={captureContact} onChange={e=>setCaptureContact(e.target.value)}
+            style={{width:"100%",border:"none",borderRadius:8,padding:".5rem .75rem",fontSize:".82rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>
+          <button onClick={async()=>{
+            if(!capturePrenom.trim()&&!captureContact.trim()) return;
+            try{
+              await setDoc(doc(db,"tunnel_prospects","diag"+Date.now()),{
+                type:"diagnostic_parfum",prenom:capturePrenom,contact:captureContact,
+                resultat:resultat.map(p=>p.nom),slug:distributeurNom,date:new Date().toISOString().slice(0,10),ts:Date.now()
+              });
+            }catch{}
+            setCaptureEnvoyee(true);
+          }}
+            style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            ✦ Recevoir ma sélection
+          </button>
+        </div>
+      ) : (
+        <div style={{background:"#7FAF8A",borderRadius:12,padding:"1rem",textAlign:"center",marginBottom:"1rem",color:"white"}}>
+          <div style={{fontSize:"1.5rem",marginBottom:".3rem"}}>✅</div>
+          <div style={{fontWeight:700,fontSize:".85rem",marginBottom:".2rem"}}>Reçu !</div>
+          <div style={{fontSize:".75rem",opacity:.9}}>Ta conseillère va te contacter très vite 🌸</div>
+        </div>
+      )}
+
+      {/* Boutons suite du parcours */}
+      <div style={{display:"flex",flexDirection:"column",gap:".6rem",marginBottom:"1rem"}}>
+        <button onClick={()=>setSuiteParfum("produits")}
+          style={{background:"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".75rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
+          <span style={{fontSize:"1.2rem"}}>🛍️</span>
+          <div><div style={{fontWeight:700}}>Découvrir tous les produits Mihi</div><div style={{fontSize:".7rem",opacity:.85,fontWeight:400}}>Qui correspondent à ton profil</div></div>
+        </button>
+        <button onClick={()=>setSuiteParfum("recrutement")}
+          style={{background:"#3D1F0E",color:"white",border:"none",borderRadius:12,padding:".75rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
+          <span style={{fontSize:"1.2rem"}}>👑</span>
+          <div><div style={{fontWeight:700}}>Créer un revenu avec ces produits</div><div style={{fontSize:".7rem",opacity:.85,fontWeight:400}}>Découvrir l'opportunité Mihi</div></div>
+        </button>
       </div>
 
       <button onClick={reset}
@@ -18363,6 +18449,7 @@ function DiagAdminEditor(){
 function LinkBioPublicPage({slug}){
   const [profil,setProfil]=useState(null);
   const [loading,setLoading]=useState(true);
+  const [diagActif,setDiagActif]=useState(null);
   useEffect(()=>{
     (async()=>{
       try{
@@ -18433,6 +18520,39 @@ function LinkBioPublicPage({slug}){
             ))}
           </div>
         )}
+        {/* Section diagnostics */}
+        {diagActif ? (
+          <div style={{padding:"1rem",background:theme.bg}}>
+            <button onClick={()=>setDiagActif(null)}
+              style={{background:"none",border:"none",color:theme.accent,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem",display:"flex",alignItems:"center",gap:".3rem"}}>
+              ← Retour
+            </button>
+            <DiagnosticsTab uid={profil.uid||slug} userName={profil.prenom||""} externalMode={true} initialType={diagActif} initialClient=""/>
+          </div>
+        ) : (
+          <div style={{padding:"1rem",background:theme.bg}}>
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:theme.accent,textAlign:"center",marginBottom:".75rem"}}>✦ Mes diagnostics gratuits</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
+              {[
+                {id:"parfum",icon:"🌸",label:"Diagnostic Parfum",sub:"Ton parfum idéal parmi 26 fragrances"},
+                {id:"skincare",icon:"✨",label:"Diagnostic Skincare",sub:"Ta routine beauté personnalisée"},
+                {id:"silhouette",icon:"⚖️",label:"Diagnostic Silhouette",sub:"Ton programme minceur sur mesure"},
+                {id:"sante",icon:"💚",label:"Diagnostic Bien-être",sub:"Tes compléments adaptés"},
+                {id:"cheveux",icon:"💇",label:"Diagnostic Cheveux",sub:"Ta routine capillaire sur mesure"},
+                {id:"makeup",icon:"💄",label:"Diagnostic Makeup",sub:"Tes couleurs et produits makeup"},
+                {id:"recrutement",icon:"👑",label:"Diagnostic Opportunité",sub:"L'activité Mihi faite pour toi ?"},
+              ].filter(d=>(profil.diagChoisis||["parfum","skincare","silhouette","sante"]).includes(d.id)).map(d=>(
+                <button key={d.id} onClick={()=>setDiagActif(d.id)}
+                  style={{background:"white",border:"1.5px solid "+theme.accent+"40",borderRadius:12,padding:".75rem .65rem",textAlign:"center",cursor:"pointer",fontFamily:"inherit"}}>
+                  <div style={{fontSize:"1.4rem",marginBottom:".3rem"}}>{d.icon}</div>
+                  <div style={{fontSize:".72rem",fontWeight:700,color:theme.header,lineHeight:1.3,marginBottom:".2rem"}}>{d.label}</div>
+                  <div style={{fontSize:".62rem",color:"#888",lineHeight:1.4}}>{d.sub}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div style={{padding:"1rem 1rem 2rem",background:theme.bg,display:"flex",flexDirection:"column",gap:".5rem"}}>
           {profil.lienBoutique&&(
             <a href={profil.lienBoutique} target="_blank" rel="noopener noreferrer"
@@ -18558,14 +18678,21 @@ function EntonnoirTab(p){
 }
 
 
-function TunnelHybridePage({slug}){
+function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   const [profil,setProfil]=useState(null);
   const [loading,setLoading]=useState(true);
-  const [etape,setEtape]=useState("accueil");
-  const [parcours,setParcours]=useState("");
+  const [etape,setEtape]=useState(forceEtape||(forceParcours?"ebook":"accueil"));
+  const [parcours,setParcours]=useState(forceParcours||"");
   const [ebookChoisi,setEbookChoisi]=useState("");
   const [coords,setCoords]=useState({prenom:"",email:"",tel:"",reseau:""});
   const [saving,setSaving]=useState(false);
+  const [qIdx,setQIdx]=useState(0);
+  const [repsDiagRec,setRepsDiagRec]=useState([]);
+  const QDIAGREC=[
+    {q:"Tu cherches plutôt :",opts:[["💰","Un revenu complémentaire"],["🚀","Un projet à plein temps"],["🌱","Juste tester sans engagement"]]},
+    {q:"Tu es à l'aise avec les réseaux sociaux ?",opts:[["📱","Oui, j'y suis tous les jours"],["🤔","Un peu, j'apprends"],["😅","Pas du tout mais je veux progresser"]]},
+    {q:"Ce qui t'attire le plus dans Mihi :",opts:[["🌿","Les produits que j'adore"],["👑","La liberté que ça apporte"],["💪","Le défi de construire quelque chose"]]},
+  ];
   const isPT=(navigator.language||"fr").slice(0,2)==="pt";
   const txt=(fr,pt)=>isPT?pt:fr;
   const C2={brun:"#3D1F0E",rose:"#C49A8A",or:"#C4A882",vert:"#7FAF8A",lilas:"#A89BB5",creme:"#FAF7F2",blanc:"#FFFFFF",texte:"#3D2B1F",gris:"#888888",pale:"#E8DDD4"};
@@ -18596,8 +18723,184 @@ function TunnelHybridePage({slug}){
     else setEtape("recrutement");
   };
   if(loading) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#FAF7F2"}}><div style={{textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.5rem",color:"#3D1F0E"}}>Chargement...</div></div></div>;
+  // Appliquer forceEtape après chargement
+
   const W={maxWidth:480,margin:"0 auto",padding:"1rem 1rem 3rem"};
   const Hdr=()=>(<div style={{textAlign:"center",padding:"1.5rem 0 1rem"}}>{profil&&profil.photo?<img src={profil.photo} alt="" style={{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:"3px solid #C49A8A",display:"block",margin:"0 auto .6rem"}}/>:<div style={{width:72,height:72,borderRadius:"50%",background:"#3D1F0E",margin:"0 auto .6rem",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.8rem",color:"white"}}>{(profil&&profil.prenom||"B")[0]}</div>}<div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"#3D1F0E",fontWeight:600}}>{profil&&profil.prenom} {profil&&profil.nom||""}</div>{profil&&profil.slogan&&<div style={{fontSize:".72rem",color:"#888",marginTop:".2rem"}}>{profil.slogan}</div>}</div>);
+
+  // ── PAGE PRODUITS ──
+  if(etape==="produits_page") return(
+    <div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}>
+      <div style={W}>
+        <Hdr/>
+        {/* Hero */}
+        <div style={{background:"linear-gradient(135deg,#3D1F0E,#5C3A22)",borderRadius:16,padding:"1.5rem",marginBottom:"1.25rem",textAlign:"center"}}>
+          <div style={{fontSize:"2rem",marginBottom:".5rem"}}>🌿</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",color:"white",fontWeight:300,marginBottom:".4rem"}}>Découvrir les produits <em style={{color:"#C49A8A"}}>Mihi</em></div>
+          <div style={{fontSize:".78rem",color:"rgba(255,255,255,.8)",lineHeight:1.65}}>Fabriqués par ElfaPharm — laboratoire pharmaceutique présent dans 62 pays depuis 25 ans. 90% d'ingrédients naturels.</div>
+        </div>
+
+        {/* Pourquoi pas cher */}
+        <div style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4"}}>
+          <div style={{fontSize:".6rem",fontWeight:700,color:"#C4A882",letterSpacing:".12em",marginBottom:".6rem"}}>✦ POURQUOI CE PRIX ?</div>
+          <div style={{fontSize:".82rem",color:"#3D2B1F",lineHeight:1.75}}>Mihi vend <strong>directement</strong> de l'usine à toi — sans intermédiaire, sans boutique, sans publicité TV. Tu paies le produit, pas le marketing.</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:".5rem",marginTop:".75rem"}}>
+            {[["🏭","Fabricant direct","ElfaPharm"],["🌿","90% naturel","Sans compromis"],["💰","Prix juste","Sans intermédiaire"]].map(([ic,t,s])=>(
+              <div key={t} style={{background:"#FAF7F2",borderRadius:10,padding:".6rem",textAlign:"center"}}>
+                <div style={{fontSize:"1.2rem",marginBottom:".2rem"}}>{ic}</div>
+                <div style={{fontSize:".68rem",fontWeight:700,color:"#3D1F0E",marginBottom:".1rem"}}>{t}</div>
+                <div style={{fontSize:".6rem",color:"#888"}}>{s}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Gammes */}
+        <div style={{marginBottom:"1rem"}}>
+          <div style={{fontSize:".6rem",fontWeight:700,color:"#C4A882",letterSpacing:".12em",marginBottom:".65rem"}}>✦ NOS GAMMES</div>
+          {[
+            {icon:"✨",nom:"Skincare",desc:"Soins visage adaptés à tous les types de peau. Hydratation, anti-âge, éclat.",couleur:"#C49A8A"},
+            {icon:"🌸",nom:"Parfums",desc:"26 fragrances à 18% de concentration. Tiennent 12h. À partir de 12€.",couleur:"#A89BB5"},
+            {icon:"💊",nom:"Compléments",desc:"Minceur, énergie, beauté, santé. Formules pharmaceutiques naturelles.",couleur:"#7FAF8A"},
+            {icon:"💄",nom:"Maquillage",desc:"Teintes adaptées à toutes les carnations. Formules légères et durables.",couleur:"#C4A882"},
+            {icon:"💇",nom:"Cheveux",desc:"Soins capillaires réparateurs et fortifiants pour tous types de cheveux.",couleur:"#E8A598"},
+          ].map(g=>(
+            <div key={g.nom} style={{display:"flex",gap:".75rem",alignItems:"flex-start",background:"white",borderRadius:12,padding:".85rem",marginBottom:".5rem",border:"1px solid #E8DDD4"}}>
+              <div style={{width:40,height:40,borderRadius:10,background:g.couleur+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.2rem",flexShrink:0}}>{g.icon}</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:".85rem",color:"#3D1F0E",marginBottom:".2rem"}}>{g.nom}</div>
+                <div style={{fontSize:".75rem",color:"#666",lineHeight:1.55}}>{g.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button onClick={()=>{setParcours("produits");setEtape("diag_besoins");}}
+          style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+          ✨ Trouver mes produits idéaux →
+        </button>
+        <button onClick={()=>{setParcours("produits");setEtape("coordonnees");}}
+          style={{width:"100%",background:"none",border:"1.5px solid #E8DDD4",borderRadius:12,padding:".7rem",fontSize:".78rem",color:"#888",fontFamily:"inherit",cursor:"pointer"}}>
+          Contacter {nomDistrib} directement
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── DIAGNOSTIC BESOINS (après page produits) ──
+  if(etape==="diag_besoins") return(
+    <div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}>
+      <div style={W}>
+        <button onClick={()=>setEtape("produits_page")} style={{background:"none",border:"none",color:"#C49A8A",fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>← Retour</button>
+        <div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}>
+          <div style={{fontSize:"1.5rem",marginBottom:".3rem"}}>🎯</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Tes besoins en 3 questions</div>
+          <div style={{fontSize:".72rem",color:"rgba(255,255,255,.75)",marginTop:".3rem"}}>Pour te recommander la gamme idéale</div>
+        </div>
+        {[
+          {q:"Ton objectif principal ?",opts:[["✨","Prendre soin de ma peau","skincare"],["⚖️","Perdre du poids","silhouette"],["💊","Booster mon énergie","sante"],["💄","Sublimer mon maquillage","makeup"],["🌸","Trouver mon parfum","parfum"],["💇","Soins cheveux","cheveux"]]},
+        ].map((item,qi)=>(
+          <div key={qi} style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4"}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"#3D1F0E",marginBottom:".85rem"}}>{item.q}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+              {item.opts.map(([ic,label,val])=>(
+                <button key={val} onClick={()=>{
+                  setParcours("produits");
+                  setEtape("coordonnees");
+                  // Stocker le besoin pour personnaliser l'ebook
+                }}
+                  style={{display:"flex",alignItems:"center",gap:".75rem",background:"#FAF7F2",border:"1.5px solid #E8DDD4",borderRadius:10,padding:".65rem .85rem",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                  <span style={{fontSize:"1.2rem"}}>{ic}</span>
+                  <span style={{fontSize:".82rem",color:"#3D2B1F",fontWeight:600}}>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ── PAGE RECRUTEMENT ──
+  if(etape==="recrutement_page") return(
+    <div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}>
+      <div style={W}>
+        <Hdr/>
+        <div style={{background:"linear-gradient(135deg,#3D1F0E,#1A0A04)",borderRadius:16,padding:"1.5rem",marginBottom:"1.25rem",textAlign:"center"}}>
+          <div style={{fontSize:"2rem",marginBottom:".5rem"}}>👑</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",color:"white",fontWeight:300,marginBottom:".4rem"}}>L'activité <em style={{color:"#C49A8A"}}>Mihi</em></div>
+          <div style={{fontSize:".78rem",color:"rgba(255,255,255,.8)",lineHeight:1.65}}>Un revenu complémentaire depuis chez toi. Sans stock. Sans patron. À tes heures.</div>
+        </div>
+
+        {/* Avantages */}
+        <div style={{marginBottom:"1rem"}}>
+          {[
+            {icon:"🏠",titre:"Depuis chez toi",desc:"Travaille depuis ton canapé, ton café, ta voiture. Ton bureau, c'est toi qui le choisis."},
+            {icon:"⏰",titre:"Tes horaires",desc:"Le matin avant les enfants, le soir après le dîner. Tu choisis quand tu travailles."},
+            {icon:"💰",titre:"Revenus réels",desc:"Des commissions sur tes ventes + les ventes de ton équipe. Plus tu développes, plus tu gagnes."},
+            {icon:"🌱",titre:"Zéro stock",desc:"Les clientes commandent directement sur le site Mihi. Tu n'avances pas d'argent."},
+            {icon:"👩‍👧",titre:"Parfait pour les mamans",desc:"Flexible, épanouissant, et motivant. Des centaines de mamans françaises ont déjà franchi le pas."},
+          ].map(a=>(
+            <div key={a.titre} style={{display:"flex",gap:".75rem",background:"white",borderRadius:12,padding:".85rem",marginBottom:".5rem",border:"1px solid #E8DDD4"}}>
+              <div style={{width:38,height:38,borderRadius:10,background:"#3D1F0E15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{a.icon}</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:".83rem",color:"#3D1F0E",marginBottom:".2rem"}}>{a.titre}</div>
+                <div style={{fontSize:".75rem",color:"#666",lineHeight:1.55}}>{a.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button onClick={()=>{setParcours("recrutement");setEtape("diag_recrutement");}}
+          style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+          👑 Est-ce fait pour moi ? →
+        </button>
+        <button onClick={()=>{setParcours("recrutement");setEtape("coordonnees");}}
+          style={{width:"100%",background:"none",border:"1.5px solid #E8DDD4",borderRadius:12,padding:".7rem",fontSize:".78rem",color:"#888",fontFamily:"inherit",cursor:"pointer"}}>
+          Contacter {nomDistrib} directement
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── DIAGNOSTIC RECRUTEMENT RAPIDE ──
+  if(etape==="diag_recrutement"){
+    const _ignore=[
+      {q:"Tu cherches plutôt :",opts:[["💰","Un revenu complémentaire"],["🚀","Un projet à plein temps"],["🌱","Juste tester sans engagement"]]},
+      {q:"Tu es à l'aise avec les réseaux sociaux ?",opts:[["📱","Oui, j'y suis tous les jours"],["🤔","Un peu, j'apprends"],["😅","Pas du tout mais je veux progresser"]]},
+      {q:"Ce qui t'attire le plus dans Mihi :",opts:[["🌿","Les produits que j'adore"],["👑","La liberté que ça apporte"],["💪","Le défi de construire quelque chose"]]},
+    ];
+
+    if(qIdx<QDIAGREC.length){
+      const q=QDIAGREC[qIdx];
+      return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}>
+        <button onClick={()=>setEtape("recrutement_page")} style={{background:"none",border:"none",color:"#C49A8A",fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>← Retour</button>
+        <div style={{height:4,background:"#E8DDD4",borderRadius:2,marginBottom:"1.25rem",overflow:"hidden"}}><div style={{height:"100%",background:"#C49A8A",width:((qIdx/QDIAGREC.length)*100)+"%",transition:"width .3s"}}/></div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"#3D1F0E",marginBottom:"1.25rem",lineHeight:1.5}}>{q.q}</div>
+        <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}>
+          {q.opts.map(([ic,label])=>(
+            <button key={label} onClick={()=>{setRepsDiagRec(r=>[...r,label]);setQIdx(i=>i+1);}}
+              style={{display:"flex",alignItems:"center",gap:".75rem",background:"white",border:"1.5px solid #E8DDD4",borderRadius:12,padding:".75rem 1rem",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+              <span style={{fontSize:"1.2rem"}}>{ic}</span>
+              <span style={{fontSize:".85rem",color:"#3D2B1F",fontWeight:600}}>{label}</span>
+            </button>
+          ))}
+        </div>
+      </div></div>);
+    }
+    return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}>
+      <div style={{background:"linear-gradient(135deg,#3D1F0E,#1A0A04)",borderRadius:16,padding:"1.5rem",textAlign:"center",marginBottom:"1.25rem"}}>
+        <div style={{fontSize:"2rem",marginBottom:".5rem"}}>🌟</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"white",fontWeight:300,marginBottom:".4rem"}}>Tu as le profil !</div>
+        <div style={{fontSize:".78rem",color:"rgba(255,255,255,.8)",lineHeight:1.65}}>{nomDistrib} peut te donner toutes les infos pour démarrer. Laisse tes coordonnées.</div>
+      </div>
+      <button onClick={()=>setEtape("coordonnees")}
+        style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+        Recevoir toutes les infos →
+      </button>
+    </div></div>);
+  }
+
   if(etape==="accueil") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/>{profil&&profil.histoire&&<div style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".82rem",color:"#3D2B1F",lineHeight:1.75,fontStyle:"italic"}}>"{profil.histoire}"</div>}<div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"white",fontWeight:300}}>Qu'est-ce qui t'amene aujourd'hui ? </div></div><div style={{display:"flex",flexDirection:"column",gap:".6rem"}}><div onClick={()=>{setParcours("produits");setEtape("ebook");}} style={{background:"white",border:"2px solid #C49A8A",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#C49A8A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>P</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je veux decouvrir les produits</div><div style={{fontSize:".72rem",color:"#888"}}>Recois tes recommandations personnalisees + un cadeau offert</div></div><span style={{color:"#C49A8A",fontSize:"1.1rem",flexShrink:0}}>→</span></div><div onClick={()=>{setParcours("recrutement");setEtape("ebook");}} style={{background:"white",border:"2px solid #A89BB5",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#A89BB530",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>O</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je cherche une opportunite</div><div style={{fontSize:".72rem",color:"#888"}}>Decouvre si cette aventure est faite pour toi + un cadeau offert</div></div><span style={{color:"#A89BB5",fontSize:"1.1rem",flexShrink:0}}>→</span></div></div></div></div>);
   if(etape==="ebook") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontSize:".6rem",fontWeight:700,color:"#C4A882",marginBottom:".3rem"}}>CADEAU OFFERT</div><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Choisis ton guide gratuit</div></div>{EBOOKS.map(eb=>(<div key={eb.id} onClick={()=>{setEbookChoisi(eb.id);setEtape("coordonnees");}} style={{background:"white",border:"2px solid "+(ebookChoisi===eb.id?eb.couleur:"#E8DDD4"),borderRadius:14,padding:"1.1rem",marginBottom:".65rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".75rem"}}><div style={{fontSize:"2rem",flexShrink:0}}>{eb.icon}</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>{eb.titre}</div><div style={{fontSize:".72rem",color:"#888"}}>{eb.sous}</div></div><span style={{color:eb.couleur,fontSize:"1.1rem",flexShrink:0}}>→</span></div>))}</div></div>);
   if(etape==="coordonnees") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Ou est-ce que je t'envoie ton guide ?</div></div>{[["prenom","Prenom *","Ton prenom"],["email","Email","ton@email.com"],["tel","Tel / WhatsApp","06 XX XX XX XX"],["reseau","Messenger / Instagram","@tonpseudo"]].map(([k,l,ph])=>(<div key={k} style={{marginBottom:".4rem"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".2rem",fontWeight:600}}>{l}</div><input value={coords[k]||""} onChange={e=>setCoords(c=>({...c,[k]:e.target.value}))} placeholder={ph} style={{width:"100%",border:"1.5px solid "+(coords[k]?"#7FAF8A":"#E8DDD4"),borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none"}}/></div>))}<button onClick={enregistrerCoords} disabled={!coordsOk||saving} style={{width:"100%",background:coordsOk?"#3D1F0E":"#E8DDD4",color:coordsOk?"white":"#888",border:"none",borderRadius:10,padding:".75rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:coordsOk?"pointer":"default",marginTop:".5rem"}}>{saving?"Envoi...":"Recevoir mon guide gratuit →"}</button></div></div>);
@@ -18608,6 +18911,9 @@ function TunnelHybridePage({slug}){
 function Root(){
   const p=new URLSearchParams(window.location.search);
   const bioSlug=p.get("bio");
+  const tunnelParam=p.get("tunnel");
+  // Si bio + tunnel => ouvrir tunnel avec parcours pré-sélectionné
+  if(bioSlug && tunnelParam) return <TunnelHybridePage slug={bioSlug} forceEtape={tunnelParam}/>;
   if(bioSlug) return <LinkBioPublicPage slug={bioSlug}/>;
   const ordId=p.get("ordonnance");
   if(ordId) return <OrdonnancePubliquePage ordId={ordId}/>;
