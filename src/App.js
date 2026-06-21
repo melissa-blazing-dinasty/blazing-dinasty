@@ -81,7 +81,7 @@ async function syncAnnuaire(uid, displayName, objPerso, marraineUid){
     };
     const snap = await getDoc(ref);
     const existing = snap.exists() && snap.data().membres ? snap.data().membres : {};
-    entry.dateEnreg = existing[uid]?.dateEnreg || new Date().toISOString().slice(0,10);
+    entry.dateEnreg = existing[uid]?.dateEnreg || todayLocalStr();
     if(existing[uid]?.notes) entry.notes = existing[uid].notes;
     // Marraine : utilise la nouvelle valeur si fournie, sinon conserve l'existante
     if(marraineUid) entry.marraine = marraineUid;
@@ -166,7 +166,7 @@ async function seedAnnuaireFromMembres(){
         caObj: objPerso?.caObj||"",
         recruesReal: objPerso?.recruesReal||"0",
         recruesObj: objPerso?.recruesObj||"0",
-        dateEnreg: new Date().toISOString().slice(0,10),
+        dateEnreg: todayLocalStr(),
         lastActive: 0,
       };
       added++;
@@ -216,6 +216,16 @@ function SearchSelect({value, onChange, options, placeholder, compact}){
 // ── PALETTE ───────────────────────────────────────────────────────────────────
 const APP_VERSION = "2.6.0";
 
+
+// ── DATE LOCALE (évite le décalage UTC) ─────────────────────────────────────
+function todayLocalStr(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function todayLocalDate(){
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+}
 const C={brun:"#3D1F0E",brun2:"#5C3020",rose:"#C49A8A",pale:"#E8D5CC",lilas:"#A89BB5",or:"#C4A882",creme:"#F7F2EE",blanc:"#FDFAF7",texte:"#2E1F17",gris:"#8A7A74",vert:"#7FAF8A"};
 
 // Forcer la mise à jour de l'application
@@ -289,7 +299,7 @@ async function translateBatch(texts, targetLang){
     try{
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:`Traduz do francês para português europeu (Portugal). Responde APENAS com JSON array na mesma ordem:\n${JSON.stringify(chunk)}`}]})
       });
       const data=await res.json();
@@ -1510,7 +1520,7 @@ function App(){
         // Sauvegarder dans l'historique
         const hist=obj.historique||[];
         const entry={
-          date:new Date().toISOString().slice(0,10),
+          date:todayLocalStr(),
           periode:lastPeriode,
           ca:parseFloat(obj.ca)||0,
           caObj:parseFloat(obj.caObj)||0,
@@ -1768,7 +1778,7 @@ function App(){
 
 
   // ── APP ──────────────────────────────────────────────────────────────────────
-  const todayKey=new Date().toISOString().slice(0,10);
+  const todayKey=todayLocalStr();
   const dailyActions=["a1","a2","a3","a4","a5"];
   const actionsToday=dailyActions.filter(id=>checks[`${todayKey}-${id}`]||checks[id]).length;
   const actionsIncomplete=actionsToday<5;
@@ -3320,13 +3330,13 @@ function SuiviRecruTab({uid, isChef=false}){
       const snap=await getDoc(ref);
       const existing=snap.exists()&&snap.data()["db-fast-start"]?JSON.parse(snap.data()["db-fast-start"]):{};
       if(!existing.startDate){
-        await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+        await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:todayLocalStr(),doneTasks:{},modulesValides:{}})},{merge:true});
         alert("✅ Fast Start assigné à "+nom);
         chargerExtra(mUid);
       } else {
         if(window.confirm(nom+" a déjà un Fast Start. Relancer ?")){
-          await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
-          setExtras(p=>({...p,[mUid]:{...p[mUid],fastStart:{startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}}}}));
+          await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:todayLocalStr(),doneTasks:{},modulesValides:{}})},{merge:true});
+          setExtras(p=>({...p,[mUid]:{...p[mUid],fastStart:{startDate:todayLocalStr(),doneTasks:{},modulesValides:{}}}}));
         }
       }
     }catch{alert("Erreur.");}
@@ -3548,13 +3558,13 @@ function ConversionPopup({prospect:p, clients, distributeurs, saveClients, saveD
 
   const confirmer=()=>{
     if(vers==="client"){
-      const newClient={id:`c${Date.now()}`,prenom,nom,tel,email,notes:p.note||"",commandes:[],dateAjout:new Date().toISOString().slice(0,10)};
+      const newClient={id:`c${Date.now()}`,prenom,nom,tel,email,notes:p.note||"",commandes:[],dateAjout:todayLocalStr()};
       saveClients([...clients,newClient]);
     } else if(vers==="distributrice"){
       if(doublon){
         saveDistributeurs(distributeurs.map(d=>d.id===doublon.id?{...d,tel:tel||d.tel,email:email||d.email,prospectId:p.id}:d));
       } else {
-        const newDistrib={id:`d${Date.now()}`,prenom,nom,tel,email,palier:"2%",notes:p.note||"",dateEnreg:new Date().toISOString().slice(0,10),prospectId:p.id};
+        const newDistrib={id:`d${Date.now()}`,prenom,nom,tel,email,palier:"2%",notes:p.note||"",dateEnreg:todayLocalStr(),prospectId:p.id};
         saveDistributeurs([...distributeurs,newDistrib]);
       }
     }
@@ -3656,7 +3666,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       if(data["db-actions"]){
         try{
           const parsed = JSON.parse(data["db-actions"]);
-          const today = new Date().toISOString().slice(0,10);
+          const today = todayLocalStr();
           // Si les actions ont été sauvegardées aujourd'hui → les charger
           // Sinon → repartir à zéro (nouveau jour)
           if(parsed._date === today){
@@ -3682,7 +3692,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       if(data["db-actions-custom"]){
         try{
           const cd=JSON.parse(data["db-actions-custom"]);
-          const tod=new Date().toISOString().slice(0,10);
+          const tod=todayLocalStr();
           if(Array.isArray(cd)){setActionsCustomRaw(cd);}
           else if(cd._date===tod){setActionsCustomRaw(cd.actions||[]);}
           else{setActionsCustomRaw([]);ss(uid,"db-actions-custom",JSON.stringify({_date:tod,actions:[]}));}
@@ -3709,7 +3719,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       }
 
       // Calcul du streak de connexion quotidienne
-      const today = new Date().toISOString().slice(0,10);
+      const today = todayLocalStr();
       const lastLogin = data["db-last-login"];
       let newStreak = +data["db-streak"] || 0;
       if(lastLogin !== today){
@@ -3734,7 +3744,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   },[uid]);
 
   const saveActions=(a, justChecked)=>{
-    const today = new Date().toISOString().slice(0,10);
+    const today = todayLocalStr();
     setActions(a);
     ss(uid,"db-actions",JSON.stringify({...a, _date:today}));
 
@@ -3781,7 +3791,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const setActionsCustom=(updater)=>{
     setActionsCustomRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
-      ss(uid,"db-actions-custom",JSON.stringify({_date:new Date().toISOString().slice(0,10),actions:next}));
+      ss(uid,"db-actions-custom",JSON.stringify({_date:todayLocalStr(),actions:next}));
       return next;
     });
   };
@@ -3806,7 +3816,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   };
   const badges = computeBadges(badgeData);
 
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = todayLocalStr();
   const aRecontacterAujourdhui = prospects.filter(p=>p.relance && p.relance<=todayStr);
 
   // Anniversaires clients dans les 7 prochains jours
@@ -4199,14 +4209,14 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
                   </div>
                   <div style={{display:"flex",gap:".3rem"}}>
                     <button onClick={()=>{
-                      const next=prospects.map(x=>x.id===p.id?{...x,convertiVers:"client",statut:"✅ Converti",dateConversion:new Date().toISOString().slice(0,10)}:x);
+                      const next=prospects.map(x=>x.id===p.id?{...x,convertiVers:"client",statut:"✅ Converti",dateConversion:todayLocalStr()}:x);
                       saveProspects(next);
                     }}
                       style={{flex:1,background:C.vert+"20",border:`1px solid ${C.vert}`,borderRadius:8,padding:".35rem",fontSize:".66rem",fontWeight:700,color:C.vert,cursor:"pointer",fontFamily:"inherit"}}>
                       🛍️ Convertie en cliente
                     </button>
                     <button onClick={()=>{
-                      const next=prospects.map(x=>x.id===p.id?{...x,convertiVers:"distributrice",statut:"✅ Converti",dateConversion:new Date().toISOString().slice(0,10)}:x);
+                      const next=prospects.map(x=>x.id===p.id?{...x,convertiVers:"distributrice",statut:"✅ Converti",dateConversion:todayLocalStr()}:x);
                       saveProspects(next);
                     }}
                       style={{flex:1,background:C.or+"20",border:`1px solid ${C.or}`,borderRadius:8,padding:".35rem",fontSize:".66rem",fontWeight:700,color:C.or,cursor:"pointer",fontFamily:"inherit"}}>
@@ -4476,7 +4486,7 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, T
   const[showRappel,setShowRappel]=useState(false);
   const[editMode,setEditMode]=useState(false);
   const[cmdDetailOuverte,setCmdDetailOuverte]=useState(null);
-  const[cmdForm,setCmdForm]=useState({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:new Date().toISOString().slice(0,10)});
+  const[cmdForm,setCmdForm]=useState({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:todayLocalStr()});
   const[catalogue,setCatalogue]=useState(null);
 
   // Charger le catalogue Mihi une seule fois quand on ouvre le formulaire commande
@@ -4577,7 +4587,7 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, T
         }catch{}
       });
     }
-    setCmdForm({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:new Date().toISOString().slice(0,10)});
+    setCmdForm({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:todayLocalStr()});
     setShowCmd(false);
   };
 
@@ -5125,7 +5135,7 @@ function RelancesTab({prospects,clients,saveProspects,saveClients}){
   prospects=prospects||[];clients=clients||[];
   const [section,setSection]=useState("prospects");
   const [copied,setCopied]=useState(null);
-  const today=new Date().toISOString().slice(0,10);
+  const today=todayLocalStr();
   const todayFr=new Date().toLocaleDateString("fr-FR");
   const aRecontacter=prospects.filter(p=>p.relance&&p.relance<=today&&p.statut!=="Converti"&&p.statut!=="Archive").sort((a,b)=>a.relance<b.relance?-1:1);
   const sansContact=prospects.filter(p=>!p.relance&&p.statut!=="Converti"&&p.statut!=="Archive"&&p.date).filter(p=>{try{const pts=p.date.split("/");const d=new Date(pts[2],pts[1]-1,pts[0]);return(new Date()-d)>14*24*60*60*1000;}catch{return false;}});
@@ -5312,7 +5322,7 @@ function ClientsTab({clients,save,uid}){
   const[form,setForm]=useState({nom:"",prenom:"",tel:"",email:"",ddn:"",adresse:"",notes:""});
   const[editMode,setEditMode]=useState(false);
   const[editForm,setEditForm]=useState({});
-  const[cmdForm,setCmdForm]=useState({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:new Date().toISOString().slice(0,10)});
+  const[cmdForm,setCmdForm]=useState({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:todayLocalStr()});
   const[rappelForm,setRappelForm]=useState({texte:"",date:"",fait:false});
   const[showAdd,setShowAdd]=useState(false);
   const[showCmd,setShowCmd]=useState(false);
@@ -5386,7 +5396,7 @@ function ClientsTab({clients,save,uid}){
         ss(uid,"db-cmd-periode",JSON.stringify(cp));
       }catch{}
     });
-    setCmdForm({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:new Date().toISOString().slice(0,10)});setShowCmd(false);
+    setCmdForm({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:todayLocalStr()});setShowCmd(false);
   };
 
   const updateLigne=(idx,field,val)=>setCmdForm(p=>({...p,lignes:p.lignes.map((l,i)=>i===idx?{...l,[field]:val}:l)}));
@@ -5591,7 +5601,7 @@ function DistributeursTab({distributeurs,save,uid}){
       const newUid=(form.prenom.trim()+"-"+form.nom.trim()).toLowerCase().replace(/\s+/g,"-").replace(/-+$/,"");
       if(newUid){
         const ref=doc(db,"equipe","annuaire");
-        const entry={uid:newUid, prenom:form.prenom.trim(), nom:form.nom.trim(), marraine:uid, palier:"2%", manuel:true, dateEnreg:new Date().toISOString().slice(0,10)};
+        const entry={uid:newUid, prenom:form.prenom.trim(), nom:form.nom.trim(), marraine:uid, palier:"2%", manuel:true, dateEnreg:todayLocalStr()};
         await setDoc(ref,{membres:{[newUid]:entry}},{merge:true});
         setAnnuaire(prev=>({...prev,[newUid]:entry}));
       }
@@ -5898,11 +5908,11 @@ function DistributeursTab({distributeurs,save,uid}){
                     const existing=snap.exists()&&snap.data()["db-fast-start"]?JSON.parse(snap.data()["db-fast-start"]):{};
                     const nom=`${d.prenom||""} ${d.nom||""}`.trim();
                     if(!existing.startDate){
-                      await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+                      await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:todayLocalStr(),doneTasks:{},modulesValides:{}})},{merge:true});
                       alert("✅ Fast Start assigné à "+nom);
                     } else {
                       if(window.confirm(nom+" a déjà un Fast Start (démarré le "+existing.startDate+"). Relancer depuis le début ?")){
-                        await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+                        await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:todayLocalStr(),doneTasks:{},modulesValides:{}})},{merge:true});
                         alert("✅ Fast Start relancé pour "+nom);
                       }
                     }
@@ -6845,7 +6855,7 @@ function FastStartTab({uid, userName, goToFormation}){
   };
 
   const demarrer=()=>{
-    const today = new Date().toISOString().slice(0,10);
+    const today = todayLocalStr();
     setStartDate(today);
     ss(uid,"db-fast-start",JSON.stringify({startDate:today, doneTasks:{}}));
   };
@@ -7133,7 +7143,7 @@ FORMAT JSON SI TEXTE (type="texte", business ou mood) :
 
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
       });
       const data=await res.json();
@@ -7370,7 +7380,7 @@ RÈGLES IMPORTANTES :
         method:"POST",
         headers:{
           "Content-Type":"application/json",
-          "x-api-key":"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",
+          "x-api-key":"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",
           "anthropic-version":"2023-06-01",
           "anthropic-dangerous-direct-browser-access":"true"
         },
@@ -7957,7 +7967,7 @@ function EditorialTab({ uid, userName }) {
   const todayStr = today.toISOString().slice(0,10);
   const JOURS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
   const MOIS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-  const API_KEY = "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";
+  const API_KEY = "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";
 
   const THEMES = [
     {p1:{type:"Storytelling",hook:"Je n'avais pas prévu que ça changerait ma vie...",conseil:"Dyptique avant/après, lumière naturelle"},p2:{type:"Conversion Minceur",hook:"Tu veux perdre du poids sans régime draconien ?",cta:"MINCEUR",conseil:"Produit sur fond blanc avec feuille verte"},s:["Coulisses de ton lundi — café, enfant, bureau","Sondage : tu te bats plus contre la fatigue ou la balance ?","Diagnostic GRATUIT → lien en bio"]},
@@ -8538,6 +8548,20 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
 // Période de 21 jours, commence un mercredi
 // Référence : période en cours se termine dans 6j 12h à partir d'aujourd'hui (11/06/2026)
 function getPeriodeInfo(){
+  // Utiliser le calendrier officiel Mihi
+  const campOfficielle = getCampagneMihiActuelle();
+  if(campOfficielle){
+    const deb = new Date(campOfficielle.debut+"T12:00:00");
+    const fin = new Date(campOfficielle.fin+"T23:59:59");
+    const now = Date.now();
+    const PERIOD_MS = 21*24*60*60*1000;
+    const msLeft = fin.getTime() - now;
+    const daysLeft = Math.max(0, Math.ceil(msLeft/(1000*60*60*24)));
+    const hoursLeft = Math.max(0, Math.floor((msLeft%(1000*60*60*24))/(1000*60*60)));
+    const pctElapsed = Math.min(100, Math.round((now-deb.getTime())/PERIOD_MS*100));
+    return {periodNum:campOfficielle.num, periodStart:deb, periodEnd:fin, daysLeft, hoursLeft, pctElapsed, pctLeft:Math.max(0,100-pctElapsed)};
+  }
+  // Fallback calcul linéaire
   const ANCRE = new Date("2026-01-01T12:00:00").getTime();
   const PERIOD_MS = PERIODE_DUREE_JOURS * 24 * 60 * 60 * 1000;
   const d = new Date(); const now = new Date(d.getFullYear(),d.getMonth(),d.getDate(),12,0,0).getTime();
@@ -10697,7 +10721,7 @@ function DreamBoardTab({uid}){
     if(!form.titre.trim())return;
     let next;
     if(editIdx!==null){ next=dreams.map((d,i)=>i===editIdx?{...form}:d); }
-    else{ next=[...dreams,{...form,date:new Date().toISOString().slice(0,10)}]; }
+    else{ next=[...dreams,{...form,date:todayLocalStr()}]; }
     await saveDreams(next);
     setForm({titre:"",description:"",emoji:"🌟",image:"",categorie:"vie"});
     setShowForm(false);setEditIdx(null);
@@ -10941,7 +10965,7 @@ function CitationDuJour({uid}){
         return;
       }
 
-      const todayStr = new Date().toISOString().slice(0,10);
+      const todayStr = todayLocalStr();
       const lastSeen = await sg(uid,"db-citation-vue");
       if(lastSeen !== todayStr){
         setIsFirstToday(true);
@@ -11066,7 +11090,7 @@ function MoodCheck({uid, onMoodChange, onBonusToggle}){
   const[bonusDone,setBonusDone]=useState({});
   const[loaded,setLoaded]=useState(false);
   const[conseilHistory,setConseilHistory]=useState({});
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = todayLocalStr();
 
   useEffect(()=>{
     (async()=>{
@@ -11952,6 +11976,109 @@ const PALIERS_QUALIFICATION=[
 
 // Périodes Mihi — ancre chargée depuis Firebase admin (modifiable)
 // Valeur par défaut : 19/12/2024
+
+// ── CALENDRIER OFFICIEL MIHI PAR ANNÉE ──────────────────────────────────────
+// Dates exactes extraites des catalogues officiels Mihi
+const CALENDRIER_MIHI = {
+  2023: [
+    {c:1, debut:"2023-01-07", fin:"2023-01-27"},
+    {c:2, debut:"2023-01-28", fin:"2023-02-17"},
+    {c:3, debut:"2023-02-18", fin:"2023-03-10"},
+    {c:4, debut:"2023-03-11", fin:"2023-03-31"},
+    {c:5, debut:"2023-04-01", fin:"2023-04-21"},
+    {c:6, debut:"2023-04-22", fin:"2023-05-12"},
+    {c:7, debut:"2023-05-13", fin:"2023-06-02"},
+    {c:8, debut:"2023-06-03", fin:"2023-06-23"},
+    {c:9, debut:"2023-06-24", fin:"2023-07-14"},
+    {c:10,debut:"2023-07-15", fin:"2023-08-04"},
+    {c:11,debut:"2023-08-05", fin:"2023-08-25"},
+    {c:12,debut:"2023-08-26", fin:"2023-09-15"},
+    {c:13,debut:"2023-09-16", fin:"2023-10-06"},
+    {c:14,debut:"2023-10-07", fin:"2023-10-27"},
+    {c:15,debut:"2023-10-28", fin:"2023-11-17"},
+    {c:16,debut:"2023-11-18", fin:"2023-12-08"},
+    {c:17,debut:"2023-12-09", fin:"2023-12-29"},
+  ],
+  2024: [
+    {c:1, debut:"2024-01-18", fin:"2024-02-07"},
+    {c:2, debut:"2024-02-08", fin:"2024-02-28"},
+    {c:3, debut:"2024-02-29", fin:"2024-03-20"},
+    {c:4, debut:"2024-03-21", fin:"2024-04-10"},
+    {c:5, debut:"2024-04-11", fin:"2024-05-01"},
+    {c:6, debut:"2024-05-02", fin:"2024-05-22"},
+    {c:7, debut:"2024-05-23", fin:"2024-06-12"},
+    {c:8, debut:"2024-06-13", fin:"2024-07-03"},
+    {c:9, debut:"2024-07-04", fin:"2024-07-24"},
+    {c:10,debut:"2024-07-25", fin:"2024-08-14"},
+    {c:11,debut:"2024-08-15", fin:"2024-09-04"},
+    {c:12,debut:"2024-09-05", fin:"2024-09-25"},
+    {c:13,debut:"2024-09-26", fin:"2024-10-16"},
+    {c:14,debut:"2024-10-17", fin:"2024-11-06"},
+    {c:15,debut:"2024-11-07", fin:"2024-11-27"},
+    {c:16,debut:"2024-11-28", fin:"2024-12-18"},
+    {c:17,debut:"2024-12-19", fin:"2025-01-08"},
+    {c:18,debut:"2023-12-28", fin:"2024-01-17"},
+  ],
+  2025: [
+    {c:1, debut:"2025-01-09", fin:"2025-01-29"},
+    {c:2, debut:"2025-01-30", fin:"2025-02-19"},
+    {c:3, debut:"2025-02-20", fin:"2025-03-12"},
+    {c:4, debut:"2025-03-13", fin:"2025-04-02"},
+    {c:5, debut:"2025-04-03", fin:"2025-04-23"},
+    {c:6, debut:"2025-04-24", fin:"2025-05-14"},
+    {c:7, debut:"2025-05-15", fin:"2025-06-04"},
+    {c:8, debut:"2025-06-05", fin:"2025-06-25"},
+    {c:9, debut:"2025-06-26", fin:"2025-07-16"},
+    {c:10,debut:"2025-07-17", fin:"2025-08-06"},
+    {c:11,debut:"2025-08-07", fin:"2025-08-27"},
+    {c:12,debut:"2025-08-28", fin:"2025-09-17"},
+    {c:13,debut:"2025-09-18", fin:"2025-10-08"},
+    {c:14,debut:"2025-10-09", fin:"2025-10-29"},
+    {c:15,debut:"2025-10-30", fin:"2025-11-19"},
+    {c:16,debut:"2025-11-20", fin:"2025-12-10"},
+    {c:17,debut:"2025-12-11", fin:"2025-12-31"},
+  ],
+  2026: [
+    {c:1, debut:"2026-01-01", fin:"2026-01-21"},
+    {c:2, debut:"2026-01-22", fin:"2026-02-11"},
+    {c:3, debut:"2026-02-12", fin:"2026-03-04"},
+    {c:4, debut:"2026-03-05", fin:"2026-03-25"},
+    {c:5, debut:"2026-03-26", fin:"2026-04-15"},
+    {c:6, debut:"2026-04-16", fin:"2026-05-06"},
+    {c:7, debut:"2026-05-07", fin:"2026-05-27"},
+    {c:8, debut:"2026-05-28", fin:"2026-06-17"},
+    {c:9, debut:"2026-06-18", fin:"2026-07-08"},
+    {c:10,debut:"2026-07-09", fin:"2026-07-29"},
+    {c:11,debut:"2026-07-30", fin:"2026-08-19"},
+    {c:12,debut:"2026-08-20", fin:"2026-09-09"},
+    {c:13,debut:"2026-09-10", fin:"2026-09-30"},
+    {c:14,debut:"2026-10-01", fin:"2026-10-21"},
+    {c:15,debut:"2026-10-22", fin:"2026-11-11"},
+    {c:16,debut:"2026-11-12", fin:"2026-12-02"},
+    {c:17,debut:"2026-12-03", fin:"2026-12-23"},
+  ],
+};
+
+// Trouve la campagne Mihi officielle pour une date donnée
+function getCampagneMihiPourDate(dateStr){
+  const d = new Date(dateStr+"T12:00:00").getTime();
+  for(const [annee, campagnes] of Object.entries(CALENDRIER_MIHI)){
+    for(const c of campagnes){
+      const deb = new Date(c.debut+"T00:00:00").getTime();
+      const fin = new Date(c.fin+"T23:59:59").getTime();
+      if(d >= deb && d <= fin) return {annee:parseInt(annee), num:c.c, debut:c.debut, fin:c.fin};
+    }
+  }
+  return null;
+}
+
+// Trouve la campagne Mihi actuelle
+function getCampagneMihiActuelle(){
+  const today = new Date();
+  const dateStr = today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
+  return getCampagneMihiPourDate(dateStr);
+}
+
 let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-01T12:00:00").getTime();
 const PERIODE_DUREE_JOURS = 21;
 const PERIODES_PAR_AN = 18;
@@ -11972,6 +12099,16 @@ async function chargerAncrePeriodesFirebase(){
 chargerAncrePeriodesFirebase();
 
 function getPeriodeDebut(nAbsolu){
+  // Utiliser le calendrier officiel Mihi 2026 pour la période actuelle
+  const campActuelle = getCampagneMihiActuelle();
+  if(campActuelle){
+    const annee = campActuelle.annee;
+    const camps = CALENDRIER_MIHI[annee] || [];
+    // nAbsolu relatif = numéro dans l'année courante
+    const numAnnee = ((nAbsolu-1) % PERIODES_PAR_AN) + 1;
+    const camp = camps.find(c=>c.c===numAnnee);
+    if(camp) return new Date(camp.debut+"T12:00:00");
+  }
   return new Date(PERIODE_DEBUT_ABSOLU_MS + (nAbsolu-1)*PERIODE_DUREE_JOURS*24*60*60*1000);
 }
 
@@ -12437,7 +12574,7 @@ function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
 
   const historique=obj.historique||[];
   const snapshotNow=()=>{
-    const entry={date:new Date().toISOString().slice(0,10),ca:+obj.ca||0,caObj:+obj.caObj||0,caPerso:+obj.caPerso||0,recruesReal:+obj.recruesReal||0,recruesObj:+obj.recruesObj||0,palier:obj.palier||"2%"};
+    const entry={date:todayLocalStr(),ca:+obj.ca||0,caObj:+obj.caObj||0,caPerso:+obj.caPerso||0,recruesReal:+obj.recruesReal||0,recruesObj:+obj.recruesObj||0,palier:obj.palier||"2%"};
     return [...historique,entry].slice(-24);
   };
 
@@ -12684,7 +12821,7 @@ function MembresTab({uid}){
     const marraineUid = marraineFullName ? marraineFullName.toLowerCase().replace(/\s+/g,"-") : "";
     try{
       const ref=doc(db,"equipe","annuaire");
-      const existing = annuaire[membreUid] || {uid:membreUid, prenom:"", nom:"", dateEnreg:new Date().toISOString().slice(0,10)};
+      const existing = annuaire[membreUid] || {uid:membreUid, prenom:"", nom:"", dateEnreg:todayLocalStr()};
       const updated = {...existing, marraine:marraineUid||null};
       const nextAnnuaire = {...annuaire, [membreUid]:updated};
       setAnnuaire(nextAnnuaire);
@@ -12898,7 +13035,7 @@ function MembreStatsCard({m, expanded, onToggleExpand}){
     })();
   },[expanded,m.uid]);
 
-  const today=new Date().toISOString().slice(0,10);
+  const today=todayLocalStr();
   const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
 
   return(
@@ -13192,7 +13329,7 @@ function AssiduiteTab({uid}){
             if(!snap.exists())return {uid:mUid, noData:true};
             const data=snap.data();
             const actionsRaw = data["db-actions"] ? JSON.parse(data["db-actions"]) : {};
-            const todayStr = new Date().toISOString().slice(0,10);
+            const todayStr = todayLocalStr();
             const isToday = actionsRaw._date === todayStr;
             const {_date, ...actionsSeules} = actionsRaw;
             const doneToday = isToday ? Object.values(actionsSeules).filter(Boolean).length : 0;
@@ -13229,7 +13366,7 @@ function AssiduiteTab({uid}){
     </div>
   );
 
-  const today=new Date().toISOString().slice(0,10);
+  const today=todayLocalStr();
   const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
 
   return(
@@ -13679,7 +13816,7 @@ function ActionsBiblioChefTab({uid}){
 function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCell, editVal, setEditCell, setEditVal, saveJour, setEditPeriode, setEditCA, setEditObj}){
   const d=data[`p${pNum}`]||{ca:0,obj:0,jours:{}};
   const debut=getPeriodeDebut(pNum);
-  const isFutur=(i)=>courante&&i>=joursEcoules;  const isToday=(i)=>courante&&i===joursEcoules-1;
+  const _n=new Date();const _t=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate(),12,0,0);const _dj=Math.floor((_t.getTime()-debut.getTime())/(24*60*60*1000));const _je=courante?Math.min(21,Math.max(0,_dj+1)):joursEcoules;const isFutur=(i)=>courante&&i>=_je;const isToday=(i)=>courante&&i===_je-1;
   const pct=(ca,obj)=>obj?Math.min(100,Math.round((ca||0)/obj*100)):0;
   const fmtJour=(d2)=>d2.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
   return(
@@ -14742,11 +14879,11 @@ function MonEquipeTab({uid}){
                   const existing=snap.exists()&&snap.data()["db-fast-start"]?JSON.parse(snap.data()["db-fast-start"]):{};
                   const nom=(m.prenom||"")+" "+(m.nom||"");
                   if(!existing.startDate){
-                    await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+                    await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:todayLocalStr(),doneTasks:{},modulesValides:{}})},{merge:true});
                     alert("✅ Fast Start assigné à "+nom.trim());
                   } else {
                     if(window.confirm(nom.trim()+" a déjà un Fast Start (démarré le "+existing.startDate+"). Relancer depuis le début ?")){
-                      await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:new Date().toISOString().slice(0,10),doneTasks:{},modulesValides:{}})},{merge:true});
+                      await setDoc(ref,{"db-fast-start":JSON.stringify({startDate:todayLocalStr(),doneTasks:{},modulesValides:{}})},{merge:true});
                       alert("✅ Fast Start relancé pour "+nom.trim());
                     }
                   }
@@ -14886,7 +15023,7 @@ function AdminConfigPeriodes(){
                     // Sauvegarder dans historique avant reset
                     const hist2=obj2.historique||[];
                     if(obj2.ca||obj2.caPerso||obj2.recruesReal!=="0"){
-                      hist2.push({date:new Date().toISOString().slice(0,10),ca:+obj2.ca||0,caPerso:+obj2.caPerso||0,recruesReal:+obj2.recruesReal||0,palier:obj2.palier||"2%"});
+                      hist2.push({date:todayLocalStr(),ca:+obj2.ca||0,caPerso:+obj2.caPerso||0,recruesReal:+obj2.recruesReal||0,palier:obj2.palier||"2%"});
                     }
                     const totalCaCumul=(+obj2.totalCaCumul||0)+(+obj2.ca||0);
                     const totalRecruesCumul=(+obj2.totalRecruesCumul||0)+(+obj2.recruesReal||0);
@@ -16014,7 +16151,7 @@ Génère un plan d'action personnalisé en JSON avec cette structure exacte (ne 
       method:"POST",
       headers:{
         "Content-Type":"application/json",
-        "x-api-key":"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",
+        "x-api-key":"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",
         "anthropic-version":"2023-06-01",
         "anthropic-dangerous-direct-browser-access":"true",
       },
@@ -16085,23 +16222,22 @@ Réponses: ${reponsesText}
 Catalogue: ${catalogueText}
 ${notesAdmin?`Notes: ${notesAdmin}`:""}
 
-3 packs UNIQUEMENT avec les produits du catalogue. Traduis les noms en français. JSON strict:
-{"introduction":"2 phrases personnalisées","budget":{"total":"X€","produits":[{"nom":"Nom FR","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"1 geste concret ex: appliquer sur visage humide en cercles"}],"routine":"Routine matin : étape1 → étape2. Routine soir : étape1 → étape2"},"bestseller":{"total":"X€","produits":[{"nom":"Nom FR","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"1 geste concret"}],"routine":"Routine matin : étape1 → étape2. Routine soir : étape1 → étape2"},"premium":{"total":"X€","produits":[{"nom":"Nom FR","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"1 geste concret"}],"routine":"Routine matin : étape1 → étape2. Routine soir : étape1 → étape2"},"conseil":"1 conseil final personnalisé lié au profil"}
-
-Règles: budget=1-2 produits, bestseller=3 produits, premium=4-5 produits. Prix exacts du catalogue.`;
+3 packs. JSON strict:
+{"introduction":"2 phrases","budget":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"geste"}],"routine":"matin→soir"},"bestseller":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"usage","benefice":"phrase","comment":"geste"}],"routine":"matin→soir"},"premium":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"usage","benefice":"phrase","comment":"geste"}],"routine":"matin→soir"},"conseil":"conseil"}
+budget=1-2 produits. bestseller=2-3 produits. premium=3-4 produits max`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": "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",
+        "x-api-key": "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",
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 8000,
+        max_tokens: 3000,
         messages: [{ role: "user", content: prompt }]
       })
     });
@@ -16113,7 +16249,7 @@ Règles: budget=1-2 produits, bestseller=3 produits, premium=4-5 produits. Prix 
       throw new Error("API: " + (data.error.message || JSON.stringify(data.error)));
     }
 
-    const text = data.content?.map(i => i.text || "").join("") || "";
+    const text = data.content?.map(i => i.text || "").join("") || ""; console.log("REPONSE BRUTE:", text.substring(0,500));
     console.log("=== RÉPONSE IA BRUTE ===", text);
     console.log("=== LONGUEUR ===", text.length);
     const clean = text.replace(/```json|```/g, "").trim();
@@ -16155,7 +16291,7 @@ ${catalogueText}
 
 Génère 4 à 5 produits du catalogue pour un pack premium complet. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
 {"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom FR","prix":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;
-          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
+          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
           const d2 = await r2.json();
           const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
           result.premium = JSON.parse(t2);
@@ -16720,7 +16856,7 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
             try{
               await setDoc(doc(db,"tunnel_prospects","diag"+Date.now()),{
                 type:"diagnostic_parfum",prenom:capturePrenom,contact:captureContact,
-                resultat:resultat.map(p=>p.nom),slug:distributeurNom,date:new Date().toISOString().slice(0,10),ts:Date.now()
+                resultat:resultat.map(p=>p.nom),slug:distributeurNom,date:todayLocalStr(),ts:Date.now()
               });
             }catch{}
             setCaptureEnvoyee(true);
@@ -17381,7 +17517,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         await setDoc(ref,{
           uid, type, nomClient:nomFinal, contact,
           reponses:repSansContact,
-          date:new Date().toISOString().slice(0,10),
+          date:todayLocalStr(),
           ts:Date.now(), traite:false
         });
         // Stocker aussi dans users/{uid}/db-diagnostics pour apparaître dans l'historique
@@ -17392,7 +17528,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           id:`diag${Date.now()}`,
           type, nomClient:nomFinal, contact,
           reponses:repSansContact,
-          date:new Date().toISOString().slice(0,10),
+          date:todayLocalStr(),
           ts:Date.now(),
           externe:true, nonLu:true,
         };
@@ -17428,7 +17564,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       const ref = doc(db, "users", uid);
       const snap = await getDoc(ref);
       const existing = snap.exists() && snap.data()["db-diagnostics"] ? JSON.parse(snap.data()["db-diagnostics"]) : [];
-      const newDiag = { id: `diag${Date.now()}`, type, nomClient: nomClient||"Cliente", reponses: rep||reponses, ordonnance: reco, date: new Date().toISOString().slice(0,10), ts: Date.now() };
+      const newDiag = { id: `diag${Date.now()}`, type, nomClient: nomClient||"Cliente", reponses: rep||reponses, ordonnance: reco, date: todayLocalStr(), ts: Date.now() };
       await setDoc(ref, { "db-diagnostics": JSON.stringify([newDiag,...existing].slice(0,50)) }, { merge: true });
     } catch {}
   };
@@ -17934,7 +18070,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           🖨️ Sauvegarder mon ordonnance en PDF
         </button>
 
-        <button onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:new Date().toISOString().slice(0,10),ts:Date.now()});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
+        <button onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:todayLocalStr(),ts:Date.now()});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
 
         {/* DEBUG TEMPORAIRE */}
         <details style={{marginTop:".5rem"}}>
@@ -18030,7 +18166,7 @@ function DiagResultsTab({ uid }) {
     const p = prospects.find(x => x.id===prospectId);
     if (!p) return;
     if (vers === "client") {
-      const newClient = {id:`c${Date.now()}`, nom:p.name, prenom:"", tel:"", email:"", produits:[], notes:p.note||"", dateAjout:new Date().toISOString().slice(0,10)};
+      const newClient = {id:`c${Date.now()}`, nom:p.name, prenom:"", tel:"", email:"", produits:[], notes:p.note||"", dateAjout:todayLocalStr()};
       const nextClients = [...clients, newClient];
       setClients(nextClients);
       try { await setDoc(doc(db,"users",uid), {"db-clients":JSON.stringify(nextClients)}, {merge:true}); } catch {}
@@ -18227,7 +18363,7 @@ function DiagResultsTab({ uid }) {
               🖨️ Générer PDF / Imprimer
             </button>
 
-            <button onClick={async()=>{const ord=sel?.ordonnance;if(!ord)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ord,nomClient:sel?.nomClient||sel?.contact?.prenom||'Cliente',date:new Date().toISOString().slice(0,10),ts:Date.now()});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - envoie-le a la cliente');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Envoyer le lien a la cliente</button>
+            <button onClick={async()=>{const ord=sel?.ordonnance;if(!ord)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ord,nomClient:sel?.nomClient||sel?.contact?.prenom||'Cliente',date:todayLocalStr(),ts:Date.now()});const lien=window.location.origin+'?ordonnance='+id;const msg='Voici le lien pour ta cliente :\n\n'+lien+'\n\nCopie ce lien et envoie-le lui !';if(navigator.share){await navigator.share({title:'Ordonnance Mihi',text:'Ton ordonnance personnalisée Mihi',url:lien});}else{prompt('Copie ce lien et envoie-le à ta cliente :',lien);}}catch(e){alert('Erreur : '+e.message);}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Envoyer le lien a la cliente</button>
           </div>
         )}
 
@@ -18716,7 +18852,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   const enregistrerCoords=async()=>{
     setSaving(true);
     try{
-      await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:coords,date:new Date().toISOString().slice(0,10),ts:Date.now()});
+      await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:coords,date:todayLocalStr(),ts:Date.now()});
     }catch(e){console.error(e);}
     setSaving(false);
     if(parcours==="produits") setEtape("diagnostic");
