@@ -3693,7 +3693,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
         try{
           const cd=JSON.parse(data["db-actions-custom"]);
           const tod=todayLocalStr();
-          if(Array.isArray(cd)){setActionsCustomRaw(cd);}
+          if(Array.isArray(cd)){setActionsCustomRaw([]);ss(uid,"db-actions-custom",JSON.stringify({_date:tod,actions:[]}));}
           else if(cd._date===tod){setActionsCustomRaw(cd.actions||[]);}
           else{setActionsCustomRaw([]);ss(uid,"db-actions-custom",JSON.stringify({_date:tod,actions:[]}));}
         }catch{}
@@ -3778,7 +3778,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const saveStats=s=>{setStats(s);ss(uid,"db-stats",JSON.stringify(s));};
   const saveClients=c=>{setClients(c);ss(uid,"db-clients",JSON.stringify(c));};
   const saveDistributeurs=d=>{setDistributeurs(d);ss(uid,"db-distributeurs",JSON.stringify(d));};
-  const saveObjPerso=o=>{setObjPerso(o);ss(uid,"db-obj-perso",JSON.stringify(o));syncAnnuaire(uid,userName,o);onObjPersoChange(o);};
+  const saveObjPerso=async(o)=>{setObjPerso(o);ss(uid,"db-obj-perso",JSON.stringify(o));try{await syncAnnuaire(uid,userName,o);}catch{};onObjPersoChange(o);};
 
   const todayActions=[
     {id:"a1",icon:"📝",label:"Publier mon post du jour",sub:"1 contenu fort — photo, Reel ou carrousel"},
@@ -6861,7 +6861,11 @@ function FastStartTab({uid, userName, goToFormation}){
   };
 
   const currentDay = startDate
-    ? Math.min(7, Math.max(1, Math.floor((Date.now()-new Date(startDate).getTime())/86400000)+1))
+    ? (()=>{
+        const _s=new Date(startDate+"T12:00:00").getTime();
+        const _n=new Date();const _t=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate(),12,0,0).getTime();
+        return Math.min(7,Math.max(1,Math.floor((_t-_s)/86400000)+1));
+      })()
     : 1;
 
   const toggleTask=(jour,idx)=>{
@@ -9920,10 +9924,7 @@ function LinkBioTab({uid, userName}){
       )}
 
       {/* Liens */}
-      <div style={{padding:".75rem",background:theme.cardBg,display:"flex",flexDirection:"column",gap:".4rem"}}>
-        <button onClick={()=>{window.location.href="?bio="+slug+"&tunnel=produits_page";}} style={{display:"block",width:"100%",background:theme.btnPrimary,color:"white",border:"none",borderRadius:10,padding:".7rem .85rem",textAlign:"center",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
-        {profil.lienDiag&&<a href={profil.lienDiag} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:10,padding:".55rem .85rem",textAlign:"center",textDecoration:"none",fontSize:".78rem",fontWeight:600}}>✨ Faire mon diagnostic</a>}
-        <button onClick={()=>{window.location.href="?bio="+slug+"&tunnel=recrutement_page";}} style={{display:"block",width:"100%",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:10,padding:".7rem .85rem",textAlign:"center",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👑 Rejoindre l'équipe</button>
+      <div style={{padding:"0 .75rem",display:"flex",flexDirection:"column",gap:".4rem"}}>
         {(profil.liensBonusLabel||[]).map((lbl,i)=>lbl&&profil.liensBonusUrl?.[i]&&(
           <a key={i} href={profil.liensBonusUrl[i]} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:".5rem",background:theme.accent+"15",border:`1.5px solid ${theme.accent}30`,borderRadius:10,padding:".45rem .75rem",textDecoration:"none"}}>
             {profil.liensBonusPhoto?.[i]&&<img src={profil.liensBonusPhoto[i]} alt="" style={{width:30,height:30,borderRadius:6,objectFit:"cover",flexShrink:0}}/>}
@@ -10460,12 +10461,7 @@ function UploadPhoto({value, onChange, label="Photo", folder="produits"}){
       const reader=new FileReader();
       reader.onload=ev=>setPreview(ev.target.result);
       reader.readAsDataURL(file);
-      // Upload Firebase Storage
-      const path=`${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g,"_")}`;
-      const sRef=storageRef(storage,path);
-      await uploadBytes(sRef,file);
-      const url=await getDownloadURL(sRef);
-      onChange(url);
+      const reader2=new FileReader();reader2.onload=ev=>{onChange(ev.target.result);setUploading(false);};reader2.readAsDataURL(file);return;
     }catch(err){
       alert("Erreur upload : "+err.message);
     }
@@ -18677,6 +18673,7 @@ function LinkBioPublicPage({slug}){
                 {id:"cheveux",icon:"💇",label:"Diagnostic Cheveux",sub:"Ta routine capillaire sur mesure"},
                 {id:"makeup",icon:"💄",label:"Diagnostic Makeup",sub:"Tes couleurs et produits makeup"},
                 {id:"recrutement",icon:"👑",label:"Diagnostic Opportunité",sub:"L'activité Mihi faite pour toi ?"},
+              {id:"blocage",icon:"👩‍👧",label:"Diagnostic Maman Entrepreneur",sub:"L'activité Mihi est-elle faite pour toi ?"},
               ].filter(d=>(profil.diagChoisis||["parfum","skincare","silhouette","sante"]).includes(d.id)).map(d=>(
                 <button key={d.id} onClick={()=>setDiagActif(d.id)}
                   style={{background:"white",border:"1.5px solid "+theme.accent+"40",borderRadius:12,padding:".75rem .65rem",textAlign:"center",cursor:"pointer",fontFamily:"inherit"}}>
@@ -18688,6 +18685,13 @@ function LinkBioPublicPage({slug}){
             </div>
           </div>
         )}
+
+        {/* Boutons principaux */}
+        <div style={{padding:"0 1rem .75rem",display:"flex",flexDirection:"column",gap:".6rem"}}>
+          <button onClick={()=>{window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=produits_page";}} style={{width:"100%",background:theme.btnPrimary||"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".8rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
+          <button onClick={()=>{window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}} style={{width:"100%",background:"transparent",color:theme.accent||"#A89BB5",border:`1.5px solid ${theme.accent||"#A89BB5"}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👑 Rejoindre l'équipe</button>
+        </div>
+
 
         <div style={{padding:"1rem 1rem 2rem",background:theme.bg,display:"flex",flexDirection:"column",gap:".5rem"}}>
           {profil.lienBoutique&&(
@@ -18708,11 +18712,10 @@ function LinkBioPublicPage({slug}){
               ✨ Faire mon diagnostic
             </a>
           )}
-          <a href={profil.lienRecrutement||`https://blazing-dinasty-1fad9.web.app?recrutement=true&uid=${slug}`}
-            target="_blank" rel="noopener noreferrer"
-            style={{display:"block",background:theme.btnT,color:"#fff",borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:700}}>
+          <button onClick={()=>{window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}}
+            style={{display:"block",width:"100%",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",border:"none"}}>
             👑 Rejoindre l'équipe
-          </a>
+          </button>
         </div>
         <div style={{padding:"1rem",textAlign:"center",fontSize:".6rem",color:theme.accent,opacity:.6}}>Blazing Dynasty × Mihi France</div>
       </div>
@@ -19063,7 +19066,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
     </div></div>);
   }
 
-  if(etape==="accueil") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/>{profil&&profil.histoire&&<div style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".82rem",color:"#3D2B1F",lineHeight:1.75,fontStyle:"italic"}}>"{profil.histoire}"</div>}<div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"white",fontWeight:300}}>Qu'est-ce qui t'amene aujourd'hui ? </div></div><div style={{display:"flex",flexDirection:"column",gap:".6rem"}}><div onClick={()=>{setParcours("produits");setEtape("ebook");}} style={{background:"white",border:"2px solid #C49A8A",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#C49A8A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>P</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je veux decouvrir les produits</div><div style={{fontSize:".72rem",color:"#888"}}>Recois tes recommandations personnalisees + un cadeau offert</div></div><span style={{color:"#C49A8A",fontSize:"1.1rem",flexShrink:0}}>→</span></div><div onClick={()=>{setParcours("recrutement");setEtape("ebook");}} style={{background:"white",border:"2px solid #A89BB5",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#A89BB530",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>O</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je cherche une opportunite</div><div style={{fontSize:".72rem",color:"#888"}}>Decouvre si cette aventure est faite pour toi + un cadeau offert</div></div><span style={{color:"#A89BB5",fontSize:"1.1rem",flexShrink:0}}>→</span></div></div></div></div>);
+  if(etape==="accueil") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/>{profil&&profil.histoire&&<div style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".82rem",color:"#3D2B1F",lineHeight:1.75,fontStyle:"italic"}}>"{profil.histoire}"</div>}<div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"white",fontWeight:300}}>Qu'est-ce qui t'amene aujourd'hui ? </div></div><div style={{display:"flex",flexDirection:"column",gap:".6rem"}}><div onClick={()=>{setParcours("produits");setEtape("produits_page");}} style={{background:"white",border:"2px solid #C49A8A",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#C49A8A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>P</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je veux decouvrir les produits</div><div style={{fontSize:".72rem",color:"#888"}}>Recois tes recommandations personnalisees + un cadeau offert</div></div><span style={{color:"#C49A8A",fontSize:"1.1rem",flexShrink:0}}>→</span></div><div onClick={()=>{setParcours("recrutement");setEtape("recrutement_page");}} style={{background:"white",border:"2px solid #A89BB5",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#A89BB530",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>O</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je cherche une opportunite</div><div style={{fontSize:".72rem",color:"#888"}}>Decouvre si cette aventure est faite pour toi + un cadeau offert</div></div><span style={{color:"#A89BB5",fontSize:"1.1rem",flexShrink:0}}>→</span></div></div></div></div>);
   if(etape==="ebook") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontSize:".6rem",fontWeight:700,color:"#C4A882",marginBottom:".3rem"}}>CADEAU OFFERT</div><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Choisis ton guide gratuit</div></div>{EBOOKS.map(eb=>(<div key={eb.id} onClick={()=>{setEbookChoisi(eb.id);setEtape("coordonnees");}} style={{background:"white",border:"2px solid "+(ebookChoisi===eb.id?eb.couleur:"#E8DDD4"),borderRadius:14,padding:"1.1rem",marginBottom:".65rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".75rem"}}><div style={{fontSize:"2rem",flexShrink:0}}>{eb.icon}</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>{eb.titre}</div><div style={{fontSize:".72rem",color:"#888"}}>{eb.sous}</div></div><span style={{color:eb.couleur,fontSize:"1.1rem",flexShrink:0}}>→</span></div>))}</div></div>);
   if(etape==="coordonnees") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Ou est-ce que je t'envoie ton guide ?</div></div>{[["prenom","Prenom *","Ton prenom"],["email","Email","ton@email.com"],["tel","Tel / WhatsApp","06 XX XX XX XX"],["reseau","Messenger / Instagram","@tonpseudo"]].map(([k,l,ph])=>(<div key={k} style={{marginBottom:".4rem"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".2rem",fontWeight:600}}>{l}</div><input value={coords[k]||""} onChange={e=>setCoords(c=>({...c,[k]:e.target.value}))} placeholder={ph} style={{width:"100%",border:"1.5px solid "+(coords[k]?"#7FAF8A":"#E8DDD4"),borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none"}}/></div>))}<button onClick={enregistrerCoords} disabled={!coordsOk||saving} style={{width:"100%",background:coordsOk?"#3D1F0E":"#E8DDD4",color:coordsOk?"white":"#888",border:"none",borderRadius:10,padding:".75rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:coordsOk?"pointer":"default",marginTop:".5rem"}}>{saving?"Envoi...":"Recevoir mon guide gratuit →"}</button></div></div>);
   if(etape==="diagnostic") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={{maxWidth:480,margin:"0 auto"}}><DiagnosticsTab uid={profil&&profil.uid||slug} userName={nomDistrib} externalMode={true} initialClient={coords.prenom}/></div></div>);
