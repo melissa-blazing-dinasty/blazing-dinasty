@@ -6812,6 +6812,13 @@ function FastStartTab({uid, userName, goToFormation}){
   const[modulesValides,setModulesValides]=useState({});
 
   const[videosFastStart,setVideosFastStart]=useState({});
+  const[ordreFormationApp,setOrdreFormationApp]=useState([]);
+  const[savingOrdre,setSavingOrdre]=useState(false);
+  const[savedOrdre,setSavedOrdre]=useState(false);
+  useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"admin","formation_app_ordre"));if(snap.exists()&&snap.data().ordre)setOrdreFormationApp(snap.data().ordre);else setOrdreFormationApp(FORMATION_APP_CATEGORIES_DEFAULT.map(c=>c.id));}catch{}})();},[]);
+  const sauvegarderOrdre=async()=>{setSavingOrdre(true);try{await setDoc(doc(db,"admin","formation_app_ordre"),{ordre:ordreFormationApp},{merge:true});FORMATION_APP_CATEGORIES=[...FORMATION_APP_CATEGORIES_DEFAULT].sort((a,b)=>ordreFormationApp.indexOf(a.id)-ordreFormationApp.indexOf(b.id));setSavedOrdre(true);setTimeout(()=>setSavedOrdre(false),2000);}catch{}setSavingOrdre(false);};
+  const monterCat=(i)=>{if(i===0)return;const next=[...ordreFormationApp];[next[i-1],next[i]]=[next[i],next[i-1]];setOrdreFormationApp(next);};
+  const descendreCat=(i)=>{if(i===ordreFormationApp.length-1)return;const next=[...ordreFormationApp];[next[i],next[i+1]]=[next[i+1],next[i]];setOrdreFormationApp(next);};
   const[startDate,setStartDate]=useState(null);
   const[doneTasks,setDoneTasks]=useState({});
   const[loaded,setLoaded]=useState(false);
@@ -15286,7 +15293,10 @@ function AdminTab(){
       {id:"devperso",        label:"Développement Personnel Business"},
       {id:"videoannexe",     label:"Vidéos Annexes"},
       {id:"outils",          label:"Formation Outils"},
-      {id:"formationapp",    label:"Formation App"},
+      {id:"formationapp",    label:"Formation App (général)"},
+      {id:"formationchef",   label:"Formation App — Chef d'équipe"},
+      {id:"dashboard",        label:"Formation App — Tableau de bord"},
+      {id:"outils",           label:"Formation App — Outils généraux"},
     ]},
     {groupe:"🧴 Produits",options:[
       {id:"produits_parfum",      label:"Produits — Parfum"},
@@ -17265,11 +17275,23 @@ const FORMATION_APP_DASHBOARD_SUBS=[
   {id:"fa-prospects", num:"5", icon:"👥", title:"Prospects", desc:"Organiser tes prospects par catégorie, statuts et relances."},
 ];
 
-const FORMATION_APP_CATEGORIES=[
+let FORMATION_APP_CATEGORIES_DEFAULT=[
   {id:"formationchef", num:"1", icon:"👑", title:"Formation Chef d'équipe", desc:"Espace Chef, Accès équipe, Assiduité — pour les cheffes d'équipe."},
   {id:"dashboard", num:"2", icon:"⚡", title:"Tableau de bord", desc:"Tout sur le tableau de bord et ses sous-sections.", folder:FORMATION_APP_DASHBOARD_SUBS},
   {id:"outils", num:"3", icon:"🛠️", title:"Outils généraux", desc:"Les bases de l'application : navigation, recherche produits, diagnostics."},
 ];
+
+let FORMATION_APP_CATEGORIES=[...FORMATION_APP_CATEGORIES_DEFAULT];
+async function chargerOrdreFormationApp(){
+  try{
+    const snap=await getDoc(doc(db,"admin","formation_app_ordre"));
+    if(snap.exists()&&snap.data().ordre){
+      const ordre=snap.data().ordre;
+      FORMATION_APP_CATEGORIES=[...FORMATION_APP_CATEGORIES_DEFAULT].sort((a,b)=>ordre.indexOf(a.id)-ordre.indexOf(b.id));
+    }
+  }catch{}
+}
+chargerOrdreFormationApp();
 
 function FormationAppTab({adminItems=[]}){
   const[openFolder,setOpenFolder]=useState(null);
