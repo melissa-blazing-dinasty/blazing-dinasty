@@ -299,7 +299,7 @@ async function translateBatch(texts, targetLang){
     try{
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:`Traduz do francês para português europeu (Portugal). Responde APENAS com JSON array na mesma ordem:\n${JSON.stringify(chunk)}`}]})
       });
       const data=await res.json();
@@ -7154,7 +7154,7 @@ FORMAT JSON SI TEXTE (type="texte", business ou mood) :
 
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:prompt}]})
       });
       const data=await res.json();
@@ -7391,7 +7391,7 @@ RÈGLES IMPORTANTES :
         method:"POST",
         headers:{
           "Content-Type":"application/json",
-          "x-api-key":"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",
+          "x-api-key":ANTHROPIC_API_KEY,
           "anthropic-version":"2023-06-01",
           "anthropic-dangerous-direct-browser-access":"true"
         },
@@ -7978,7 +7978,7 @@ function EditorialTab({ uid, userName }) {
   const todayStr = today.toISOString().slice(0,10);
   const JOURS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
   const MOIS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-  const API_KEY = "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";
+  const API_KEY = "ANTHROPIC_API_KEY";
 
   const THEMES = [
     {p1:{type:"Storytelling",hook:"Je n'avais pas prévu que ça changerait ma vie...",conseil:"Dyptique avant/après, lumière naturelle"},p2:{type:"Conversion Minceur",hook:"Tu veux perdre du poids sans régime draconien ?",cta:"MINCEUR",conseil:"Produit sur fond blanc avec feuille verte"},s:["Coulisses de ton lundi — café, enfant, bureau","Sondage : tu te bats plus contre la fatigue ou la balance ?","Diagnostic GRATUIT → lien en bio"]},
@@ -10287,6 +10287,7 @@ function FormationProduitsTab(){
   const[catActive,setCatActive]=useState("parfum");
   const[produitOuvert,setProduitOuvert]=useState(null); // {id, cat}
   const[ongletProduit,setOngletProduit]=useState("texte");
+  const[makeupSousOnglet,setMakeupSousOnglet]=useState("produits"); // produits | tips
 
   useEffect(()=>{
     (async()=>{
@@ -10300,7 +10301,8 @@ function FormationProduitsTab(){
 
   const cat=CATEGORIES_PRODUITS.find(c=>c.id===catActive)||CATEGORIES_PRODUITS[0];
   const[themeActif,setThemeActif]=useState(null);
-  const listeCat=produits[catActive]||[];
+  const makeupKey = catActive==="makeup" ? (makeupSousOnglet==="tips" ? "makeup_tips" : "makeup") : catActive;
+  const listeCat=produits[makeupKey]||[];
   // Pour problématiques : filtrer par thème si sélectionné
   const listeAffichee=catActive==="problematiques"&&themeActif
     ?listeCat.filter(p=>p.theme===themeActif)
@@ -10389,6 +10391,18 @@ function FormationProduitsTab(){
           </button>
         ))}
       </div>
+
+      {/* Sous-onglets Maquillage */}
+      {catActive==="makeup"&&(
+        <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
+          {[{id:"produits",label:"💄 Produits"},{id:"tips",label:"✨ Tips & Astuces"}].map(o=>(
+            <button key={o.id} onClick={()=>setMakeupSousOnglet(o.id)}
+              style={{flex:1,padding:".5rem",fontSize:".78rem",fontWeight:600,borderRadius:10,border:"1.5px solid "+(makeupSousOnglet===o.id?"#E91E8C":C.pale),background:makeupSousOnglet===o.id?"#E91E8C":"white",color:makeupSousOnglet===o.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Sous-thèmes pour Problématiques */}
       {catActive==="problematiques"&&(
@@ -10950,7 +10964,7 @@ function DreamBoardTab({uid}){
 
 function CitationDuJour({uid}){
   const[citations,setCitations]=useState(null);
-  const[revealed,setRevealed]=useState(true);
+  const[revealed,setRevealed]=useState(true); // toujours visible
   const[isFirstToday,setIsFirstToday]=useState(false);
   const[flipping,setFlipping]=useState(false);
 
@@ -10969,7 +10983,9 @@ function CitationDuJour({uid}){
       }
 
       const todayStr = todayLocalStr();
-      const lastSeen = await sg(uid,"db-citation-vue");
+      let lastSeen = await sg(uid,"db-citation-vue");
+      // Normaliser le format de date stocké
+      if(lastSeen && lastSeen.length > 10) lastSeen = lastSeen.slice(0,10);
       if(lastSeen !== todayStr){
         setIsFirstToday(true);
         setRevealed(false);
@@ -12081,6 +12097,10 @@ function getCampagneMihiActuelle(){
   const dateStr = today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
   return getCampagneMihiPourDate(dateStr);
 }
+
+let ANTHROPIC_API_KEY="";
+async function chargerCleAPI(){try{const snap=await getDoc(doc(db,"admin","config"));if(snap.exists()&&snap.data().anthropicKey)ANTHROPIC_API_KEY=snap.data().anthropicKey;}catch{}}
+chargerCleAPI();
 
 let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-01T12:00:00").getTime();
 const PERIODE_DUREE_JOURS = 21;
@@ -15281,6 +15301,11 @@ function AdminTab(){
   const[editId,setEditId]=useState(null);
   const[saving,setSaving]=useState(false);
   const[videosFastStart,setVideosFastStart]=useState({});
+  const[anthropicKey,setAnthropicKey]=useState("");
+  const[savingKey,setSavingKey]=useState(false);
+  const[savedKey,setSavedKey]=useState(false);
+  useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"admin","config"));if(snap.exists()&&snap.data().anthropicKey)setAnthropicKey(snap.data().anthropicKey);}catch{}})();},[]);
+  const sauvegarderCle=async()=>{setSavingKey(true);try{await setDoc(doc(db,"admin","config"),{anthropicKey},{merge:true});ANTHROPIC_API_KEY=anthropicKey;setSavedKey(true);setTimeout(()=>setSavedKey(false),2000);}catch{}setSavingKey(false);};
   const[savingFS,setSavingFS]=useState(false);
   const[filterDest,setFilterDest]=useState("all");
 
@@ -15557,6 +15582,24 @@ function AdminTab(){
             </div>
           );
         })}
+      </div>
+
+      {/* Clé API Anthropic */}
+      <div style={{background:C.creme,borderRadius:12,padding:"1rem",marginTop:"1rem",border:"1px solid "+C.pale}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.brun,marginBottom:".5rem"}}>🔑 Clé API Anthropic (IA)</div>
+        <div style={{fontSize:".72rem",color:C.gris,marginBottom:".5rem",lineHeight:1.5}}>Renouvelle-la si les diagnostics IA ne fonctionnent plus.</div>
+        <input type="password" placeholder="sk-ant-api03-..." value={anthropicKey} onChange={e=>setAnthropicKey(e.target.value)}
+          style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".45rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",marginBottom:".5rem"}}/>
+        <button onClick={sauvegarderCle} disabled={savingKey||!anthropicKey.trim()}
+          style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".45rem 1rem",fontSize:".75rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          {savingKey?"...":savedKey?"✅ Sauvegardée !":"💾 Sauvegarder la clé"}
+        </button>
+      </div>
+
+      {/* Scripts personnalisés */}
+      <div style={{background:C.creme,borderRadius:12,padding:"1rem",marginTop:"1rem",border:"1px solid "+C.pale}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.brun,marginBottom:".75rem"}}>📝 Scripts personnalisés</div>
+        <AdminScriptsEditor/>
       </div>
     </div>
   );
@@ -16157,7 +16200,7 @@ Génère un plan d'action personnalisé en JSON avec cette structure exacte (ne 
       method:"POST",
       headers:{
         "Content-Type":"application/json",
-        "x-api-key":"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",
+        "x-api-key":ANTHROPIC_API_KEY,
         "anthropic-version":"2023-06-01",
         "anthropic-dangerous-direct-browser-access":"true",
       },
@@ -16237,7 +16280,7 @@ budget=1-2 produits. bestseller=2-3 produits. premium=3-4 produits max`;
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": "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",
+        "x-api-key":ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true"
       },
@@ -16297,7 +16340,7 @@ ${catalogueText}
 
 Génère 4 à 5 produits du catalogue pour un pack premium complet. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
 {"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom FR","prix":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;
-          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":"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","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
+          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
           const d2 = await r2.json();
           const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
           result.premium = JSON.parse(t2);
