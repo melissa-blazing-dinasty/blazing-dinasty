@@ -18855,8 +18855,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
       await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:coords,date:todayLocalStr(),ts:Date.now()});
     }catch(e){console.error(e);}
     setSaving(false);
-    if(parcours==="produits") setEtape("diagnostic");
-    else setEtape("recrutement");
+    setEtape("ebook_affiche");
   };
   if(loading) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#FAF7F2"}}><div style={{textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.5rem",color:"#3D1F0E"}}>Chargement...</div></div></div>;
   // Appliquer forceEtape après chargement
@@ -18865,6 +18864,33 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   const Hdr=()=>(<div style={{textAlign:"center",padding:"1.5rem 0 1rem"}}>{profil&&profil.photo?<img src={profil.photo} alt="" style={{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:"3px solid #C49A8A",display:"block",margin:"0 auto .6rem"}}/>:<div style={{width:72,height:72,borderRadius:"50%",background:"#3D1F0E",margin:"0 auto .6rem",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.8rem",color:"white"}}>{(profil&&profil.prenom||"B")[0]}</div>}<div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"#3D1F0E",fontWeight:600}}>{profil&&profil.prenom} {profil&&profil.nom||""}</div>{profil&&profil.slogan&&<div style={{fontSize:".72rem",color:"#888",marginTop:".2rem"}}>{profil.slogan}</div>}</div>);
 
   // ── PAGE PRODUITS ──
+
+  if(etape==="ebook_affiche"){
+    const ebookUrl=ebookChoisi==="maman"?"https://blazing-dinasty-1fad9.web.app/guide-maman-active.html":"https://blazing-dinasty-1fad9.web.app/carnet-silhouette.html";
+    const ebookNom=ebookChoisi==="maman"?"Le Guide de la Maman Active":"Carnet Silhouette";
+    return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/>
+      <div style={{background:"#3D1F0E",borderRadius:16,padding:"1.5rem",marginBottom:"1.25rem",textAlign:"center"}}>
+        <div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>🎁</div>
+        <div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".15em",color:"#C4A882",marginBottom:".3rem"}}>CADEAU DÉBLOQUÉ</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"white",fontWeight:300,marginBottom:".4rem"}}>{coords.prenom?"Bonne lecture "+coords.prenom+" !":"Bonne lecture !"}</div>
+        <div style={{fontSize:".78rem",color:"rgba(255,255,255,.75)",lineHeight:1.6}}>Ton guide <strong style={{color:"#C49A8A"}}>{ebookNom}</strong> est prêt 🌸</div>
+      </div>
+      <a href={ebookUrl} target="_blank" rel="noopener noreferrer"
+        style={{display:"block",background:"#C49A8A",color:"white",textDecoration:"none",borderRadius:12,padding:"1rem",textAlign:"center",marginBottom:"1rem"}}>
+        <div style={{fontSize:"1.2rem",marginBottom:".25rem"}}>📖</div>
+        <div style={{fontWeight:700,fontSize:".9rem",marginBottom:".2rem"}}>Lire mon guide maintenant</div>
+        <div style={{fontSize:".72rem",opacity:.85}}>S'ouvre dans un nouvel onglet</div>
+      </a>
+      <div style={{background:"white",borderRadius:12,padding:"1rem",marginBottom:".75rem",border:"1px solid #E8DDD4"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,color:"#C49A8A",letterSpacing:".1em",marginBottom:".4rem"}}>ET AUSSI</div>
+        <div style={{fontSize:".82rem",color:"#3D2B1F",lineHeight:1.6,marginBottom:".75rem"}}>{parcours==="produits"?"Pour des recommandations produits personnalisées →":"Découvrir comment travailler avec nous →"}</div>
+        <button onClick={()=>setEtape(parcours==="produits"?"diagnostic":"recrutement")}
+          style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".82rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          {parcours==="produits"?"Mes recommandations produits →":"Découvrir l'opportunité →"}
+        </button>
+      </div>
+    </div></div>);
+  }
   if(etape==="produits_page") return(
     <div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}>
       <div style={W}>
