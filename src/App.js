@@ -6538,7 +6538,7 @@ function getCampagneMihiActuelle(){
   return getCampagneMihiPourDate(dateStr);
 }
 
-let ANTHROPIC_API_KEY="";
+export let ANTHROPIC_API_KEY="";
 async function chargerCleAPI(){try{const snap=await getDoc(doc(db,"admin","config"));if(snap.exists()&&snap.data().anthropicKey)ANTHROPIC_API_KEY=snap.data().anthropicKey;}catch{}}
 chargerCleAPI();
 

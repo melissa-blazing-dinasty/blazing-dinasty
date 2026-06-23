@@ -105,7 +105,7 @@ function EditorialTab({ uid, userName }) {
   const todayStr = today.toISOString().slice(0,10);
   const JOURS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
   const MOIS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-  const API_KEY = "ANTHROPIC_API_KEY";
+  const API_KEY = ANTHROPIC_API_KEY;
 
   const THEMES = [
     {p1:{type:"Storytelling",hook:"Je n'avais pas prévu que ça changerait ma vie...",conseil:"Dyptique avant/après, lumière naturelle"},p2:{type:"Conversion Minceur",hook:"Tu veux perdre du poids sans régime draconien ?",cta:"MINCEUR",conseil:"Produit sur fond blanc avec feuille verte"},s:["Coulisses de ton lundi — café, enfant, bureau","Sondage : tu te bats plus contre la fatigue ou la balance ?","Diagnostic GRATUIT → lien en bio"]},
