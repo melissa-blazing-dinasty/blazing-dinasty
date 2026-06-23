@@ -3,7 +3,8 @@ import { db, storage } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { C } from './constants';
-import { todayLocalStr, ss, sg } from './utils';
+import { todayLocalStr, ss, sg, sgAll } from './utils';
+import { getPeriodeActuelle, Confetti, MembreStatsCard } from './App';
 
 function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, TYPES_PRODUITS_DUREE, getPeriodeActuelle, sgAll, ss, daysDiff}){
   const isActive = sel===c.id;
@@ -1459,4 +1460,4 @@ function DistributeursTab({distributeurs,save,uid}){
 const MELISSA = "melissa";
 
 
-export { FicheClienteCard, ClientsRelanceTab, ClientsTab, DistributeursTab };
+export { FicheClienteCard, ClientsRelanceTab, ClientsTab, DistributeursTab, RelancesTab, LiensReseauxSection, MELISSA };
