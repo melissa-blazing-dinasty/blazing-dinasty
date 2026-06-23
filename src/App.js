@@ -13,6 +13,7 @@ import { TunnelTab } from './TunnelTab';
 import { DreamBoardWidget, DreamBoardTab } from './DreamBoardTab';
 import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_PRODUITS } from './FormationProduitsTab';
 import { DashboardTab } from './DashboardTab';
+import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { buildEquipeTree, countEquipe, getLigneeChefs, countEquipeSafe, SearchSelect, todayLocalDate, todayLocalStr, BoutonMiseAJour, useLang, useTranslation, useTranslatedContent, useTranslatedProduit, T, Btn, YTBtn, DriveBtn, DocBtn, Card, Info, Tag, SecTitle, LangContext, UI_TEXTS, UI_TEXTS_PT, domOriginals, translateDOM, translateBatch, seedAnnuaireFromMembres, APP_VERSION, C } from './components';
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -4484,7 +4485,7 @@ RÈGLES IMPORTANTES :
   );
 }
 
-const OBJECTIONS_VENTE=[
+export const OBJECTIONS_VENTE=[
   {id:"cher",icon:"💰",label:"C'est trop cher",reponses:["Je comprends ! Ce qui est intéressant avec Mihi, c'est que les produits sont concentrés — une petite quantité suffit, donc le flacon dure bien plus longtemps qu'un produit classique. Au final, le coût par utilisation est souvent inférieur à ce qu'on trouve en grande surface 😊","La qualité a un prix, mais avec Mihi tu ne paies pas la pub, les intermédiaires ou les rayons de supermarché. Tout va dans le produit. Tu veux que je te montre la différence de composition ?","C'est un investissement dans ta peau et ta santé. Et le plus souvent, mes clientes me disent qu'elles ont arrêté d'acheter 3 ou 4 autres produits parce que Mihi leur suffit !"]},
   {id:"besoin",icon:"🤔",label:"Je n'en ai pas besoin",reponses:["Bien sûr, tu n'es pas obligée ! Mais dis-moi, si tu pouvais avoir une peau plus lumineuse / plus d'énergie / moins de cheveux qui tombent... tu prendrais quoi comme produit actuellement ?","Je t'entends. Et souvent, on ne sait pas qu'on a besoin d'un produit avant de l'essayer. C'est pour ça que je propose des tests 😊 Qu'est-ce qui te manquerait le plus si tu pouvais changer une chose dans ta routine ?","Ce n'est pas un problème ! Je ne vends pas à tout le monde. Je te pose juste la question : est-ce que tu es contente à 100% de tes produits actuels ?"]},
   {id:"reflexion",icon:"💭",label:"Je vais réfléchir",reponses:["Bien sûr ! Je ne veux pas que tu achètes par pression. Pour t'aider à réfléchir : qu'est-ce qui te retient ? Le prix, le fait de ne pas connaître les produits, autre chose ?","Je comprends. Tu veux qu'on se rappelle dans 3 jours ? Comme ça tu as le temps d'y penser tranquillement 😊","À quoi tu dois réfléchir précisément ? Si c'est une question sur les ingrédients, les résultats ou le budget, je peux t'aider maintenant !"]},
@@ -4492,158 +4493,13 @@ const OBJECTIONS_VENTE=[
   {id:"pharmacie",icon:"🏥",label:"Je préfère la pharmacie",reponses:["La pharmacie c'est bien pour des problèmes spécifiques ! Mais pour la routine quotidienne, Mihi propose des formules sans sulfates, sans parabènes, sans perturbateurs endocriniens. Des ingrédients que tu ne trouveras pas forcément en pharmacie.","Je comprends la confiance en pharmacie. Mihi c'est une gamme développée par ElfaPharm, qui est justement un laboratoire pharmaceutique. Tu bénéficies de la même rigueur, mais avec une distribution directe qui fait baisser le prix.","Est-ce qu'il y a un produit spécifique que tu achètes en pharmacie ? Je peux te dire si on a un équivalent et te montrer la comparaison d'ingrédients 😊"]},
 ];
 
-const OBJECTIONS_RECRUTEMENT=[
+export const OBJECTIONS_RECRUTEMENT=[
   {id:"mlm",icon:"😬",label:"C'est du MLM / arnaque",reponses:["Je te comprends totalement, j'avais les mêmes craintes au départ ! La différence fondamentale : avec Mihi, je gagne principalement sur les ventes de vrais produits à de vraies clientes. Pas sur le recrutement. Si je recrutais sans vendre, je ne gagnerais rien.","C'est une vente directe réglementée en France, pas un pyramide. Les produits existent vraiment, les clientes les achètent vraiment. Je peux te montrer mes vrais résultats du mois si tu veux être transparente.","Je ne te demande pas de me croire sur parole ! Je te propose juste de rencontrer quelques membres de l'équipe et de leur poser la question directement. Qu'est-ce qui te ferait changer d'avis si tu pouvais avoir une vraie réponse ?"]},
   {id:"temps",icon:"⏰",label:"Je n'ai pas le temps",reponses:["C'est exactement pour ça que je t'en parle ! Beaucoup de mes membres travaillent depuis leur téléphone, pendant que les enfants dorment ou pendant la pause déjeuner. On adapte à ton rythme de vie, pas l'inverse.","Combien d'heures par semaine tu penses avoir ? Parce qu'avec 3-4h par semaine, certaines de mes membres font déjà 200-300€ de ventes. C'est pas le Pérou, mais c'est un vrai complément.","Je ne veux pas que tu sacrifies du temps que tu n'as pas. On peut juste en parler 20 minutes pour que tu aies toutes les infos ? Après tu décides librement 😊"]},
   {id:"argent",icon:"💶",label:"Je n'ai pas les moyens",reponses:["Le starter kit commence à 39€. C'est le seul investissement — après tu te rembourses sur tes premières ventes. Et si vraiment c'est impossible, on peut trouver une solution ensemble.","Je comprends. Est-ce que c'est un problème de budget ponctuel ou structurel ? Parce que si c'est ponctuel, on peut attendre le bon moment. Et si c'est structurel... n'est-ce pas justement pour ça que tu as besoin de revenus complémentaires ?","On peut commencer progressivement. Parle-en autour de toi, ramène tes premières clientes sans kit, et on voit si l'activité te plaît avant d'investir quoi que ce soit."]},
   {id:"introvertie",icon:"😶",label:"Je suis trop timide / pas commerciale",reponses:["Les meilleures vendeuses de l'équipe sont souvent des personnes discrètes ! Parce qu'elles écoutent vraiment les clientes au lieu de les bombarder. Et avec les produits Mihi, tu n'as pas besoin de 'vendre' — tu partages ce que tu aimes vraiment.","Je n'étais pas commerciale du tout non plus au départ. Ce qui a tout changé : aimer les produits et en parler naturellement. Quand tu crois en ce que tu vends, ça ne ressemble plus à de la vente.","On a une formation complète pour ça ! Scripts, réponses aux objections, stories Instagram... On ne te lâche pas dans le vide. Et les premières ventes se font souvent avec l'entourage proche, pas avec des inconnus 😊"]},
   {id:"experience",icon:"📚",label:"Je n'ai pas d'expérience",reponses:["Bonne nouvelle : on n'en a pas besoin ! J'ai des membres qui n'avaient jamais vendu quoi que ce soit et qui font des centaines d'euros par mois aujourd'hui. On forme tout le monde de zéro.","L'expérience vient en faisant. Et comme je suis ta marraine, tu n'es jamais seule. Chaque question, chaque doute, je suis là pour t'aider à avancer.","La seule chose dont tu as besoin : croire aux produits et être prête à apprendre. Le reste, on te l'enseigne étape par étape dans notre programme de démarrage 🚀"]},
 ];
-
-function ObjectionBubbles({objections, titre, sousTitre}){
-  const[open,setOpen]=useState(null);
-  return(
-    <div>
-      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        {titre}
-      </div>
-      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        {sousTitre}
-      </p>
-      <div style={{display:"flex",flexWrap:"wrap",gap:".4rem",marginBottom:"1rem"}}>
-        {objections.map(o=>(
-          <div key={o.id} onClick={()=>setOpen(open===o.id?null:o.id)}
-            style={{padding:".45rem .85rem",borderRadius:20,fontSize:".74rem",fontWeight:600,cursor:"pointer",border:`1.5px solid ${open===o.id?C.rose:C.pale}`,background:open===o.id?C.rose:C.blanc,color:open===o.id?C.blanc:C.brun,transition:"all .2s"}}>
-            {o.icon} {o.label}
-          </div>
-        ))}
-      </div>
-      {open&&(objections.find(x=>x.id===open))&&(
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
-          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".7rem"}}>{objections.find(x=>x.id===open).icon} Réponses possibles</div>
-          {objections.find(x=>x.id===open).reponses.map((r,i)=>(
-            <div key={i} style={{background:C.creme,borderLeft:`3px solid ${C.lilas}`,borderRadius:"0 8px 8px 0",padding:".6rem .8rem",fontSize:".74rem",color:C.texte,lineHeight:1.7,marginBottom:".5rem",display:"flex",justifyContent:"space-between",gap:".5rem",alignItems:"flex-start"}}>
-              <span style={{flex:1}}>{r}</span>
-              <CopyBtn text={r}/>
-            </div>
-          ))}
-          <div style={{fontSize:".6rem",color:C.gris,fontStyle:"italic",marginTop:".3rem"}}>
-            💡 Adapte le ton et les détails (durée, prénom...) à ta conversation avant d'envoyer.
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function ObjectionsTab(){
-  const[mode,setMode]=useState("vente");
-  return(
-    <div>
-      <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
-        <button onClick={()=>setMode("vente")}
-          style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${mode==="vente"?C.rose:C.pale}`,background:mode==="vente"?C.rose:C.blanc,color:mode==="vente"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
-          🛍️ Objections Vente
-        </button>
-        <button onClick={()=>setMode("recrutement")}
-          style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${mode==="recrutement"?C.rose:C.pale}`,background:mode==="recrutement"?C.rose:C.blanc,color:mode==="recrutement"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
-          👑 Objections Recrutement
-        </button>
-      </div>
-      {mode==="vente"&&<ObjectionBubbles objections={OBJECTIONS_VENTE} titre={<>Objections <em style={{fontStyle:"italic",color:C.rose}}>Vente</em></>} sousTitre="Clique sur l'objection que ta cliente vient de te dire pour obtenir des réponses prêtes à copier-coller."/>}
-      {mode==="recrutement"&&<ObjectionBubbles objections={OBJECTIONS_RECRUTEMENT} titre={<>Objections <em style={{fontStyle:"italic",color:C.rose}}>Recrutement</em></>} sousTitre="Clique sur l'objection que ta prospecte vient de te dire pour obtenir des réponses prêtes à copier-coller."/>}
-    </div>
-  );
-}
-
-
-function ScriptsTab(){
-  const[open,setOpen]=useState({});
-  const[adminScripts,setAdminScripts]=useState([]);
-  const[loaded,setLoaded]=useState(false);
-
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const snap=await getDoc(doc(db,"admin","scripts_extra"));
-        if(snap.exists()) setAdminScripts(snap.data().items||[]);
-      }catch{}
-      setLoaded(true);
-    })();
-  },[]);
-
-  return(
-    <div>
-      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        Bibliothèque <em style={{fontStyle:"italic",color:C.rose}}>Scripts</em>
-      </div>
-      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Scripts prêts à utiliser. Adapte toujours à ta voix — copie et personnalise.
-      </p>
-
-      {loaded&&adminScripts.length>0&&(
-        <div style={{marginBottom:"1rem"}}>
-          <div style={{fontSize:".65rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun,marginBottom:".5rem",padding:".25rem .7rem",background:C.or+"30",borderRadius:20,display:"inline-block"}}>✨ Ajoutés par Melissa</div>
-          {adminScripts.map(cat=>{
-            const isOpen=open["adm-"+cat.cat];
-            return(
-            <div key={"adm-"+cat.cat}>
-              <div style={{fontSize:".65rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun,marginBottom:".5rem",marginTop:".5rem",padding:".25rem .7rem",background:C.pale,borderRadius:20,display:"inline-block"}}>{cat.cat}</div>
-              {cat.scripts.map(s=>{
-                const isOpenS=open["adm-"+s.title];
-                return(
-                  <div key={"adm-"+s.title} style={{background:C.blanc,border:`1px solid ${isOpenS?C.rose:C.pale}`,borderRadius:12,marginBottom:".45rem",overflow:"hidden"}}>
-                    <div onClick={()=>setOpen(p=>({...p,["adm-"+s.title]:!p["adm-"+s.title]}))}
-                      style={{padding:".7rem 1rem",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
-                      <div style={{fontSize:".8rem",fontWeight:600,color:C.brun}}>{s.title}</div>
-                      <div style={{display:"flex",gap:".5rem",alignItems:"center"}}>
-                        <CopyBtn text={s.text}/>
-                        <span style={{color:C.rose,fontSize:".65rem",transform:isOpenS?"rotate(180deg)":"none",transition:"transform .2s"}}>▼</span>
-                      </div>
-                    </div>
-                    {isOpenS&&(
-                      <div style={{borderTop:`1px solid ${C.pale}`,padding:".7rem 1rem .85rem",background:C.creme}}>
-                        <p style={{fontSize:".78rem",color:C.texte,lineHeight:1.75,margin:0,fontStyle:"italic"}}>{s.text}</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            );
-          })}
-        </div>
-      )}
-
-      {SCRIPTS_DATA.map(cat=>(
-        <div key={cat.cat} style={{marginBottom:"1rem"}}>
-          <div style={{fontSize:".65rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun,marginBottom:".5rem",padding:".25rem .7rem",background:C.pale,borderRadius:20,display:"inline-block"}}>{cat.cat}</div>
-          {cat.scripts.map(s=>{
-            const isOpen=open[s.title];
-            return(
-              <div key={s.title} style={{background:C.blanc,border:`1px solid ${isOpen?C.rose:C.pale}`,borderRadius:12,marginBottom:".45rem",overflow:"hidden"}}>
-                <div onClick={()=>setOpen(p=>({...p,[s.title]:!p[s.title]}))}
-                  style={{padding:".7rem 1rem",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",userSelect:"none"}}>
-                  <div style={{fontSize:".8rem",fontWeight:600,color:C.brun}}>{s.title}</div>
-                  <div style={{display:"flex",gap:".5rem",alignItems:"center"}}>
-                    <CopyBtn text={s.text}/>
-                    <span style={{color:C.rose,fontSize:".65rem",transform:isOpen?"rotate(180deg)":"none",transition:"transform .2s"}}>▼</span>
-                  </div>
-                </div>
-                {isOpen&&(
-                  <div style={{borderTop:`1px solid ${C.pale}`,padding:".7rem 1rem .85rem",background:C.creme}}>
-                    <p style={{fontSize:".78rem",color:C.texte,lineHeight:1.75,margin:0,fontStyle:"italic"}}>{s.text}</p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── OBJECTIFS ÉQUIPE ──────────────────────────────────────────────────────────
 function ObjectifsTab({uid,userName,isMelissa}){
   const[obj,setObj]=useState({ventesObj:"",ventesReal:"",recruesObj:"",recruesReal:"",caObj:"",caReal:"",msg:"",updatedBy:"",updatedAt:0});
