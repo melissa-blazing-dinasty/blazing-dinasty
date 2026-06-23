@@ -12881,8 +12881,8 @@ function MembresTab({uid}){
       const mUid=m.toLowerCase().replace(/\s+/g,"-");
       await setDoc(doc(db,"users",mUid),{accesBloqueAdmin:true},{merge:true});
     }catch{}
+    try{const snapMe=await getDoc(doc(db,"users",uid));if(snapMe.exists()&&snapMe.data()["db-distributeurs"]){const distList=JSON.parse(snapMe.data()["db-distributeurs"]);const mNom=m.toLowerCase().trim();const nextD=distList.filter(d=>((d.prenom||"")+" "+(d.nom||"")).toLowerCase().trim()!==mNom);if(nextD.length!==distList.length)await setDoc(doc(db,"users",uid),{"db-distributeurs":JSON.stringify(nextD)},{merge:true});}}catch{}
   };
-
   const [pauses,setPauses]=useState({});
   const togglePause=async(m)=>{
     const mUid=m.toLowerCase().replace(/\s+/g,"-");
@@ -17775,13 +17775,13 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       <ScriptsDiagSection/>
     </div>
   );
-  async function copierLienDirect(diagType, labelCustom) {
+  function copierLienDirect(diagType, labelCustom) {
     const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
-    let lienFinal = lien;
-    try{ const r=await fetch('https://tinyurl.com/api-create.php?url='+encodeURIComponent(lien)); if(r.ok) lienFinal=await r.text(); }catch{}
-    const msg = 'Coucou '+(nomClient||'')+'! '+(labelCustom||'J ai un diagnostic personnalise gratuit pour toi - 2 minutes chrono !')+' '+lienFinal;
+
+
+    const msg = (labelCustom ? labelCustom+" " : "Coucou "+(nomClient||"")+"! Diagnostic gratuit 2 min ! ")  + lien;
     navigator.clipboard && navigator.clipboard.writeText(msg);
-    alert('Message copie ! Colle-le dans ta conversation.');
+    alert("Message copie ! Colle-le dans ta conversation.");
   }
   if (mode === "loading") return (
     <div style={{textAlign:"center",padding:"3rem 1rem"}}>
