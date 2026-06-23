@@ -5891,12 +5891,12 @@ function DistributeursTab({distributeurs,save,uid}){
                   placeholder="Objectifs, blocages, points de suivi..."
                   style={{width:"100%",minHeight:80,border:`1px solid ${C.pale}`,borderRadius:8,padding:".6rem",fontFamily:"inherit",fontSize:".76rem",color:C.texte,background:C.creme,resize:"vertical",outline:"none",lineHeight:1.6}}/>
 
-                {
+                {!d.auto&&(
                   <button onClick={()=>del(d.id)}
                     style={{marginTop:".5rem",background:"none",border:`1px solid #B0404040`,borderRadius:8,padding:".3rem .7rem",fontSize:".68rem",color:"#B04040",fontFamily:"inherit",cursor:"pointer"}}>
                     Supprimer
                   </button>
-                }
+                )}
 
                 {/* Bouton Fast Start */}
                 <button onClick={async()=>{
