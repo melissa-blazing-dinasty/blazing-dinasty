@@ -17513,8 +17513,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   const [ordonnance, setOrdonnance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState("");
-
   const questions = type ? (QUESTIONS[type]||[]) : [];
+  const[labelPerso,setLabelPerso]=useState({});const[showLabelInput,setShowLabelInput]=useState({});
   const q = questions[step];
   // Si type sélectionné mais pas de questions définies => générer directement
   if(mode==="questionnaire" && type && questions.length===0 && !TYPES_SCORING.includes(type)){
@@ -17761,11 +17761,12 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
               style={{ flex: 1, background: C.brun, color: C.blanc, border: "none", borderRadius: 9, padding: ".5rem", fontSize: ".75rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
               📋 Remplir maintenant
             </button>
-            <button onClick={() => { setType(t.id); copierLienDirect(t.id); }}
+            <button onClick={() => setShowLabelInput(p=>({...p,[t.id]:!p[t.id]}))}
               style={{ flex: 1, background: C.rose+"20", color: C.rose, border: `1px solid ${C.rose}`, borderRadius: 9, padding: ".5rem", fontSize: ".75rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
               🔗 Envoyer le lien
             </button>
           </div>
+          {showLabelInput[t.id]&&(<div style={{marginTop:".5rem",background:C.creme,borderRadius:9,padding:".6rem .75rem",border:"1px solid #E8DDD4"}}><div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem",fontWeight:600}}>Intitule du lien (optionnel)</div><input value={labelPerso[t.id]||""} onChange={e=>setLabelPerso(p=>({...p,[t.id]:e.target.value}))} placeholder="Ex: Mon diagnostic Skincare gratuit" style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:7,padding:".38rem .55rem",fontSize:".78rem",fontFamily:"inherit",outline:"none",marginBottom:".4rem"}}/><button onClick={()=>{copierLienDirect(t.id,labelPerso[t.id]);setShowLabelInput(p=>({...p,[t.id]:false}));}} style={{width:"100%",background:C.rose,color:"white",border:"none",borderRadius:8,padding:".42rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Copier le message</button></div>)}
         </div>
       ))}
 
@@ -17773,11 +17774,11 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       <ScriptsDiagSection/>
     </div>
   );
-  function copierLienDirect(diagType) {
+  function copierLienDirect(diagType, labelCustom) {
     const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
-    const msg = `Coucou ${nomClient||""}! 🌸 J'ai un diagnostic personnalisé pour toi — ça prend 2 minutes et tu repars avec une sélection de produits sur mesure. C'est gratuit ✨\n\n👉 ${lien}`;
-    navigator.clipboard?.writeText(msg);
-    alert(`✅ Message copié !\n\nColle-le dans ta conversation avec ${nomClient||"ta prospect"}.\n\nLa cliente renseignera ses coordonnées elle-même à la fin du questionnaire.`);
+
+    const lienAffiche = labelCustom ? labelCustom+' : '+lien : lien;
+    const msg = 'Coucou ' + (nomClient||'') + '! Diagnostic personnalise gratuit - 2 min ! ' + lienAffiche;
   }
 
   if (mode === "loading") return (
@@ -19172,3 +19173,4 @@ function Root(){
 }
 
 export default Root;
+
