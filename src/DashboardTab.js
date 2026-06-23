@@ -515,7 +515,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
             ← Retour aux catégories
           </button>
           <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.brun,marginBottom:".6rem"}}>
-            {prospectInteretFiltre==="client"?"🛍️ Clients potentiels":prospectInteretFiltre==="distributeur"?"👑 Distributeurs potentiels":prospectInteretFiltre==="Recommandation"?"🤝 Recommandations":"📌 Non classé"}
+            {prospectInteretFiltre==="client"?"🛍️ Clients potentiels":prospectInteretFiltre==="distributeur"?"👑 Distributeurs potentiels":prospectInteretFiltre==="recommandation"?"🤝 Recommandations":"📌 Non classé"}
           </div>
 
           {/* Recherche et filtres */}
