@@ -6250,7 +6250,7 @@ function CommunauteTab({uid, userName}){
 }
 
 // ── SCRIPTS ───────────────────────────────────────────────────────────────────
-const SCRIPTS_DATA=[
+export const SCRIPTS_DATA=[
   {cat:"🔬 Proposer un diagnostic",scripts:[
     {title:"Story / DM — Diagnostic Peau (général)",text:"🌸 Tu veux enfin comprendre ce dont ta peau a VRAIMENT besoin ?\n\nJe te propose un diagnostic beauté personnalisé — 100% gratuit, 2 minutes chrono ✨\n\nÀ la clé : une ordonnance sur mesure avec les produits faits pour toi 💊\n\n👇 Écris-moi DIAGNOSTIC en MP et je t'envoie le lien !"},
     {title:"DM — Diagnostic Skincare ciblé",text:"Coucou [Prénom] ! 👋\n\nJ'ai vu que tu posais des questions sur [problème peau/routine]... J'ai quelque chose qui pourrait vraiment t'aider !\n\nJe fais des diagnostics peau personnalisés — 5 questions et je te propose une routine adaptée à TON profil avec des produits que j'adore 🌿\n\nC'est gratuit et sans engagement. Tu veux essayer ? 😊"},
