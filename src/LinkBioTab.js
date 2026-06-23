@@ -1,0 +1,447 @@
+﻿import React, { useState, useEffect } from 'react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
+import { C } from './constants';
+import { UploadPhoto } from './App';
+
+const THEMES_LINKBIO=[
+  {id:"elegance",label:"Élégance",bg:"linear-gradient(135deg,#3D1F0E,#5C3020)",header:"linear-gradient(135deg,#3D1F0E,#5C3020)",accent:"#C4A882",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#3D1F0E",cardBg:"white",preview:"🤎"},
+  {id:"rose_gold",label:"Rose Gold",bg:"linear-gradient(135deg,#F9E5E0,#F2C4BB)",header:"linear-gradient(135deg,#C49A8A,#A0716A)",accent:"#C49A8A",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#5C3020",cardBg:"#FFF5F3",preview:"🌸"},
+  {id:"nuit",label:"Nuit Étoilée",bg:"linear-gradient(135deg,#0D0D2B,#1A1A4E)",header:"linear-gradient(135deg,#0D0D2B,#1A1A4E)",accent:"#A89BB5",text:"white",btnPrimary:"#A89BB5",btnSecondary:"rgba(255,255,255,.9)",btnTertiary:"#0D0D2B",cardBg:"#12122E",preview:"🌙"},
+  {id:"or_noir",label:"Or & Noir",bg:"#0A0A0A",header:"linear-gradient(135deg,#1A1A1A,#2D2D2D)",accent:"#C4A832",text:"white",btnPrimary:"#C4A832",btnSecondary:"white",btnTertiary:"#1A1A1A",cardBg:"#141414",preview:"⚫"},
+  {id:"nature",label:"Nature & Vert",bg:"linear-gradient(135deg,#E8F5E9,#C8E6C9)",header:"linear-gradient(135deg,#2E7D32,#388E3C)",accent:"#2E7D32",text:"white",btnPrimary:"#4CAF50",btnSecondary:"white",btnTertiary:"#1B5E20",cardBg:"white",preview:"🌿"},
+  {id:"lavande",label:"Lavande",bg:"linear-gradient(135deg,#EDE7F6,#D1C4E9)",header:"linear-gradient(135deg,#7E57C2,#9575CD)",accent:"#7E57C2",text:"white",btnPrimary:"#9575CD",btnSecondary:"white",btnTertiary:"#4527A0",cardBg:"white",preview:"💜"},
+  {id:"soleil",label:"Soleil d'Été",bg:"linear-gradient(135deg,#FFF8E1,#FFF3CD)",header:"linear-gradient(135deg,#F57F17,#F9A825)",accent:"#F57F17",text:"white",btnPrimary:"#FF8F00",btnSecondary:"white",btnTertiary:"#E65100",cardBg:"white",preview:"☀️"},
+  {id:"ocean",label:"Océan",bg:"linear-gradient(135deg,#E3F2FD,#BBDEFB)",header:"linear-gradient(135deg,#1565C0,#1976D2)",accent:"#1565C0",text:"white",btnPrimary:"#1976D2",btnSecondary:"white",btnTertiary:"#0D47A1",cardBg:"white",preview:"🌊"},
+  {id:"corail",label:"Corail & Blanc",bg:"#FFF9F7",header:"linear-gradient(135deg,#FF6B6B,#FF8E8E)",accent:"#FF6B6B",text:"white",btnPrimary:"#FF6B6B",btnSecondary:"white",btnTertiary:"#C62828",cardBg:"white",preview:"🪸"},
+  {id:"minimaliste",label:"Minimaliste",bg:"#FAFAFA",header:"linear-gradient(135deg,#212121,#424242)",accent:"#212121",text:"white",btnPrimary:"#212121",btnSecondary:"white",btnTertiary:"#000",cardBg:"white",preview:"⬛"},
+];
+
+function LinkBioTab({uid, userName}){
+  const[profil,setProfil]=useState({
+    prenom:"",slogan:"",histoire:"",photo:"",theme:"elegance",
+    accroche:"",nbClientes:"",nbDiags:"",nbEquipe:"",nbAnnees:"",
+    ctaLabel:"✨ Faire mon diagnostic gratuit",ctaUrl:"",
+    urgence:"",banniere:"",banniereUrl:"",badge:"",
+    lienBoutique:"",lienRecrutement:"",lienDiag:"",
+    liensBonusLabel:[],liensBonusUrl:[],liensBonusPhoto:[],
+    photos:[],temoignages:[],produitsStar:[],faq:[],
+    diagChoisis:["parfum","skincare","silhouette","sante"],
+    showBanniere:true,
+    bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,
+  });
+  const[banniereGlobale,setBanniereGlobale]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[saved,setSaved]=useState(false);
+  const[loading,setLoading]=useState(true);
+  const[copied,setCopied]=useState(false);
+  const[activeSection,setActiveSection]=useState("theme"); // theme|profil|liens|banniere|photos
+
+  const slug=(userName||uid).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"-");
+  const bioUrl=`https://blazing-dinasty-1fad9.web.app?bio=${slug}`;
+  const tunnelUrl=`https://blazing-dinasty-1fad9.web.app?tunnel=${slug}`;
+  const theme=THEMES_LINKBIO.find(t=>t.id===profil.theme)||THEMES_LINKBIO[0];
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"linkbio",uid));
+        if(snap.exists()) setProfil(p=>({...p,...snap.data()}));
+      }catch{}
+      try{
+        const bSnap=await getDoc(doc(db,"admin","linkbio_banniere"));
+        if(bSnap.exists()) setBanniereGlobale(bSnap.data());
+      }catch{}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  const save=async()=>{
+    setSaving(true);
+    try{
+      await setDoc(doc(db,"linkbio",uid),{...profil,uid,slug,updatedAt:Date.now()});
+      setSaved(true);setTimeout(()=>setSaved(false),2500);
+    }catch{}
+    setSaving(false);
+  };
+
+  const copyUrl=()=>{navigator.clipboard?.writeText(bioUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);};
+
+  const addLienBonus=()=>{
+    setProfil(p=>({...p,
+      liensBonusLabel:[...(p.liensBonusLabel||[]),""],
+      liensBonusUrl:[...(p.liensBonusUrl||[]),""],
+      liensBonusPhoto:[...(p.liensBonusPhoto||[]),""],
+    }));
+  };
+  const removeLienBonus=(i)=>{
+    setProfil(p=>({...p,
+      liensBonusLabel:(p.liensBonusLabel||[]).filter((_,j)=>j!==i),
+      liensBonusUrl:(p.liensBonusUrl||[]).filter((_,j)=>j!==i),
+      liensBonusPhoto:(p.liensBonusPhoto||[]).filter((_,j)=>j!==i),
+    }));
+  };
+
+  if(loading)return null;
+
+  const SECTIONS=[
+    {id:"theme",icon:"🎨",label:"Thème"},
+    {id:"profil",icon:"✨",label:"Profil"},
+    {id:"liens",icon:"🔗",label:"Liens"},
+    {id:"photos",icon:"📸",label:"Photos"},
+    {id:"banniere",icon:"📢",label:"Bannière"},
+  ];
+
+  // Prévisualisation
+  const Preview=({bg=banniereGlobale})=>(
+    <div style={{background:theme.bg,borderRadius:14,overflow:"hidden",maxWidth:300,margin:"0 auto",boxShadow:"0 4px 24px rgba(0,0,0,.12)"}}>
+      {/* Bannière */}
+      {((bg?.actif&&bg?.texte&&profil.showBanniere)||(profil.bannierePersoActif&&profil.bannierePersoTexte))&&(
+        <div style={{background:profil.bannierePersoBg||(profil.bannierePersoActif&&profil.bannierePersoTexte?undefined:bg?.couleur)||theme.btnPrimary,padding:".5rem .75rem",textAlign:"center",fontSize:".7rem",fontWeight:600,color:"white",whiteSpace:"pre-line"}}>
+          {profil.bannierePersoActif&&profil.bannierePersoTexte ? profil.bannierePersoTexte : bg?.texte}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{background:theme.header,padding:"1.5rem 1rem",textAlign:"center"}}>
+        {profil.photo
+          ?<img src={profil.photo} alt="" style={{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:"3px solid rgba(255,255,255,.25)",marginBottom:".6rem",display:"block",margin:"0 auto .6rem"}}/>
+          :<div style={{width:72,height:72,borderRadius:"50%",background:"rgba(255,255,255,.2)",margin:"0 auto .6rem",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.8rem",fontFamily:"Georgia,serif",color:"white",fontWeight:600}}>
+            {(profil.prenom||userName||"B")[0].toUpperCase()}
+          </div>
+        }
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:theme.text}}>{profil.prenom||userName}</div>
+        {profil.slogan&&<div style={{fontSize:".65rem",color:"rgba(255,255,255,.75)",marginTop:".2rem",lineHeight:1.5}}>{profil.slogan}</div>}
+      </div>
+
+      {profil.histoire&&<div style={{padding:".75rem 1rem",fontSize:".72rem",lineHeight:1.65,color:theme.id==="nuit"||theme.id==="or_noir"?"rgba(255,255,255,.75)":C.gris,background:theme.cardBg}}>{profil.histoire}</div>}
+
+      {/* Photos */}
+      {(profil.photos||[]).filter(p=>p).length>0&&(
+        <div style={{display:"flex",gap:".3rem",padding:".5rem .75rem",overflowX:"auto",background:theme.cardBg}}>
+          {profil.photos.filter(p=>p).map((url,i)=>(
+            <img key={i} src={url} alt="" style={{width:68,height:68,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+          ))}
+        </div>
+      )}
+
+      {/* Liens */}
+      <div style={{padding:"0 .75rem",display:"flex",flexDirection:"column",gap:".4rem"}}>
+        {(profil.liensBonusLabel||[]).map((lbl,i)=>lbl&&profil.liensBonusUrl?.[i]&&(
+          <a key={i} href={profil.liensBonusUrl[i]} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:".5rem",background:theme.accent+"15",border:`1.5px solid ${theme.accent}30`,borderRadius:10,padding:".45rem .75rem",textDecoration:"none"}}>
+            {profil.liensBonusPhoto?.[i]&&<img src={profil.liensBonusPhoto[i]} alt="" style={{width:30,height:30,borderRadius:6,objectFit:"cover",flexShrink:0}}/>}
+            <span style={{fontSize:".75rem",fontWeight:600,color:theme.accent}}>{lbl}</span>
+          </a>
+        ))}
+      </div>
+      <div style={{padding:".4rem",textAlign:"center",fontSize:".55rem",color:theme.accent,background:theme.cardBg}}>Blazing Dynasty × Mihi</div>
+    </div>
+  );
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
+        Mon <em style={{fontStyle:"italic",color:C.rose}}>Link-in-Bio</em>
+      </div>
+
+      {/* Lien à copier */}
+      <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:".75rem"}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase",marginBottom:".2rem"}}>🔗 Ton lien de bio</div>
+          <div style={{fontSize:".68rem",color:C.pale,wordBreak:"break-all"}}>{bioUrl}</div>
+        </div>
+        <button onClick={copyUrl} style={{background:C.or,color:C.brun,border:"none",borderRadius:8,padding:".38rem .7rem",fontSize:".7rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+          {copied?"✓ Copié!":"📋 Copier"}
+        </button>
+      </div>
+
+      {/* Navigation sections */}
+      <div style={{display:"flex",gap:".3rem",marginBottom:"1rem",overflowX:"auto",paddingBottom:".2rem"}}>
+        {SECTIONS.map(s=>(
+          <button key={s.id} onClick={()=>setActiveSection(s.id)}
+            style={{flexShrink:0,padding:".38rem .65rem",fontSize:".68rem",fontWeight:600,borderRadius:9,border:`1.5px solid ${activeSection===s.id?C.rose:C.pale}`,background:activeSection===s.id?C.rose:C.blanc,color:activeSection===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            {s.icon} {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* SECTION THÈME */}
+      {activeSection==="theme"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>Choisis ton thème</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:".4rem",marginBottom:"1rem"}}>
+            {THEMES_LINKBIO.map(t=>(
+              <div key={t.id} onClick={()=>setProfil(p=>({...p,theme:t.id}))}
+                style={{textAlign:"center",cursor:"pointer",padding:".4rem .2rem",borderRadius:10,border:`2px solid ${profil.theme===t.id?C.rose:C.pale}`,background:profil.theme===t.id?C.rose+"10":"transparent",transition:"all .15s"}}>
+                <div style={{fontSize:"1.4rem"}}>{t.preview}</div>
+                <div style={{fontSize:".55rem",fontWeight:600,color:profil.theme===t.id?C.rose:C.gris,marginTop:".2rem",lineHeight:1.2}}>{t.label}</div>
+              </div>
+            ))}
+          </div>
+          <Preview/>
+        </div>
+      )}
+
+      {/* SECTION PROFIL */}
+      {activeSection==="profil"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>Ton profil</div>
+          {[
+            {label:"Prénom affiché",key:"prenom",placeholder:"Ex: Melissa"},
+            {label:"Phrase d'accroche",key:"slogan",placeholder:"Ex: Maman entrepreneur 🌸"},
+          ].map(f=>(
+            <div key={f.key} style={{marginBottom:".6rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{f.label}</div>
+              <input value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            </div>
+          ))}
+          <UploadPhoto label="Photo de profil" value={profil.photo} onChange={v=>setProfil(p=>({...p,photo:v}))} folder="linkbio"/>
+          <div style={{marginBottom:".6rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Mon histoire</div>
+            <textarea value={profil.histoire||""} onChange={e=>setProfil(p=>({...p,histoire:e.target.value}))} placeholder="2-3 phrases : qui tu es, pourquoi Mihi..." rows={3}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",lineHeight:1.55}}/>
+          </div>
+
+          {/* Accroche forte */}
+          <div style={{marginBottom:".6rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Citation / Accroche forte</div>
+            <input value={profil.accroche||""} onChange={e=>setProfil(p=>({...p,accroche:e.target.value}))} placeholder="Ex: J'ai retrouvé confiance en moi grâce à Mihi"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          </div>
+
+          {/* Stats chiffrées */}
+          <div style={{fontSize:".6rem",color:C.gris,marginBottom:".3rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>📊 Chiffres clés (social proof)</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".35rem",marginBottom:".6rem"}}>
+            {[
+              {key:"nbClientes",placeholder:"Ex: 48 clientes"},
+              {key:"nbDiags",placeholder:"Ex: 120 diags"},
+              {key:"nbEquipe",placeholder:"Ex: 12 dans l'équipe"},
+              {key:"nbAnnees",placeholder:"Ex: 2 ans d'exp."},
+            ].map(f=>(
+              <input key={f.key} value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                style={{border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            ))}
+          </div>
+
+          {/* CTA Principal */}
+          <div style={{fontSize:".6rem",color:C.rose,marginBottom:".3rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>🎯 Bouton d'appel à l'action principal</div>
+          <input value={profil.ctaLabel||""} onChange={e=>setProfil(p=>({...p,ctaLabel:e.target.value}))} placeholder="Ex: ✨ Faire mon diagnostic gratuit"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".35rem"}}/>
+          <input value={profil.ctaUrl||""} onChange={e=>setProfil(p=>({...p,ctaUrl:e.target.value}))} placeholder="URL du CTA (lien diagnostic par défaut)"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".6rem"}}/>
+
+          {/* Urgence */}
+          <div style={{fontSize:".6rem",color:C.or,marginBottom:".2rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>⏰ Message d'urgence (optionnel)</div>
+          <input value={profil.urgence||""} onChange={e=>setProfil(p=>({...p,urgence:e.target.value}))} placeholder="Ex: Offre limitée — seulement 5 places cette semaine"
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".6rem"}}/>
+
+          {/* Témoignages */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem"}}>
+            
+          {/* ── Choix des diagnostics ── */}
+          <div style={{marginBottom:".75rem",padding:".75rem",background:C.creme,borderRadius:10,border:`1px solid ${C.pale}`}}>
+            <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>🩺 Diagnostics affichés sur ton LinkBio</div>
+            {[
+              {id:"parfum",label:"🌸 Diagnostic Parfum"},
+              {id:"skincare",label:"✨ Diagnostic Skincare"},
+              {id:"silhouette",label:"⚖️ Diagnostic Silhouette"},
+              {id:"sante",label:"💚 Diagnostic Bien-être"},
+              {id:"cheveux",label:"💇 Diagnostic Cheveux"},
+              {id:"makeup",label:"💄 Diagnostic Makeup"},
+              {id:"recrutement",label:"👑 Diagnostic Opportunité"},
+              {id:"blocage",label:"👩‍👧 Diagnostic Maman Entrepreneur"},
+            ].map(d=>{
+              const checked=(profil.diagChoisis||["parfum","skincare","silhouette","sante"]).includes(d.id);
+              return(<label key={d.id} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",cursor:"pointer",fontSize:".78rem",color:C.texte}}>
+                <input type="checkbox" checked={checked} onChange={()=>{
+                  const current=profil.diagChoisis||["parfum","skincare","silhouette","sante"];
+                  const next=checked?current.filter(x=>x!==d.id):[...current,d.id];
+                  setProfil(p=>({...p,diagChoisis:next}));
+                }} style={{accentColor:C.rose,width:15,height:15}}/>
+                {d.label}
+              </label>);
+            })}
+          </div>
+
+          <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Témoignages clientes</div>
+            <button onClick={()=>setProfil(p=>({...p,temoignages:[...(p.temoignages||[]),{texte:"",auteur:""}]}))}
+              style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          </div>
+          {(profil.temoignages||[]).map((t,i)=>(
+            <div key={i} style={{background:C.creme,borderRadius:9,padding:".55rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
+              <textarea value={t.texte} onChange={e=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],texte:e.target.value};setProfil(p=>({...p,temoignages:a}));}}
+                placeholder="Texte du témoignage" rows={2}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",resize:"none",marginBottom:".3rem"}}/>
+              <div style={{display:"flex",gap:".3rem"}}>
+                <input value={t.auteur} onChange={e=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],auteur:e.target.value};setProfil(p=>({...p,temoignages:a}));}}
+                  placeholder="Prénom de la cliente" style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".28rem .5rem",fontSize:".7rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+                <button onClick={()=>setProfil(p=>({...p,temoignages:(p.temoignages||[]).filter((_,j)=>j!==i)}))}
+                  style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem"}}>✕</button>
+              </div>
+            </div>
+          ))}
+
+          {/* FAQ */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem",marginTop:".6rem"}}>
+            <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>❓ FAQ</div>
+            <button onClick={()=>setProfil(p=>({...p,faq:[...(p.faq||[]),{q:"",a:""}]}))}
+              style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          </div>
+          {(profil.faq||[]).map((f,i)=>(
+            <div key={i} style={{background:C.creme,borderRadius:9,padding:".55rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
+              <input value={f.q} onChange={e=>{const a=[...(profil.faq||[])];a[i]={...a[i],q:e.target.value};setProfil(p=>({...p,faq:a}));}}
+                placeholder="Question" style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",marginBottom:".3rem"}}/>
+              <div style={{display:"flex",gap:".3rem"}}>
+                <textarea value={f.a} onChange={e=>{const a=[...(profil.faq||[])];a[i]={...a[i],a:e.target.value};setProfil(p=>({...p,faq:a}));}}
+                  placeholder="Réponse" rows={2} style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",resize:"none"}}/>
+                <button onClick={()=>setProfil(p=>({...p,faq:(p.faq||[]).filter((_,j)=>j!==i)}))}
+                  style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem",alignSelf:"flex-start"}}>✕</button>
+              </div>
+            </div>
+          ))}
+
+          <Preview/>
+        </div>
+      )}
+
+      {/* SECTION LIENS */}
+      {activeSection==="liens"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>Liens principaux</div>
+          {[
+            {label:"🛍️ Boutique Mihi",key:"lienBoutique",placeholder:"https://mihi.care/fr/..."},
+            {label:"👑 Rejoindre l'équipe",key:"lienRecrutement",placeholder:"https://mihi.care/fr/..."},
+          ].map(f=>(
+            <div key={f.key} style={{marginBottom:".55rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600}}>{f.label}</div>
+              <input value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+            </div>
+          ))}
+
+          {/* Diagnostics multiples */}
+          <div style={{height:1,background:C.pale,margin:"1rem 0"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase"}}>✨ Liens Diagnostics</div>
+            <button onClick={()=>setProfil(p=>({...p,liensDiag:[...(p.liensDiag||[]),{label:"",url:""}]}))}
+              style={{background:C.rose,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          </div>
+          {(profil.liensDiag||[{label:"✨ Faire mon diagnostic",url:profil.lienDiag||""}]).map((d,i)=>(
+            <div key={i} style={{display:"flex",gap:".3rem",marginBottom:".35rem",alignItems:"center"}}>
+              <input value={d.label} onChange={e=>{const a=[...(profil.liensDiag||[])];a[i]={...a[i],label:e.target.value};setProfil(p=>({...p,liensDiag:a}));}}
+                placeholder="Label ex: Diagnostic Skincare"
+                style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+              <input value={d.url} onChange={e=>{const a=[...(profil.liensDiag||[])];a[i]={...a[i],url:e.target.value};setProfil(p=>({...p,liensDiag:a}));}}
+                placeholder="URL https://..."
+                style={{flex:2,border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+              <button onClick={()=>setProfil(p=>({...p,liensDiag:(p.liensDiag||[]).filter((_,j)=>j!==i)}))}
+                style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem",flexShrink:0}}>✕</button>
+            </div>
+          ))}
+
+          {/* Liens bonus */}
+          <div style={{height:1,background:C.pale,margin:"1rem 0"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".6rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase"}}>Liens bonus</div>
+            <button onClick={addLienBonus} style={{background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".25rem .6rem",fontSize:".68rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          </div>
+          {(profil.liensBonusLabel||[]).map((_,i)=>(
+            <div key={i} style={{background:C.creme,borderRadius:9,padding:".65rem",marginBottom:".5rem",border:`1px solid ${C.pale}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:".35rem"}}>
+                <div style={{fontSize:".62rem",fontWeight:700,color:C.gris}}>Lien bonus {i+1}</div>
+                <button onClick={()=>removeLienBonus(i)} style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".7rem"}}>✕</button>
+              </div>
+              <input value={profil.liensBonusLabel?.[i]||""} onChange={e=>{const a=[...(profil.liensBonusLabel||[])];a[i]=e.target.value;setProfil(p=>({...p,liensBonusLabel:a}));}}
+                placeholder="Label du bouton" style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .55rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".3rem"}}/>
+              <input value={profil.liensBonusUrl?.[i]||""} onChange={e=>{const a=[...(profil.liensBonusUrl||[])];a[i]=e.target.value;setProfil(p=>({...p,liensBonusUrl:a}));}}
+                placeholder="URL https://..." style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .55rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".3rem"}}/>
+              <input value={profil.liensBonusPhoto?.[i]||""} onChange={e=>{const a=[...(profil.liensBonusPhoto||[])];a[i]=e.target.value;setProfil(p=>({...p,liensBonusPhoto:a}));}}
+                placeholder="Photo miniature (URL optionnel)" style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .55rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* SECTION PHOTOS */}
+      {activeSection==="photos"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>Galerie photos</div>
+          <p style={{fontSize:".7rem",color:C.gris,lineHeight:1.6,marginBottom:".75rem"}}>
+            Ajoute des photos. Tu peux coller une URL ou utiliser les photos de ta galerie (partage → copier le lien).
+          </p>
+          {Array.from({length:5},(_,i)=>(
+            <div key={i} style={{display:"flex",gap:".5rem",alignItems:"center",marginBottom:".4rem"}}>
+              <div style={{width:52,height:52,borderRadius:8,background:C.creme,border:`1px solid ${C.pale}`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}
+                onClick={()=>{
+                  // Ouvrir input file caché
+                  document.getElementById(`photo-input-${i}`)?.click();
+                }}>
+                {profil.photos?.[i]
+                  ?<img src={profil.photos[i]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                  :<div style={{textAlign:"center"}}><div style={{fontSize:"1.2rem"}}>📷</div><div style={{fontSize:".5rem",color:C.gris}}>Tap</div></div>
+                }
+              </div>
+              <input value={profil.photos?.[i]||""} onChange={e=>{const a=[...(profil.photos||["","","","",""])];a[i]=e.target.value;setProfil(p=>({...p,photos:a}));}}
+                placeholder={`URL photo ${i+1}`}
+                style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".38rem .55rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+              {profil.photos?.[i]&&<button onClick={()=>{const a=[...(profil.photos||[])];a[i]="";setProfil(p=>({...p,photos:a}));}} style={{background:"none",border:"none",color:C.gris,cursor:"pointer",flexShrink:0}}>✕</button>}
+            </div>
+          ))}
+          {(profil.photos||[]).some(p=>p)&&<Preview/>}
+        </div>
+      )}
+
+      {/* SECTION BANNIÈRE */}
+      {activeSection==="banniere"&&(
+        <div>
+          {/* Bannière globale admin */}
+          {banniereGlobale?.actif&&banniereGlobale?.texte&&(
+            <div style={{background:C.or+"15",border:`1px solid ${C.or}`,borderRadius:10,padding:".75rem",marginBottom:".85rem"}}>
+              <div style={{fontSize:".6rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".3rem"}}>📢 Bannière équipe (de Melissa)</div>
+              <div style={{fontSize:".78rem",color:C.brun,marginBottom:".5rem"}}>{banniereGlobale.texte}</div>
+              <label style={{display:"flex",alignItems:"center",gap:".5rem",cursor:"pointer"}}>
+                <input type="checkbox" checked={profil.showBanniere!==false} onChange={e=>setProfil(p=>({...p,showBanniere:e.target.checked}))}/>
+                <span style={{fontSize:".74rem",color:C.brun,fontWeight:600}}>Afficher sur ma page</span>
+              </label>
+            </div>
+          )}
+
+          {/* Bannière personnelle */}
+          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>✨ Ma bannière personnelle</div>
+            <input value={profil.bannierePersoTexte||""} onChange={e=>setProfil(p=>({...p,bannierePersoTexte:e.target.value}))} placeholder="Ex: Promo -15% ce weekend !" style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+
+
+            <input value={profil.bannierePersoLien||""} onChange={e=>setProfil(p=>({...p,bannierePersoLien:e.target.value}))}
+              placeholder="Lien optionnel (https://...)"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+            <div style={{display:"flex",gap:".75rem",alignItems:"center",marginBottom:".5rem"}}>
+              <div style={{fontSize:".7rem",color:C.gris}}>Couleur :</div>
+              <input type="color" value={profil.bannierePersoBg||"#C49A8A"} onChange={e=>setProfil(p=>({...p,bannierePersoBg:e.target.value}))}
+                style={{width:36,height:30,border:"none",borderRadius:6,cursor:"pointer"}}/>
+            </div>
+            <label style={{display:"flex",alignItems:"center",gap:".5rem",cursor:"pointer"}}>
+              <input type="checkbox" checked={!!profil.bannierePersoActif} onChange={e=>setProfil(p=>({...p,bannierePersoActif:e.target.checked}))}/>
+              <span style={{fontSize:".74rem",color:C.brun,fontWeight:600}}>Activer ma bannière personnelle</span>
+            </label>
+          </div>
+
+          {(profil.bannierePersoActif&&profil.bannierePersoTexte)||(banniereGlobale?.actif&&profil.showBanniere!==false)&&(
+            <div style={{marginTop:"1rem"}}><Preview/></div>
+          )}
+        </div>
+      )}
+
+      {/* Bouton sauvegarder */}
+      <div style={{marginTop:"1.2rem"}}>
+        <button onClick={save} disabled={saving}
+          style={{width:"100%",background:saved?C.vert:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".75rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",transition:"background .3s"}}>
+          {saving?"Sauvegarde...":saved?"✅ Sauvegardé !":"Sauvegarder ma page"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export { LinkBioTab };
