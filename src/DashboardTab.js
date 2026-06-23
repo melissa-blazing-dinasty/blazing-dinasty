@@ -3932,5 +3932,5 @@ const TYPE_TO_GAMME={
 };
 
 function genererScriptRelance(ligne, prenomClient){
-
-export { CopyBtn, SuiviRecruTab, DashboardTab, ConversionPopup, NoticePanel, HistoriquePeriodes, getCitationDuJour, getProgress, CHALLENGE_APP_JOURS, CITATIONS_DEFAULT };
+  const gamme=(TYPE_TO_GAMME[ligne.typeProduit])||'entretien';const template=SCRIPTS_RELANCE_GAMME[gamme]||SCRIPTS_RELANCE_GAMME.entretien;return template.replace(/{produit}/g,ligne.nom).replace(/{prenom}/g,prenomClient||'toi');}
+export { CopyBtn, SuiviRecruTab, DashboardTab, ConversionPopup, NoticePanel, HistoriquePeriodes, getCitationDuJour, getProgress, CHALLENGE_APP_JOURS, CITATIONS_DEFAULT, TYPE_TO_GAMME, SCRIPTS_RELANCE_GAMME, genererScriptRelance };
