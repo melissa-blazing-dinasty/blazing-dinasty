@@ -17775,16 +17775,16 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       <ScriptsDiagSection/>
     </div>
   );
-  function copierLienDirect(diagType, labelCustom) {
+  async function copierLienDirect(diagType, labelCustom) {
     const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
-
-    const lienAffiche = labelCustom ? labelCustom+' '+lien : lien;
-    const msg = 'Coucou '+(nomClient||'')+'! J ai un diagnostic personnalise gratuit pour toi - 2 minutes et tu repars avec des produits sur mesure ! '+lienAffiche;
+    let lienFinal = lien;
+    try{ const r=await fetch('https://tinyurl.com/api-create.php?url='+encodeURIComponent(lien)); if(r.ok) lienFinal=await r.text(); }catch{}
+    const msg = 'Coucou '+(nomClient||'')+'! '+(labelCustom||'J ai un diagnostic personnalise gratuit pour toi - 2 minutes chrono !')+' '+lienFinal;
+    navigator.clipboard && navigator.clipboard.writeText(msg);
     alert('Message copie ! Colle-le dans ta conversation.');
   }
   if (mode === "loading") return (
-    <div style={{ textAlign: "center", padding: "3rem 1rem" }}>
-      <div style={{ fontSize: "2.5rem", marginBottom: "1rem", animation: "spin 1s linear infinite" }}>✨</div>
+    <div style={{textAlign:"center",padding:"3rem 1rem"}}>
       <div style={{ fontFamily: "Georgia,serif", fontSize: "1.1rem", color: C.brun, marginBottom: ".5rem" }}>Génération en cours...</div>
       <p style={{ fontSize: ".76rem", color: C.gris, lineHeight: 1.6 }}>
         L'IA analyse les réponses et sélectionne les meilleurs produits Mihi pour {nomClient||"ta cliente"} 🖤
