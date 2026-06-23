@@ -2,7 +2,7 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
-import { UploadPhoto } from './App';
+import { UploadPhoto } from './FormationProduitsTab';
 import { todayLocalStr } from './utils';
 
 function DreamBoardWidget({uid}){

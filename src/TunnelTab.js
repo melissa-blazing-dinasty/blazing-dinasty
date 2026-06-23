@@ -2,7 +2,7 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
-import { UploadPhoto } from './App';
+import { UploadPhoto } from './FormationProduitsTab';
 
 function TunnelTab({uid, userName}){
   const slug=(userName||uid).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"-");
