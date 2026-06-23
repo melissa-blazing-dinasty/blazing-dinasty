@@ -5,10 +5,11 @@ import { C } from './constants';
 import { ss, sg } from './utils';
 import { useLang, Btn, SearchSelect, SecTitle } from './components';
 
-import { getPeriodeInfo, getPeriodeActuelle, fmtPLabel, Confetti, postToWallOfFame, CopyBtn, syncAnnuaire, computeBadges, BADGES_DEF, FAST_START_DAYS, MarrainePopup, AnnonceBanner, ConversionPopup, AssistanteIATab, JaugeSucces, BadgesPanel, CitationDuJour, BiblioActionsPopup, TodoPerso, ClassementEquipe, CmdPeriodeBlock, NoticePanel, FastStartTab, ObjPersoTab, WallOfFameTab, SuiviCATab, HistoriquePeriodes } from './App';
+import { getPeriodeInfo, getPeriodeActuelle, fmtPLabel, Confetti, postToWallOfFame, CopyBtn, syncAnnuaire, computeBadges, BADGES_DEF, FAST_START_DAYS, MarrainePopup, AnnonceBanner, ConversionPopup, AssistanteIATab, JaugeSucces, BadgesPanel, CitationDuJour, BiblioActionsPopup, TodoPerso, ClassementEquipe, CmdPeriodeBlock, NoticePanel, ObjPersoTab, WallOfFameTab, SuiviCATab, HistoriquePeriodes } from './App';
 import { MELISSA } from './ClientsTab';
 import { EntonnoirTab, DiagResultsTab } from './DiagnosticsTab';
 import { ObjectionsTab, ScriptsTab } from './ScriptsTab';
+import { FastStartTab } from './FastStartTab';
 import { DreamBoardWidget } from './DreamBoardTab';
 import { EditorialTab } from './EditorialTab';
 import { ClientsTab, ClientsRelanceTab, DistributeursTab, RelancesTab } from './ClientsTab';
