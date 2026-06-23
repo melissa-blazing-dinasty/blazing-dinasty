@@ -5891,12 +5891,12 @@ function DistributeursTab({distributeurs,save,uid}){
                   placeholder="Objectifs, blocages, points de suivi..."
                   style={{width:"100%",minHeight:80,border:`1px solid ${C.pale}`,borderRadius:8,padding:".6rem",fontFamily:"inherit",fontSize:".76rem",color:C.texte,background:C.creme,resize:"vertical",outline:"none",lineHeight:1.6}}/>
 
-                {!d.auto&&(
+                {
                   <button onClick={()=>del(d.id)}
                     style={{marginTop:".5rem",background:"none",border:`1px solid #B0404040`,borderRadius:8,padding:".3rem .7rem",fontSize:".68rem",color:"#B04040",fontFamily:"inherit",cursor:"pointer"}}>
                     Supprimer
                   </button>
-                )}
+                }
 
                 {/* Bouton Fast Start */}
                 <button onClick={async()=>{
@@ -17777,9 +17777,9 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   );
   function copierLienDirect(diagType, labelCustom) {
     const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
-    const lienAffiche = labelCustom ? labelCustom+' -> '+lien : lien;
-    const msg = 'Coucou ' + (nomClient||'') + '! Diagnostic gratuit 2 min -> ' + lienAffiche;
-    navigator.clipboard && navigator.clipboard.writeText(msg);
+
+    const lienAffiche = labelCustom ? labelCustom+' '+lien : lien;
+    const msg = 'Coucou '+(nomClient||'')+'! J ai un diagnostic personnalise gratuit pour toi - 2 minutes et tu repars avec des produits sur mesure ! '+lienAffiche;
     alert('Message copie ! Colle-le dans ta conversation.');
   }
   if (mode === "loading") return (
