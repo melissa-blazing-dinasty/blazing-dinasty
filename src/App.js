@@ -858,6 +858,9 @@ function App(){
   const[pendingName,setPendingName]=useState("");
   const[pendingIsMelissa,setPendingIsMelissa]=useState(false);
   const[mdpInput,setMdpInput]=useState("");
+  const[showMdpSetup,setShowMdpSetup]=useState(false);
+  const[newMdp,setNewMdp]=useState("");
+  const[newMdp2,setNewMdp2]=useState("");
 
   const SECRET_CODE="BD-2026-FIRE";
   const verifierMdp=async()=>{
@@ -973,6 +976,8 @@ function App(){
       }catch{}
       // Enregistrer token FCM pour les notifications
       saveFCMToken(uid);
+      // Verifier si mdp personnel existe
+      try{const mdpSnap=await getDoc(doc(db,"users",uid));if(!mdpSnap.exists()||!mdpSnap.data()["db-mdp"]){setTimeout(()=>setShowMdpSetup(true),1500);}}catch{}
       // Synchroniser l'annuaire global des distributeurs
       sg(uid,"db-obj-perso").then(data=>{
         syncAnnuaire(uid, displayName, data?JSON.parse(data):null);
@@ -1379,6 +1384,7 @@ function App(){
     >
 
       {showWelcome&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:20,maxWidth:420,width:"100%",overflow:"hidden"}}><div style={{background:"#3D1F0E",padding:"1.5rem 1.3rem",textAlign:"center"}}><div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>👑</div><div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",color:"white",fontWeight:300}}>Bienvenue {name&&name.split(" ")[0]} !</div><div style={{fontSize:".78rem",color:"#C49A8A",marginTop:".25rem"}}>Tu fais maintenant partie de Blazing Dynasty ✨</div></div><div style={{padding:"1.25rem 1.3rem"}}><div style={{background:"#FAF7F2",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",fontSize:".78rem",color:"#3D2B1F",lineHeight:1.7}}>🌸 Nous sommes tellement heureuses de t'accueillir dans notre équipe. Tu as fait le bon choix — maintenant on est là pour t'accompagner à chaque étape. Let's go ! 🔥</div><div style={{fontSize:".6rem",fontWeight:700,color:"#888",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>✦ TES ACCÈS DU MOMENT</div>{[{icon:"🚀",titre:"Fast Start",desc:"7 modules progressifs pour bien démarrer — commence par là !"},{icon:"📱",titre:"Formation Application",desc:"Apprends à utiliser l'appli pour te faciliter la vie"}].map((item,i)=>(<div key={i} onClick={()=>{setShowWelcome(false);setTab("formation");}} style={{display:"flex",alignItems:"center",gap:".75rem",background:"#3D1F0E",borderRadius:10,padding:".7rem .85rem",marginBottom:".4rem",cursor:"pointer"}}><span style={{fontSize:"1.3rem"}}>{item.icon}</span><div style={{flex:1}}><div style={{fontSize:".82rem",fontWeight:700,color:"white"}}>{item.titre}</div><div style={{fontSize:".68rem",color:"#C49A8A"}}>{item.desc}</div></div><span style={{color:"#C49A8A"}}>→</span></div>))}<button onClick={()=>setShowWelcome(false)} style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:".75rem"}}>Commencer mon aventure → 🚀</button></div></div></div>)}
+      {showMdpSetup&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem",textAlign:"center"}}>🔐 Crée ton code personnel</div><div style={{fontSize:".75rem",color:"#888",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>Pour sécuriser ton espace, choisis un code personnel que tu saisiras à chaque connexion.</div><input type="password" placeholder="Ton code personnel" value={newMdp} onChange={e=>setNewMdp(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/><input type="password" placeholder="Confirme ton code" value={newMdp2} onChange={e=>setNewMdp2(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>{newMdp&&newMdp!==newMdp2&&<div style={{fontSize:".7rem",color:"#C44B1A",marginBottom:".5rem"}}>Les codes ne correspondent pas</div>}<button onClick={async()=>{if(!newMdp.trim()||newMdp!==newMdp2)return;try{await setDoc(doc(db,"users",userId),{"db-mdp":newMdp.trim()},{merge:true});setShowMdpSetup(false);setNewMdp("");setNewMdp2("");}catch{}}} disabled={!newMdp.trim()||newMdp!==newMdp2} style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>Enregistrer mon code</button><button onClick={()=>setShowMdpSetup(false)} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>Plus tard</button></div></div>)}
 
       {/* BANNIÈRE NOUVELLE PÉRIODE */}
       {showPeriodeBanner&&(
