@@ -1,9 +1,10 @@
-﻿import { useState, useEffect, useCallback, useContext } from 'react';
+import { useState, useEffect, useCallback, useContext, createContext } from 'react';
 import { db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { C } from './constants';
-import { LangContext, UI_TEXTS, UI_TEXTS_PT } from './App';
 
+let ANTHROPIC_API_KEY = '';
+
+// Construit récursivement l'arbre des filleules (recrues directes et indirectes) d'un membre
 function buildEquipeTree(annuaire, uid){
   const enfants = Object.values(annuaire).filter(m=>m.marraine===uid);
   return enfants.map(m=>({
@@ -456,6 +457,9 @@ function SecTitle({title,em,desc}){
   </>;
 }
 
-function CopyBtn({text}){
 
-export { buildEquipeTree, countEquipe, getLigneeChefs, countEquipeSafe, SearchSelect, todayLocalDate, BoutonMiseAJour, useLang, useTranslation, useTranslatedContent, useTranslatedProduit, T, Btn, YTBtn, DriveBtn, DocBtn, Card, Info, Tag, SecTitle };
+export { buildEquipeTree, countEquipe, getLigneeChefs, countEquipeSafe, SearchSelect,
+  todayLocalDate, todayLocalStr, BoutonMiseAJour, useLang, useTranslation, useTranslatedContent,
+  useTranslatedProduit, T, Btn, YTBtn, DriveBtn, DocBtn, Card, Info, Tag, SecTitle,
+  LangContext, UI_TEXTS, UI_TEXTS_PT, domOriginals, translateDOM, translateBatch,
+  seedAnnuaireFromMembres, APP_VERSION, C };
