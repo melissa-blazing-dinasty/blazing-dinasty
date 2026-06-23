@@ -1183,7 +1183,7 @@ async function chargerOrdreFormationApp(){
 }
 chargerOrdreFormationApp();
 
-function FormationAppTab({adminItems=[]}){
+export function FormationAppTab({adminItems=[]}){
   const[openFolder,setOpenFolder]=useState(null);
   const[openSub,setOpenSub]=useState(null);
 
@@ -2697,7 +2697,7 @@ function OrdonnancePubliquePage({ordId}){
   );
 }
 
-function EntonnoirTab(p){
+export function EntonnoirTab(p){
   const pr=p.prospects||[],cl=p.clients||[],di=p.distributeurs||[];
   const tP=pr.length,tC=cl.length,tD=di.length;
   const ca=cl.reduce((s,x)=>s+(x.commandes||[]).reduce((a,b)=>a+(parseFloat(b.montant)||0),0),0);
@@ -3021,5 +3021,5 @@ function Root(){
 }
 
 
-export { DiagnosticParfumTab, DiagnosticsTab, DiagResultsTab, LinkBioPublicPage, TunnelHybridePage, RecommandationPubliquePage };
+export { DiagnosticParfumTab, DiagnosticsTab, DiagResultsTab, LinkBioPublicPage, TunnelHybridePage, RecommandationPubliquePage, FORMATION_APP_CATEGORIES, FORMATION_APP_CATEGORIES_DEFAULT };
 export default Root;
