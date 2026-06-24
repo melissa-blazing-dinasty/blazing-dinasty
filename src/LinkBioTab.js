@@ -425,4 +425,16 @@ function LinkBioTab({uid, userName}){
   );
 }
 
+function StatsLinkBio({uid}){;
+const[stats,setStats]=React.useState(null);
+  React.useEffect(()=>{if(!uid)return;getDoc(doc(db,"linkbio_stats",uid)).then(s=>{if(s.exists())setStats(s.data());});},[uid]);
+  if(!stats)return<div style={{textAlign:"center",padding:"2rem",color:"#888",fontSize:".78rem"}}>Aucune stat pour l instant.</div>;
+  return(<div style={{display:"flex",flexDirection:"column",gap:".75rem"}}>
+    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Visites</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.visites||0}</div></div><div>👁️</div></div>
+    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Clics diagnostics</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.clicsDiag||0}</div></div><div>🔍</div></div>
+    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Diagnostics completes</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.diagCompletes||0}</div></div><div>✅</div></div>
+    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Tunnel vente</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.tunnelVente||0}</div></div><div>🛒</div></div>
+    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Recrutement</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.tunnelRecrutement||0}</div></div><div>🤝</div></div>
+  </div>);
+}
 export { LinkBioTab };
