@@ -819,7 +819,11 @@ function ChallengeAppPopup({uid, onClose, setTab}){
 function App(){
   const[screen,setScreen]=useState("login");
   const[showWelcome,setShowWelcome]=useState(false);
-  const[loginStep,setLoginStep]=useState(1); // 1=identité, 2=chef équipe
+  const[showMdpSetup,setShowMdpSetup]=useState(false);
+  const[newMdp,setNewMdp]=useState("");
+  const[newMdp2,setNewMdp2]=useState("");
+  const[loginStep,setLoginStep]=useState(1);
+  const[mdpInput,setMdpInput]=useState("");
   const[userId,setUserId]=useState("");
   const[isChefApp,setIsChefApp]=useState(false);
   const[hasTeamApp,setHasTeamApp]=useState(false);
@@ -857,12 +861,8 @@ function App(){
   const[pendingUid,setPendingUid]=useState("");
   const[pendingName,setPendingName]=useState("");
   const[pendingIsMelissa,setPendingIsMelissa]=useState(false);
-  const[mdpInput,setMdpInput]=useState("");
-  const[showMdpSetup,setShowMdpSetup]=useState(false);
-  const[newMdp,setNewMdp]=useState("");
-  const[newMdp2,setNewMdp2]=useState("");
 
-  const SECRET_CODE="BD-2026-FIRE";
+
   const verifierMdp=async()=>{
     if(!mdpInput.trim())return;
     setLoginLoading(true);setLoginError("");
@@ -879,6 +879,8 @@ function App(){
     setLoginLoading(false);
   };
 
+  const SECRET_CODE="BD-2026-FIRE";
+
   // ── AUTO-LOGIN depuis localStorage ──
   useEffect(()=>{
     try{
@@ -886,13 +888,22 @@ function App(){
       if(saved){
         const{uid,n,codeOk}=JSON.parse(saved);
         if(uid&&n&&codeOk===true){
-          setUserId(uid);setName(n);
-          setScreen("app");load(uid);verifierChangementPeriode(uid);
-          try{const fk="bd-first-"+uid;if(!localStorage.getItem(fk)){localStorage.setItem(fk,"1");setTimeout(()=>setShowWelcome(true),1500);}}catch{}
+          // Verifier forceReload
+          getDoc(doc(db,"admin","config")).then(cfg=>{
+            const fr=cfg.exists()?cfg.data().forceReload:0;
+            const lastReload=+localStorage.getItem("bd-last-reload")||0;
+            if(fr&&fr>lastReload){localStorage.setItem("bd-last-reload",String(fr));window.location.reload();return;}
+            setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);
+            try{const fk="bd-first-"+uid;if(!localStorage.getItem(fk)){localStorage.setItem(fk,"1");setTimeout(()=>setShowWelcome(true),1500);}}catch{}
+          }).catch(()=>{
+            setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);
+          });
         } else {
-          // Session invalide - effacer et forcer reconnexion
+          // Session invalide
           localStorage.removeItem("bd-user");
         }
+
+
       }
     }catch{}
   },[]);
@@ -952,8 +963,7 @@ function App(){
         setLoginStep(2);return;
       }
 
-
-      // Vérifier mot de passe personnel avant connexion
+      // Check mot de passe personnel
       if(userSnap.exists()&&userSnap.data()["db-mdp"]){
         setPendingUid(uid);setPendingName(displayName);setPendingIsMelissa(isMelissa);
         setLoginLoading(false);setLoginStep(3);return;
@@ -983,9 +993,9 @@ function App(){
       }catch{}
       // Enregistrer token FCM pour les notifications
       saveFCMToken(uid);
-      // Verifier si mdp personnel existe
+      saveFCMToken(uid);
+      // Verifier si mdp personnel existe - si non, afficher popup creation
       try{const mdpSnap=await getDoc(doc(db,"users",uid));if(!mdpSnap.exists()||!mdpSnap.data()["db-mdp"]){setTimeout(()=>setShowMdpSetup(true),1500);}}catch{}
-      // Synchroniser l'annuaire global des distributeurs
       sg(uid,"db-obj-perso").then(data=>{
         syncAnnuaire(uid, displayName, data?JSON.parse(data):null);
       });
@@ -1360,6 +1370,7 @@ function App(){
             style={{width:"100%",background:"none",border:"none",color:C.gris,fontSize:".7rem",marginTop:".5rem",cursor:"pointer",fontFamily:"inherit",padding:".3rem"}}>
             Passer cette étape
           </button>
+        </>}
         {loginStep===3&&<>
           <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:300,color:"#3D1F0E",marginBottom:"1rem",textAlign:"center"}}>🔐 Ton code <em style={{color:"#C49A8A"}}>personnel</em></div>
           <input type="password" placeholder="Ton code personnel" value={mdpInput} onChange={e=>setMdpInput(e.target.value)}
@@ -1368,9 +1379,8 @@ function App(){
           {loginError&&<div style={{color:"#C44B1A",fontSize:".75rem",marginBottom:".5rem",textAlign:"center"}}>{loginError}</div>}
           <button onClick={verifierMdp} disabled={!mdpInput.trim()||loginLoading}
             style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-            {loginLoading?"Vérification...":"Accéder →"}
+            {loginLoading?"Verification...":"Acceder →"}
           </button>
-        </>}
         </>}
 
       </div>
@@ -1402,8 +1412,8 @@ function App(){
     >
 
       {showWelcome&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:20,maxWidth:420,width:"100%",overflow:"hidden"}}><div style={{background:"#3D1F0E",padding:"1.5rem 1.3rem",textAlign:"center"}}><div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>👑</div><div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",color:"white",fontWeight:300}}>Bienvenue {name&&name.split(" ")[0]} !</div><div style={{fontSize:".78rem",color:"#C49A8A",marginTop:".25rem"}}>Tu fais maintenant partie de Blazing Dynasty ✨</div></div><div style={{padding:"1.25rem 1.3rem"}}><div style={{background:"#FAF7F2",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",fontSize:".78rem",color:"#3D2B1F",lineHeight:1.7}}>🌸 Nous sommes tellement heureuses de t'accueillir dans notre équipe. Tu as fait le bon choix — maintenant on est là pour t'accompagner à chaque étape. Let's go ! 🔥</div><div style={{fontSize:".6rem",fontWeight:700,color:"#888",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>✦ TES ACCÈS DU MOMENT</div>{[{icon:"🚀",titre:"Fast Start",desc:"7 modules progressifs pour bien démarrer — commence par là !"},{icon:"📱",titre:"Formation Application",desc:"Apprends à utiliser l'appli pour te faciliter la vie"}].map((item,i)=>(<div key={i} onClick={()=>{setShowWelcome(false);setTab("formation");}} style={{display:"flex",alignItems:"center",gap:".75rem",background:"#3D1F0E",borderRadius:10,padding:".7rem .85rem",marginBottom:".4rem",cursor:"pointer"}}><span style={{fontSize:"1.3rem"}}>{item.icon}</span><div style={{flex:1}}><div style={{fontSize:".82rem",fontWeight:700,color:"white"}}>{item.titre}</div><div style={{fontSize:".68rem",color:"#C49A8A"}}>{item.desc}</div></div><span style={{color:"#C49A8A"}}>→</span></div>))}<button onClick={()=>setShowWelcome(false)} style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:".75rem"}}>Commencer mon aventure → 🚀</button></div></div></div>)}
-      {showMdpSetup&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem",textAlign:"center"}}>🔐 Crée ton code personnel</div><div style={{fontSize:".75rem",color:"#888",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>Pour sécuriser ton espace, choisis un code personnel que tu saisiras à chaque connexion.</div><input type="password" placeholder="Ton code personnel" value={newMdp} onChange={e=>setNewMdp(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/><input type="password" placeholder="Confirme ton code" value={newMdp2} onChange={e=>setNewMdp2(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>{newMdp&&newMdp!==newMdp2&&<div style={{fontSize:".7rem",color:"#C44B1A",marginBottom:".5rem"}}>Les codes ne correspondent pas</div>}<button onClick={async()=>{if(!newMdp.trim()||newMdp!==newMdp2)return;try{await setDoc(doc(db,"users",userId),{"db-mdp":newMdp.trim()},{merge:true});setShowMdpSetup(false);setNewMdp("");setNewMdp2("");}catch{}}} disabled={!newMdp.trim()||newMdp!==newMdp2} style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>Enregistrer mon code</button><button onClick={()=>setShowMdpSetup(false)} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>Plus tard</button></div></div>)}
 
+      {showMdpSetup&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem",textAlign:"center"}}>🔐 Crée ton code personnel</div><div style={{fontSize:".75rem",color:"#888",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>Pour sécuriser ton espace, choisis un code personnel que tu saisiras à chaque connexion.</div><input type="password" placeholder="Ton code personnel" value={newMdp} onChange={e=>setNewMdp(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/><input type="password" placeholder="Confirme ton code" value={newMdp2} onChange={e=>setNewMdp2(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>{newMdp&&newMdp!==newMdp2&&<div style={{fontSize:".7rem",color:"#C44B1A",marginBottom:".5rem"}}>Les codes ne correspondent pas</div>}<button onClick={async()=>{if(!newMdp.trim()||newMdp!==newMdp2)return;try{await setDoc(doc(db,"users",userId),{"db-mdp":newMdp.trim()},{merge:true});setShowMdpSetup(false);setNewMdp("");setNewMdp2("");}catch{}}} disabled={!newMdp.trim()||newMdp!==newMdp2} style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>Enregistrer mon code</button><button onClick={()=>setShowMdpSetup(false)} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>Plus tard</button></div></div>)}
       {/* BANNIÈRE NOUVELLE PÉRIODE */}
       {showPeriodeBanner&&(
         <div style={{background:"linear-gradient(135deg,#C44B1A,#8B3010)",padding:".85rem 1rem",display:"flex",gap:".75rem",alignItems:"flex-start",position:"sticky",top:0,zIndex:150}}>
@@ -9759,9 +9769,38 @@ function AdminTab(){
         <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.brun,marginBottom:".75rem"}}>📝 Scripts personnalisés</div>
         <AdminScriptsEditor/>
       </div>
+      {/* Nettoyage mdp */}
+      <div style={{background:"#FFF0F0",borderRadius:12,padding:"1rem",marginTop:"1rem",border:"1px solid #E0C0C0"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"#B04040",marginBottom:".5rem"}}>🔐 Réinitialiser les codes personnels</div>
+        <div style={{fontSize:".72rem",color:"#888",marginBottom:".75rem",lineHeight:1.5}}>Supprime tous les db-mdp existants. Les membres devront créer un nouveau code à leur prochaine connexion.</div>
+        <button onClick={async()=>{
+          if(!window.confirm("Supprimer tous les codes personnels ?"))return;
+          try{
+            const {getDocs,collection,writeBatch}=await import("firebase/firestore");
+            const snap=await getDocs(collection(db,"users"));
+            const batch=writeBatch(db);
+            const {deleteField}=await import("firebase/firestore");
+            snap.docs.forEach(d=>{if(d.data()["db-mdp"])batch.update(d.ref,{"db-mdp":deleteField()});});
+            await batch.commit();
+            alert("✅ Codes supprimés !");
+          }catch(e){alert("Erreur: "+e.message);}
+        }} style={{background:"#B04040",color:"white",border:"none",borderRadius:8,padding:".55rem 1rem",fontSize:".75rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          🗑️ Supprimer tous les codes
+        </button>
+      </div>
+      <div style={{background:"#F0F7FF",borderRadius:12,padding:"1rem",marginTop:"1rem",border:"1px solid #B0C4DE"}}>
+        <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"#1a5276",marginBottom:".5rem"}}>🔄 Forcer la mise à jour pour tous</div>
+        <div style={{fontSize:".72rem",color:"#888",marginBottom:".75rem",lineHeight:1.5}}>Force toutes les membres a recharger l app au prochain chargement.</div>
+        <button onClick={async()=>{try{await setDoc(doc(db,"admin","config"),{forceReload:Date.now()},{merge:true});alert("Mise a jour forcee !");}catch(e){alert("Erreur: "+e.message);}}}
+          style={{background:"#1a5276",color:"white",border:"none",borderRadius:8,padding:".55rem 1rem",fontSize:".75rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          🔄 Forcer la mise a jour
+        </button>
+      </div>
     </div>
   );
 }
+
+
 
 function DevPersoSection({adminItems}){
   const[dvpTab,setDvpTab]=useState("business");
