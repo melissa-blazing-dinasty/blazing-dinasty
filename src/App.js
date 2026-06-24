@@ -696,7 +696,9 @@ function ChallengeAppPopup({uid, onClose, setTab}){
       if(!joursValides.includes(jourActuel)) joursValides.push(jourActuel);
       const next={...ca,joursValides};
       await setDoc(doc(db,"users",uid),{"db-challenge-app":JSON.stringify(next)},{merge:true});
+      await setDoc(doc(db,"users",uid),{"db-challenge-app":JSON.stringify(next)},{merge:true});
       setValide(true);
+      setTimeout(()=>onClose(),2000);
     }catch{}
     setSaving(false);
   };
@@ -1608,7 +1610,7 @@ function App(){
             {FORMATION_TABS.map(f=>{
               const formationDebloquee = fastStartDone || isChefApp || hasTeamApp;
               // Onglets bloqués si Fast Start non terminé (sauf formationapp et demarrage)
-              const bloque = !formationDebloquee && f.id!=="formationapp" && f.id!=="demarrage";
+              const bloque = false;
               return(
                 <div key={f.id} onClick={()=>!bloque&&setFormationSubTab(f.id)}
                   style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:bloque?C.creme:C.blanc,border:`1px solid ${bloque?"#ddd":C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:bloque?"default":"pointer",opacity:bloque?.6:1}}>

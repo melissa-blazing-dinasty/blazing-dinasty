@@ -282,25 +282,6 @@ function LinkBioTab({uid, userName}){
             </div>
           ))}
 
-          {/* FAQ */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem",marginTop:".6rem"}}>
-            <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>❓ FAQ</div>
-            <button onClick={()=>setProfil(p=>({...p,faq:[...(p.faq||[]),{q:"",a:""}]}))}
-              style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
-          </div>
-          {(profil.faq||[]).map((f,i)=>(
-            <div key={i} style={{background:C.creme,borderRadius:9,padding:".55rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
-              <input value={f.q} onChange={e=>{const a=[...(profil.faq||[])];a[i]={...a[i],q:e.target.value};setProfil(p=>({...p,faq:a}));}}
-                placeholder="Question" style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",marginBottom:".3rem"}}/>
-              <div style={{display:"flex",gap:".3rem"}}>
-                <textarea value={f.a} onChange={e=>{const a=[...(profil.faq||[])];a[i]={...a[i],a:e.target.value};setProfil(p=>({...p,faq:a}));}}
-                  placeholder="Réponse" rows={2} style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",resize:"none"}}/>
-                <button onClick={()=>setProfil(p=>({...p,faq:(p.faq||[]).filter((_,j)=>j!==i)}))}
-                  style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem",alignSelf:"flex-start"}}>✕</button>
-              </div>
-            </div>
-          ))}
-
           <Preview/>
         </div>
       )}
