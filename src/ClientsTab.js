@@ -1137,9 +1137,9 @@ function DistributeursTab({distributeurs,save,uid}){
   };
 
   const updatePalier=(id,p)=>save(distributeursTries.map(d=>d.id===id?{...d,palier:p}:d));
-  const updateNotes=(id,v)=>save(distributeurs.map(d=>d.id===id?{...d,notes:v}:d));
-  const updateRecrues=(id,field,v)=>save(distributeurs.map(d=>d.id===id?{...d,[field]:v}:d));
-  const updatePremiereCommande=(id,v)=>save(distributeurs.map(d=>d.id===id?{...d,premiereCommande:v}:d));
+  const updateNotes=(id,v)=>save(distributeursTries.map(d=>d.id===id?{...d,notes:v}:d));
+  const updateRecrues=(id,field,v)=>save(distributeursTries.map(d=>d.id===id?{...d,[field]:v}:d));
+  const updatePremiereCommande=(id,v)=>save(distributeursTries.map(d=>d.id===id?{...d,premiereCommande:v}:d));
   const distributeursTries=[...distributeurs].sort((a,b)=>(a.prenom||"").localeCompare(b.prenom||"","fr"));
   const del=(id)=>{save(distributeurs.filter(d=>d.id!==id));if(sel===id)setSel(null);};
 
