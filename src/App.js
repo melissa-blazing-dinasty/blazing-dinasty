@@ -952,6 +952,13 @@ function App(){
         setLoginStep(2);return;
       }
 
+
+      // Vérifier mot de passe personnel avant connexion
+      if(userSnap.exists()&&userSnap.data()["db-mdp"]){
+        setPendingUid(uid);setPendingName(displayName);setPendingIsMelissa(isMelissa);
+        setLoginLoading(false);setLoginStep(3);return;
+      }
+
       // Connexion directe
       try{localStorage.setItem("bd-user",JSON.stringify({uid,n:displayName,codeOk:true}));}catch{}
       // Popup bienvenue si première connexion
