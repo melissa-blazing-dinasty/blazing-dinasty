@@ -1693,7 +1693,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           const contact={prenom:prenomContact,nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact};
           genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});
         }}
-        disabled={prenomContact.trim().length<2||nomContact.trim().length<2||(!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailContact.trim()))&&!(/^[\d\+\-\s\(\)]{10,}$/.test(telContact.trim()))&&reseauContact.trim().length<3)}
+        disabled={prenomContact.trim().length<2||nomContact.trim().length<2||(!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailContact.trim()))&&!(/^[\d\+\-\s\(\)]{10,}$/.test(telContact.trim())))}
         style={{width:"100%",background:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.brun:C.pale,color:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
         Envoyer mes réponses →
       </button>
