@@ -1383,7 +1383,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       setReponsesFinales(newRep);
       setMode("contact");
     } else {
-      genererOrdonnance(newRep);
+      setReponsesFinales(newRep); setMode("contact");
     }
   };
 
