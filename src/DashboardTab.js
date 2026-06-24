@@ -246,7 +246,8 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       if(prospectInteretFiltre==="recommandation")return p.source==="recommandation"||p.interet==="Recommandation";
       if(prospectInteretFiltre==="none")return !p.interet;
       return p.interet===prospectInteretFiltre;
-    .filter(p=>!prospectSearch.trim()||p.name.toLowerCase().includes(prospectSearch.trim().toLowerCase())||(p.note||"").toLowerCase().includes(prospectSearch.trim().toLowerCase()))
+      return p.interet===prospectInteretFiltre;
+    })
     .slice()
     .sort((a,b)=>{
       const aToday = a.relance && a.relance<=todayStr;

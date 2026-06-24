@@ -1353,6 +1353,17 @@ function App(){
             style={{width:"100%",background:"none",border:"none",color:C.gris,fontSize:".7rem",marginTop:".5rem",cursor:"pointer",fontFamily:"inherit",padding:".3rem"}}>
             Passer cette étape
           </button>
+        {loginStep===3&&<>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:300,color:"#3D1F0E",marginBottom:"1rem",textAlign:"center"}}>🔐 Ton code <em style={{color:"#C49A8A"}}>personnel</em></div>
+          <input type="password" placeholder="Ton code personnel" value={mdpInput} onChange={e=>setMdpInput(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&verifierMdp()}
+            style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".9rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none",marginBottom:".75rem"}}/>
+          {loginError&&<div style={{color:"#C44B1A",fontSize:".75rem",marginBottom:".5rem",textAlign:"center"}}>{loginError}</div>}
+          <button onClick={verifierMdp} disabled={!mdpInput.trim()||loginLoading}
+            style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            {loginLoading?"Vérification...":"Accéder →"}
+          </button>
+        </>}
         </>}
 
       </div>
