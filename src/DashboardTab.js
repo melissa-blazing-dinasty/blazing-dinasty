@@ -243,9 +243,9 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
     .filter(p=>prospectFiltre==="Tous"||(prospectFiltre==="🤝 Recommandés"?p.source==="recommandation":p.statut===prospectFiltre))
     .filter(p=>{
       if(!prospectInteretFiltre)return true;
+      if(prospectInteretFiltre==="recommandation")return p.source==="recommandation"||p.interet==="Recommandation";
       if(prospectInteretFiltre==="none")return !p.interet;
       return p.interet===prospectInteretFiltre;
-    })
     .filter(p=>!prospectSearch.trim()||p.name.toLowerCase().includes(prospectSearch.trim().toLowerCase())||(p.note||"").toLowerCase().includes(prospectSearch.trim().toLowerCase()))
     .slice()
     .sort((a,b)=>{
@@ -489,10 +489,10 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
                 ["client","🛍️ Clients potentiels",C.rose],
                 ["distributeur","👑 Distributeurs potentiels",C.lilas],
                 
-                ["none","🤝 Recommandations",C.gris],
+                ["recommandation","🤝 Recommandations",C.gris],
               ].map(([val,label,col])=>{
-                const count = val==="none"
-                  ?prospects.filter(p=>!p.interet||p.interet==="none").length
+                const count = val==="recommandation"
+                  ?prospects.filter(p=>p.source==="recommandation"||p.interet==="Recommandation").length
                   :prospects.filter(p=>p.interet===val).length;
                 return(
                   <div key={val} onClick={()=>setProspectInteretFiltre(val)}
