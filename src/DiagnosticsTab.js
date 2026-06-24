@@ -83,25 +83,25 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
     if(snap.exists() && snap.data()[type]) notesAdmin = snap.data()[type];
   } catch {}
 
-  // Charger le catalogue réel des produits Mihi selon le type
-  let catalogueText = "";
+  let catalogueText = '';
   try {
-    const catSnap = await getDoc(doc(db,"admin","catalogue_mihi"));
+    const catSnap = await getDoc(doc(db,'admin','formation_produits'));
     if(catSnap.exists()){
-      const cat = catSnap.data();
+      const allP = catSnap.data().produits || {};
       let cles = [];
-      if(type==="skincare") cles=["face"];
-      else if(type==="cheveux") cles=["hair"];
-      else if(type==="sante"||type==="silhouette"||type==="detox"||type==="antiage") cles=["health"];
-      else if(type==="makeup") cles=["makeup","face"];
-      else if(type==="peaucorps") cles=["corps","health"];
-      else cles=["face","corps","hair","makeup","health"];
-      let produits=[];
-      cles.forEach(cle=>{ produits=[...produits,...(cat[cle]||[])]; });
-      if(produits.length>25) produits=produits.slice(0,25);
-      catalogueText = produits.map(p=>`${p.nom} — ${p.prix}€`).join("\n");
+      if(type==='skincare') cles=['skincare','problematiques'];
+      else if(type==='cheveux') cles=['cheveux'];
+      else if(['sante','silhouette','detox','antiage'].includes(type)) cles=['complement','poids'];
+      else if(type==='makeup') cles=['makeup'];
+      else if(type==='peaucorps') cles=['corpsoin','problematiques'];
+      else cles=Object.keys(allP);
+      let prods=[];
+      cles.forEach(c=>{ prods=[...prods,...(allP[c]||[])]; });
+      if(prods.length>30) prods=prods.slice(0,30);
+      catalogueText = prods.map(p=>p.nom+(p.prix?' - '+p.prix+'€':'')).join('\n');
     }
-  } catch (e) { console.error("Erreur chargement catalogue:", e); }
+  } catch(e){}
+
 
   const typeLabel =
     type==="skincare"?"soin visage/peau":
@@ -114,14 +114,14 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
     .filter(([k]) => k !== "_contact")
     .map(([k,v]) => `- ${k}: ${v}`).join("\n") || "Pas de réponses détaillées";
   
-  const prompt = `Experte beauté MIHI. Diagnostic ${typeLabel} pour ${nomClient||"Cliente"}.
-Réponses: ${reponsesText}
-Catalogue: ${catalogueText}
-${notesAdmin?`Notes: ${notesAdmin}`:""}
+  const prompt = "Tu es experte produits Mihi France. Diagnostic "+typeLabel+" pour "+(nomClient||"Cliente")+".\nReponses cliente:\n"+reponsesText+"\n\nCATALOGUE MIHI - utilise UNIQUEMENT ces produits:\n"+catalogueText+(notesAdmin?"\nInstructions: "+notesAdmin:"")+"\n\nGenere 3 packs JSON strict sans rien avant ni apres:\n"+
+    "{\"introduction\":\"2 phrases\",\"budget\":{\"total\":\"X\",\"produits\":[{\"nom\":\"NOM EXACT DU CATALOGUE\",\"prix\":\"X\",\"usage\":\"usage\",\"benefice\":\"benefice\",\"comment\":\"geste\"}],\"routine\":\"routine\"},\"bestseller\":{\"total\":\"X\",\"produits\":[{\"nom\":\"Nom\",\"prix\":\"X\",\"usage\":\"usage\",\"benefice\":\"benefice\",\"comment\":\"geste\"}],\"routine\":\"routine\"},\"premium\":{\"total\":\"X\",\"produits\":[{\"nom\":\"Nom\",\"prix\":\"X\",\"usage\":\"usage\",\"benefice\":\"benefice\",\"comment\":\"geste\"}],\"routine\":\"routine\"},\"conseil\":\"conseil\"}"+
+    "\nREGLES STRICTES: budget=1-2 produits. bestseller=2-3. premium=3-4. UNIQUEMENT les produits du catalogue ci-dessus.";
 
-3 packs. JSON strict:
-{"introduction":"2 phrases","budget":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"geste"}],"routine":"matin→soir"},"bestseller":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"usage","benefice":"phrase","comment":"geste"}],"routine":"matin→soir"},"premium":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"usage","benefice":"phrase","comment":"geste"}],"routine":"matin→soir"},"conseil":"conseil"}
-budget=1-2 produits. bestseller=2-3 produits. premium=3-4 produits max`;
+
+
+
+
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
