@@ -749,7 +749,7 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
           <input placeholder="Ton Instagram, WhatsApp ou email" value={captureContact} onChange={e=>setCaptureContact(e.target.value)}
             style={{width:"100%",border:"none",borderRadius:8,padding:".5rem .75rem",fontSize:".82rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>
           <button onClick={async()=>{
-            if(!capturePrenom.trim()||!captureContact.trim()||(!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(captureContact.trim()))&&!(/^[\d\s\+\-\(\)]{8,}$/.test(captureContact.trim())))){alert("Prenom et email ou telephone valide requis.");return;}
+            if(!capturePrenom.trim()||!captureContact.trim()) return;
             try{
               await setDoc(doc(db,"tunnel_prospects","diag"+Date.now()),{
                 type:"diagnostic_parfum",prenom:capturePrenom,contact:captureContact,
