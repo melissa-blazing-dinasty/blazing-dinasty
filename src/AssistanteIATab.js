@@ -33,7 +33,7 @@ export function AssistanteIATab({uid, userName}){
         const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
         if(catSnap.exists()){
           const cat=catSnap.data();
-          const allProduits=[...(cat.face||[]),...(cat.hair||[]),...(cat.health||[])].slice(0,80);
+          const allProduits=[...(cat.face||[]),...(cat.hair||[]),...(cat.health||[]),...(cat.corps||[]),...(cat.makeup||[]),...(cat.parfums||[])].slice(0,60);
           catalogueText=allProduits.map(p=>`- ${p.nom} (${p.serie}) — ${p.prix}€`).join("\n");
         }
       }catch{}
@@ -60,7 +60,7 @@ export function AssistanteIATab({uid, userName}){
               if(p.description) lignes.push(`[${cat}] ${p.titre}: ${p.description.slice(0,200)}`);
             });
           });
-          produitsFormationText=lignes.slice(0,40).join("\n");
+          produitsFormationText=lignes.slice(0,80).join("\n");
         }
       }catch{}
 
@@ -74,7 +74,7 @@ ${formationText||"Aucune formation chargée pour l'instant."}
 DÉTAILS PRODUITS (descriptions formation) :
 ${produitsFormationText||"Aucun détail produit chargé."}
 
-CATALOGUE PRODUITS MIHI AVEC PRIX RÉELS (utilise UNIQUEMENT ces produits et prix exacts si on te demande une recommandation produits — n'invente JAMAIS un produit ou un prix) :
+CATALOGUE PRODUITS MIHI AVEC PRIX RÉELS (utilise ces produits en priorité. Si le catalogue ne couvre pas le besoin, utilise tes connaissances sur les produits Mihi et indique que le prix est à vérifier) :
 ${catalogueText||"Catalogue non chargé."}
 
 HISTORIQUE DE LA CONVERSATION :
@@ -222,4 +222,5 @@ FORMAT JSON SI TEXTE (type="texte", business ou mood) :
   );
 }
 
-
+
+

@@ -83,25 +83,25 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
     if(snap.exists() && snap.data()[type]) notesAdmin = snap.data()[type];
   } catch {}
 
-  let catalogueText = '';
+  // Charger le catalogue réel des produits Mihi selon le type
+  let catalogueText = "";
   try {
-    const catSnap = await getDoc(doc(db,'admin','formation_produits'));
+    const catSnap = await getDoc(doc(db,"admin","catalogue_mihi"));
     if(catSnap.exists()){
-      const allP = catSnap.data().produits || {};
+      const cat = catSnap.data();
       let cles = [];
-      if(type==='skincare') cles=['skincare','problematiques'];
-      else if(type==='cheveux') cles=['cheveux'];
-      else if(['sante','silhouette','detox','antiage'].includes(type)) cles=['complement','poids'];
-      else if(type==='makeup') cles=['makeup'];
-      else if(type==='peaucorps') cles=['corpsoin','problematiques'];
-      else cles=Object.keys(allP);
-      let prods=[];
-      cles.forEach(c=>{ prods=[...prods,...(allP[c]||[])]; });
-      if(prods.length>30) prods=prods.slice(0,30);
-      catalogueText = prods.map(p=>p.nom+(p.prix?' - '+p.prix+'€':'')).join('\n');
+      if(type==="skincare") cles=["face"];
+      else if(type==="cheveux") cles=["hair"];
+      else if(type==="sante"||type==="silhouette"||type==="detox"||type==="antiage") cles=["health"];
+      else if(type==="makeup") cles=["makeup","face"];
+      else if(type==="peaucorps") cles=["corps","health"];
+      else cles=["face","corps","hair","makeup","health"];
+      let produits=[];
+      cles.forEach(cle=>{ produits=[...produits,...(cat[cle]||[])]; });
+      if(produits.length>25) produits=produits.slice(0,25);
+      catalogueText = produits.map(p=>`${p.nom} — ${p.prix}€`).join("\n");
     }
-  } catch(e){}
-
+  } catch (e) { console.error("Erreur chargement catalogue:", e); }
 
   const typeLabel =
     type==="skincare"?"soin visage/peau":
@@ -114,14 +114,14 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
     .filter(([k]) => k !== "_contact")
     .map(([k,v]) => `- ${k}: ${v}`).join("\n") || "Pas de réponses détaillées";
   
-  const prompt = "Tu es experte produits Mihi France. Diagnostic "+typeLabel+" pour "+(nomClient||"Cliente")+".\nReponses cliente:\n"+reponsesText+"\n\nCATALOGUE MIHI - utilise UNIQUEMENT ces produits:\n"+catalogueText+(notesAdmin?"\nInstructions: "+notesAdmin:"")+"\n\nGenere 3 packs JSON strict sans rien avant ni apres:\n"+
-    "{\"introduction\":\"2 phrases\",\"budget\":{\"total\":\"X\",\"produits\":[{\"nom\":\"NOM EXACT DU CATALOGUE\",\"prix\":\"X\",\"usage\":\"usage\",\"benefice\":\"benefice\",\"comment\":\"geste\"}],\"routine\":\"routine\"},\"bestseller\":{\"total\":\"X\",\"produits\":[{\"nom\":\"Nom\",\"prix\":\"X\",\"usage\":\"usage\",\"benefice\":\"benefice\",\"comment\":\"geste\"}],\"routine\":\"routine\"},\"premium\":{\"total\":\"X\",\"produits\":[{\"nom\":\"Nom\",\"prix\":\"X\",\"usage\":\"usage\",\"benefice\":\"benefice\",\"comment\":\"geste\"}],\"routine\":\"routine\"},\"conseil\":\"conseil\"}"+
-    "\nREGLES STRICTES: budget=1-2 produits. bestseller=2-3. premium=3-4. UNIQUEMENT les produits du catalogue ci-dessus.";
+  const prompt = `Experte beauté MIHI. Diagnostic ${typeLabel} pour ${nomClient||"Cliente"}.
+Réponses: ${reponsesText}
+Catalogue: ${catalogueText}
+${notesAdmin?`Notes: ${notesAdmin}`:""}
 
-
-
-
-
+3 packs. JSON strict:
+{"introduction":"2 phrases","budget":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"geste"}],"routine":"matin→soir"},"bestseller":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"usage","benefice":"phrase","comment":"geste"}],"routine":"matin→soir"},"premium":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"usage","benefice":"phrase","comment":"geste"}],"routine":"matin→soir"},"conseil":"conseil"}
+budget=1-2 produits. bestseller=2-3 produits. premium=3-4 produits max`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -749,7 +749,7 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
           <input placeholder="Ton Instagram, WhatsApp ou email" value={captureContact} onChange={e=>setCaptureContact(e.target.value)}
             style={{width:"100%",border:"none",borderRadius:8,padding:".5rem .75rem",fontSize:".82rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>
           <button onClick={async()=>{
-            if(!capturePrenom.trim()||!captureContact.trim()) return;
+            if(!capturePrenom.trim()||!captureContact.trim()||(!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(captureContact.trim()))&&!(/^[\d\s\+\-\(\)]{8,}$/.test(captureContact.trim())))){alert("Prenom et email ou telephone valide requis.");return;}
             try{
               await setDoc(doc(db,"tunnel_prospects","diag"+Date.now()),{
                 type:"diagnostic_parfum",prenom:capturePrenom,contact:captureContact,
