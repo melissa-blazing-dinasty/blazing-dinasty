@@ -666,7 +666,8 @@ function RelancesTab({prospects,clients,saveProspects,saveClients}){
   const prospectsTries=[...prospects].sort((a,b)=>(a.prenom||"").localeCompare(b.prenom||"","fr"));
   const aRecontacter=prospectsTries.filter(p=>p.relance&&p.relance<=today&&p.statut!=="Converti"&&p.statut!=="Archive").sort((a,b)=>a.relance<b.relance?-1:1);
   const sansContact=prospectsTries.filter(p=>!p.relance&&p.statut!=="Converti"&&p.statut!=="Archive"&&p.date).filter(p=>{try{const pts=p.date.split("/");const d=new Date(pts[2],pts[1]-1,pts[0]);return(new Date()-d)>14*24*60*60*1000;}catch{return false;}});
-  const endormies=clients.filter(c=>{const cmds=c.commandes||[];if(!cmds.length)return false;const d=[...cmds].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];return Math.floor((new Date()-new Date(d.date))/(864e5))>=60;}).map(c=>{const cmds=[...c.commandes].sort((a,b)=>new Date(b.date)-new Date(a.date));return{...c,joursSans:Math.floor((new Date()-new Date(cmds[0].date))/(864e5)),derniereCmd:cmds[0]};}).sort((a,b)=>b.joursSans-a.joursSans);
+  const clientsTries=[...clients].sort((a,b)=>(a.prenom||"").localeCompare(b.prenom||"","fr"));
+  const endormies=clientsTries.filter(c=>{const cmds=c.commandes||[];if(!cmds.length)return false;const d=[...cmds].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];return Math.floor((new Date()-new Date(d.date))/(864e5))>=60;}).map(c=>{const cmds=[...c.commandes].sort((a,b)=>new Date(b.date)-new Date(a.date));return{...c,joursSans:Math.floor((new Date()-new Date(cmds[0].date))/(864e5)),derniereCmd:cmds[0]};}).sort((a,b)=>b.joursSans-a.joursSans);
   const copy=(text,id)=>{navigator.clipboard?.writeText(text);setCopied(id);setTimeout(()=>setCopied(null),2000);};
   const msgP=(p)=>"Coucou "+(p.name&&p.name.split(" ")[0]||"")+" ! On avait echange il y a quelques jours. Tu as eu le temps de reflechir ? Je suis la si tu as des questions";
   const msgE=(c)=>"Coucou "+c.prenom+" ! Ca fait un moment qu'on ne s'est pas parlees. J'ai pense a toi avec nos nouvelles references. Tu veux qu'on fasse le point sur ta routine ?";
@@ -1135,10 +1136,11 @@ function DistributeursTab({distributeurs,save,uid}){
     }catch{}
   };
 
-  const updatePalier=(id,p)=>save(distributeurs.map(d=>d.id===id?{...d,palier:p}:d));
+  const updatePalier=(id,p)=>save(distributeursTries.map(d=>d.id===id?{...d,palier:p}:d));
   const updateNotes=(id,v)=>save(distributeurs.map(d=>d.id===id?{...d,notes:v}:d));
   const updateRecrues=(id,field,v)=>save(distributeurs.map(d=>d.id===id?{...d,[field]:v}:d));
   const updatePremiereCommande=(id,v)=>save(distributeurs.map(d=>d.id===id?{...d,premiereCommande:v}:d));
+  const distributeursTries=[...distributeurs].sort((a,b)=>(a.prenom||"").localeCompare(b.prenom||"","fr"));
   const del=(id)=>{save(distributeurs.filter(d=>d.id!==id));if(sel===id)setSel(null);};
 
   const updateAutoNotes=async(uid,v)=>{
