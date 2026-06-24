@@ -88,7 +88,7 @@ function LinkBioTab({uid, userName}){
     {id:"theme",icon:"🎨",label:"Thème"},
     {id:"profil",icon:"✨",label:"Profil"},
     {id:"liens",icon:"🔗",label:"Liens"},
-    {id:"photos",icon:"📸",label:"Photos"},
+    {id:"photos",icon:"📸",label:"Photos"},{id:"stats",icon:"📊",label:"Stats"},
     {id:"banniere",icon:"📢",label:"Bannière"},
   ];
 
