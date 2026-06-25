@@ -2048,16 +2048,16 @@ function BanqueImagesTab({isMelissa}){
       {isMelissa&&(
         <button onClick={()=>setShowAdd(p=>!p)}
           style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:"1rem"}}>
-          ➕ Ajouter une image
+          ➕ Ajouter image / video
         </button>
       )}
 
       {showAdd&&isMelissa&&(
         <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouvelle image</div>
+          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouveau contenu</div><div style={{display:"flex",gap:".4rem",marginBottom:".6rem"}}><button onClick={()=>setForm(p=>({...p,type:"image"}))} style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:"1px solid "+(form.type!=="video"?C.brun:C.pale),background:form.type!=="video"?C.brun:C.blanc,color:form.type!=="video"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>Photo</button><button onClick={()=>setForm(p=>({...p,type:"video"}))} style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:"1px solid "+(form.type==="video"?C.brun:C.pale),background:form.type==="video"?C.brun:C.blanc,color:form.type==="video"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>Video</button></div>
           <input placeholder="Titre (ex: Avant/Après Skincare)" value={form.titre} onChange={e=>setForm(p=>({...p,titre:e.target.value}))}
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".45rem"}}/>
-          <UploadPhoto label="Photo" value={form.url} onChange={v=>setForm(p=>({...p,url:v}))} folder="banque-images"/>
+          {form.type==="video"?<input placeholder="URL video YouTube TikTok Instagram" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",outline:"none",marginBottom:".45rem"}}/>:<UploadPhoto label="Photo" value={form.url} onChange={v=>setForm(p=>({...p,url:v}))} folder="banque-images"/>}
           <div style={{display:"flex",gap:".4rem",marginBottom:".45rem",marginTop:".3rem"}}>
             <select value={form.theme} onChange={e=>setForm(p=>({...p,theme:e.target.value}))}
               style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
@@ -2066,7 +2066,7 @@ function BanqueImagesTab({isMelissa}){
             <select value={form.sousTheme} onChange={e=>setForm(p=>({...p,sousTheme:e.target.value}))}
               style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
               <option value="visuels">📸 Visuels</option>
-              <option value="temoignages">💬 Témoignages</option>
+              <option value="temoignages">💬 Témoignages</option><option value="videos">🎥 Vidéos</option>
             </select>
           </div>
           <div style={{display:"flex",gap:".4rem"}}>
@@ -2094,7 +2094,7 @@ function BanqueImagesTab({isMelissa}){
 
       {/* Sous-thème */}
       <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
-        {[{id:"visuels",label:"📸 Visuels"},{id:"temoignages",label:"💬 Témoignages"}].map(s=>(
+        {[{id:"visuels",label:"📸 Visuels"},{id:"temoignages",label:"💬 Témoignages"},{id:"videos",label:"🎥 Vidéos"}].map(s=>(
           <button key={s.id} onClick={()=>setSousTheme(s.id)}
             style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:`1px solid ${sousTheme===s.id?C.brun:C.pale}`,background:sousTheme===s.id?C.brun:C.blanc,color:sousTheme===s.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
             {s.label}
