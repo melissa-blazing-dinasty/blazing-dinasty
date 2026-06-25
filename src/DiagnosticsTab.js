@@ -2501,7 +2501,7 @@ function LinkBioPublicPage({slug}){
     (async()=>{
       try{
         const s=await getDoc(doc(db,"linkbio",slug));
-        if(s.exists()) setProfil(s.data());
+        if(s.exists()){setProfil(s.data());try{const sRef=doc(db,"linkbio_stats",slug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking:",e);}}
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
