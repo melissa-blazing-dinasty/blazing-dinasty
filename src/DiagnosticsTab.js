@@ -1345,7 +1345,7 @@ function ScriptsDiagSection(){
   );
 }
 
-function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="" }) {
+function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="", skipContact=false, onComplete=null }) {
   const [mode, setMode] = useState(initialType?"questionnaire":"choix");
   const [type, setType] = useState(initialType||"");
   const [step, setStep] = useState(0);
@@ -1640,7 +1640,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     </div>
   );
 
-  if (mode === "contact") return (
+  if (mode === "contact" && !skipContact) return (
     <div style={{padding:"1rem 0"}}>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.brun,marginBottom:".3rem"}}>
         Presque terminé <em style={{fontStyle:"italic",color:C.rose}}>✨</em>
@@ -1991,6 +1991,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           </pre>
         </details>
         <p style={{ fontSize: ".65rem", color: C.gris, textAlign: "center" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
+        {onComplete&&<button onClick={onComplete} style={{width:"100%",background:"#2D5A3D",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:"1rem"}}>Recevoir mon guide gratuit 🎁</button>}
       </div>
     );
   }
@@ -2737,7 +2738,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   const [loading,setLoading]=useState(true);
   const [etape,setEtape]=useState(forceEtape||(forceParcours?"ebook":"accueil"));
   const [parcours,setParcours]=useState(forceParcours||"");
-  const [ebookChoisi,setEbookChoisi]=useState("");
+  const [ebookChoisi,setEbookChoisi]=useState("");const [diagType,setDiagType]=useState("");
   const [coords,setCoords]=useState({prenom:"",email:"",tel:"",reseau:""});
   const [saving,setSaving]=useState(false);
   const [qIdx,setQIdx]=useState(0);
@@ -2884,15 +2885,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
             <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"#3D1F0E",marginBottom:".85rem"}}>{item.q}</div>
             <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
               {item.opts.map(([ic,label,val])=>(
-                <button key={val} onClick={()=>{
-                  setParcours("produits");
-                  setEtape("coordonnees");
-                  // Stocker le besoin pour personnaliser l'ebook
-                }}
-                  style={{display:"flex",alignItems:"center",gap:".75rem",background:"#FAF7F2",border:"1.5px solid #E8DDD4",borderRadius:10,padding:".65rem .85rem",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
-                  <span style={{fontSize:"1.2rem"}}>{ic}</span>
-                  <span style={{fontSize:".82rem",color:"#3D2B1F",fontWeight:600}}>{label}</span>
-                </button>
+                <button key={val} onClick={()=>{setParcours("produits");setDiagType(val);setEtape("produits_ebook");}} style={{display:"flex",alignItems:"center",gap:".75rem",background:"#FAF7F2",border:"1.5px solid #E8DDD4",borderRadius:10,padding:".65rem .85rem",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}><span style={{fontSize:"1.2rem"}}>{ic}</span><span style={{fontSize:".82rem",color:"#3D2B1F",fontWeight:600}}>{label}</span></button>
               ))}
             </div>
           </div>
@@ -2982,7 +2975,8 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   }
 
   if(etape==="accueil") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/>{profil&&profil.histoire&&<div style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".82rem",color:"#3D2B1F",lineHeight:1.75,fontStyle:"italic"}}>"{profil.histoire}"</div>}<div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"white",fontWeight:300}}>Qu'est-ce qui t'amene aujourd'hui ? </div></div><div style={{display:"flex",flexDirection:"column",gap:".6rem"}}><div onClick={()=>{setParcours("produits");setEtape("produits_page");}} style={{background:"white",border:"2px solid #C49A8A",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#C49A8A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>P</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je veux decouvrir les produits</div><div style={{fontSize:".72rem",color:"#888"}}>Recois tes recommandations personnalisees + un cadeau offert</div></div><span style={{color:"#C49A8A",fontSize:"1.1rem",flexShrink:0}}>→</span></div><div onClick={()=>{setParcours("recrutement");setEtape("recrutement_page");}} style={{background:"white",border:"2px solid #A89BB5",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#A89BB530",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>O</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je cherche une opportunite</div><div style={{fontSize:".72rem",color:"#888"}}>Decouvre si cette aventure est faite pour toi + un cadeau offert</div></div><span style={{color:"#A89BB5",fontSize:"1.1rem",flexShrink:0}}>→</span></div></div></div></div>);
-  if(etape==="ebook") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontSize:".6rem",fontWeight:700,color:"#C4A882",marginBottom:".3rem"}}>CADEAU OFFERT</div><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Choisis ton guide gratuit</div></div>{EBOOKS.map(eb=>(<div key={eb.id} onClick={()=>{setEbookChoisi(eb.id);setEtape("coordonnees");}} style={{background:"white",border:"2px solid "+(ebookChoisi===eb.id?eb.couleur:"#E8DDD4"),borderRadius:14,padding:"1.1rem",marginBottom:".65rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".75rem"}}><div style={{fontSize:"2rem",flexShrink:0}}>{eb.icon}</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>{eb.titre}</div><div style={{fontSize:".72rem",color:"#888"}}>{eb.sous}</div></div><span style={{color:eb.couleur,fontSize:"1.1rem",flexShrink:0}}>→</span></div>))}</div></div>);
+  if(etape==="diag_produit") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={{maxWidth:480,margin:"0 auto"}}><DiagnosticsTab uid={profil&&profil.uid||slug} userName={profil&&profil.prenom||slug} externalMode={true} initialType={diagType} skipContact={true} onComplete={()=>setEtape("produits_ebook")}/></div></div>);
+  if(etape==="produits_ebook") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#2D5A3D",borderRadius:16,padding:"1.5rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>🎁</div><div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".15em",color:"#A8D4A8",marginBottom:".3rem"}}>CADEAU OFFERT</div><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"white",fontWeight:300,marginBottom:".4rem"}}>Ton bilan produits est pret !</div><div style={{fontSize:".78rem",color:"rgba(255,255,255,.8)",lineHeight:1.65}}>Recouvre ton guide gratuit + tes recommandations personnalisees par email ou WhatsApp</div></div><div style={{background:"white",border:"1.5px solid #E8DDD4",borderRadius:12,padding:".75rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:"1rem"}}><img src="/carnet_silhouette.png" alt="Carnet Silhouette" style={{width:48,height:68,objectFit:"cover",borderRadius:6,flexShrink:0}}/><div><div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Carnet Silhouette</div><div style={{fontSize:".72rem",color:"#888"}}>7 jours de recettes gourmandes - offert !</div></div></div><button onClick={()=>window.open("https://blazing-dinasty-1fad9.web.app?diag="+diagType+"&uid="+(profil&&profil.uid||slug),"_blank")} style={{width:"100%",background:"white",border:"1.5px solid #2D5A3D",color:"#2D5A3D",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".75rem"}}>Faire mon diagnostic gratuit 🔍</button><button onClick={()=>{setEbookChoisi("silhouette");setEtape("coordonnees");}} style={{width:"100%",background:"#2D5A3D",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>Recevoir mon guide + mon bilan →</button></div></div>);
   if(etape==="coordonnees") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Ou est-ce que je t'envoie ton guide ?</div></div>{[["prenom","Prenom *","Ton prenom"],["email","Email","ton@email.com"],["tel","Tel / WhatsApp","06 XX XX XX XX"],["reseau","Messenger / Instagram","@tonpseudo"]].map(([k,l,ph])=>(<div key={k} style={{marginBottom:".4rem"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".2rem",fontWeight:600}}>{l}</div><input value={coords[k]||""} onChange={e=>setCoords(c=>({...c,[k]:e.target.value}))} placeholder={ph} style={{width:"100%",border:"1.5px solid "+(coords[k]?"#7FAF8A":"#E8DDD4"),borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none"}}/></div>))}<button onClick={enregistrerCoords} disabled={!coordsOk||saving} style={{width:"100%",background:coordsOk?"#3D1F0E":"#E8DDD4",color:coordsOk?"white":"#888",border:"none",borderRadius:10,padding:".75rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:coordsOk?"pointer":"default",marginTop:".5rem"}}>{saving?"Envoi...":"Recevoir mon guide gratuit →"}</button></div></div>);
   if(etape==="diagnostic") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={{maxWidth:480,margin:"0 auto"}}><DiagnosticsTab uid={profil&&profil.uid||slug} userName={nomDistrib} externalMode={true} initialClient={coords.prenom}/></div></div>);
   if(etape==="recrutement"){window.location.href="?recrutement=true&uid="+(profil&&profil.uid||slug);return null;}
