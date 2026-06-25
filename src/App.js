@@ -873,8 +873,7 @@ function App(){
       const mdpStocke=snap.exists()?snap.data()["db-mdp"]:"";
       if(mdpInput.trim()!==mdpStocke){setLoginError("Code personnel incorrect.");setLoginLoading(false);return;}
       try{localStorage.setItem("bd-user",JSON.stringify({uid:pendingUid,n:pendingName,codeOk:true}));}catch{}
-      setUserId(pendingUid);setName(pendingName);setScreen("app");load(pendingUid);verifierChangementPeriode(pendingUid);
-      setTimeout(()=>setShowChallengeApp(true),2000);
+      setUserId(pendingUid);setName(pendingName);setScreen("app");load(pendingUid);verifierChangementPeriode(pendingUid);try{const snapCA2=await getDoc(doc(db,"users",pendingUid));const caRaw2=snapCA2.exists()?snapCA2.data()["db-challenge-app"]:null;if(caRaw2){const ca2=JSON.parse(caRaw2);const startDate2=new Date(ca2.startDate);const today2=new Date();today2.setHours(0,0,0,0);const diffJours2=Math.floor((today2-startDate2)/(1000*60*60*24));if(diffJours2<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}catch{setTimeout(()=>setShowChallengeApp(true),2000);}
       saveFCMToken(pendingUid);
       sg(pendingUid,"db-obj-perso").then(data=>{syncAnnuaire(pendingUid,pendingName,data?JSON.parse(data):null);});
     }catch{setLoginError("Erreur. Reessaie.");}
@@ -974,13 +973,10 @@ function App(){
       // Connexion directe
       try{localStorage.setItem("bd-user",JSON.stringify({uid,n:displayName,codeOk:true}));}catch{}
       // Popup bienvenue si première connexion
-      try{
-        const isFirst=!localStorage.getItem("bd-welcome-shown-"+uid);
-        if(isFirst){ setShowWelcome(true); localStorage.setItem("bd-welcome-shown-"+uid,"1"); }
-      }catch{}
+      try{const snapW=await getDoc(doc(db,"users",uid));const welcomed=snapW.exists()?snapW.data()["db-welcomed"]:false;if(!welcomed){setShowWelcome(true);await setDoc(doc(db,"users",uid),{"db-welcomed":true},{merge:true});}}catch{}
       setUserId(uid);setName(displayName);setScreen("app");load(uid);verifierChangementPeriode(uid);
-      // Afficher le challenge app après 2s
-      setTimeout(()=>setShowChallengeApp(true), 2000);
+      // Afficher le challenge app apres 2s seulement si pas termine
+      try{const snapCA=await getDoc(doc(db,"users",uid));const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}catch{setTimeout(()=>setShowChallengeApp(true),2000);}
       // Démarrer automatiquement le challenge app si première connexion
       try{
         const snap2=await getDoc(doc(db,"users",uid));
