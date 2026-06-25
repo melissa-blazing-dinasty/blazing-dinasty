@@ -944,11 +944,7 @@ function ClientsTab({clients,save,uid}){
     const statutInfo = statut ? STATUTS_CLIENT.find(s=>s.id===statut) : null;
     const membres = clients
       .filter(c=>(c.statut||null)===statut)
-      .sort((a,b)=>{
-        const da=lastCmdDate(a);const db=lastCmdDate(b);
-        if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;
-        return new Date(db)-new Date(da);
-      });
+      .sort((a,b)=>(a.prenom||a.nom||"").localeCompare(b.prenom||b.nom||"","fr"));
     return {statut, statutInfo, membres};
   }).filter(g=>g.membres.length>0);
 

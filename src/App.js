@@ -664,12 +664,7 @@ function ChallengeAppPopup({uid, onClose, setTab}){
           today.setHours(0,0,0,0);
           const diffJours=Math.floor((today-startDate)/(1000*60*60*24));
           const jour=Math.min(diffJours+1,7); // J1 à J7
-          if(diffJours>=7){setEtat("termine");return;}
-          const joursValides=ca.joursValides||[];
-          setEtat("actif");
-          setJourActuel(jour);
-          setValide(joursValides.includes(jour));
-        }
+          if(diffJours>=7){setEtat("termine");return;}const joursValides=ca.joursValides||[];if(joursValides.includes(jour)){setEtat("termine_jour");return;}setEtat("actif");setJourActuel(jour);setValide(joursValides.includes(jour));}
       }catch{setEtat("annonce");}
     })();
   },[uid]);
@@ -711,8 +706,7 @@ function ChallengeAppPopup({uid, onClose, setTab}){
     else if(section==="dreamboard"){ setTab("dreamboard"); }
     onClose();
   };
-
-  const jour=jourActuel?CHALLENGE_APP_JOURS[jourActuel-1]:null;
+  if(etat==="termine_jour"||etat==="termine"){onClose();return null;}  const jour=jourActuel?CHALLENGE_APP_JOURS[jourActuel-1]:null;
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:999,display:"flex",alignItems:"flex-end",justifyContent:"center"}}
@@ -8179,6 +8173,7 @@ function ChallengeAppSuiviTab({annuaire}){
               ))}
             </div>
           )}
+          <button onClick={async()=>{if(!window.confirm("Reset challenge de "+m.nom+" ?"))return;await setDoc(doc(db,"users",m.uid),{"db-challenge-app":null},{merge:true});setMembres(prev=>prev.map(x=>x.uid===m.uid?{...x,statut:"non_commence",joursValides:[],jourActuel:0,pct:0}:x));}} style={{marginTop:".4rem",width:"100%",background:"none",border:"1px solid #E8DDD4",borderRadius:8,padding:".3rem",fontSize:".62rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>Reset</button>
         </div>
       ))}
 
@@ -8187,6 +8182,7 @@ function ChallengeAppSuiviTab({annuaire}){
           Aucun membre dans l'équipe pour l'instant.
         </div>
       )}
+      <button onClick={async()=>{if(!window.confirm("Remettre le challenge a zero pour tout le monde ?"))return;const liste=Object.entries(annuaire||{});await Promise.all(liste.map(([muid])=>setDoc(doc(db,"users",muid),{"db-challenge-app":null},{merge:true})));setMembres(prev=>prev.map(x=>({...x,statut:"non_commence",joursValides:[],jourActuel:0,pct:0})));}} style={{width:"100%",background:"#B04040",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".8rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:"1rem"}}>Reset challenge tout le monde</button>
     </div>
   );
 }
