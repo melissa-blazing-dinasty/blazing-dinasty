@@ -2505,7 +2505,7 @@ function LinkBioPublicPage({slug}){
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
-          if(!qs.empty) setProfil(qs.docs[0].data());
+          if(!qs.empty){console.log("TRACKING via query:",slug);setProfil(qs.docs[0].data());}
           else setProfil("404");
         }
       }catch(e){setProfil("404");}
@@ -2759,7 +2759,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
-          if(!qs.empty) setProfil(qs.docs[0].data());
+          if(!qs.empty){console.log("TRACKING via query:",slug);setProfil(qs.docs[0].data());}
         }
       }catch{}
       setLoading(false);
