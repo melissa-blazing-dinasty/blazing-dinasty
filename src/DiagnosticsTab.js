@@ -2766,7 +2766,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
     })();
   },[slug]);
   const nomDistrib=profil&&profil.prenom||"ta conseillere";
-  const coordsOk=coords.prenom.trim()&&(coords.email.trim()||coords.tel.trim()||coords.reseau.trim());
+  const emailOkT=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(coords.email.trim());const telOkT=/\d{10,}/.test(coords.tel.replace(/\s/g,""));const coordsOk=coords.prenom.trim().length>=2&&(emailOkT||telOkT||coords.reseau.trim().length>=3);
   const enregistrerCoords=async()=>{
     setSaving(true);
     try{
