@@ -1130,12 +1130,12 @@ function DistributeursTab({distributeurs,save,uid}){
       }
     }catch{}
   };
+  const distributeursTries=[...distributeurs].sort((a,b)=>(a.prenom||"").localeCompare(b.prenom||"","fr"));
 
   const updatePalier=(id,p)=>save(distributeursTries.map(d=>d.id===id?{...d,palier:p}:d));
   const updateNotes=(id,v)=>save(distributeursTries.map(d=>d.id===id?{...d,notes:v}:d));
   const updateRecrues=(id,field,v)=>save(distributeursTries.map(d=>d.id===id?{...d,[field]:v}:d));
   const updatePremiereCommande=(id,v)=>save(distributeursTries.map(d=>d.id===id?{...d,premiereCommande:v}:d));
-  const distributeursTries=[...distributeurs].sort((a,b)=>(a.prenom||"").localeCompare(b.prenom||"","fr"));
   const del=(id)=>{save(distributeurs.filter(d=>d.id!==id));if(sel===id)setSel(null);};
 
   const updateAutoNotes=async(uid,v)=>{
@@ -1176,11 +1176,11 @@ function DistributeursTab({distributeurs,save,uid}){
       const nom = m.nom || parts.slice(1).join(" ") || "";
       return {...m, prenom, nom, id:"auto-"+m.uid, auto:true};
     });
-  const manualFiltered = isMelissa ? distributeurs : distributeurs.filter(d=>{
+  const manualFiltered = isMelissa ? distributeursTries : distributeursTries.filter(d=>{
     const dUid=(d.prenom+"-"+d.nom).toLowerCase().replace(/\s+/g,"-").replace(/-+$/,"");
     return !descendants||descendants.has(dUid)||Object.values(annuaire).some(m=>(m.prenom===d.prenom&&m.nom===d.nom)&&descendants.has(m.uid));
   });
-  const allEntries = [...autoEntries, ...manualFiltered.map(d=>({...d, auto:false}))];
+  const allEntries = [...autoEntries, ...manualFiltered.map(d=>({...d, auto:false}))].sort((a,b)=>(a.prenom||a.nom||"").localeCompare(b.prenom||b.nom||"","fr"));
 
   // Helpers navigation par équipe (basé sur le champ marraine de l'annuaire)
   const fmtNom=(u)=>u.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
