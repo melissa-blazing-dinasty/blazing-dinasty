@@ -6725,6 +6725,7 @@ function ResteCalculateur({obj, save, distributeurs=[]}){
 export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   const[confettiTrigger,setConfettiTrigger]=useState(0);
   const[fireworksTrigger,setFireworksTrigger]=useState(0);
+  const[suiviCATotal,setSuiviCATotal]=useState(0);useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"users",uid));if(snap.exists()&&snap.data()["db-suivi-ca"]){const sc=JSON.parse(snap.data()["db-suivi-ca"]);const total=Object.values(sc).reduce((s,v)=>s+(parseFloat(v)||0),0);setSuiviCATotal(total);}}catch{}})();},[uid]);
   const[graphEnGros,setGraphEnGros]=useState(null);
   const raw=getPeriodeInfo();
   const pCourant=getPeriodeActuelle();
@@ -6864,7 +6865,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
 
       {/* 2. TOTAL DEPUIS LE DÉBUT */}
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".75rem .85rem",marginBottom:".75rem"}}>
-        <div style={{fontSize:".55rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".3rem"}}>🏆 Total depuis le début</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:700,color:C.brun}}>{(+obj.totalCaCumul||0)+(+obj.ca||0)+(+suiviCATotal||0)}€</div>
         <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:700,color:C.brun}}>{(+obj.totalCaCumul||0)+(+obj.ca||0)}€</div>
         <div style={{fontSize:".58rem",color:C.gris}}>{(+obj.totalRecruesCumul||0)+(+obj.recruesReal||0)} recrues total</div>
       </div>
