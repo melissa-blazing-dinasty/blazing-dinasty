@@ -374,6 +374,7 @@ function LinkBioTab({uid, userName}){
       )}
 
       {/* SECTION BANNIÈRE */}
+      {activeSection==="stats"&&<StatsLinkBio uid={slug}/>}
       {activeSection==="banniere"&&(
         <div>
           {/* Bannière globale admin */}
