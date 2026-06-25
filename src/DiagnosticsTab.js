@@ -2496,6 +2496,7 @@ function DiagAdminEditor(){
 
 function LinkBioPublicPage({slug}){
   const [profil,setProfil]=useState(null);
+  const [nbDiagsEquipe,setNbDiagsEquipe]=useState(127);
   const [loading,setLoading]=useState(true);
   const [diagActif,setDiagActif]=useState(null);
   useEffect(()=>{
@@ -2510,7 +2511,7 @@ function LinkBioPublicPage({slug}){
           else setProfil("404");
         }
       }catch(e){setProfil("404");}
-      setLoading(false);
+      try{const diagSnap=await getDocs(collection(db,"diag_externes"));const nb=diagSnap.size;setNbDiagsEquipe(Math.max(127,nb));}catch(e){}      setLoading(false);
     })();
   },[slug]);
 
@@ -2558,6 +2559,8 @@ function LinkBioPublicPage({slug}){
           {profil.slogan&&<div style={{fontSize:".72rem",color:"rgba(255,255,255,.8)",marginTop:".3rem",lineHeight:1.5,padding:"0 1rem"}}>{profil.slogan}</div>}
         </div>
         {profil.histoire&&<div style={{padding:".85rem 1.1rem",fontSize:".78rem",lineHeight:1.7,color:sub,background:theme.bg}}>{profil.histoire}</div>}
+        <div style={{background:"linear-gradient(135deg,#C49A8A,#A89BB5)",padding:".65rem 1rem",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}><span style={{fontSize:"1rem"}}>🔥</span><span style={{fontSize:".78rem",fontWeight:700,color:"white",letterSpacing:".02em"}}>{nbDiagsEquipe}+ femmes ont recu leur bilan personnalise — et toi ?</span></div>
+        {(profil.nbClientes||profil.nbDiags||profil.nbEquipe||profil.nbAnnees)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",padding:".75rem 1rem",background:theme.bg}}>{[{k:"nbClientes",icon:"👥"},{k:"nbDiags",icon:"🔍"},{k:"nbEquipe",icon:"⭐"},{k:"nbAnnees",icon:"🏆"}].filter(f=>profil[f.k]).map(f=><div key={f.k} style={{background:theme.accent+"15",borderRadius:10,padding:".6rem .75rem",textAlign:"center"}}><div style={{fontSize:".7rem",marginBottom:".2rem"}}>{f.icon}</div><div style={{fontSize:".82rem",fontWeight:700,color:theme.accent}}>{profil[f.k]}</div></div>)}</div>}
         {(profil.temoignages||[]).filter(t=>t.texte).length>0&&(
           <div style={{padding:".75rem 1rem",background:theme.bg}}>
             {profil.temoignages.filter(t=>t.texte).map((t,i)=>(
