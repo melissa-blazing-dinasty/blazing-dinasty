@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide Énergie & Équilibre — Mihi</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Georgia',serif;background:#F8F6FC;color:#1A1030;}
+  .cover{min-height:100vh;background:linear-gradient(160deg,#1A1030 0%,#4A3570 50%,#8B6BAE 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;position:relative;overflow:hidden;}
+  .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.2;}
+  .cover-content{position:relative;z-index:2;}
+  .badge{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.2em;color:#C4A8E8;text-transform:uppercase;margin-bottom:1rem;}
+  .cover h1{font-size:2.6rem;font-weight:300;color:#fff;line-height:1.2;margin-bottom:.75rem;}
+  .cover h1 em{font-style:italic;color:#D8C4F0;}
+  .cover-sub{font-family:'Trebuchet MS',sans-serif;font-size:.9rem;color:rgba(255,255,255,.75);line-height:1.7;max-width:340px;margin:0 auto 2rem;}
+  .cover-line{width:50px;height:1px;background:#8B6BAE;margin:1.5rem auto;}
+  .cover-brand{font-family:'Trebuchet MS',sans-serif;font-size:.65rem;letter-spacing:.15em;color:rgba(255,255,255,.5);text-transform:uppercase;}
+  .section{padding:2.5rem 1.5rem;max-width:600px;margin:0 auto;}
+  .section-tag{font-family:'Trebuchet MS',sans-serif;font-size:.55rem;font-weight:700;letter-spacing:.2em;color:#6B4A9E;text-transform:uppercase;margin-bottom:.5rem;}
+  .section h2{font-size:1.6rem;font-weight:300;color:#1A1030;margin-bottom:1rem;line-height:1.3;}
+  .section h2 em{font-style:italic;color:#6B4A9E;}
+  .section p{font-family:'Trebuchet MS',sans-serif;font-size:.85rem;line-height:1.8;color:#3A2858;margin-bottom:1rem;}
+  .photo-full{width:100%;height:280px;object-fit:cover;display:block;}
+  .photo-full-tall{width:100%;height:340px;object-fit:cover;display:block;}
+  .photo-caption{font-family:'Trebuchet MS',sans-serif;font-size:.62rem;color:#AAA;text-align:center;padding:.4rem;background:#F0EDF8;}
+  .photo-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin:1.25rem 0;}
+  .photo-grid-3 img{width:100%;height:120px;object-fit:cover;border-radius:8px;}
+  .photo-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:1.25rem 0;}
+  .photo-grid-2 img{width:100%;height:170px;object-fit:cover;border-radius:10px;}
+  .photo-wide{width:100%;height:220px;object-fit:cover;border-radius:14px;margin:1.25rem 0;display:block;}
+  .card{background:#fff;border-radius:16px;overflow:hidden;margin:1.25rem 0;box-shadow:0 4px 20px rgba(0,0,0,.07);}
+  .card-body{padding:1.25rem 1.5rem;}
+  .card-num{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.15em;color:#6B4A9E;text-transform:uppercase;margin-bottom:.3rem;}
+  .card h3{font-size:1.1rem;font-weight:400;color:#1A1030;margin-bottom:.5rem;}
+  .card p{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.75;color:#3A2858;}
+  .tip{background:linear-gradient(135deg,#F3EFF9,#EAE4F5);border-left:3px solid #8B6BAE;border-radius:0 12px 12px 0;padding:1rem 1.25rem;margin:1.25rem 0;}
+  .tip-label{font-family:'Trebuchet MS',sans-serif;font-size:.55rem;font-weight:700;letter-spacing:.15em;color:#6B4A9E;text-transform:uppercase;margin-bottom:.3rem;}
+  .tip p{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.7;color:#3A2858;margin:0;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.25rem 0;}
+  .mini-card{background:#fff;border-radius:12px;padding:1rem;box-shadow:0 2px 12px rgba(0,0,0,.05);text-align:center;}
+  .mini-card .icon{font-size:1.5rem;margin-bottom:.4rem;}
+  .mini-card h4{font-size:.82rem;font-weight:600;color:#1A1030;margin-bottom:.3rem;}
+  .mini-card p{font-family:'Trebuchet MS',sans-serif;font-size:.7rem;color:#888;line-height:1.5;}
+  .routine{background:#1A1030;border-radius:16px;padding:1.5rem;margin:1.5rem 0;color:#fff;}
+  .routine h3{font-size:1.1rem;font-weight:300;color:#C4A8E8;margin-bottom:1rem;}
+  .routine-step{display:flex;gap:.75rem;margin-bottom:.85rem;align-items:flex-start;}
+  .routine-step .num{width:28px;height:28px;border-radius:50%;background:#6B4A9E;display:flex;align-items:center;justify-content:center;font-family:'Trebuchet MS',sans-serif;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0;}
+  .routine-step div{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.6;color:rgba(255,255,255,.85);}
+  .routine-step strong{color:#C4A8E8;}
+  .pillar{background:linear-gradient(135deg,#1A1030,#4A3570);border-radius:14px;padding:1.25rem;margin:.75rem 0;color:#fff;display:flex;gap:1rem;align-items:flex-start;}
+  .pillar .icon{font-size:1.8rem;flex-shrink:0;}
+  .pillar h4{font-size:.92rem;font-weight:600;color:#C4A8E8;margin-bottom:.35rem;}
+  .pillar p{font-family:'Trebuchet MS',sans-serif;font-size:.78rem;line-height:1.65;color:rgba(255,255,255,.8);}
+  /* PRODUIT CARD */
+  .produit-card{background:#fff;border-radius:16px;padding:1.25rem;margin:.85rem 0;box-shadow:0 4px 20px rgba(107,74,158,.12);border:1.5px solid #E8E0F5;}
+  .produit-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;}
+  .produit-icon{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#4A3570,#8B6BAE);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
+  .produit-nom{font-size:.92rem;font-weight:600;color:#1A1030;}
+  .produit-tag{font-family:'Trebuchet MS',sans-serif;font-size:.58rem;font-weight:700;letter-spacing:.1em;color:#6B4A9E;text-transform:uppercase;}
+  .produit-desc{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.7;color:#3A2858;margin-bottom:.65rem;}
+  .actifs-list{list-style:none;}
+  .actifs-list li{font-family:'Trebuchet MS',sans-serif;font-size:.75rem;color:#5A4070;padding:.25rem 0;border-bottom:1px solid #F0EBF8;display:flex;gap:.5rem;align-items:flex-start;}
+  .actifs-list li::before{content:"✦";color:#8B6BAE;font-size:.55rem;margin-top:.2rem;flex-shrink:0;}
+  .stat-row{display:flex;gap:.75rem;margin:1.25rem 0;}
+  .stat{background:#fff;border-radius:12px;flex:1;padding:.85rem;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.05);}
+  .stat .num{font-size:1.4rem;font-weight:300;color:#6B4A9E;font-family:'Georgia',serif;}
+  .stat p{font-family:'Trebuchet MS',sans-serif;font-size:.65rem;color:#888;line-height:1.4;margin-top:.2rem;}
+  .cta{background:linear-gradient(135deg,#1A1030,#4A3570);border-radius:16px;padding:2rem 1.5rem;text-align:center;margin:2rem 0;}
+  .cta h3{font-size:1.3rem;font-weight:300;color:#fff;margin-bottom:.5rem;}
+  .cta p{font-family:'Trebuchet MS',sans-serif;font-size:.78rem;color:rgba(255,255,255,.75);margin-bottom:1.25rem;line-height:1.6;}
+  .cta-brand{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;letter-spacing:.15em;color:#C4A8E8;text-transform:uppercase;}
+  @media(max-width:420px){.cover h1{font-size:2rem;}.two-col{grid-template-columns:1fr;}.stat-row{flex-direction:column;}.photo-grid-3{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+
+<!-- COUVERTURE -->
+<div class="cover">
+  <img class="cover-img" src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&q=80" alt="Énergie bien-être">
+  <div class="cover-content">
+    <div class="badge">✦ Guide Bien-Être Mihi ✦</div>
+    <h1>Énergie &<br><em>Équilibre</em></h1>
+    <div class="cover-line"></div>
+    <p class="cover-sub">Retrouve une énergie naturelle, un sommeil réparateur et une sérénité au quotidien — sans te forcer</p>
+    <div class="cover-brand">Blazing Dynasty × Mihi France</div>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div class="section">
+  <div class="section-tag">✦ Introduction</div>
+  <h2>Tu mérites de te sentir<br><em>pleinement vivante</em></h2>
+  <p>Fatigue chronique, nuits agitées, stress qui s'accumule... Ce trio infernal touche des millions de femmes — et pourtant, il n'est pas une fatalité.</p>
+  <p>Ce guide te donne les outils concrets pour recharger tes batteries naturellement, améliorer la qualité de ton sommeil et retrouver ta sérénité, même dans un quotidien bien chargé.</p>
+</div>
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=800&q=80" alt="Femme zen">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<div class="stat-row" style="padding:0 1.5rem;max-width:600px;margin:1rem auto;">
+  <div class="stat">
+    <div class="num">73%</div>
+    <p>des femmes se sentent fatiguées dès le réveil</p>
+  </div>
+  <div class="stat">
+    <div class="num">1/3</div>
+    <p>de notre vie se passe à dormir — autant bien le faire</p>
+  </div>
+  <div class="stat">
+    <div class="num">+40%</div>
+    <p>de concentration avec 8h de sommeil de qualité</p>
+  </div>
+</div>
+
+<!-- PILIERS -->
+<div class="section">
+  <div class="section-tag">✦ Les fondations</div>
+  <h2>Les 3 piliers de<br><em>l'énergie durable</em></h2>
+
+  <div class="pillar">
+    <div class="icon">😴</div>
+    <div>
+      <h4>Le sommeil</h4>
+      <p>La base de tout. Un sommeil de qualité régénère les cellules, régule les hormones et stabilise l'humeur. Ce n'est pas du temps perdu — c'est de l'investissement.</p>
+    </div>
+  </div>
+
+  <div class="pillar">
+    <div class="icon">🥗</div>
+    <div>
+      <h4>La nutrition & micronutrition</h4>
+      <p>Les carences en vitamines et minéraux sont la première cause de fatigue chronique. Un apport ciblé en micronutriments change la donne rapidement.</p>
+    </div>
+  </div>
+
+  <div class="pillar">
+    <div class="icon">🧘</div>
+    <div>
+      <h4>La gestion du stress</h4>
+      <p>Le stress chronique épuise les réserves de magnésium et de vitamines B. Apprendre à le réguler — et à combler les carences qu'il crée — change tout.</p>
+    </div>
+  </div>
+</div>
+
+<div class="photo-grid-2" style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <img src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&q=80" alt="Alimentation saine">
+  <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80" alt="Légumes colorés">
+</div>
+
+<!-- SOMMEIL -->
+<div class="section">
+  <div class="section-tag">✦ Pilier 1</div>
+  <h2>Réparer ton<br><em>sommeil</em></h2>
+  <p>La qualité compte plus que la quantité. 7 heures de sommeil profond valent mieux que 9 heures agitées. Et certains minéraux jouent un rôle clé dans la qualité du sommeil.</p>
+</div>
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80" alt="Sommeil repos">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<div style="padding:0 1.5rem 2rem;max-width:600px;margin:0 auto;">
+  <div class="routine">
+    <h3>🌙 Routine soir — 1 heure avant le lit</h3>
+    <div class="routine-step">
+      <div class="num">1</div>
+      <div><strong>Écrans off</strong> — La lumière bleue bloque la mélatonine. Remplace par un livre, du podcasting ou de la musique douce.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">2</div>
+      <div><strong>Température fraîche</strong> — 18-19°C dans la chambre favorise l'endormissement. Le corps doit baisser en température pour dormir.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">3</div>
+      <div><strong>Magnésium le soir</strong> — Le magnésium favorise la relaxation musculaire et nerveuse. C'est le minéral anti-stress par excellence — et 70% des femmes en manquent.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">4</div>
+      <div><strong>Respiration 4-7-8</strong> — Inspire 4 secondes, retiens 7, expire 8. 3 cycles suffisent pour calmer le système nerveux.</div>
+    </div>
+  </div>
+
+  <!-- PRODUIT MAGNÉSIUM -->
+  <div class="produit-card">
+    <div class="produit-header">
+      <div class="produit-icon">🧲</div>
+      <div>
+        <div class="produit-nom">Magnésium B6</div>
+        <div class="produit-tag">✦ Disponible chez Mihi</div>
+      </div>
+    </div>
+    <p class="produit-desc">La combinaison magnésium + vitamine B6 est particulièrement efficace : la B6 améliore l'absorption du magnésium par les cellules et amplifie ses effets sur le système nerveux. Idéal pour le stress, la fatigue et la qualité du sommeil.</p>
+    <ul class="actifs-list">
+      <li>Citrate de magnésium — forme hautement biodisponible, bien tolérée</li>
+      <li>Vitamine B6 (pyridoxine) — cofacteur essentiel du système nerveux</li>
+      <li>Sans colorants ni arômes artificiels</li>
+    </ul>
+  </div>
+</div>
+
+<!-- MICRONUTRITION -->
+<div class="section">
+  <div class="section-tag">✦ Pilier 2</div>
+  <h2>Combler les carences<br><em>qui épuisent</em></h2>
+  <p>La fatigue chronique est souvent une fatigue nutritionnelle. Vitamines du groupe B, vitamine C, zinc, fer... ces micronutriments sont les moteurs de ton énergie cellulaire.</p>
+</div>
+
+<div class="photo-grid-3" style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <img src="https://images.unsplash.com/photo-1550572017-edd951aa8f72?w=300&q=80" alt="Compléments">
+  <img src="https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=300&q=80" alt="Vitamines">
+  <img src="https://images.unsplash.com/photo-1559757175-0eb30cd8c063?w=300&q=80" alt="Bien-être">
+</div>
+
+<div style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+
+  <!-- PRODUIT MULTIVITAMINES -->
+  <div class="produit-card">
+    <div class="produit-header">
+      <div class="produit-icon">⚡</div>
+      <div>
+        <div class="produit-nom">Complexe Multivitamines</div>
+        <div class="produit-tag">✦ Disponible chez Mihi</div>
+      </div>
+    </div>
+    <p class="produit-desc">Une formule complète qui couvre l'ensemble des vitamines et minéraux essentiels à l'énergie quotidienne. Particulièrement riche en vitamines du groupe B, qui sont le carburant de ton système nerveux et de ta production d'énergie cellulaire.</p>
+    <ul class="actifs-list">
+      <li>Vitamines B1, B2, B6, B12 — métabolisme énergétique et système nerveux</li>
+      <li>Vitamine C (acide L-ascorbique) — antioxydant, immunité, réduction de la fatigue</li>
+      <li>Vitamine E — protection cellulaire contre le stress oxydatif</li>
+      <li>Zinc, Cuivre, Magnésium — minéraux anti-fatigue essentiels</li>
+      <li>Schisandra chinensis — baie adaptogène traditionnelle pour la vitalité</li>
+      <li>Bioflavonoïdes d'agrumes — synergie avec la vitamine C</li>
+    </ul>
+  </div>
+
+  <!-- PRODUIT MINÉRAUX -->
+  <div class="produit-card">
+    <div class="produit-header">
+      <div class="produit-icon">🌿</div>
+      <div>
+        <div class="produit-nom">Complexe Minéraux & Vitamines</div>
+        <div class="produit-tag">✦ Disponible chez Mihi</div>
+      </div>
+    </div>
+    <p class="produit-desc">Une formule enrichie en minéraux trace et en vitamines liposolubles — idéale en complément du multivitamines ou en cure saisonnière ciblée. Avec du fer pour les femmes sujettes à l'anémie et de la vitamine D pour l'immunité.</p>
+    <ul class="actifs-list">
+      <li>Fer (fumarate de fer II) — lutte contre la fatigue liée à l'anémie</li>
+      <li>Vitamine D3 (cholécalciférol) — immunité, moral, énergie</li>
+      <li>Sélénium, Manganèse, Chrome, Iode — oligoéléments essentiels</li>
+      <li>Vitamine A, K — vitamines liposolubles souvent oubliées</li>
+      <li>Acide folique — indispensable pour les femmes en âge de procréer</li>
+    </ul>
+  </div>
+
+</div>
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80" alt="Femme énergie sport">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<!-- IMMUNITÉ & DIGESTION -->
+<div class="section">
+  <div class="section-tag">✦ Bonus</div>
+  <h2>Intestin sain,<br><em>énergie retrouvée</em></h2>
+  <p>80% de notre immunité se joue dans l'intestin. Un microbiote déséquilibré entraîne fatigue, ballonnements et baisse de moral. Les probiotiques sont devenus l'un des compléments les plus recommandés par les professionnels de santé.</p>
+</div>
+
+<div class="photo-grid-2" style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <img src="https://images.unsplash.com/photo-1547592180-85f173990554?w=400&q=80" alt="Santé intestinale">
+  <img src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80" alt="Alimentation équilibrée">
+</div>
+
+<div style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <!-- PRODUIT PROBIOTIQUES -->
+  <div class="produit-card">
+    <div class="produit-header">
+      <div class="produit-icon">🦠</div>
+      <div>
+        <div class="produit-nom">Probiotiques 5 Souches</div>
+        <div class="produit-tag">✦ Disponible chez Mihi</div>
+      </div>
+    </div>
+    <p class="produit-desc">Une formule multi-souches premium avec des milliards de bactéries bénéfiques pour rééquilibrer ton microbiote. Idéale après une prise d'antibiotiques, en cas de troubles digestifs ou pour renforcer l'immunité sur le long terme.</p>
+    <ul class="actifs-list">
+      <li>Lactobacillus acidophilus — confort digestif, immunité</li>
+      <li>Streptococcus thermophilus — digestion des lactoses, flore intestinale</li>
+      <li>Lactobacillus salivarius — santé buccale et intestinale</li>
+      <li>Bifidobacterium bifidum — transit, immunité, réduction des ballonnements</li>
+      <li>Lactobacillus rhamnosus — souche de référence, très étudiée scientifiquement</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ÉNERGIE EXPRESS -->
+<div class="section">
+  <div class="section-tag">✦ Coup de boost</div>
+  <h2>Quand tu as besoin<br><em>d'énergie maintenant</em></h2>
+  <p>Pour les journées intenses, les entraînements, ou simplement les coups de mou de 15h — une formule concentrée pour retrouver ton élan rapidement.</p>
+</div>
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=800&q=80" alt="Énergie workout">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<div style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <!-- PRODUIT BRÛLEUR / ÉNERGIE -->
+  <div class="produit-card">
+    <div class="produit-header">
+      <div class="produit-icon">🔥</div>
+      <div>
+        <div class="produit-nom">Complexe Énergie & Vitalité</div>
+        <div class="produit-tag">✦ Disponible chez Mihi</div>
+      </div>
+    </div>
+    <p class="produit-desc">Une formule tonifiante qui associe des actifs naturels pour booster l'énergie physique et mentale, soutenir le métabolisme et améliorer la concentration. Idéale avant le sport ou pour tenir une journée chargée.</p>
+    <ul class="actifs-list">
+      <li>L-Carnitine — transporte les acides gras vers les mitochondries pour les brûler en énergie</li>
+      <li>Extrait de thé vert (Camellia sinensis) — antioxydant, boost métabolique doux</li>
+      <li>Extrait d'orange amère (Citrus aurantium) — tonifiant naturel, soutien du métabolisme</li>
+      <li>Caféine — améliore la concentration et réduit la sensation de fatigue</li>
+      <li>Niacine, B2, B6, B12, Biotine, Acide folique — tout le complexe B pour l'énergie cellulaire</li>
+    </ul>
+  </div>
+</div>
+
+<!-- VITAMINE C -->
+<div style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <div class="produit-card">
+    <div class="produit-header">
+      <div class="produit-icon">🍊</div>
+      <div>
+        <div class="produit-nom">Vitamine C Effervescente</div>
+        <div class="produit-tag">✦ Disponible chez Mihi</div>
+      </div>
+    </div>
+    <p class="produit-desc">La vitamine C est l'un des micronutriments les plus importants pour combattre la fatigue et renforcer l'immunité. En version effervescente, elle est absorbée rapidement et efficacement. Arôme orange naturel, très agréable à prendre.</p>
+    <ul class="actifs-list">
+      <li>Acide L-ascorbique — forme naturelle et biodisponible de la vitamine C</li>
+      <li>Zinc (citrate de zinc) — immunité, réduction de la fatigue</li>
+      <li>Riboflavine (B2) — métabolisme énergétique</li>
+      <li>Format effervescent — absorption rapide, facile à prendre au quotidien</li>
+    </ul>
+  </div>
+</div>
+
+<div class="photo-grid-3" style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <img src="https://images.unsplash.com/photo-1505253716362-afaea1d3d1af?w=300&q=80" alt="Orange vitamine C">
+  <img src="https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=300&q=80" alt="Alimentation">
+  <img src="https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=300&q=80" alt="Yoga énergie">
+</div>
+
+<!-- STRESS -->
+<div class="section">
+  <div class="section-tag">✦ Pilier 3</div>
+  <h2>Apprivoiser<br><em>le stress</em></h2>
+  <p>Le stress chronique consomme massivement le magnésium, les vitamines B et la vitamine C de ton organisme. Combler ces carences est la première étape — les gestes du quotidien font le reste.</p>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Outil 01</div>
+      <h3>La cohérence cardiaque</h3>
+      <p>5 minutes, 3 fois par jour. Inspire 5 secondes, expire 5 secondes. Réduit le cortisol et améliore la variabilité cardiaque en 4 semaines. Gratuit, immédiat et scientifiquement validé.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Outil 02</div>
+      <h3>Le journal de gratitude</h3>
+      <p>3 choses positives par soir, en 2 minutes. Le cerveau se recalibre progressivement vers le positif. Effet mesurable sur l'humeur dès 3 semaines de pratique.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <img src="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=600&q=80" alt="Marche nature" style="width:100%;height:180px;object-fit:cover;">
+    <div class="card-body">
+      <div class="card-num">Outil 03</div>
+      <h3>20 minutes de marche</h3>
+      <p>20 minutes de marche rapide libèrent des endorphines et métabolisent le cortisol. Une promenade après le dîner suffit — en dehors, en pleine nature si possible.</p>
+    </div>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">💡 Le combo anti-fatigue Mihi</div>
+    <p>Pour une approche complète : Magnésium B6 le soir pour le sommeil + Multivitamines le matin pour l'énergie de la journée + Probiotiques pour l'immunité. Demande à ta conseillère le protocole adapté à ta situation.</p>
+  </div>
+</div>
+
+<img class="photo-full-tall" src="https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&q=80" alt="Femme épanouie">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<!-- CTA -->
+<div class="section">
+  <div class="cta">
+    <h3>Retrouve ton énergie<br>naturelle avec Mihi</h3>
+    <p>Magnésium B6, Multivitamines, Probiotiques, Vitamine C... Découvre la gamme complète bien-être Mihi et laisse ta conseillère te guider vers le protocole qui te correspond.</p>
+    <div class="cover-line" style="background:#8B6BAE;"></div>
+    <div class="cta-brand">Blazing Dynasty × Mihi France</div>
+  </div>
+  <p style="font-family:'Trebuchet MS',sans-serif;font-size:.7rem;color:#AAA;text-align:center;margin-top:1rem;">Guide offert par ta conseillère Mihi 🌸</p>
+</div>
+
+</body>
+</html>

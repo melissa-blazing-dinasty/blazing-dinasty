@@ -820,11 +820,43 @@ function App(){
   const[newMdp2,setNewMdp2]=useState("");
   const[loginStep,setLoginStep]=useState(1);
   const[mdpInput,setMdpInput]=useState("");
+  const[showMdpOublie,setShowMdpOublie]=useState(false);
   const[userId,setUserId]=useState("");
   const[isChefApp,setIsChefApp]=useState(false);
   const[hasTeamApp,setHasTeamApp]=useState(false);
   const[fastStartDone,setFastStartDone]=useState(false);
   const[hasFastStart,setHasFastStart]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","config"));
+        if(snap.exists()){
+          const remoteV=snap.data().appVersion||"1.0";
+          const localV=localStorage.getItem("appVersion");
+          if(localV&&localV!==remoteV){localStorage.setItem("appVersion",remoteV);window.location.reload(true);}else{localStorage.setItem("appVersion",remoteV);}
+        }
+      }catch{}
+    })();
+  },[]);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","config"));
+        if(snap.exists()){
+          const remoteV=snap.data().appVersion||"1.0";
+          const localV=localStorage.getItem("appVersion");
+          if(localV&&localV!==remoteV){
+            localStorage.setItem("appVersion",remoteV);
+            window.location.reload(true);
+          } else {
+            localStorage.setItem("appVersion",remoteV);
+          }
+        }
+      }catch{}
+    })();
+  },[]);
 
   useEffect(()=>{
     if(!userId)return;
@@ -1308,7 +1340,9 @@ function App(){
   }
 
   // ── LOGIN ────────────────────────────────────────────────────────────────────
-  if(screen==="login")return(
+  
+
+if(screen==="login")return(
     <div style={{minHeight:"100vh",background:C.brun,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"2rem 1.2rem",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
       <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".25em",color:C.or,marginBottom:".5rem"}}>✦ BLAZING DYNASTY ✦</div>
       <div style={{fontFamily:"Georgia,serif",fontSize:"clamp(1.8rem,5vw,2.6rem)",fontWeight:300,color:C.blanc,textAlign:"center",lineHeight:1.1}}>Espace Formation</div>
@@ -1385,6 +1419,32 @@ function App(){
   const dailyActions=["a1","a2","a3","a4","a5"];
   const actionsToday=dailyActions.filter(id=>checks[`${todayKey}-${id}`]||checks[id]).length;
   const actionsIncomplete=actionsToday<5;
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  // ── BADGE ICÔNE APP ───────────────────────────────────────────────────────
+  useEffect(()=>{
+    if(!userId) return;
+    (async()=>{
+      try{
+        let total=0;
+        if(actionsIncomplete) total += (5 - actionsToday);
+        try{
+          const msgsSnap=await getDocs(collection(db,"messages"));
+          msgsSnap.forEach(d=>{const msg=d.data();if(msg.destinataire===userId&&!msg.lu) total++;});
+        }catch{}
+        if(isChefApp||hasTeamApp){
+          try{
+            const mdpSnap=await getDocs(collection(db,"demandes_mdp"));
+            mdpSnap.forEach(d=>{if(!d.data().traite) total++;});
+          }catch{}
+        }
+        if(total>0){if("setAppBadge" in navigator) await navigator.setAppBadge(total);}
+        else{if("clearAppBadge" in navigator) await navigator.clearAppBadge();}
+      }catch{}
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[userId,actionsToday,isChefApp,hasTeamApp]);
+
+
   const periodeInfo=getPeriodeInfo();
   // J1 seulement = moins de 24h depuis le début de la période
   const isJ1Periode = periodeInfo.pctElapsed<=Math.round(100/21);
@@ -7632,7 +7692,7 @@ function AssiduiteTab({uid}){
 
 // Onglet "Espace Chef" — regroupe toutes les fonctions chef d'équipe au même endroit
 const ESPACE_CHEF_SECTIONS=[
-  {id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true},
+  {id:"demandes_mdp",icon:"🔐",label:"Mots de passe",desc:"Demandes de réinitialisation en attente",chefOnly:true},{id:"backup",icon:"💾",label:"Backup données",desc:"Exporter toutes les données de l'équipe en JSON",chefOnly:true},{id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true},
   {id:"challengeapp",icon:"🎮",label:"Challenge Découverte App",desc:"Progression de chaque membre dans le défi 7 jours",chefOnly:true},
   {id:"membres",icon:"⚙️",label:"Accès équipe",desc:"Gérer les membres, chefs, et assigner les marraines",chefOnly:true},
   {id:"assiduite",icon:"📋",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true},
@@ -8824,6 +8884,191 @@ function ResumeSemaineChef({annuaire}){
     </div>
   );
 }
+function MdpOublieModal({pendingUid, pendingName, onClose}){
+  const[done,setDone]=useState(false);
+  const[loading,setLoading]=useState(false);
+
+  const envoyer=async()=>{
+    setLoading(true);
+    try{
+      await setDoc(doc(db,"demandes_mdp",pendingUid),{
+        uid:pendingUid,
+        nom:pendingName,
+        date:new Date().toISOString(),
+        traite:false
+      });
+      setDone(true);
+    }catch{}
+    setLoading(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
+      <div style={{background:"#fff",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,.2)"}}>
+        <div style={{fontSize:"2rem",marginBottom:".5rem"}}>🔐</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:300,color:"#3D1F0E",marginBottom:".75rem"}}>Mot de passe oublié</div>
+        {done?(
+          <>
+            <div style={{background:"#F0FFF4",border:"1px solid #C0E8D0",borderRadius:8,padding:".75rem",marginBottom:"1rem",fontFamily:"Trebuchet MS,sans-serif",fontSize:".78rem",color:"#2D7A4F",lineHeight:1.6}}>
+              ✅ Ta demande a été envoyée !<br/>Ta conseillère va te recontacter très vite pour te donner ton nouveau code.
+            </div>
+            <button onClick={onClose} style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Fermer</button>
+          </>
+        ):(
+          <>
+            <p style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".78rem",color:"#888",lineHeight:1.7,marginBottom:"1.25rem"}}>
+              Ta demande sera transmise à ta conseillère qui te contactera pour réinitialiser ton code personnel.
+            </p>
+            <div style={{background:"#FBF8F4",borderRadius:10,padding:".75rem",marginBottom:"1.25rem",fontFamily:"Trebuchet MS,sans-serif",fontSize:".82rem",color:"#3D1F0E",fontWeight:600}}>
+              {pendingName||pendingUid}
+            </div>
+            <div style={{display:"flex",gap:".5rem"}}>
+              <button onClick={onClose} style={{flex:1,background:"transparent",border:"1px solid #E8DDD4",borderRadius:10,padding:".65rem",fontSize:".82rem",fontFamily:"inherit",cursor:"pointer",color:"#888"}}>Annuler</button>
+              <button onClick={envoyer} disabled={loading} style={{flex:2,background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                {loading?"Envoi...":"Envoyer la demande"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DemandesMdpTab(){
+  const[demandes,setDemandes]=useState([]);
+  const[loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDocs(collection(db,"demandes_mdp"));
+        const liste=[];
+        snap.forEach(d=>liste.push({id:d.id,...d.data()}));
+        setDemandes(liste.filter(d=>!d.traite).sort((a,b)=>b.date.localeCompare(a.date)));
+      }catch{}
+      setLoading(false);
+    })();
+  },[]);
+
+  const traiter=async(uid)=>{
+    await setDoc(doc(db,"demandes_mdp",uid),{traite:true},{merge:true});
+    setDemandes(p=>p.filter(d=>d.uid!==uid));
+  };
+
+  return(
+    <div style={{padding:"1rem",maxWidth:500,margin:"0 auto"}}>
+      <div style={{fontSize:".6rem",fontWeight:700,color:"#C49A8A",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".75rem"}}>🔐 Demandes de réinitialisation</div>
+      {loading?<div style={{color:"#AAA",fontSize:".78rem"}}>Chargement...</div>
+      :demandes.length===0?<div style={{textAlign:"center",padding:"2rem",color:"#AAA",fontSize:".78rem"}}>✅ Aucune demande en attente</div>
+      :demandes.map(d=>(
+        <div key={d.uid} style={{background:"#fff",borderRadius:12,padding:"1rem",marginBottom:".75rem",boxShadow:"0 2px 12px rgba(0,0,0,.07)",display:"flex",alignItems:"center",gap:"1rem"}}>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:600,fontSize:".85rem",color:"#3D1F0E",marginBottom:".2rem"}}>{d.nom||d.uid}</div>
+            <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".65rem",color:"#AAA"}}>{new Date(d.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+          </div>
+          <button onClick={()=>traiter(d.uid)} style={{background:"#3D1F0E",color:"white",border:"none",borderRadius:8,padding:".4rem .85rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            ✓ Traité
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+function BackupTab({uid, annuaire}){
+  const[loading,setLoading]=useState(false);
+  const[done,setDone]=useState(false);
+
+  const runBackup=async()=>{
+    setLoading(true);setDone(false);
+    const backup={date:new Date().toISOString(),generePar:uid,donnees:{}};
+    try{
+      // acces/membres
+      const membres=await getDoc(doc(db,"acces","membres"));
+      if(membres.exists()) backup.donnees.membres=membres.data();
+
+      // admin/ebooks
+      const ebooks=await getDoc(doc(db,"admin","ebooks"));
+      if(ebooks.exists()) backup.donnees.ebooks=ebooks.data();
+
+      // admin/config
+      const config=await getDoc(doc(db,"admin","config"));
+      if(config.exists()) backup.donnees.config=config.data();
+
+      // equipe
+      const equipeSnap=await getDocs(collection(db,"equipe"));
+      backup.donnees.equipe={};
+      equipeSnap.forEach(d=>backup.donnees.equipe[d.id]=d.data());
+
+      // diag_externes
+      const diagSnap=await getDocs(collection(db,"diag_externes"));
+      backup.donnees.diag_externes={};
+      diagSnap.forEach(d=>backup.donnees.diag_externes[d.id]=d.data());
+
+      // linkbio
+      const linkbioSnap=await getDocs(collection(db,"linkbio"));
+      backup.donnees.linkbio={};
+      linkbioSnap.forEach(d=>backup.donnees.linkbio[d.id]=d.data());
+
+      // Par membre : clients, db-suivi-ca, db-objectifs, fast-start
+      const membres_ids=Object.keys(annuaire||{});
+      backup.donnees.users={};
+      await Promise.all(membres_ids.map(async(mUid)=>{
+        backup.donnees.users[mUid]={};
+        try{
+          const userDoc=await getDoc(doc(db,"users",mUid));
+          if(userDoc.exists()) backup.donnees.users[mUid].profil=userDoc.data();
+          const clientsSnap=await getDocs(collection(db,"clients_"+mUid));
+          backup.donnees.users[mUid].clients={};
+          clientsSnap.forEach(d=>backup.donnees.users[mUid].clients[d.id]=d.data());
+          const diagNotesSnap=await getDocs(collection(db,"diag_notes_"+mUid));
+          backup.donnees.users[mUid].diag_notes={};
+          diagNotesSnap.forEach(d=>backup.donnees.users[mUid].diag_notes[d.id]=d.data());
+        }catch{}
+      }));
+
+      // Téléchargement JSON
+      const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;
+      a.download="blazing-dynasty-backup-"+new Date().toISOString().slice(0,10)+".json";
+      a.click();
+      URL.revokeObjectURL(url);
+      setDone(true);
+    }catch(e){console.error(e);}
+    setLoading(false);
+  };
+
+  return(
+    <div style={{padding:"1.5rem 1rem",maxWidth:500,margin:"0 auto"}}>
+      <div style={{background:"#fff",borderRadius:16,padding:"1.5rem",boxShadow:"0 4px 20px rgba(0,0,0,.07)",textAlign:"center"}}>
+        <div style={{fontSize:"2.5rem",marginBottom:".75rem"}}>💾</div>
+        <div style={{fontSize:"1rem",fontWeight:600,color:C.brun,marginBottom:".5rem",fontFamily:"Georgia,serif"}}>Backup des données</div>
+        <p style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".78rem",color:C.gris,lineHeight:1.7,marginBottom:"1.25rem"}}>
+          Exporte toutes les données de ton équipe en un fichier JSON — membres, clients, ebooks, diagnostics, LinkBio. À faire régulièrement et garder précieusement.
+        </p>
+        <div style={{background:"#FFF8F0",border:"1px solid #F0E0C8",borderRadius:10,padding:".75rem",marginBottom:"1.25rem",fontFamily:"Trebuchet MS,sans-serif",fontSize:".72rem",color:"#8B5E3C",lineHeight:1.6,textAlign:"left"}}>
+          📦 Inclus dans le backup :<br/>
+          ✓ Liste des membres & chefs<br/>
+          ✓ Profils LinkBio de l'équipe<br/>
+          ✓ Clients de chaque distributrice<br/>
+          ✓ Diagnostics externes<br/>
+          ✓ Bibliothèque ebooks<br/>
+          ✓ Configuration de l'app
+        </div>
+        {done&&<div style={{background:"#F0FFF4",border:"1px solid #C0E8D0",borderRadius:8,padding:".6rem",marginBottom:"1rem",fontFamily:"Trebuchet MS,sans-serif",fontSize:".75rem",color:"#2D7A4F"}}>✅ Backup téléchargé avec succès !</div>}
+        <button onClick={runBackup} disabled={loading}
+          style={{width:"100%",background:loading?"#CCC":C.brun,color:"#fff",border:"none",borderRadius:12,padding:".85rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:loading?"not-allowed":"pointer"}}>
+          {loading?"⏳ Export en cours...":"💾 Télécharger le backup"}
+        </button>
+        <p style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".62rem",color:C.gris,marginTop:".75rem"}}>
+          Recommandé : 1 backup par semaine, stocké dans Google Drive ou iCloud.
+        </p>
+      </div>
+    </div>
+  );
+}
 function EspaceChefTab({uid, isChef}){
   const[section,setSection]=useState("");
   const[distrib,setDistrib]=useState([]);
@@ -8870,6 +9115,8 @@ function EspaceChefTab({uid, isChef}){
           style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>
           ← Retour à Espace Chef
         </button>
+        {section=="backup"&&<BackupTab uid={uid} annuaire={annuaire}/>}
+        {section=="demandes_mdp"&&<DemandesMdpTab/>}
         {section==="stats"&&<StatsEquipeTab uid={uid} annuaire={annuaire}/>}
         {section==="challengeapp"&&<ChallengeAppSuiviTab annuaire={annuaire}/>}
         {section==="suivica"&&<SuiviCATab uid={uid}/>}

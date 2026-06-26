@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide Cheveux de Rêve — Mihi</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Georgia',serif;background:#F8F5F0;color:#2C1A0E;}
+  .cover{min-height:100vh;background:linear-gradient(160deg,#1A2C1A 0%,#3D6B3D 50%,#8AB58A 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;position:relative;overflow:hidden;}
+  .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.2;}
+  .cover-content{position:relative;z-index:2;}
+  .badge{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.2em;color:#A8D4A8;text-transform:uppercase;margin-bottom:1rem;}
+  .cover h1{font-size:2.6rem;font-weight:300;color:#fff;line-height:1.2;margin-bottom:.75rem;}
+  .cover h1 em{font-style:italic;color:#C8E8C8;}
+  .cover-sub{font-family:'Trebuchet MS',sans-serif;font-size:.9rem;color:rgba(255,255,255,.75);line-height:1.7;max-width:340px;margin:0 auto 2rem;}
+  .cover-line{width:50px;height:1px;background:#8AB58A;margin:1.5rem auto;}
+  .cover-brand{font-family:'Trebuchet MS',sans-serif;font-size:.65rem;letter-spacing:.15em;color:rgba(255,255,255,.5);text-transform:uppercase;}
+  .section{padding:2.5rem 1.5rem;max-width:600px;margin:0 auto;}
+  .section-tag{font-family:'Trebuchet MS',sans-serif;font-size:.55rem;font-weight:700;letter-spacing:.2em;color:#3D6B3D;text-transform:uppercase;margin-bottom:.5rem;}
+  .section h2{font-size:1.6rem;font-weight:300;color:#2C1A0E;margin-bottom:1rem;line-height:1.3;}
+  .section h2 em{font-style:italic;color:#3D6B3D;}
+  .section p{font-family:'Trebuchet MS',sans-serif;font-size:.85rem;line-height:1.8;color:#4A3728;margin-bottom:1rem;}
+  .photo-full{width:100%;height:280px;object-fit:cover;display:block;}
+  .photo-caption{font-family:'Trebuchet MS',sans-serif;font-size:.62rem;color:#AAA;text-align:center;padding:.4rem;background:#F0EBE5;}
+  .card{background:#fff;border-radius:16px;overflow:hidden;margin:1.25rem 0;box-shadow:0 4px 20px rgba(0,0,0,.07);}
+  .card-body{padding:1.25rem 1.5rem;}
+  .card-num{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.15em;color:#3D6B3D;text-transform:uppercase;margin-bottom:.3rem;}
+  .card h3{font-size:1.1rem;font-weight:400;color:#2C1A0E;margin-bottom:.5rem;}
+  .card p{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.75;color:#4A3728;}
+  .tip{background:linear-gradient(135deg,#EFF7EF,#E0F0E0);border-left:3px solid #3D6B3D;border-radius:0 12px 12px 0;padding:1rem 1.25rem;margin:1.25rem 0;}
+  .tip-label{font-family:'Trebuchet MS',sans-serif;font-size:.55rem;font-weight:700;letter-spacing:.15em;color:#3D6B3D;text-transform:uppercase;margin-bottom:.3rem;}
+  .tip p{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.7;color:#4A3728;margin:0;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.25rem 0;}
+  .mini-card{background:#fff;border-radius:12px;padding:1rem;box-shadow:0 2px 12px rgba(0,0,0,.05);text-align:center;}
+  .mini-card .icon{font-size:1.5rem;margin-bottom:.4rem;}
+  .mini-card h4{font-size:.82rem;font-weight:600;color:#2C1A0E;margin-bottom:.3rem;}
+  .mini-card p{font-family:'Trebuchet MS',sans-serif;font-size:.7rem;color:#888;line-height:1.5;}
+  .routine{background:#1A2C1A;border-radius:16px;padding:1.5rem;margin:1.5rem 0;color:#fff;}
+  .routine h3{font-size:1.1rem;font-weight:300;color:#A8D4A8;margin-bottom:1rem;}
+  .routine-step{display:flex;gap:.75rem;margin-bottom:.85rem;align-items:flex-start;}
+  .routine-step .num{width:28px;height:28px;border-radius:50%;background:#3D6B3D;display:flex;align-items:center;justify-content:center;font-family:'Trebuchet MS',sans-serif;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0;}
+  .routine-step div{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.6;color:rgba(255,255,255,.85);}
+  .routine-step strong{color:#A8D4A8;}
+  .mask-card{background:linear-gradient(135deg,#1A2C1A,#3D6B3D);border-radius:14px;padding:1.25rem;margin:.75rem 0;color:#fff;}
+  .mask-card h4{font-size:.9rem;font-weight:600;color:#A8D4A8;margin-bottom:.4rem;}
+  .mask-card p{font-family:'Trebuchet MS',sans-serif;font-size:.78rem;line-height:1.65;color:rgba(255,255,255,.8);}
+  .photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:1.25rem 0;}
+  .photo-grid img{width:100%;height:160px;object-fit:cover;border-radius:10px;}
+  .cta{background:linear-gradient(135deg,#1A2C1A,#3D6B3D);border-radius:16px;padding:2rem 1.5rem;text-align:center;margin:2rem 0;}
+  .cta h3{font-size:1.3rem;font-weight:300;color:#fff;margin-bottom:.5rem;}
+  .cta p{font-family:'Trebuchet MS',sans-serif;font-size:.78rem;color:rgba(255,255,255,.75);margin-bottom:1.25rem;line-height:1.6;}
+  .cta-brand{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;letter-spacing:.15em;color:#A8D4A8;text-transform:uppercase;}
+  .ingredient-list{list-style:none;margin:1rem 0;}
+  .ingredient-list li{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;color:#4A3728;padding:.4rem 0;border-bottom:1px solid #EAE4DE;display:flex;gap:.5rem;}
+  .ingredient-list li::before{content:"✦";color:#3D6B3D;font-size:.6rem;margin-top:.15rem;flex-shrink:0;}
+  @media(max-width:420px){.cover h1{font-size:2rem;}.two-col{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<!-- COUVERTURE -->
+<div class="cover">
+  <img class="cover-img" src="https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&q=80" alt="Cheveux">
+  <div class="cover-content">
+    <div class="badge">✦ Guide Beauté Mihi ✦</div>
+    <h1>Cheveux<br><em>de Rêve</em></h1>
+    <div class="cover-line"></div>
+    <p class="cover-sub">Nutrition, brillance et force — le guide complet pour des cheveux en pleine santé, du cuir chevelu aux pointes</p>
+    <div class="cover-brand">Blazing Dynasty × Mihi France</div>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div class="section">
+  <div class="section-tag">✦ Introduction</div>
+  <h2>Des cheveux<br><em>qui rayonnent</em></h2>
+  <p>Tes cheveux sont ton accessoire le plus visible. Pourtant, beaucoup de femmes luttent au quotidien contre la casse, le manque de volume ou la sécheresse — sans toujours savoir pourquoi.</p>
+  <p>Ce guide te donne toutes les clés pour comprendre tes cheveux et construire une routine adaptée à leur nature, pour des résultats visibles dès les premières semaines.</p>
+</div>
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1582095133179-bfd08e2fb6b9?w=800&q=80" alt="Soin cheveux">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<!-- TYPES DE CHEVEUX -->
+<div class="section">
+  <div class="section-tag">✦ Étape 1</div>
+  <h2>Connaître la nature<br><em>de tes cheveux</em></h2>
+  <p>Avant de choisir tes soins, il est essentiel de comprendre ce dont tes cheveux ont vraiment besoin.</p>
+
+  <div class="two-col">
+    <div class="mini-card">
+      <div class="icon">💧</div>
+      <h4>Secs / abîmés</h4>
+      <p>Manque d'éclat, frisottis, casse au peigne</p>
+    </div>
+    <div class="mini-card">
+      <div class="icon">🌿</div>
+      <h4>Gras</h4>
+      <p>Cuir chevelu brillant dès le lendemain du shampoing</p>
+    </div>
+    <div class="mini-card">
+      <div class="icon">🌸</div>
+      <h4>Fins / sans volume</h4>
+      <p>S'écrasent rapidement, manquent de densité</p>
+    </div>
+    <div class="mini-card">
+      <div class="icon">✨</div>
+      <h4>Colorés / traités</h4>
+      <p>Fragilisés par les traitements chimiques</p>
+    </div>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">💡 Le test porosité</div>
+    <p>Plonge un cheveu propre dans un verre d'eau. S'il coule rapidement : cheveux très poreux (très abîmés). S'il flotte : faible porosité (difficiles à hydrater). Entre les deux : porosité normale.</p>
+  </div>
+</div>
+
+<!-- INGRÉDIENTS -->
+<div class="section">
+  <div class="section-tag">✦ Étape 2</div>
+  <h2>Les actifs stars<br><em>pour tes cheveux</em></h2>
+
+  <ul class="ingredient-list">
+    <li><div><strong>Kératine</strong> — Reconstruit la fibre capillaire de l'intérieur, lisse et fortifie</div></li>
+    <li><div><strong>Huile d'argan</strong> — Nourrit en profondeur, apporte brillance et souplesse sans alourdir</div></li>
+    <li><div><strong>Protéines de soie</strong> — Gainifient le cheveu, réduisent la casse et les frisottis</div></li>
+    <li><div><strong>Biotine (Vit B8)</strong> — Stimule la pousse, renforce les bulbes pileux</div></li>
+    <li><div><strong>Acide hyaluronique</strong> — Hydrate le cuir chevelu, réduit les démangeaisons</div></li>
+    <li><div><strong>Huile de ricin</strong> — Active la circulation, favorise une pousse plus dense</div></li>
+  </ul>
+</div>
+
+<div class="photo-grid" style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <img src="https://images.unsplash.com/photo-1607748851687-ba9a10438621?w=400&q=80" alt="Huiles cheveux">
+  <img src="https://images.unsplash.com/photo-1559599101-f09722fb4948?w=400&q=80" alt="Soin capillaire">
+</div>
+
+<!-- ROUTINE -->
+<div class="section">
+  <div class="section-tag">✦ Étape 3</div>
+  <h2>La routine<br><em>capillaire idéale</em></h2>
+</div>
+
+<div style="padding:0 1.5rem 2rem;max-width:600px;margin:0 auto;">
+  <div class="routine">
+    <h3>🚿 Jour de shampoing</h3>
+    <div class="routine-step">
+      <div class="num">1</div>
+      <div><strong>Pré-shampoing</strong> — Applique une huile nourrissante sur les longueurs 30 min avant. Elle protège le cheveu pendant le lavage.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">2</div>
+      <div><strong>Shampoing doux</strong> — Masse le cuir chevelu (pas les longueurs). Deux passages maximum, eau tiède.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">3</div>
+      <div><strong>Après-shampoing</strong> — Sur les longueurs et pointes uniquement. Laisse poser 2-3 minutes.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">4</div>
+      <div><strong>Rinçage à l'eau froide</strong> — Referme les écailles du cheveu, apporte brillance et douceur.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">5</div>
+      <div><strong>Séchage délicat</strong> — Presse avec une serviette en microfibre, ne frotte jamais. Sèche-cheveux à distance raisonnable.</div>
+    </div>
+  </div>
+</div>
+
+<!-- MASQUES -->
+<div class="section">
+  <div class="section-tag">✦ Bonus</div>
+  <h2>3 masques<br><em>à faire chez soi</em></h2>
+
+  <div class="mask-card">
+    <h4>🥑 Masque nutrition intense</h4>
+    <p>1/2 avocat + 2 cuillères d'huile d'olive + 1 cuillère de miel. Applique sur cheveux secs, laisse 30 min sous une charlotte, rince abondamment. Pour cheveux très secs.</p>
+  </div>
+
+  <div class="mask-card" style="background:linear-gradient(135deg,#2C1A0E,#5C3D2A);">
+    <h4>🥚 Masque protéines & brillance</h4>
+    <p>1 œuf entier + 1 cuillère de mayonnaise + quelques gouttes d'huile d'argan. 20 min sur les longueurs. Rinçage à l'eau froide (jamais chaude avec l'œuf !).</p>
+  </div>
+
+  <div class="mask-card">
+    <h4>🌿 Masque cuir chevelu purifiant</h4>
+    <p>2 cuillères d'argile verte + eau de rose jusqu'à consistance crémeuse + 5 gouttes d'huile essentielle de tea tree. Sur le cuir chevelu uniquement, 15 min, rince bien.</p>
+  </div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;padding:0 1.5rem;max-width:600px;margin:1rem auto;">
+  <img src="https://images.unsplash.com/photo-1620331311520-246422fd82f9?w=300&q=80" alt="Cheveux brillants" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+  <img src="https://images.unsplash.com/photo-1519699047748-de8e457a634e?w=300&q=80" alt="Soin cheveux" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+  <img src="https://images.unsplash.com/photo-1590159763121-7c9fd312190d?w=300&q=80" alt="Coiffure femme" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+</div>
+
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1527799820374-87036b11d0a9?w=800&q=80" alt="Cheveux brillants">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<!-- ERREURS -->
+<div class="section">
+  <div class="section-tag">✦ À éviter</div>
+  <h2>Les habitudes qui<br><em>abîment tes cheveux</em></h2>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 01</div>
+      <h3>Attacher les cheveux mouillés</h3>
+      <p>Le cheveu mouillé est 3x plus fragile. Les attacher casse la fibre capillaire et crée des points de rupture.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 02</div>
+      <h3>Laver trop souvent</h3>
+      <p>Chaque shampoing élimine le sébum protecteur naturel. 2-3 fois par semaine est idéal pour la plupart des types de cheveux.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 03</div>
+      <h3>Utiliser trop de chaleur</h3>
+      <p>Au-delà de 180°C, la kératine est dénaturée. Utilise toujours un spray thermo-protecteur avant lissage ou bouclage.</p>
+    </div>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">🌱 L'alimentation capillaire</div>
+    <p>Les cheveux sont constitués à 95% de kératine (protéine). Pour les nourrir de l'intérieur : œufs, lentilles, épinards, noix, poissons gras. Et pense à boire suffisamment — un cheveu déshydraté casse plus facilement.</p>
+  </div>
+</div>
+
+<!-- CTA -->
+
+<img style="width:100%;height:260px;object-fit:cover;display:block;" src="https://images.unsplash.com/photo-1605980776566-0486c3ac7617?w=800&q=80" alt="Cheveux longs">
+<div style="font-family:Trebuchet MS,sans-serif;font-size:.62rem;color:#AAA;text-align:center;padding:.4rem;background:#F0EBE5;">© Unsplash — Libre de droits</div>
+
+<div class="section">
+  <div class="cta">
+    <h3>Des cheveux forts<br>et lumineux t'attendent</h3>
+    <p>Découvre la gamme capillaire Mihi — des formules enrichies en actifs naturels pour nourrir, réparer et sublimer tes cheveux.</p>
+    <div class="cover-line" style="background:#8AB58A;"></div>
+    <div class="cta-brand">Blazing Dynasty × Mihi France</div>
+  </div>
+  <p style="font-family:'Trebuchet MS',sans-serif;font-size:.7rem;color:#AAA;text-align:center;margin-top:1rem;">Guide offert par ta conseillère Mihi 🌿</p>
+</div>
+
+</body>
+</html>

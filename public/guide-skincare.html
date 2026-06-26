@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide Éclat Peau — Mihi</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Georgia',serif;background:#FBF8F4;color:#2C1A0E;}
+  .cover{min-height:100vh;background:linear-gradient(160deg,#2C1A0E 0%,#7B4F35 50%,#C49A8A 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;position:relative;overflow:hidden;}
+  .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.25;}
+  .cover-content{position:relative;z-index:2;}
+  .badge{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.2em;color:#C49A8A;text-transform:uppercase;margin-bottom:1rem;}
+  .cover h1{font-size:2.6rem;font-weight:300;color:#fff;line-height:1.2;margin-bottom:.75rem;}
+  .cover h1 em{font-style:italic;color:#E8C4A8;}
+  .cover-sub{font-family:'Trebuchet MS',sans-serif;font-size:.9rem;color:rgba(255,255,255,.75);line-height:1.7;max-width:340px;margin:0 auto 2rem;}
+  .cover-line{width:50px;height:1px;background:#C49A8A;margin:1.5rem auto;}
+  .cover-brand{font-family:'Trebuchet MS',sans-serif;font-size:.65rem;letter-spacing:.15em;color:rgba(255,255,255,.5);text-transform:uppercase;}
+  .section{padding:2.5rem 1.5rem;max-width:600px;margin:0 auto;}
+  .section-tag{font-family:'Trebuchet MS',sans-serif;font-size:.55rem;font-weight:700;letter-spacing:.2em;color:#C49A8A;text-transform:uppercase;margin-bottom:.5rem;}
+  .section h2{font-size:1.6rem;font-weight:300;color:#2C1A0E;margin-bottom:1rem;line-height:1.3;}
+  .section h2 em{font-style:italic;color:#7B4F35;}
+  .section p{font-family:'Trebuchet MS',sans-serif;font-size:.85rem;line-height:1.8;color:#5C3D2A;margin-bottom:1rem;}
+  .photo-full{width:100%;height:280px;object-fit:cover;display:block;}
+  .photo-caption{font-family:'Trebuchet MS',sans-serif;font-size:.62rem;color:#AAA;text-align:center;padding:.4rem;background:#F5F0EB;}
+  .card{background:#fff;border-radius:16px;overflow:hidden;margin:1.5rem 0;box-shadow:0 4px 20px rgba(0,0,0,.07);}
+  .card-body{padding:1.25rem 1.5rem;}
+  .card-num{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.15em;color:#C49A8A;text-transform:uppercase;margin-bottom:.3rem;}
+  .card h3{font-size:1.15rem;font-weight:400;color:#2C1A0E;margin-bottom:.6rem;}
+  .card p{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.75;color:#5C3D2A;}
+  .tip{background:linear-gradient(135deg,#FBF3EE,#F5E6DC);border-left:3px solid #C49A8A;border-radius:0 12px 12px 0;padding:1rem 1.25rem;margin:1.25rem 0;}
+  .tip-label{font-family:'Trebuchet MS',sans-serif;font-size:.55rem;font-weight:700;letter-spacing:.15em;color:#C49A8A;text-transform:uppercase;margin-bottom:.3rem;}
+  .tip p{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.7;color:#5C3D2A;margin:0;}
+  .divider{width:40px;height:2px;background:linear-gradient(90deg,#C49A8A,transparent);margin:2rem auto;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.25rem 0;}
+  .mini-card{background:#fff;border-radius:12px;padding:1rem;box-shadow:0 2px 12px rgba(0,0,0,.05);text-align:center;}
+  .mini-card .icon{font-size:1.5rem;margin-bottom:.4rem;}
+  .mini-card h4{font-size:.82rem;font-weight:600;color:#2C1A0E;margin-bottom:.3rem;}
+  .mini-card p{font-family:'Trebuchet MS',sans-serif;font-size:.7rem;color:#888;line-height:1.5;}
+  .routine{background:#2C1A0E;border-radius:16px;padding:1.5rem;margin:1.5rem 0;color:#fff;}
+  .routine h3{font-size:1.1rem;font-weight:300;color:#E8C4A8;margin-bottom:1rem;}
+  .routine-step{display:flex;gap:.75rem;margin-bottom:.85rem;align-items:flex-start;}
+  .routine-step .num{width:28px;height:28px;border-radius:50%;background:#C49A8A;display:flex;align-items:center;justify-content:center;font-family:'Trebuchet MS',sans-serif;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0;}
+  .routine-step div{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.6;color:rgba(255,255,255,.85);}
+  .routine-step strong{color:#E8C4A8;}
+  .cta{background:linear-gradient(135deg,#2C1A0E,#7B4F35);border-radius:16px;padding:2rem 1.5rem;text-align:center;margin:2rem 0;}
+  .cta h3{font-size:1.3rem;font-weight:300;color:#fff;margin-bottom:.5rem;}
+  .cta p{font-family:'Trebuchet MS',sans-serif;font-size:.78rem;color:rgba(255,255,255,.75);margin-bottom:1.25rem;line-height:1.6;}
+  .cta-brand{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;letter-spacing:.15em;color:#C49A8A;text-transform:uppercase;}
+  .ingredient-list{list-style:none;margin:1rem 0;}
+  .ingredient-list li{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;color:#5C3D2A;padding:.4rem 0;border-bottom:1px solid #F0E8E0;display:flex;gap:.5rem;}
+  .ingredient-list li::before{content:"✦";color:#C49A8A;font-size:.6rem;margin-top:.15rem;flex-shrink:0;}
+  .photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:1.25rem 0;}
+  .photo-grid img{width:100%;height:160px;object-fit:cover;border-radius:10px;}
+  @media(max-width:420px){.cover h1{font-size:2rem;}.two-col{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<!-- COUVERTURE -->
+<div class="cover">
+  <img class="cover-img" src="https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?w=800&q=80" alt="Skincare">
+  <div class="cover-content">
+    <div class="badge">✦ Guide Beauté Mihi ✦</div>
+    <h1>Guide <em>Éclat</em><br>Peau</h1>
+    <div class="cover-line"></div>
+    <p class="cover-sub">Les secrets d'une peau lumineuse et hydratée — routine complète, ingrédients clés et conseils d'experte</p>
+    <div class="cover-brand">Blazing Dynasty × Mihi France</div>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div class="section">
+  <div class="section-tag">✦ Introduction</div>
+  <h2>Ta peau mérite le<br><em>meilleur</em></h2>
+  <p>Une belle peau ne tient pas au hasard. Elle se construit avec les bons gestes, au bon moment, avec les bons produits. Ce guide t'accompagne pas à pas pour créer une routine skincare qui te ressemble — simple, efficace, et adaptée à ton type de peau.</p>
+  <p>Tu vas découvrir les ingrédients qui font vraiment la différence, la routine idéale matin et soir, et les erreurs à éviter absolument.</p>
+</div>
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=800&q=80" alt="Routine skincare">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<!-- TYPES DE PEAU -->
+<div class="section">
+  <div class="section-tag">✦ Étape 1</div>
+  <h2>Identifier ton<br><em>type de peau</em></h2>
+  <p>Tout commence par bien se connaître. Une routine inadaptée peut aggraver les imperfections plutôt que les corriger.</p>
+
+  <div class="two-col">
+    <div class="mini-card">
+      <div class="icon">💧</div>
+      <h4>Peau sèche</h4>
+      <p>Tiraillements, peaux qui pèlent, manque de confort</p>
+    </div>
+    <div class="mini-card">
+      <div class="icon">✨</div>
+      <h4>Peau mixte</h4>
+      <p>Zone T brillante, joues normales ou sèches</p>
+    </div>
+    <div class="mini-card">
+      <div class="icon">🌿</div>
+      <h4>Peau grasse</h4>
+      <p>Brillances, pores dilatés, tendance acnéique</p>
+    </div>
+    <div class="mini-card">
+      <div class="icon">🌸</div>
+      <h4>Peau sensible</h4>
+      <p>Rougeurs, réactivité, inconfort fréquent</p>
+    </div>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">💡 Le test simple</div>
+    <p>Le matin au réveil, avant de te laver le visage, tamponne une feuille de papier sec sur ton visage. Si elle est translucide : peau grasse. Sèche : peau normale ou sèche. Les deux : peau mixte.</p>
+  </div>
+</div>
+
+<!-- INGRÉDIENTS -->
+<div class="section">
+  <div class="section-tag">✦ Étape 2</div>
+  <h2>Les ingrédients<br><em>qui changent tout</em></h2>
+  <p>Savoir lire une étiquette, c'est choisir en connaissance de cause. Voici les actifs stars à privilégier :</p>
+
+  <ul class="ingredient-list">
+    <li><div><strong>Acide hyaluronique</strong> — Hydratation intense, repulpant, convient à tous les types de peau</div></li>
+    <li><div><strong>Rétinol</strong> — Anti-âge puissant, lisse les ridules, à utiliser le soir uniquement</div></li>
+    <li><div><strong>Vitamine C</strong> — Éclat, anti-taches, protection antioxydante — idéal le matin</div></li>
+    <li><div><strong>Niacinamide</strong> — Resserre les pores, réduit les rougeurs, régule le sébum</div></li>
+    <li><div><strong>Peptides</strong> — Stimulent le collagène, fermeté et élasticité de la peau</div></li>
+    <li><div><strong>Céramides</strong> — Réparent la barrière cutanée, apaisent les peaux sensibles</div></li>
+  
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;padding:0 1.5rem;max-width:600px;margin:0 auto 1rem;">
+  <img src="https://images.unsplash.com/photo-1643196969580-c8cded4a6a55?w=300&q=80" alt="Sérum visage" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+  <img src="https://images.unsplash.com/photo-1625772452859-1c03d884dcd7?w=300&q=80" alt="Crème hydratante" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+  <img src="https://images.unsplash.com/photo-1617897903246-719242758050?w=300&q=80" alt="Soin peau" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+</div>
+</ul>
+</div>
+
+<div class="photo-grid" style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <img src="https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=400&q=80" alt="Sérum">
+  <img src="https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=400&q=80" alt="Crème">
+</div>
+
+<!-- ROUTINE -->
+<div class="section">
+  <div class="section-tag">✦ Étape 3</div>
+  <h2>La routine<br><em>parfaite</em></h2>
+</div>
+
+<div style="padding:0 1.5rem 2rem;max-width:600px;margin:0 auto;">
+  <div class="routine">
+    <h3>☀️ Matin — 5 minutes</h3>
+    <div class="routine-step">
+      <div class="num">1</div>
+      <div><strong>Nettoyage doux</strong> — Eau tiède + gel nettoyant sans savon. Jamais d'eau trop chaude qui agresse la peau.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">2</div>
+      <div><strong>Sérum Vitamine C</strong> — Applique quelques gouttes du bout des doigts en tapotant doucement.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">3</div>
+      <div><strong>Crème hydratante</strong> — Adaptée à ton type de peau, avec ou sans parfum selon ta sensibilité.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">4</div>
+      <div><strong>SPF 30 minimum</strong> — La protection solaire est l'anti-âge n°1. Indispensable même par temps nuageux.</div>
+    </div>
+  </div>
+
+  <div class="routine" style="background:#5C3D2A;">
+    <h3>🌙 Soir — 10 minutes</h3>
+    <div class="routine-step">
+      <div class="num">1</div>
+      <div><strong>Double nettoyage</strong> — D'abord une huile ou baume démaquillant, puis un gel nettoyant pour peau nette.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">2</div>
+      <div><strong>Tonique ou essence</strong> — Prépare la peau à mieux absorber les soins suivants.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">3</div>
+      <div><strong>Sérum ciblé</strong> — Rétinol (2-3x/semaine), acide hyaluronique ou niacinamide selon tes besoins.</div>
+    </div>
+    <div class="routine-step">
+      <div class="num">4</div>
+      <div><strong>Crème de nuit</strong> — Plus riche que celle du matin. La peau se régénère pendant le sommeil.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ERREURS -->
+<div class="section">
+  <div class="section-tag">✦ À éviter</div>
+  <h2>Les 5 erreurs qui<br><em>abîment ta peau</em></h2>
+
+  <div class="card">
+    <img src="https://images.unsplash.com/photo-1541943869728-4bd4f450c8f5?w=600&q=80" alt="Erreurs skincare" style="width:100%;height:200px;object-fit:cover;">
+    <div class="card-body">
+      <div class="card-num">Erreur 01</div>
+      <h3>Oublier la protection solaire</h3>
+      <p>80% du vieillissement cutané est causé par le soleil. Le SPF est l'investissement le plus rentable de ta routine.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 02</div>
+      <h3>Changer de produits trop souvent</h3>
+      <p>Un soin a besoin de 4 à 8 semaines pour montrer ses effets. La patience est la clé d'une belle peau.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 03</div>
+      <h3>Sur-nettoyer sa peau</h3>
+      <p>Nettoyer trop souvent ou trop agressivement détruit le film hydrolipidique naturel qui protège ta peau.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 04</div>
+      <h3>Ignorer le cou et le décolleté</h3>
+      <p>Ces zones trahissent l'âge avant le visage. Applique toujours tes soins en descendant sur le cou.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 05</div>
+      <h3>Mélanger trop d'actifs</h3>
+      <p>Rétinol + Vitamine C + AHA le même soir = irritations garanties. Alterne et simplifie ta routine.</p>
+    </div>
+  </div>
+</div>
+
+<!-- TIP HYDRATATION -->
+<div class="section">
+  <div class="tip">
+    <div class="tip-label">💧 L'hydratation de l'intérieur</div>
+    <p>Les meilleurs soins du monde ne remplaceront jamais une bonne hydratation interne. 1,5 à 2 litres d'eau par jour + une alimentation riche en oméga-3 (poissons gras, noix, avocat) sont le secret d'une peau durablement belle.</p>
+  </div>
+</div>
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1505944270255-72b8c68c6a70?w=800&q=80" alt="Peau éclat">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<!-- CTA -->
+
+<img style="width:100%;height:260px;object-fit:cover;display:block;" src="https://images.unsplash.com/photo-1522338242992-e1a54906a8da?w=800&q=80" alt="Femme soin visage">
+<div style="font-family:Trebuchet MS,sans-serif;font-size:.62rem;color:#AAA;text-align:center;padding:.4rem;background:#F5F0EB;">© Unsplash — Libre de droits</div>
+
+<div class="section">
+  <div class="cta">
+    <h3>Prête pour une peau<br>qui rayonne ?</h3>
+    <p>Découvre la gamme Skincare Mihi — des formules conçues pour sublimer tous les types de peau, avec des actifs de haute qualité.</p>
+    <div class="cover-line"></div>
+    <div class="cta-brand">Blazing Dynasty × Mihi France</div>
+  </div>
+  <p style="font-family:'Trebuchet MS',sans-serif;font-size:.7rem;color:#AAA;text-align:center;margin-top:1rem;">Guide offert par ta conseillère Mihi 🌸</p>
+</div>
+
+</body>
+</html>

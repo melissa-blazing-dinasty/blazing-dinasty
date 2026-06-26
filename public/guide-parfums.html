@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide L'Art du Parfum — Mihi</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Georgia',serif;background:#FAF6F0;color:#1A0E05;}
+  .cover{min-height:100vh;background:linear-gradient(160deg,#1A0E05 0%,#6B4A1A 50%,#C4922A 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;position:relative;overflow:hidden;}
+  .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.22;}
+  .cover-content{position:relative;z-index:2;}
+  .badge{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.2em;color:#E8C870;text-transform:uppercase;margin-bottom:1rem;}
+  .cover h1{font-size:2.6rem;font-weight:300;color:#fff;line-height:1.2;margin-bottom:.75rem;}
+  .cover h1 em{font-style:italic;color:#F0DC9A;}
+  .cover-sub{font-family:'Trebuchet MS',sans-serif;font-size:.9rem;color:rgba(255,255,255,.75);line-height:1.7;max-width:340px;margin:0 auto 2rem;}
+  .cover-line{width:50px;height:1px;background:#C4922A;margin:1.5rem auto;}
+  .cover-brand{font-family:'Trebuchet MS',sans-serif;font-size:.65rem;letter-spacing:.15em;color:rgba(255,255,255,.5);text-transform:uppercase;}
+  .section{padding:2.5rem 1.5rem;max-width:600px;margin:0 auto;}
+  .section-tag{font-family:'Trebuchet MS',sans-serif;font-size:.55rem;font-weight:700;letter-spacing:.2em;color:#9B6B10;text-transform:uppercase;margin-bottom:.5rem;}
+  .section h2{font-size:1.6rem;font-weight:300;color:#1A0E05;margin-bottom:1rem;line-height:1.3;}
+  .section h2 em{font-style:italic;color:#9B6B10;}
+  .section p{font-family:'Trebuchet MS',sans-serif;font-size:.85rem;line-height:1.8;color:#3D2810;margin-bottom:1rem;}
+  .photo-full{width:100%;height:280px;object-fit:cover;display:block;}
+  .photo-caption{font-family:'Trebuchet MS',sans-serif;font-size:.62rem;color:#AAA;text-align:center;padding:.4rem;background:#F5EFE5;}
+  .card{background:#fff;border-radius:16px;overflow:hidden;margin:1.25rem 0;box-shadow:0 4px 20px rgba(0,0,0,.07);}
+  .card-body{padding:1.25rem 1.5rem;}
+  .card-num{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.15em;color:#9B6B10;text-transform:uppercase;margin-bottom:.3rem;}
+  .card h3{font-size:1.1rem;font-weight:400;color:#1A0E05;margin-bottom:.5rem;}
+  .card p{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.75;color:#3D2810;}
+  .tip{background:linear-gradient(135deg,#FDF6E8,#F8EDCC);border-left:3px solid #C4922A;border-radius:0 12px 12px 0;padding:1rem 1.25rem;margin:1.25rem 0;}
+  .tip-label{font-family:'Trebuchet MS',sans-serif;font-size:.55rem;font-weight:700;letter-spacing:.15em;color:#9B6B10;text-transform:uppercase;margin-bottom:.3rem;}
+  .tip p{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.7;color:#3D2810;margin:0;}
+  .pyramid{background:#1A0E05;border-radius:16px;padding:1.5rem;margin:1.5rem 0;color:#fff;}
+  .pyramid h3{font-size:1rem;font-weight:300;color:#E8C870;margin-bottom:1.25rem;text-align:center;}
+  .pyramid-level{border-radius:8px;padding:.85rem 1rem;margin-bottom:.6rem;text-align:center;}
+  .pyramid-level h4{font-family:'Trebuchet MS',sans-serif;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.25rem;}
+  .pyramid-level p{font-family:'Trebuchet MS',sans-serif;font-size:.75rem;line-height:1.55;opacity:.85;}
+  .family-grid{display:grid;gap:.75rem;margin:1.25rem 0;}
+  .family{background:#fff;border-radius:14px;padding:1rem 1.25rem;box-shadow:0 2px 12px rgba(0,0,0,.06);display:flex;gap:.85rem;align-items:flex-start;}
+  .family .icon{font-size:1.6rem;flex-shrink:0;}
+  .family h4{font-size:.88rem;font-weight:600;color:#1A0E05;margin-bottom:.2rem;}
+  .family p{font-family:'Trebuchet MS',sans-serif;font-size:.74rem;color:#666;line-height:1.55;}
+  .rules{background:linear-gradient(135deg,#1A0E05,#6B4A1A);border-radius:16px;padding:1.5rem;margin:1.5rem 0;}
+  .rule{display:flex;gap:.75rem;margin-bottom:.85rem;align-items:flex-start;}
+  .rule .num{width:28px;height:28px;border-radius:50%;background:#C4922A;display:flex;align-items:center;justify-content:center;font-family:'Trebuchet MS',sans-serif;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0;}
+  .rule div{font-family:'Trebuchet MS',sans-serif;font-size:.8rem;line-height:1.6;color:rgba(255,255,255,.85);}
+  .rule strong{color:#E8C870;}
+  .cta{background:linear-gradient(135deg,#1A0E05,#6B4A1A);border-radius:16px;padding:2rem 1.5rem;text-align:center;margin:2rem 0;}
+  .cta h3{font-size:1.3rem;font-weight:300;color:#fff;margin-bottom:.5rem;}
+  .cta p{font-family:'Trebuchet MS',sans-serif;font-size:.78rem;color:rgba(255,255,255,.75);margin-bottom:1.25rem;line-height:1.6;}
+  .cta-brand{font-family:'Trebuchet MS',sans-serif;font-size:.6rem;letter-spacing:.15em;color:#E8C870;text-transform:uppercase;}
+  @media(max-width:420px){.cover h1{font-size:2rem;}}
+</style>
+</head>
+<body>
+
+<!-- COUVERTURE -->
+<div class="cover">
+  <img class="cover-img" src="https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=800&q=80" alt="Parfum">
+  <div class="cover-content">
+    <div class="badge">✦ Guide Olfactif Mihi ✦</div>
+    <h1>L'Art du<br><em>Parfum</em></h1>
+    <div class="cover-line"></div>
+    <p class="cover-sub">Choisir, porter et faire durer son parfum — les secrets des expertes en olfaction pour trouver ta signature olfactive</p>
+    <div class="cover-brand">Blazing Dynasty × Mihi France</div>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div class="section">
+  <div class="section-tag">✦ Introduction</div>
+  <h2>Le parfum, ton<br><em>accessoire invisible</em></h2>
+  <p>Un parfum dit ce que les mots ne peuvent pas exprimer. Il laisse une empreinte dans la mémoire de ceux qui te croisent — on se souvient d'une personne à son odeur bien avant son visage.</p>
+  <p>Pourtant, choisir un parfum reste un exercice difficile pour beaucoup. Ce guide t'apprend à déchiffrer les compositions olfactives, identifier ta famille de parfums et porter ton fragrance pour qu'il dure toute la journée.</p>
+</div>
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1541643600914-78b084683702?w=800&q=80" alt="Flacons de parfum">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<!-- PYRAMIDE OLFACTIVE -->
+<div class="section">
+  <div class="section-tag">✦ Les bases</div>
+  <h2>Comprendre la<br><em>pyramide olfactive</em></h2>
+  <p>Tout parfum se structure en 3 couches qui se révèlent dans le temps. C'est ce qui rend chaque fragrance unique et vivante.</p>
+</div>
+
+<div style="padding:0 1.5rem;max-width:600px;margin:0 auto;">
+  <div class="pyramid">
+    <h3>🔺 La Pyramide Olfactive</h3>
+    <div class="pyramid-level" style="background:rgba(196,146,42,.25);border:1px solid rgba(196,146,42,.4);">
+      <h4 style="color:#E8C870;">Notes de Tête</h4>
+      <p>Ce que tu sens en premier. Fraîches et légères, elles durent 15-30 minutes. Agrumes, herbes, aromates. La première impression — ne juge jamais un parfum sur les notes de tête.</p>
+    </div>
+    <div class="pyramid-level" style="background:rgba(196,146,42,.15);border:1px solid rgba(196,146,42,.25);">
+      <h4 style="color:#E8C870;">Notes de Cœur</h4>
+      <p>L'âme du parfum. Elles apparaissent après 30 min et restent 2 à 4 heures. Florales, épicées, fruitées. C'est ici que le parfum se révèle vraiment.</p>
+    </div>
+    <div class="pyramid-level" style="background:rgba(196,146,42,.08);border:1px solid rgba(196,146,42,.15);">
+      <h4 style="color:#E8C870;">Notes de Fond</h4>
+      <p>La mémoire du parfum. Bois, musc, vanille, ambre. Elles persistent 6 à 12 heures et continuent à te suivre longtemps après la vaporisation.</p>
+    </div>
+  
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;padding:0 1.5rem;max-width:600px;margin:1rem auto;">
+  <img src="https://images.unsplash.com/photo-1547005327-821d7e96d4c2?w=400&q=80" alt="Fleurs parfum" style="width:100%;height:170px;object-fit:cover;border-radius:10px;">
+  <img src="https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?w=400&q=80" alt="Bois épices" style="width:100%;height:170px;object-fit:cover;border-radius:10px;">
+</div>
+</div>
+</div>
+
+<!-- FAMILLES -->
+<div class="section">
+  <div class="section-tag">✦ Trouver ton style</div>
+  <h2>Les grandes familles<br><em>olfactives</em></h2>
+
+  <div class="family-grid">
+    <div class="family">
+      <div class="icon">🌸</div>
+      <div>
+        <h4>Floral</h4>
+        <p>Rose, jasmin, pivoine, magnolia. Romantique et féminin. La famille la plus portée au monde. Idéale pour une première olfactive.</p>
+      </div>
+    </div>
+    <div class="family">
+      <div class="icon">🌊</div>
+      <div>
+        <h4>Aquatique / Frais</h4>
+        <p>Marine, thé vert, agrumes. Légèreté et dynamisme. Parfait pour le quotidien et les saisons chaudes.</p>
+      </div>
+    </div>
+    <div class="family">
+      <div class="icon">🌳</div>
+      <div>
+        <h4>Boisé</h4>
+        <p>Cèdre, santal, vétiver, oud. Sophistiqué et envoûtant. Parfaits pour le soir et les occasions spéciales.</p>
+      </div>
+    </div>
+    <div class="family">
+      <div class="icon">🍂</div>
+      <div>
+        <h4>Oriental / Gourmand</h4>
+        <p>Vanille, ambre, caramel, épices. Chaleureux et sensuel. Pour celles qui aiment les parfums qui marquent les mémoires.</p>
+      </div>
+    </div>
+    <div class="family">
+      <div class="icon">🌿</div>
+      <div>
+        <h4>Aromatique / Vert</h4>
+        <p>Lavande, romarin, herbes fraîches. Naturel et authentique. Pour les femmes qui aiment les fragrances proches de la nature.</p>
+      </div>
+    </div>
+  </div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;padding:0 1.5rem;max-width:600px;margin:1rem auto;">
+  <img src="https://images.unsplash.com/photo-1588514912908-3bd52f7f2f93?w=300&q=80" alt="Flacon parfum" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+  <img src="https://images.unsplash.com/photo-1599804683979-52e77d4f37dd?w=300&q=80" alt="Roses parfum" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+  <img src="https://images.unsplash.com/photo-1594035910387-fea47794261f?w=300&q=80" alt="Flacons collection" style="width:100%;height:120px;object-fit:cover;border-radius:8px;">
+</div>
+
+
+<img class="photo-full" src="https://images.unsplash.com/photo-1615634260167-c8cdede054de?w=800&q=80" alt="Fleurs parfum">
+<div class="photo-caption">© Unsplash — Libre de droits</div>
+
+<!-- RÈGLES D'OR -->
+<div class="section">
+  <div class="section-tag">✦ La technique</div>
+  <h2>Faire durer son<br><em>parfum toute la journée</em></h2>
+</div>
+
+<div style="padding:0 1.5rem 2rem;max-width:600px;margin:0 auto;">
+  <div class="rules">
+    <div class="rule">
+      <div class="num">1</div>
+      <div><strong>Vaporise sur la peau hydratée</strong> — Applique une crème neutre avant ton parfum. La peau sèche ne retient pas les molécules odorantes.</div>
+    </div>
+    <div class="rule">
+      <div class="num">2</div>
+      <div><strong>Les points de chaleur</strong> — Poignets, nuque, derrière les oreilles, plis des coudes, creux des genoux. La chaleur diffuse le parfum dans l'air autour de toi.</div>
+    </div>
+    <div class="rule">
+      <div class="num">3</div>
+      <div><strong>Ne frotte jamais les poignets</strong> — Cela casse les molécules et altère le parfum. Laisse-le sécher naturellement.</div>
+    </div>
+    <div class="rule">
+      <div class="num">4</div>
+      <div><strong>Vaporise sur les cheveux</strong> — Les cheveux retiennent le parfum mieux que la peau. Quelques spritzes dans les longueurs créent un sillage délicat.</div>
+    </div>
+    <div class="rule">
+      <div class="num">5</div>
+      <div><strong>Conserve dans l'obscurité</strong> — La lumière et la chaleur dégradent les parfums. Range tes flacons dans leur boîte ou dans un tiroir, loin de la salle de bain.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ERREURS -->
+<div class="section">
+  <div class="section-tag">✦ À éviter</div>
+  <h2>Les erreurs qui<br><em>gâchent ton parfum</em></h2>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 01</div>
+      <h3>Sentir le flacon en magasin</h3>
+      <p>Tu sens l'alcool, pas le parfum. Vaporise sur ta peau et attends 20 minutes avant de te décider. Demande toujours des mouillettes pour tester plusieurs fragrances sans saturer ton odorat.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 02</div>
+      <h3>Tester trop de parfums à la fois</h3>
+      <p>Au-delà de 3-4 fragrances, le nez est saturé. Entre chaque test, sens l'intérieur de ton coude (peau neutre) ou quelques grains de café pour nettoyer les récepteurs.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="card-num">Erreur 03</div>
+      <h3>Vaporiser sur les vêtements</h3>
+      <p>Le parfum peut laisser des taches sur les tissus et réagit différemment que sur la peau. La chaleur corporelle est ce qui fait vivre une fragrance.</p>
+    </div>
+  </div>
+
+  <div class="tip">
+    <div class="tip-label">✨ Le secret des parfumeuses</div>
+    <p>Les vraies connaisseurs ne se limitent pas à un seul parfum. On parle de "garde-robe olfactive" — un parfum léger pour le quotidien, un plus profond pour le soir, un troisième pour les grandes occasions. Chaque humeur mérite sa fragrance.</p>
+  </div>
+</div>
+
+<!-- CTA -->
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;padding:0 1.5rem;max-width:600px;margin:1rem auto;">
+  <img src="https://images.unsplash.com/photo-1612817288484-6f916006741a?w=400&q=80" alt="Parfum luxe" style="width:100%;height:170px;object-fit:cover;border-radius:10px;">
+  <img src="https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&q=80" alt="Parfum femme" style="width:100%;height:170px;object-fit:cover;border-radius:10px;">
+</div>
+
+<div class="section">
+  <div class="cta">
+    <h3>Trouve ta signature<br>olfactive Mihi</h3>
+    <p>La collection Parfums Mihi propose des fragrances inspirées des plus grandes maisons, à des prix accessibles. Demande à ta conseillère de te guider vers les notes qui te ressemblent.</p>
+    <div class="cover-line" style="background:#C4922A;"></div>
+    <div class="cta-brand">Blazing Dynasty × Mihi France</div>
+  </div>
+  <p style="font-family:'Trebuchet MS',sans-serif;font-size:.7rem;color:#AAA;text-align:center;margin-top:1rem;">Guide offert par ta conseillère Mihi 🌸</p>
+</div>
+
+</body>
+</html>

@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
 import { C } from './constants';
 import App from './App';
 import { SCRIPTS_DATA } from './App';
@@ -557,6 +557,8 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
   const [captureContact, setCaptureContact] = useState("");
   const [captureEnvoyee, setCaptureEnvoyee] = useState(false);
   const [suiteParfum, setSuiteParfum] = useState("");
+  const [showContactParfum, setShowContactParfum] = useState(false);
+  const [contactParfum, setContactParfum] = useState({prenom:"",tel:"",mail:"",reseau:""});
 
   const calculerResultat = (rep) => {
     setLoading(true);
@@ -611,6 +613,9 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
     setReponses(newRep);
     if(step < QUESTIONS_PARFUM.length - 1){
       setStep(step + 1);
+    } else if(externalMode) {
+      setReponses(newRep);
+      setShowContactParfum(true);
     } else {
       calculerResultat(newRep);
     }
@@ -656,7 +661,36 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
     </div>
   );
 
-  // Questions
+  if(showContactParfum) return(
+    <div style={{paddingBottom:"2rem"}}>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.brun,marginBottom:".3rem"}}>Presque terminé <em style={{fontStyle:"italic",color:C.rose}}>✨</em></div>
+      <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>Laisse tes coordonnées pour recevoir tes recommandations parfum personnalisées 🌸</p>
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
+        <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Prénom *</div>
+        <input value={contactParfum.prenom} onChange={e=>setContactParfum(p=>({...p,prenom:e.target.value}))} placeholder="Ton prénom"
+          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".6rem"}}/>
+        <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>📱 Téléphone / WhatsApp</div>
+        <input value={contactParfum.tel} onChange={e=>setContactParfum(p=>({...p,tel:e.target.value}))} placeholder="06 XX XX XX XX" type="tel"
+          style={{width:"100%",border:`1.5px solid ${contactParfum.tel.trim()?C.vert:C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem"}}/>
+        <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>📧 Email</div>
+        <input value={contactParfum.mail} onChange={e=>setContactParfum(p=>({...p,mail:e.target.value}))} placeholder="ton@email.com" type="email"
+          style={{width:"100%",border:`1.5px solid ${contactParfum.mail.trim()?C.vert:C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem"}}/>
+        <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>💬 Messenger / Instagram</div>
+        <input value={contactParfum.reseau} onChange={e=>setContactParfum(p=>({...p,reseau:e.target.value}))} placeholder="@tonpseudo"
+          style={{width:"100%",border:`1.5px solid ${contactParfum.reseau.trim()?C.vert:C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+      </div>
+      <button onClick={async()=>{
+        try{await setDoc(doc(db,"diag_externes",`${uid}_parfum_${Date.now()}`),{type:"parfum",uid,contact:contactParfum,reponses,date:new Date().toISOString()},{merge:true});}catch{}
+        calculerResultat(reponses);setShowContactParfum(false);
+      }} disabled={contactParfum.prenom.trim().length<2||(!contactParfum.tel.trim()&&!contactParfum.mail.trim()&&!contactParfum.reseau.trim())}
+        style={{width:"100%",background:(contactParfum.prenom.trim().length>=2&&(contactParfum.tel.trim()||contactParfum.mail.trim()||contactParfum.reseau.trim()))?C.brun:C.pale,color:(contactParfum.prenom.trim().length>=2&&(contactParfum.tel.trim()||contactParfum.mail.trim()||contactParfum.reseau.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+        Voir mes recommandations parfum →
+      </button>
+      <div style={{fontSize:".65rem",color:C.gris,textAlign:"center",marginTop:".5rem"}}>* Prénom + au moins un moyen de contact obligatoires</div>
+    </div>
+  );
+
+    // Questions
   if(!resultat){
     const q = QUESTIONS_PARFUM[step];
     const pct = Math.round((step / QUESTIONS_PARFUM.length) * 100);
@@ -1376,6 +1410,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     setReponses(newRep);
     if (step < questions.length - 1) {
       setStep(step + 1);
+    } else if (TYPES_SCORING.includes(type) && externalMode) {
+      setReponsesFinales(newRep); setMode("contact");
     } else if (TYPES_SCORING.includes(type)) {
       genererResultatScoring(newRep);
     } else if (externalMode) {
@@ -2507,7 +2543,7 @@ function LinkBioPublicPage({slug}){
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
-          if(!qs.empty){console.log("TRACKING via query:",slug);setProfil(qs.docs[0].data());}
+          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);try{const realSlug=qProfil.slug||slug;const sRef=doc(db,"linkbio_stats",realSlug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking query:",e);}}
           else setProfil("404");
         }
       }catch(e){setProfil("404");}
@@ -2607,8 +2643,8 @@ function LinkBioPublicPage({slug}){
 
         {/* Boutons principaux */}
         <div style={{padding:"0 1rem .75rem",display:"flex",flexDirection:"column",gap:".6rem"}}>
-          <button onClick={()=>{window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=produits_page";}} style={{width:"100%",background:theme.btnPrimary||"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".8rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
-          <button onClick={()=>{window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}} style={{width:"100%",background:"transparent",color:theme.accent||"#A89BB5",border:`1.5px solid ${theme.accent||"#A89BB5"}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👑 Rejoindre l'équipe</button>
+          <button onClick={async()=>{console.log("TRACK slug:",(profil?.slug||slug));try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{tunnel_vente:increment(1)},{merge:true});}catch(e){console.error("track:",e);}await new Promise(r=>setTimeout(r,400));window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=produits_page";}} style={{width:"100%",background:theme.btnPrimary||"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".8rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
+          <button onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{recrutement:increment(1)},{merge:true});}catch(e){console.error("track:",e);}await new Promise(r=>setTimeout(r,400));window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}} style={{width:"100%",background:"transparent",color:theme.accent||"#A89BB5",border:`1.5px solid ${theme.accent||"#A89BB5"}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👑 Rejoindre l'équipe</button>
         </div>
 
 
@@ -2837,7 +2873,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
-          if(!qs.empty){console.log("TRACKING via query:",slug);setProfil(qs.docs[0].data());}
+          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);try{const realSlug=qProfil.slug||slug;const sRef=doc(db,"linkbio_stats",realSlug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking query:",e);}}
         }
       }catch{}
       setLoading(false);
