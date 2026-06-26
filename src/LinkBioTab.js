@@ -28,7 +28,7 @@ function LinkBioTab({uid, userName}){
     photos:[],temoignages:[],produitsStar:[],faq:[],
     diagChoisis:["parfum","skincare","silhouette","sante"],
     showBanniere:true,
-    bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,
+    bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,ebooksIds:[],
   });
   const[banniereGlobale,setBanniereGlobale]=useState(null);
   const[saving,setSaving]=useState(false);
@@ -89,7 +89,7 @@ function LinkBioTab({uid, userName}){
     {id:"profil",icon:"✨",label:"Profil"},
     {id:"liens",icon:"🔗",label:"Liens"},
     {id:"photos",icon:"📸",label:"Photos"},{id:"stats",icon:"📊",label:"Stats"},
-    {id:"banniere",icon:"📢",label:"Bannière"},
+    {id:"ebooks",icon:"📚",label:"Ebooks"},{id:"banniere",icon:"📢",label:"Bannière"},
   ];
 
   // Prévisualisation
@@ -375,7 +375,7 @@ function LinkBioTab({uid, userName}){
 
       {/* SECTION BANNIÈRE */}
       {activeSection==="stats"&&<StatsLinkBio uid={slug}/>}
-      {activeSection==="banniere"&&(
+      {activeSection==="ebooks"&&(<EbooksLinkBioSection profil={profil} setProfil={setProfil}/>)}{activeSection==="banniere"&&(
         <div>
           {/* Bannière globale admin */}
           {banniereGlobale?.actif&&banniereGlobale?.texte&&(
@@ -437,5 +437,79 @@ const[stats,setStats]=React.useState(null);
     <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Tunnel vente</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.tunnelVente||0}</div></div><div>🛒</div></div>
     <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Recrutement</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.tunnelRecrutement||0}</div></div><div>🤝</div></div>
   </div>);
+}
+function EbooksLinkBioSection({profil,setProfil}){
+  const THEMES_EBOOKS=[
+    {id:"skincare",label:"✨ Skincare / Visage"},
+    {id:"cheveux",label:"💇 Soin cheveux"},
+    {id:"silhouette",label:"⚖️ Silhouette / Perte de poids"},
+    {id:"recettes",label:"🍽️ Recettes minceur"},
+    {id:"energie",label:"⚡ Énergie, sommeil, stress"},
+    {id:"parfums",label:"🌸 Parfums"},
+    {id:"makeup",label:"💄 Make-up"},
+    {id:"bienetre",label:"🧘 Bien-être général"},
+    {id:"recrutement",label:"🤝 Opportunité / Recrutement"},
+  ];
+  const[ebooks,setEbooks]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const selected=profil.ebooksIds||[];
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","ebooks"));
+        if(snap.exists()) setEbooks((snap.data().items||[]).filter(e=>e.actif!==false));
+      }catch{}
+      setLoading(false);
+    })();
+  },[]);
+  const toggle=(id)=>{
+    const cur=profil.ebooksIds||[];
+    setProfil(p=>({...p,ebooksIds:cur.includes(id)?cur.filter(x=>x!==id):[...cur,id]}));
+  };
+  if(loading) return <div style={{color:C.gris,fontSize:".75rem",padding:".5rem"}}>Chargement des ebooks...</div>;
+  if(ebooks.length===0) return(
+    <div style={{textAlign:"center",padding:"1.5rem",color:C.gris,fontSize:".75rem"}}>
+      <div style={{fontSize:"1.5rem",marginBottom:".5rem"}}>📚</div>
+      Aucun ebook disponible.<br/>Melissa doit d'abord en créer depuis l'Espace Admin.
+    </div>
+  );
+  const parTheme=THEMES_EBOOKS.map(t=>({
+    ...t,
+    items:ebooks.filter(e=>(e.themes||[]).includes(t.id))
+  })).filter(t=>t.items.length>0);
+  return(
+    <div>
+      <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>Ebooks à proposer dans ton tunnel</div>
+      <p style={{fontSize:".7rem",color:C.gris,marginBottom:".85rem",lineHeight:1.6}}>
+        Choisis les ebooks que tes clientes verront après avoir laissé leurs coordonnées. Tu peux en sélectionner plusieurs.
+      </p>
+      {parTheme.map(t=>(
+        <div key={t.id} style={{marginBottom:".85rem"}}>
+          <div style={{fontSize:".62rem",fontWeight:700,color:C.rose,textTransform:"uppercase",letterSpacing:".08em",marginBottom:".35rem"}}>{t.label}</div>
+          {t.items.map(eb=>{
+            const sel=selected.includes(eb.id);
+            return(
+              <div key={eb.id} onClick={()=>toggle(eb.id)}
+                style={{display:"flex",alignItems:"center",gap:".65rem",background:sel?C.rose+"12":C.creme,borderRadius:10,padding:".55rem .75rem",marginBottom:".3rem",border:`1.5px solid ${sel?C.rose:C.pale}`,cursor:"pointer",transition:"all .15s"}}>
+                {eb.imageCover&&<img src={eb.imageCover} alt="" style={{width:32,height:44,objectFit:"cover",borderRadius:5,flexShrink:0}}/>}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,marginBottom:".1rem"}}>{eb.titre}</div>
+                  {eb.description&&<div style={{fontSize:".62rem",color:C.gris,lineHeight:1.4}}>{eb.description}</div>}
+                </div>
+                <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${sel?C.rose:C.pale}`,background:sel?C.rose:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {sel&&<div style={{width:8,height:8,borderRadius:"50%",background:"white"}}/>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      {selected.length>0&&(
+        <div style={{background:C.rose+"15",border:`1px solid ${C.rose}30`,borderRadius:8,padding:".5rem .75rem",fontSize:".68rem",color:C.rose,fontWeight:600,marginTop:".25rem"}}>
+          ✅ {selected.length} ebook{selected.length>1?"s":""} sélectionné{selected.length>1?"s":""}
+        </div>
+      )}
+    </div>
+  );
 }
 export { LinkBioTab };

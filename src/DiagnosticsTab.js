@@ -2736,6 +2736,80 @@ export function EntonnoirTab(p){
 }
 
 
+function EbookAffichePage({coords,profil,parcours,setEtape}){
+  const[ebooks,setEbooks]=useState([]);
+  const[loading,setLoading]=useState(true);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const ebooksIds=profil?.ebooksIds||[];
+        if(ebooksIds.length===0){
+          if(parcours==="recrutement"){
+            setEbooks([{id:"default_recr",titre:"Le Guide de la Maman Active",lienPDF:"https://blazing-dinasty-1fad9.web.app/guide-maman-active.html",imageCover:"",description:"Découvre comment concilier vie de famille et liberté financière"}]);
+          } else {
+            setEbooks([{id:"default_sil",titre:"Carnet Silhouette",lienPDF:"https://blazing-dinasty-1fad9.web.app/carnet-silhouette.html",imageCover:"/carnet_silhouette.png",description:"7 jours de recettes minceur gourmandes — offert !"}]);
+          }
+          setLoading(false);return;
+        }
+        const snap=await getDoc(doc(db,"admin","ebooks"));
+        const tous=snap.exists()?(snap.data().items||[]):[];
+        const sel=tous.filter(e=>ebooksIds.includes(e.id)&&e.actif!==false);
+        setEbooks(sel.length>0?sel:[{id:"default_sil",titre:"Carnet Silhouette",lienPDF:"https://blazing-dinasty-1fad9.web.app/carnet-silhouette.html",imageCover:"/carnet_silhouette.png",description:"7 jours de recettes minceur gourmandes — offert !"}]);
+      }catch{
+        setEbooks([{id:"default_sil",titre:"Carnet Silhouette",lienPDF:"https://blazing-dinasty-1fad9.web.app/carnet-silhouette.html",imageCover:"/carnet_silhouette.png",description:"7 jours de recettes minceur gourmandes — offert !"}]);
+      }
+      setLoading(false);
+    })();
+  },[profil]);
+  const W2={maxWidth:480,margin:"0 auto",padding:"0 1rem 2rem"};
+  const prenom=coords?.prenom||"";
+  if(loading) return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#3D1F0E,#C49A8A)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{color:"white",fontSize:".85rem"}}>Préparation de tes cadeaux...</div>
+    </div>
+  );
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#3D1F0E,#C49A8A)",fontFamily:"Trebuchet MS,sans-serif",paddingTop:"1.5rem"}}>
+      <div style={W2}>
+        <div style={{textAlign:"center",marginBottom:"1.5rem"}}>
+          <div style={{fontSize:"2rem",marginBottom:".4rem"}}>🎁</div>
+          <div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".15em",color:"rgba(255,255,255,.6)",marginBottom:".3rem"}}>CADEAU{ebooks.length>1?"X":""} OFFERT{ebooks.length>1?"S":""}</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"white",fontWeight:300,marginBottom:".3rem"}}>
+            {prenom?"Bonne lecture "+prenom+" !":"Bonne lecture !"}
+          </div>
+          <div style={{fontSize:".75rem",color:"rgba(255,255,255,.75)",lineHeight:1.6}}>
+            {ebooks.length>1?"Tes guides gratuits sont prêts 🌸 Clique pour lire !":"Ton guide gratuit est prêt 🌸"}
+          </div>
+        </div>
+        {ebooks.map(eb=>(
+          <a key={eb.id} href={eb.lienPDF} target="_blank" rel="noopener noreferrer"
+            style={{display:"flex",alignItems:"center",gap:".85rem",background:"rgba(255,255,255,.12)",border:"1.5px solid rgba(255,255,255,.25)",borderRadius:14,padding:".85rem",marginBottom:".65rem",textDecoration:"none"}}>
+            {eb.imageCover
+              ?<img src={eb.imageCover} alt={eb.titre} style={{width:52,height:72,objectFit:"cover",borderRadius:8,flexShrink:0,boxShadow:"0 4px 12px rgba(0,0,0,.3)"}}/>
+              :<div style={{width:52,height:72,borderRadius:8,background:"rgba(255,255,255,.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.8rem",flexShrink:0}}>📖</div>
+            }
+            <div style={{flex:1}}>
+              <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:"white",marginBottom:".25rem",lineHeight:1.3}}>{eb.titre}</div>
+              {eb.description&&<div style={{fontSize:".7rem",color:"rgba(255,255,255,.75)",lineHeight:1.5}}>{eb.description}</div>}
+              <div style={{marginTop:".45rem",fontSize:".68rem",fontWeight:700,color:"#C49A8A",background:"rgba(255,255,255,.1)",display:"inline-block",padding:".2rem .6rem",borderRadius:20}}>📖 Lire maintenant →</div>
+            </div>
+          </a>
+        ))}
+        <div style={{textAlign:"center",marginTop:"1.25rem",padding:"1rem",background:"rgba(255,255,255,.08)",borderRadius:12}}>
+          <div style={{fontSize:".72rem",color:"rgba(255,255,255,.8)",lineHeight:1.7}}>
+            {profil?.prenom?"Ta conseillère "+profil.prenom+" va":"Ta conseillère va"} te contacter très vite pour t'accompagner personnellement 🌸
+          </div>
+        </div>
+        <div style={{textAlign:"center",marginTop:"1rem"}}>
+          <button onClick={()=>setEtape(parcours==="produits"?"diagnostic":"recrutement")}
+            style={{background:"rgba(255,255,255,.15)",border:"1.5px solid rgba(255,255,255,.3)",color:"white",borderRadius:10,padding:".55rem 1.25rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            {parcours==="produits"?"Mes recommandations produits →":"Découvrir l'opportunité →"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   const [profil,setProfil]=useState(null);
   const [loading,setLoading]=useState(true);

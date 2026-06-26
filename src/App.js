@@ -9317,6 +9317,141 @@ function AdminConfigPeriodes(){
   );
 }
 
+function AdminEbooksSection(){
+  const THEMES_EBOOKS=[
+    {id:"skincare",label:"✨ Skincare / Visage"},
+    {id:"cheveux",label:"💇 Soin cheveux"},
+    {id:"silhouette",label:"⚖️ Silhouette / Perte de poids"},
+    {id:"recettes",label:"🍽️ Recettes minceur"},
+    {id:"energie",label:"⚡ Énergie, sommeil, stress"},
+    {id:"parfums",label:"🌸 Parfums"},
+    {id:"makeup",label:"💄 Make-up"},
+    {id:"bienetre",label:"🧘 Bien-être général"},
+    {id:"recrutement",label:"🤝 Opportunité / Recrutement"},
+  ];
+  const emptyForm={titre:"",description:"",themes:[],imageCover:"",lienPDF:"",actif:true};
+  const[ebooks,setEbooks]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[showForm,setShowForm]=useState(false);
+  const[editId,setEditId]=useState(null);
+  const[form,setForm]=useState(emptyForm);
+  const[saving,setSaving]=useState(false);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","ebooks"));
+        if(snap.exists()) setEbooks(snap.data().items||[]);
+      }catch{}
+      setLoading(false);
+    })();
+  },[]);
+  const saveAll=async(next)=>{
+    setSaving(true);
+    try{await setDoc(doc(db,"admin","ebooks"),{items:next});}catch{}
+    setSaving(false);
+  };
+  const toggleTheme=(id)=>{
+    const cur=form.themes||[];
+    setForm(p=>({...p,themes:cur.includes(id)?cur.filter(t=>t!==id):[...cur,id]}));
+  };
+  const submit=async()=>{
+    if(!form.titre.trim()||!form.lienPDF.trim()) return;
+    let next;
+    if(editId){
+      next=ebooks.map(e=>e.id===editId?{...e,...form}:e);
+    } else {
+      next=[...ebooks,{id:`eb${Date.now()}`,...form}];
+    }
+    setEbooks(next);
+    await saveAll(next);
+    setForm(emptyForm);setShowForm(false);setEditId(null);
+  };
+  const del=async(id)=>{
+    if(!window.confirm("Supprimer cet ebook ?")) return;
+    const next=ebooks.filter(e=>e.id!==id);
+    setEbooks(next);await saveAll(next);
+  };
+  const startEdit=(eb)=>{
+    setForm({titre:eb.titre||"",description:eb.description||"",themes:eb.themes||[],imageCover:eb.imageCover||"",lienPDF:eb.lienPDF||"",actif:eb.actif!==false});
+    setEditId(eb.id);setShowForm(true);
+  };
+  const INP=({label,field,placeholder,textarea=false})=>(
+    <div style={{marginBottom:".5rem"}}>
+      <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{label}</div>
+      {textarea
+        ?<textarea value={form[field]||""} onChange={e=>setForm(p=>({...p,[field]:e.target.value}))} placeholder={placeholder} rows={2}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical"}}/>
+        :<input value={form[field]||""} onChange={e=>setForm(p=>({...p,[field]:e.target.value}))} placeholder={placeholder}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+      }
+    </div>
+  );
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>📚 Ebooks — Bibliothèque</div>
+      <p style={{fontSize:".7rem",color:C.gris,marginBottom:".75rem",lineHeight:1.6}}>
+        Crée les ebooks disponibles pour ton équipe. Chaque distributrice choisit lesquels proposer dans son LinkBio.
+      </p>
+      {loading?<div style={{color:C.gris,fontSize:".75rem"}}>Chargement...</div>:(
+        <>
+          {ebooks.length===0&&!showForm&&(
+            <div style={{textAlign:"center",padding:"1rem",color:C.gris,fontSize:".75rem"}}>Aucun ebook créé pour l'instant.</div>
+          )}
+          {ebooks.map(eb=>(
+            <div key={eb.id} style={{display:"flex",alignItems:"center",gap:".65rem",background:C.creme,borderRadius:10,padding:".55rem .75rem",marginBottom:".4rem",border:`1px solid ${eb.actif!==false?C.pale:"#fdd"}`}}>
+              {eb.imageCover&&<img src={eb.imageCover} alt="" style={{width:36,height:50,objectFit:"cover",borderRadius:5,flexShrink:0}}/>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,marginBottom:".15rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{eb.titre}</div>
+                <div style={{fontSize:".62rem",color:C.gris}}>{(eb.themes||[]).map(t=>THEMES_EBOOKS.find(x=>x.id===t)?.label||t).join(" · ")||"Aucun thème"}</div>
+              </div>
+              <div style={{display:"flex",gap:".3rem",flexShrink:0}}>
+                <button onClick={()=>startEdit(eb)} style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:C.brun}}>✏️</button>
+                <button onClick={()=>del(eb.id)} style={{background:"none",border:`1px solid #fdd`,borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:"#B04040"}}>✕</button>
+              </div>
+            </div>
+          ))}
+          {showForm?(
+            <div style={{background:C.creme,borderRadius:10,padding:".85rem",marginTop:".5rem",border:`1px solid ${C.pale}`}}>
+              <div style={{fontSize:".62rem",fontWeight:700,color:C.rose,textTransform:"uppercase",letterSpacing:".08em",marginBottom:".65rem"}}>{editId?"Modifier l'ebook":"Nouvel ebook"}</div>
+              <INP label="Titre *" field="titre" placeholder="Ex: Carnet Silhouette — 7 jours de recettes"/>
+              <INP label="Description courte" field="description" placeholder="Ex: 7 jours de recettes minceur gourmandes" textarea/>
+              <INP label="Lien PDF / Page *" field="lienPDF" placeholder="https://..."/>
+              <INP label="Image cover (URL)" field="imageCover" placeholder="https://... (URL image)"/>
+              <div style={{marginBottom:".6rem"}}>
+                <div style={{fontSize:".6rem",color:C.gris,marginBottom:".4rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Thèmes (plusieurs possibles)</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:".3rem"}}>
+                  {THEMES_EBOOKS.map(t=>(
+                    <button key={t.id} onClick={()=>toggleTheme(t.id)}
+                      style={{padding:".25rem .55rem",borderRadius:20,border:`1.5px solid ${(form.themes||[]).includes(t.id)?C.rose:C.pale}`,background:(form.themes||[]).includes(t.id)?C.rose+"20":"transparent",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:(form.themes||[]).includes(t.id)?C.rose:C.gris,fontWeight:(form.themes||[]).includes(t.id)?700:400}}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".65rem",cursor:"pointer"}}>
+                <input type="checkbox" checked={form.actif!==false} onChange={e=>setForm(p=>({...p,actif:e.target.checked}))}/>
+                <span style={{fontSize:".72rem",color:C.brun,fontWeight:600}}>Actif (visible pour l'équipe)</span>
+              </label>
+              <div style={{display:"flex",gap:".4rem"}}>
+                <button onClick={submit} disabled={saving||!form.titre.trim()||!form.lienPDF.trim()}
+                  style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                  {saving?"Sauvegarde...":editId?"✓ Modifier":"✓ Ajouter"}
+                </button>
+                <button onClick={()=>{setShowForm(false);setEditId(null);setForm(emptyForm);}}
+                  style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .75rem",fontSize:".78rem",cursor:"pointer",fontFamily:"inherit",color:C.gris}}>Annuler</button>
+              </div>
+            </div>
+          ):(
+            <button onClick={()=>setShowForm(true)}
+              style={{width:"100%",background:"transparent",border:`1.5px dashed ${C.rose}`,color:C.rose,borderRadius:10,padding:".55rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginTop:".25rem"}}>
+              + Ajouter un ebook
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 function AdminLinkBioSection(){
   const[banniere,setBanniere]=useState({texte:"",couleur:"#C49A8A",lien:"",actif:false});
   const[saving,setSaving]=useState(false);
@@ -9621,6 +9756,7 @@ function AdminTab(){
       </p>
 
       {/* Sections fixes */}
+      <AdminEbooksSection/>
       <AdminLinkBioSection/>
       <AdminConfigPeriodes/>
       <AdminImportCatalogue/>
