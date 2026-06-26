@@ -1419,30 +1419,7 @@ if(screen==="login")return(
   const dailyActions=["a1","a2","a3","a4","a5"];
   const actionsToday=dailyActions.filter(id=>checks[`${todayKey}-${id}`]||checks[id]).length;
   const actionsIncomplete=actionsToday<5;
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  // ── BADGE ICÔNE APP ───────────────────────────────────────────────────────
-  useEffect(()=>{
-    if(!userId) return;
-    (async()=>{
-      try{
-        let total=0;
-        if(actionsIncomplete) total += (5 - actionsToday);
-        try{
-          const msgsSnap=await getDocs(collection(db,"messages"));
-          msgsSnap.forEach(d=>{const msg=d.data();if(msg.destinataire===userId&&!msg.lu) total++;});
-        }catch{}
-        if(isChefApp||hasTeamApp){
-          try{
-            const mdpSnap=await getDocs(collection(db,"demandes_mdp"));
-            mdpSnap.forEach(d=>{if(!d.data().traite) total++;});
-          }catch{}
-        }
-        if(total>0){if("setAppBadge" in navigator) await navigator.setAppBadge(total);}
-        else{if("clearAppBadge" in navigator) await navigator.clearAppBadge();}
-      }catch{}
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[userId,actionsToday,isChefApp,hasTeamApp]);
+  
 
 
   const periodeInfo=getPeriodeInfo();

@@ -2969,7 +2969,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
           ))}
         </div>
 
-        <button onClick={()=>{setParcours("produits");setEtape("diag_besoins");}}
+        <button onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{tunnel_vente:increment(1)},{merge:true});}catch{}setParcours("produits");setEtape("diag_besoins");}}
           style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
           ✨ Trouver mes produits idéaux →
         </button>
@@ -3037,7 +3037,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
           ))}
         </div>
 
-        <button onClick={()=>{setParcours("recrutement");setEtape("diag_recrutement");}}
+        <button onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{recrutement:increment(1)},{merge:true});}catch{}setParcours("recrutement");setEtape("diag_recrutement");}}
           style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
           👑 Est-ce fait pour moi ? →
         </button>
