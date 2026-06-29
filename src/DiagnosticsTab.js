@@ -97,9 +97,14 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
       else if(type==="peaucorps") cles=["corps","health"];
       else cles=["face","corps","hair","makeup","health"];
       let produits=[];
-      cles.forEach(cle=>{ produits=[...produits,...(cat[cle]||[])]; });
-      if(produits.length>25) produits=produits.slice(0,25);
-      catalogueText = produits.map(p=>`${p.nom} — ${p.prix}€`).join("\n");
+      // Extraire tous les produits de toutes les categories
+      Object.values(cat).forEach(val=>{
+        if(Array.isArray(val)) produits=[...produits,...val];
+        else if(val&&typeof val==="object") produits=[...produits,...Object.values(val).filter(p=>p&&p.nom)];
+      });
+      if(produits.length>100) produits=produits.slice(0,100);
+      catalogueText=produits.filter(p=>p&&p.nom).map((p,i)=>(i+1)+". "+p.nom+" — "+p.prix+"€").join("\n");
+      console.log("CATALOGUE CHARGE:",produits.length,"produits, cles:",cles);console.log("SAMPLE cat.face:",JSON.stringify(cat[cles[0]])?.substring(0,200));
     }
   } catch (e) { console.error("Erreur chargement catalogue:", e); }
 
@@ -114,14 +119,47 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
     .filter(([k]) => k !== "_contact")
     .map(([k,v]) => `- ${k}: ${v}`).join("\n") || "Pas de réponses détaillées";
   
-  const prompt = `Experte beauté MIHI. Diagnostic ${typeLabel} pour ${nomClient||"Cliente"}.
-Réponses: ${reponsesText}
-Catalogue: ${catalogueText}
-${notesAdmin?`Notes: ${notesAdmin}`:""}
+    // Charger les formations produits
+  let formationText = "";
+  try {
+    const fpSnap = await getDoc(doc(db,"admin","formation_produits"));
+    if(fpSnap.exists()){
+      const produits=fpSnap.data().produits||{};
+      const lignes=[];
+      const clesFormation = type==="skincare"?["Visage","Skincare","face"]:type==="cheveux"?["Cheveux","Hair","hair"]:type==="makeup"?["Makeup","makeup"]:type==="sante"||type==="silhouette"?["Sante","health","Vitamins"]:["Visage","Cheveux","Corps"];
+      Object.entries(produits).forEach(([cat,liste])=>{
+        const match=clesFormation.some(k=>cat.toLowerCase().includes(k.toLowerCase()));
+        if(match)(liste||[]).forEach(p=>{
+          if(p.description) lignes.push(p.titre+": "+p.description.slice(0,150));
+        });
+      });
+      formationText=lignes.slice(0,20).join("\n");
+    }
+  } catch {}
 
-3 packs. JSON strict:
-{"introduction":"2 phrases","budget":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"Matin/Soir","benefice":"1 phrase","comment":"geste"}],"routine":"matin→soir"},"bestseller":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"usage","benefice":"phrase","comment":"geste"}],"routine":"matin→soir"},"premium":{"total":"X€","produits":[{"nom":"Nom","prix":"X€","usage":"usage","benefice":"phrase","comment":"geste"}],"routine":"matin→soir"},"conseil":"conseil"}
-budget=1-2 produits. bestseller=2-3 produits. premium=3-4 produits max`;
+  // eslint-disable-next-line no-use-before-define
+  const prompt = `Tu es une experte beauté et santé de la marque MIHI. Tu dois créer une ordonnance produit personnalisée pour ${nomClient||"Cliente"} suite à son diagnostic ${typeLabel}.
+
+RÈGLES ABSOLUES :
+1. Utilise UNIQUEMENT les produits du catalogue ci-dessous — aucun produit inventé
+2. Les prix doivent être EXACTEMENT ceux du catalogue
+3. Pack Essentiel : entre 25€ et 40€ (1-2 produits de base indispensables)
+4. Pack Recommandé : entre 55€ et 75€ (Pack Essentiel + 1-2 produits complémentaires)
+5. Pack Premium : entre 90€ et 115€ (Pack Recommandé + 1-2 produits premium)
+6. Chaque pack inclut les produits du pack précédent PLUS des ajouts
+7. Propose une routine complète matin/soir claire et pratique
+
+RÉPONSES AU DIAGNOSTIC :
+${reponsesText}
+
+${formationText?`INFORMATIONS PRODUITS (pour orienter tes choix) :\n${formationText}\n`:""}
+CATALOGUE PRODUITS MIHI (utilise UNIQUEMENT ces produits avec ces prix exacts) :
+${catalogueText}
+
+${notesAdmin?`NOTES EXPERTES :\n${notesAdmin}`:""}
+
+Réponds UNIQUEMENT avec ce JSON strict, sans markdown :
+{"introduction":"2 phrases analysant le profil","budget":{"total":XX,"produits":[{"nom":"Nom EXACT du catalogue","prix":XX,"usage":"Matin ou Soir","benefice":"bénéfice concret","comment":"geste application"}],"routine":"routine complète matin → soir"},"bestseller":{"total":XX,"produits":[{"nom":"Nom EXACT","prix":XX,"usage":"usage","benefice":"bénéfice","comment":"geste"}],"routine":"routine complète"},"premium":{"total":XX,"produits":[{"nom":"Nom EXACT","prix":XX,"usage":"usage","benefice":"bénéfice","comment":"geste"}],"routine":"routine complète"},"conseil":"conseil personnalisé final"}`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1379,6 +1417,78 @@ function ScriptsDiagSection(){
   );
 }
 
+function AssignerDiagClienteBtn({ordonnance, type, nomClient, uid}){
+  const[clients,setClients]=useState([]);
+  const[showModal,setShowModal]=useState(false);
+  const[loading,setLoading]=useState(false);
+  const[done,setDone]=useState(false);
+  const[search,setSearch]=useState("");
+
+  const chargerClientes=async()=>{
+    setLoading(true);
+    try{
+      const snap=await getDoc(doc(db,"users",uid));
+      if(snap.exists()&&snap.data()["db-clients"]){
+        setClients(JSON.parse(snap.data()["db-clients"]));
+      }
+    }catch{}
+    setLoading(false);
+  };
+
+  const assigner=async(cliente)=>{
+    try{
+      const snap=await getDoc(doc(db,"users",uid));
+      const data=snap.exists()?snap.data():{};
+      const clientsActuels=data["db-clients"]?JSON.parse(data["db-clients"]):[];
+      const diag={id:`diag_${Date.now()}`,type,date:new Date().toLocaleDateString("fr-FR"),ordonnance,nomClient};
+      const updatedClients=clientsActuels.map(c=>c.id===cliente.id?{...c,diagnostics:[diag,...(c.diagnostics||[])]}:c);
+      await setDoc(doc(db,"users",uid),{"db-clients":JSON.stringify(updatedClients)},{merge:true});
+      setDone(true);
+      setTimeout(()=>{setDone(false);setShowModal(false);},2000);
+    }catch(e){console.error(e);}
+  };
+
+  const filteredClientes=clients.filter(c=>`${c.prenom||""} ${c.nom||""}`.toLowerCase().includes(search.toLowerCase()));
+
+  return(
+    <>
+      <button onClick={()=>{setShowModal(true);chargerClientes();setDone(false);}}
+        style={{width:"100%",background:"#F0EBF8",color:"#6B4A9E",border:"1.5px solid #C4A8E8",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem",display:"flex",alignItems:"center",justifyContent:"center",gap:".4rem"}}>
+        👤 Assigner ce diagnostic à une cliente
+      </button>
+      {showModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
+          <div style={{background:"#fff",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:300,color:"#3D1F0E",marginBottom:".75rem"}}>👤 Assigner à une cliente</div>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher une cliente..."
+              style={{border:"1px solid #E8DDD4",borderRadius:8,padding:".45rem .65rem",fontSize:".78rem",fontFamily:"inherit",marginBottom:".65rem",outline:"none"}}/>
+            <div style={{flex:1,overflowY:"auto"}}>
+              {loading&&<div style={{color:"#888",fontSize:".75rem",textAlign:"center",padding:"1rem"}}>Chargement...</div>}
+              {done&&<div style={{background:"#F0FFF4",border:"1px solid #C0E8D0",borderRadius:8,padding:".75rem",color:"#2D7A4F",fontSize:".78rem",textAlign:"center"}}>✅ Diagnostic assigné !</div>}
+              {!loading&&!done&&filteredClientes.map(c=>(
+                <div key={c.id} onClick={()=>assigner(c)}
+                  style={{padding:".55rem .75rem",borderRadius:8,marginBottom:".3rem",cursor:"pointer",border:"1px solid #E8DDD4",background:"#FAF7F2",display:"flex",alignItems:"center",gap:".5rem"}}>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:"#C49A8A",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:".75rem",fontWeight:700,flexShrink:0}}>
+                    {((c.prenom&&c.prenom[0])||(c.nom&&c.nom[0])||"?").toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{fontFamily:"Georgia,serif",fontSize:".82rem",fontWeight:600,color:"#3D1F0E"}}>{c.prenom} {c.nom}</div>
+                    <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".62rem",color:"#888"}}>{c.statut||""}</div>
+                  </div>
+                </div>
+              ))}
+              {!loading&&!done&&filteredClientes.length===0&&<div style={{color:"#888",fontSize:".75rem",textAlign:"center",padding:"1rem"}}>Aucune cliente trouvée</div>}
+            </div>
+            <button onClick={()=>setShowModal(false)}
+              style={{marginTop:".75rem",background:"none",border:"1px solid #E8DDD4",borderRadius:8,padding:".5rem",fontSize:".75rem",fontFamily:"inherit",cursor:"pointer",color:"#888"}}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="", skipContact=false, onComplete=null }) {
   const [mode, setMode] = useState(initialType?"questionnaire":"choix");
   const [type, setType] = useState(initialType||"");
@@ -1961,7 +2071,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
             <div key={pack.key} style={{ background: pack.bg, border: `2px solid ${pack.color}30`, borderRadius: 14, padding: "1rem 1.1rem", marginBottom: ".75rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: ".65rem" }}>
                 <div style={{ fontSize: ".82rem", fontWeight: 700, color: pack.color }}>{pack.label}</div>
-                <div style={{ background: pack.color, color: "white", fontSize: ".7rem", fontWeight: 700, padding: ".2rem .6rem", borderRadius: 20 }}>{p.total}</div>
+                <div style={{ background: pack.color, color: "white", fontSize: ".7rem", fontWeight: 700, padding: ".2rem .6rem", borderRadius: 20 }}>{p.total}€</div>
               </div>
 
               {p.produits && p.produits.map((prod, i) => (
@@ -1994,6 +2104,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           📋 Copier l'ordonnance complète
         </button>
 
+        {/* Assigner à une cliente */}
+        <AssignerDiagClienteBtn ordonnance={ordonnance} type={type} nomClient={nomClient} uid={uid}/>
         {/* Bouton PDF côté cliente */}
         <button onClick={()=>{
           if(!ordonnance) return;
@@ -2002,9 +2114,9 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           +"<h1>Ton ordonnance personnalisee</h1>"
           +"<div class='sub'>Blazing Dynasty x Mihi France</div>"
           +(ordonnance.introduction?"<div class='intro'>"+ordonnance.introduction+"</div>":"")
-          +(ordonnance.budget?"<div class='pack'><div class='pt'>Pack Essentiel — "+(ordonnance.budget.total||"")+"</div>"+fmt(ordonnance.budget)+"</div>":"")
-          +(ordonnance.bestseller?"<div class='pack'><div class='pt'>Pack Best Seller — "+(ordonnance.bestseller.total||"")+"</div>"+fmt(ordonnance.bestseller)+"</div>":"")
-          +(ordonnance.premium?"<div class='pack'><div class='pt'>Pack Premium — "+(ordonnance.premium.total||"")+"</div>"+fmt(ordonnance.premium)+"</div>":"")
+          +(ordonnance.budget?"<div class='pack'><div class='pt'>Pack Essentiel — "+(ordonnance.budget.total||"")+"€</div>"+fmt(ordonnance.budget)+"</div>":"")
+          +(ordonnance.bestseller?"<div class='pack'><div class='pt'>Pack Best Seller — "+(ordonnance.bestseller.total||"")+"€</div>"+fmt(ordonnance.bestseller)+"</div>":"")
+          +(ordonnance.premium?"<div class='pack'><div class='pt'>Pack Premium — "+(ordonnance.premium.total||"")+"€</div>"+fmt(ordonnance.premium)+"</div>":"")
           +(ordonnance.conseil?"<div class='conseil'>"+ordonnance.conseil+"</div>":"")
           +"<div class='footer'>Blazing Dynasty · Mihi France · "+new Date().toLocaleDateString("fr-FR")+"</div>"
           +"</body></html>";
@@ -3131,3 +3243,4 @@ function Root(){
 
 export { DiagnosticParfumTab, DiagnosticsTab, DiagResultsTab, LinkBioPublicPage, TunnelHybridePage, RecommandationPubliquePage, FORMATION_APP_CATEGORIES, FORMATION_APP_CATEGORIES_DEFAULT };
 export default Root;
+ 

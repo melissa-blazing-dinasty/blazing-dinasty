@@ -22,6 +22,14 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const[dtab,setDtab]=useState("today");
   const[showNotice,setShowNotice]=useState(false);
   const[noticeVideos,setNoticeVideos]=useState({});
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","videos_dashboard"));
+        if(snap.exists()) setNoticeVideos(snap.data()||{});
+      }catch{}
+    })();
+  },[]);
   const[btab,setBtab]=useState("suivica");
 
   // Rafraîchir automatiquement les prospects à chaque ouverture de l'onglet

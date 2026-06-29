@@ -9541,6 +9541,108 @@ function AdminConfigPeriodes(){
   );
 }
 
+function AdminVideosDashboardSection(){
+  const ONGLETS=[
+    {id:"prospects",label:"Prospects"},
+    {id:"clients",label:"Clients"},
+    {id:"distributeurs",label:"Distributeurs"},
+    {id:"relances",label:"Relances"},
+    {id:"editorial",label:"Editorial"},
+    {id:"business",label:"Business"},
+    {id:"objectifs",label:"Objectifs"},
+    {id:"aujourd_hui",label:"Aujourd hui"},
+  ];
+  const[videos,setVideos]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[saving,setSaving]=useState(false);
+  const[editOnglet,setEditOnglet]=useState(null);
+  const[inputUrl,setInputUrl]=useState("");
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"admin","videos_dashboard"));
+        if(snap.exists()) setVideos(snap.data()||{});
+      }catch{}
+      setLoading(false);
+    })();
+  },[]);
+
+  const save=async(newVideos)=>{
+    setSaving(true);
+    try{await setDoc(doc(db,"admin","videos_dashboard"),newVideos);}catch{}
+    setSaving(false);
+  };
+
+  const startEdit=(id)=>{
+    setEditOnglet(id);
+    setInputUrl(videos[id]||"");
+  };
+
+  const saveVideo=async()=>{
+    const newVideos={...videos,[editOnglet]:inputUrl.trim()};
+    setVideos(newVideos);
+    await save(newVideos);
+    setEditOnglet(null);setInputUrl("");
+  };
+
+  const removeVideo=async(id)=>{
+    const newVideos={...videos};
+    delete newVideos[id];
+    setVideos(newVideos);
+    await save(newVideos);
+  };
+
+  const getYoutubeId=(url)=>{
+    const m=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
+    return m?m[1]:null;
+  };
+
+  return(
+    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>🎥 Vidéos Guide — Tableau de bord</div>
+      <p style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".7rem",color:C.gris,marginBottom:".75rem",lineHeight:1.6}}>
+        Ajoute une vidéo YouTube pour chaque onglet. Elle apparaîtra dans le bouton ❓ Guide.
+      </p>
+      {loading?<div style={{color:C.gris,fontSize:".75rem"}}>Chargement...</div>:(
+        <>
+          {ONGLETS.map(o=>(
+            <div key={o.id} style={{background:C.creme,borderRadius:10,padding:".6rem .75rem",marginBottom:".4rem",border:`1px solid ${C.pale}`}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:".5rem"}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:".75rem",fontWeight:600,color:C.brun,marginBottom:".1rem"}}>{o.label}</div>
+                  {videos[o.id]?(
+                    <div style={{fontSize:".62rem",color:C.gris,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:220}}>{videos[o.id]}</div>
+                  ):(
+                    <div style={{fontSize:".62rem",color:"#CCC"}}>Aucune vidéo</div>
+                  )}
+                </div>
+                <div style={{display:"flex",gap:".3rem",flexShrink:0}}>
+                  {videos[o.id]&&<a href={videos[o.id]} target="_blank" rel="noopener noreferrer" style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",color:C.brun,textDecoration:"none"}}>▶</a>}
+                  <button onClick={()=>startEdit(o.id)} style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:C.brun}}>✏️</button>
+                  {videos[o.id]&&<button onClick={()=>removeVideo(o.id)} style={{background:"none",border:"1px solid #fdd",borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:"#B04040"}}>✕</button>}
+                </div>
+              </div>
+              {editOnglet===o.id&&(
+                <div style={{marginTop:".5rem",display:"flex",gap:".4rem"}}>
+                  <input value={inputUrl} onChange={e=>setInputUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .65rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+                  <button onClick={saveVideo} disabled={saving}
+                    style={{background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".4rem .75rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                    {saving?"...":"✓"}
+                  </button>
+                  <button onClick={()=>{setEditOnglet(null);setInputUrl("");}}
+                    style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .6rem",fontSize:".75rem",cursor:"pointer",fontFamily:"inherit",color:C.gris}}>✕</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
 function AdminEbooksSection(){
   const THEMES_EBOOKS=[
     {id:"skincare",label:"✨ Skincare / Visage"},
@@ -9754,30 +9856,30 @@ function AdminImportCatalogue(){
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=xlsx.utils.sheet_to_json(ws);
 
-      const seen=new Set();
+      console.log('ROWS sample:',JSON.stringify(rows.slice(0,2)));const seen=new Set();
       const catalogue={};
       Object.values(CAT_MAP).forEach(k=>{catalogue[k]=[];});
 
       for(const row of rows){
-        const art=String(row['Art']||'').replace('.0','').trim();
+        const nomProduit=String(row['nom produit ']||row['nom produit']||row['Name']||'').trim();
+        const art=String(row['references']||row['Art']||'').replace('.0','').trim();
         if(!art||seen.has(art))continue;
         seen.add(art);
-        const cat=row['Category']||'';
-        const key=CAT_MAP[cat];
-        if(!key)continue;
-        const priceRaw=String(row['Price']||'').replace('€','').replace(',','.').trim();
+        const cat=nomProduit.includes('.')?nomProduit.split('.')[0].trim():(row['Category']||'Autre');
+        const key=CAT_MAP[cat]||'makeup';
+        const priceRaw=String(row['prix']||row['Price']||'').replace('€','').replace(',','.').trim();
         const prix=parseFloat(priceRaw)||0;
         const offerPriceRaw=String(row['Offer price']||'').replace('€','').replace(',','.').trim();
         catalogue[key].push({
-          nom:String(row['Name']||''),
+          nom:nomProduit,
           prix,
           ref:art,
           serie:cat,
           offre:row['Offer']?String(row['Offer']):'',
           prixOffre:offerPriceRaw?parseFloat(offerPriceRaw)||0:'',
         });
-      }
 
+            }
       const total=Object.values(catalogue).reduce((s,v)=>s+v.length,0);
       await setDoc(doc(db,"admin","catalogue_mihi"),catalogue);
       const statsObj={};
@@ -9980,6 +10082,7 @@ function AdminTab(){
       </p>
 
       {/* Sections fixes */}
+      <AdminVideosDashboardSection/>
       <AdminEbooksSection/>
       <AdminLinkBioSection/>
       <AdminConfigPeriodes/>

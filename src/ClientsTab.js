@@ -6,7 +6,7 @@ import { C } from './constants';
 import { todayLocalStr, ss, sg, sgAll } from './utils';
 import { getPeriodeActuelle, Confetti, MembreStatsCard } from './App';
 
-function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, TYPES_PRODUITS_DUREE, getPeriodeActuelle, sgAll, ss, daysDiff}){
+function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, PRECISIONS_STATUT, TYPES_PRODUITS_DUREE, getPeriodeActuelle, sgAll, ss, daysDiff}){
   const isActive = sel===c.id;
   const[showCmd,setShowCmd]=useState(false);
   const[showRappel,setShowRappel]=useState(false);
@@ -83,6 +83,7 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, T
 
   const updateStatut=(statut)=>save(clients.map(cl=>cl.id===c.id?{...cl,statut}:cl));
   const updateNotes=(v)=>save(clients.map(cl=>cl.id===c.id?{...cl,notes:v}:cl));
+  const updatePrecisions=(pid,checked)=>{const cur=c.precisions||[];const next=checked?[...cur.filter(x=>x!==pid),pid]:cur.filter(x=>x!==pid);save(clients.map(cl=>cl.id===c.id?{...cl,precisions:next}:cl));};
   const delClient=()=>{if(!window.confirm("Supprimer cette cliente ?"))return;save(clients.filter(cl=>cl.id!==c.id));setSel(null);};
 
   const updateLigne=(idx,field,val)=>setCmdForm(p=>({...p,lignes:p.lignes.map((l,i)=>i===idx?{...l,[field]:val}:l)}));
@@ -159,6 +160,15 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, T
               {c.email&&<div style={{fontSize:".62rem",color:C.pale}}>✉️ {c.email}</div>}
               {c.adresse&&<div style={{fontSize:".62rem",color:C.pale}}>📍 {c.adresse}</div>}
               {c.ddn&&<div style={{fontSize:".6rem",color:C.or}}>🎂 {new Date(c.ddn).toLocaleDateString("fr-FR")}</div>}
+              {PRECISIONS_STATUT&&(c.precisions||[]).length>0&&(
+                <div style={{display:"flex",flexWrap:"wrap",gap:".2rem",marginTop:".3rem"}}>
+                  {(c.precisions||[]).slice(0,2).map(pid=>{
+                    const label=Object.values(PRECISIONS_STATUT).flat().find(p=>p.id===pid)?.label;
+                    return label?<div key={pid} style={{fontSize:".5rem",background:"rgba(255,255,255,.15)",color:"white",borderRadius:10,padding:".1rem .35rem"}}>{label}</div>:null;
+                  })}
+                  {(c.precisions||[]).length>2&&<div style={{fontSize:".5rem",color:"rgba(255,255,255,.6)"}}>+{(c.precisions||[]).length-2}</div>}
+                </div>
+              )}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:".25rem",alignItems:"flex-end"}}>
               <select value={c.statut||""} onChange={e=>updateStatut(e.target.value)}
@@ -369,6 +379,20 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, T
               );
             }):<div style={{fontSize:".7rem",color:C.gris,padding:".3rem 0"}}>Aucune commande.</div>}
 
+            {/* Précisions statut */}
+            {c.statut&&PRECISIONS_STATUT&&PRECISIONS_STATUT[c.statut]&&(
+              <div style={{marginBottom:".75rem"}}>
+                <div style={{fontSize:".6rem",fontWeight:700,color:"#C49A8A",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>✅ Précisions</div>
+                <div style={{display:"flex",flexDirection:"column",gap:".3rem"}}>
+                  {PRECISIONS_STATUT[c.statut].map(p=>(
+                    <label key={p.id} style={{display:"flex",alignItems:"center",gap:".5rem",cursor:"pointer",fontFamily:"Trebuchet MS,sans-serif",fontSize:".75rem",color:"#3D1F0E"}}>
+                      <input type="checkbox" checked={(c.precisions||[]).includes(p.id)} onChange={e=>updatePrecisions(p.id,e.target.checked)} style={{accentColor:"#C49A8A",width:14,height:14}}/>
+                      {p.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Notes — defaultValue + onBlur pour éviter re-render */}
             <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,margin:".75rem 0 .35rem"}}>📝 Notes</div>
             <textarea key={`notes-${c.id}`} defaultValue={c.notes||""} onBlur={e=>updateNotes(e.target.value)}
@@ -382,6 +406,8 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, T
 
             {/* Recommandation */}
             <RecommandationSection client={c} uid={uid}/>
+            <DiagnosticsRattachesSection client={c} clients={clients} save={save} uid={uid}/>
+            <div style={{marginTop:".75rem"}}><button onClick={()=>telechargerFichePDF(c)} style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📄 Télécharger la fiche complète</button></div>
           </div>
         </div>
       )}
@@ -855,6 +881,7 @@ function ClientsTab({clients,save,uid}){
   const[showCmd,setShowCmd]=useState(false);
   const[showRappel,setShowRappel]=useState(false);
   const[searches,setSearches]=useState({});
+  const[vuePrecisions,setVuePrecisions]=useState(false);
   const[groupesOuverts,setGroupesOuverts]=useState({});
   const[confettiTrigger,setConfettiTrigger]=useState(0);
 
@@ -872,6 +899,37 @@ function ClientsTab({clients,save,uid}){
     {id:"inactif",label:"Inactif",icon:"❄️",color:"#5B8DB8",bg:"#E8F0FA"},
   ];
   const STATUTS_ORDRE=["vip","fidele","consolider","inactif",null];
+  const PRECISIONS_STATUT={
+    vip:[
+      {id:"ambassadrice",label:"Ambassadrice potentielle"},
+      {id:"hotesse_validee",label:"H\u00f4tesse de r\u00e9union valid\u00e9e"},
+      {id:"demande_reunion",label:"Demande \u00e0 faire une r\u00e9union"},
+      {id:"fidelite_actif",label:"Programme fid\u00e9lit\u00e9 actif"},
+      {id:"interesse_business",label:"Int\u00e9ress\u00e9e par l'opportunit\u00e9 business"},
+      {id:"parraine_amies",label:"Parraine des amies"},
+      {id:"discussion_vip",label:"Pr\u00e9sente dans discussion VIP"},
+    ],
+    fidele:[
+      {id:"demande_reunion",label:"Demande \u00e0 faire une r\u00e9union"},
+      {id:"hotesse_validee",label:"H\u00f4tesse de r\u00e9union valid\u00e9e"},
+      {id:"proposer_vip",label:"\u00c0 proposer en VIP"},
+      {id:"parraine_amies",label:"Parraine des amies"},
+      {id:"discussion_vip",label:"Pr\u00e9sente dans discussion VIP"},
+    ],
+    consolider:[
+      {id:"relance_en_cours",label:"Relance en cours"},
+      {id:"demande_reunion",label:"Demande \u00e0 faire une r\u00e9union"},
+      {id:"diag_prevu",label:"Rendez-vous diagnostic pr\u00e9vu"},
+      {id:"devis_envoye",label:"Devis envoy\u00e9"},
+      {id:"attente_reponse",label:"En attente de r\u00e9ponse"},
+    ],
+    inactif:[
+      {id:"relance_envoyee",label:"Message de relance envoy\u00e9"},
+      {id:"numero_verifier",label:"Num\u00e9ro \u00e0 v\u00e9rifier"},
+      {id:"archiver_si_silence",label:"\u00c0 archiver si pas de r\u00e9ponse"},
+      {id:"reactiver",label:"Ancienne cliente \u00e0 r\u00e9activer"},
+    ],
+  };
   const TYPES_PRODUITS_DUREE=[
     {id:"shampoing",label:"Shampoing",jours:30},
     {id:"soin_visage",label:"Soin Visage",jours:45},
@@ -952,6 +1010,12 @@ function ClientsTab({clients,save,uid}){
     <div>
       <Confetti trigger={confettiTrigger}/>
 
+      <div style={{display:"flex",gap:".4rem",marginBottom:".65rem"}}>
+        <button onClick={()=>setVuePrecisions(false)} style={{flex:1,background:!vuePrecisions?C.brun:C.creme,color:!vuePrecisions?C.blanc:C.gris,border:"1px solid "+(!vuePrecisions?C.brun:C.pale),borderRadius:8,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>👥 Mes clientes</button>
+        <button onClick={()=>setVuePrecisions(true)} style={{flex:1,background:vuePrecisions?C.brun:C.creme,color:vuePrecisions?C.blanc:C.gris,border:"1px solid "+(vuePrecisions?C.brun:C.pale),borderRadius:8,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📋 Vue précisions</button>
+      </div>
+      {vuePrecisions&&<VuePrecisionsClientes clients={clients} PRECISIONS_STATUT={PRECISIONS_STATUT} setSel={setSel} setVuePrecisions={setVuePrecisions}/>}
+      {!vuePrecisions&&<div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
         <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun}}>
           Mes <em style={{fontStyle:"italic",color:C.rose}}>Clientes</em>
@@ -1029,6 +1093,7 @@ function ClientsTab({clients,save,uid}){
                       save={save}
                       uid={uid}
                       STATUTS_CLIENT={STATUTS_CLIENT}
+                      PRECISIONS_STATUT={PRECISIONS_STATUT}
                       TYPES_PRODUITS_DUREE={TYPES_PRODUITS_DUREE}
                       getPeriodeActuelle={getPeriodeActuelle}
                       sgAll={sgAll}
@@ -1044,6 +1109,7 @@ function ClientsTab({clients,save,uid}){
         );
       })}
 
+      </div>}
       {clients.length===0&&<div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".76rem"}}>Aucune cliente pour l'instant.</div>}
     </div>
   );
@@ -1445,6 +1511,129 @@ function DistributeursTab({distributeurs,save,uid}){
                   style={{marginTop:".5rem",marginLeft:".5rem",background:C.rose+"15",border:`1px solid ${C.rose}50`,borderRadius:8,padding:".3rem .7rem",fontSize:".68rem",fontWeight:600,color:C.rose,fontFamily:"inherit",cursor:"pointer"}}>
                   🚀 Assigner Fast Start
                 </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
+function telechargerFichePDF(c){
+  const cmds=[...(c.commandes||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const diags=c.diagnostics||[];
+  const totalCA=cmds.reduce((s,cmd)=>s+(parseFloat(cmd.montant)||0),0);
+  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Fiche ${c.prenom||""} ${c.nom||""}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Georgia,serif;color:#2C1A0E;background:#fff;padding:2rem;}h1{font-size:1.6rem;font-weight:300;color:#3D1F0E;margin-bottom:.25rem;}h1 em{font-style:italic;color:#C49A8A;}.sub{font-family:Trebuchet MS,sans-serif;font-size:.75rem;color:#888;margin-bottom:1.5rem;}.section{margin-bottom:1.5rem;}.section-title{font-family:Trebuchet MS,sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#C49A8A;margin-bottom:.5rem;border-bottom:1px solid #F0E8E0;padding-bottom:.3rem;}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .75rem;}.info-item{font-family:Trebuchet MS,sans-serif;font-size:.78rem;}.info-label{font-size:.6rem;color:#888;text-transform:uppercase;letter-spacing:.08em;}.cmd{background:#FAF7F2;border-radius:6px;padding:.6rem .75rem;margin-bottom:.4rem;font-family:Trebuchet MS,sans-serif;font-size:.75rem;}.cmd-date{font-weight:700;color:#3D1F0E;}.cmd-montant{color:#C49A8A;font-weight:700;}.produit{color:#666;font-size:.7rem;}.diag{background:#F0EBF8;border-radius:6px;padding:.6rem .75rem;margin-bottom:.4rem;font-family:Trebuchet MS,sans-serif;font-size:.75rem;}.notes{font-family:Trebuchet MS,sans-serif;font-size:.78rem;line-height:1.6;color:#5C3D2A;background:#FAF7F2;padding:.75rem;border-radius:6px;white-space:pre-wrap;}.total{font-family:Trebuchet MS,sans-serif;font-size:.85rem;font-weight:700;color:#3D1F0E;text-align:right;margin-top:.5rem;}.footer{margin-top:2rem;font-family:Trebuchet MS,sans-serif;font-size:.65rem;color:#BBB;text-align:center;border-top:1px solid #F0E8E0;padding-top:.75rem;}@media print{body{padding:1rem;}}</style></head><body><h1><em>${c.prenom||""}</em> ${c.nom||""}</h1><div class="sub">Fiche cliente — générée le ${new Date().toLocaleDateString("fr-FR")}</div><div class="section"><div class="section-title">Informations</div><div class="info-grid">${c.tel?`<div class="info-item"><div class="info-label">Téléphone</div>${c.tel}</div>`:""} ${c.email?`<div class="info-item"><div class="info-label">Email</div>${c.email}</div>`:""} ${c.ddn?`<div class="info-item"><div class="info-label">Date de naissance</div>${new Date(c.ddn).toLocaleDateString("fr-FR")}</div>`:""} ${c.statut?`<div class="info-item"><div class="info-label">Statut</div>${c.statut}</div>`:""}</div></div>${c.notes?`<div class="section"><div class="section-title">Notes</div><div class="notes">${c.notes}</div></div>`:""}<div class="section"><div class="section-title">Commandes (${cmds.length})</div>${cmds.length===0?`<div style="font-family:Trebuchet MS,sans-serif;font-size:.75rem;color:#888;">Aucune commande</div>`:cmds.map(cmd=>`<div class="cmd"><div style="display:flex;justify-content:space-between;"><span class="cmd-date">${cmd.date||""}</span><span class="cmd-montant">${parseFloat(cmd.montant)||0}€</span></div>${(cmd.lignes||[]).map(l=>`<div class="produit">• ${l.nom||""}</div>`).join("")}</div>`).join("")}<div class="total">Total CA : ${totalCA.toFixed(2)}€</div></div>${diags.length>0?`<div class="section"><div class="section-title">Diagnostics (${diags.length})</div>${diags.map(d=>`<div class="diag"><div style="font-weight:700;color:#6B4A9E;font-size:.7rem;">${d.type||""} — ${d.date||""}</div></div>`).join("")}</div>`:""}<div class="footer">Blazing Dynasty × Mihi</div></body></html>`;
+  const w=window.open("","_blank");
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(()=>w.print(),500);
+}
+
+function DiagnosticsRattachesSection({client, clients, save, uid}){
+  const[diags,setDiags]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[showAttach,setShowAttach]=useState(false);
+  const[allDiags,setAllDiags]=useState([]);
+  useEffect(()=>{
+    setDiags(client.diagnostics||[]);
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(snap.exists()&&snap.data()["db-diagnostics"]){
+          setAllDiags(JSON.parse(snap.data()["db-diagnostics"]));
+        }
+      }catch{}
+      setLoading(false);
+    })();
+  },[client.id]);
+  const rattacher=(diag)=>{
+    const newDiags=[diag,...(client.diagnostics||[])].filter((d,i,arr)=>arr.findIndex(x=>x.id===d.id)===i);
+    save(clients.map(cl=>cl.id===client.id?{...cl,diagnostics:newDiags}:cl));
+    setDiags(newDiags);setShowAttach(false);
+  };
+  const detacher=(diagId)=>{
+    const newDiags=(client.diagnostics||[]).filter(d=>d.id!==diagId);
+    save(clients.map(cl=>cl.id===client.id?{...cl,diagnostics:newDiags}:cl));
+    setDiags(newDiags);
+  };
+  const TL={"besoins":"Soin visage","cheveux":"Cheveux","minceur":"Minceur","recrutement":"Opportunité","blocage":"Maman entrepreneur","parfum":"Parfum","business":"Business"};
+  return(
+    <div style={{marginTop:".75rem"}}>
+      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>🔬 Diagnostics rattachés</div>
+      {diags.length===0&&<div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".72rem",color:C.gris,marginBottom:".5rem"}}>Aucun diagnostic rattaché</div>}
+      {diags.map(d=>(
+        <div key={d.id} style={{background:C.creme,borderRadius:8,padding:".5rem .65rem",marginBottom:".3rem",border:"1px solid "+C.pale,display:"flex",alignItems:"center",gap:".5rem"}}>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".72rem",fontWeight:600,color:C.brun}}>{TL[d.type]||d.type} — {d.date}</div>
+          </div>
+          <button onClick={()=>detacher(d.id)} style={{background:"none",border:"1px solid #fdd",borderRadius:6,padding:".2rem .4rem",fontSize:".6rem",cursor:"pointer",color:"#B04040"}}>✕</button>
+        </div>
+      ))}
+      <button onClick={()=>setShowAttach(!showAttach)} style={{width:"100%",background:"transparent",border:"1.5px dashed "+C.rose,color:C.rose,borderRadius:8,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".25rem"}}>
+        + Rattacher un diagnostic
+      </button>
+      {showAttach&&(
+        <div style={{background:C.blanc,border:"1px solid "+C.pale,borderRadius:10,padding:".75rem",marginTop:".25rem"}}>
+          {loading&&<div style={{fontSize:".72rem",color:C.gris}}>Chargement...</div>}
+          {!loading&&allDiags.filter(d=>!(client.diagnostics||[]).find(x=>x.id===d.id)).map(d=>(
+            <div key={d.id} onClick={()=>rattacher(d)} style={{background:C.creme,borderRadius:8,padding:".45rem .65rem",marginBottom:".25rem",cursor:"pointer",border:"1px solid "+C.pale}}>
+              <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".72rem",fontWeight:600,color:C.brun}}>{TL[d.type]||d.type} — {d.nomClient||""} — {d.date}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+function VuePrecisionsClientes({clients, PRECISIONS_STATUT, setSel, setVuePrecisions}){
+  const toutesLePrecisions=Object.values(PRECISIONS_STATUT).flat().filter((p,i,arr)=>arr.findIndex(x=>x.id===p.id)===i);
+  const clientsAvecPrecision=(pid)=>clients.filter(c=>(c.precisions||[]).includes(pid));
+  const STATUT_COLORS={vip:"#C4A832",fidele:"#5C8A6A",consolider:"#C49A2A",inactif:"#5B8DB8"};
+  const[ouvert,setOuvert]=useState(null);
+  const precAvecClientes=toutesLePrecisions.filter(p=>clientsAvecPrecision(p.id).length>0);
+  if(precAvecClientes.length===0) return(
+    <div style={{textAlign:"center",padding:"2rem",color:"#888",fontFamily:"Trebuchet MS,sans-serif",fontSize:".78rem"}}>
+      <div style={{fontSize:"2rem",marginBottom:".5rem"}}>📋</div>
+      Aucune précision cochée pour l'instant.<br/>Ouvre une fiche cliente et coche des cases !
+    </div>
+  );
+  return(
+    <div>
+      <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".68rem",color:"#888",marginBottom:".75rem"}}>Clique sur une catégorie pour voir les clientes</div>
+      {precAvecClientes.map(p=>{
+        const clientes=clientsAvecPrecision(p.id);
+        const isOpen=ouvert===p.id;
+        return(
+          <div key={p.id} style={{marginBottom:".5rem"}}>
+            <div onClick={()=>setOuvert(isOpen?null:p.id)}
+              style={{background:isOpen?C.brun:C.blanc,border:"1.5px solid "+(isOpen?C.brun:C.pale),borderRadius:isOpen?"12px 12px 0 0":"12px",padding:".65rem .85rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".78rem",fontWeight:700,color:isOpen?C.blanc:C.brun}}>{p.label}</div>
+                <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".62rem",color:isOpen?"rgba(255,255,255,.7)":C.gris,marginTop:".1rem"}}>{clientes.length} cliente{clientes.length>1?"s":""}</div>
+              </div>
+              <div style={{color:isOpen?C.blanc:C.gris,fontSize:".72rem"}}>{isOpen?"▲":"▼"}</div>
+            </div>
+            {isOpen&&(
+              <div style={{background:C.creme,border:"1.5px solid "+C.brun,borderTop:"none",borderRadius:"0 0 12px 12px",padding:".5rem .65rem"}}>
+                {clientes.map(c=>(
+                  <div key={c.id} onClick={()=>{setSel(c.id);setVuePrecisions(false);}}
+                    style={{display:"flex",alignItems:"center",gap:".65rem",padding:".5rem .6rem",borderRadius:8,marginBottom:".3rem",background:C.blanc,cursor:"pointer",border:"1px solid "+C.pale}}>
+                    <div style={{width:32,height:32,borderRadius:"50%",background:STATUT_COLORS[c.statut]||C.brun,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{fontFamily:"Georgia,serif",fontSize:".75rem",fontWeight:600,color:"white"}}>{((c.prenom&&c.prenom[0])||(c.nom&&c.nom[0])||"?").toUpperCase()}</span>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontFamily:"Georgia,serif",fontSize:".82rem",fontWeight:600,color:C.brun}}>{c.prenom} {c.nom}</div>
+                      <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".62rem",color:C.gris}}>{c.tel||c.email||""}</div>
+                    </div>
+                    <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".6rem",color:STATUT_COLORS[c.statut]||C.gris,fontWeight:600,flexShrink:0}}>
+                      {c.statut==="vip"?"⭐ VIP":c.statut==="fidele"?"💚 Fidèle":c.statut==="consolider"?"🔔 À consolider":c.statut==="inactif"?"❄️ Inactive":""}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
