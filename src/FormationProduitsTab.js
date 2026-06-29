@@ -238,7 +238,19 @@ export function UploadPhoto({value, onChange, label="Photo", folder="produits"})
       const reader=new FileReader();
       reader.onload=ev=>setPreview(ev.target.result);
       reader.readAsDataURL(file);
-      const reader2=new FileReader();reader2.onload=ev=>{onChange(ev.target.result);setUploading(false);};reader2.readAsDataURL(file);return;
+      // Compresser l image avant sauvegarde
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement("canvas");
+        const MAX=400;
+        let w=img.width,h=img.height;
+        if(w>h){if(w>MAX){h=h*(MAX/w);w=MAX;}}else{if(h>MAX){w=w*(MAX/h);h=MAX;}}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext("2d").drawImage(img,0,0,w,h);
+        const compressed=canvas.toDataURL("image/jpeg",0.7);
+        onChange(compressed);
+      };
+      const reader2=new FileReader();reader2.onload=ev=>{img.src=ev.target.result;setUploading(false);};reader2.readAsDataURL(file);return;
     }catch(err){
       alert("Erreur upload : "+err.message);
     }
