@@ -3,9 +3,11 @@ import { db, storage } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-import { ss, sg, sgAll, syncAnnuaire, getPeriodeInfo, getPeriodeActuelle, getPeriodeDebut, fmtPLabel, GrilleJoursCA, MembreStatsCard, ChallengeAppSuiviTab, ActionsBiblioChefTab, MembresTab, AssiduiteTab, DefisTab, PowerHourTab, SuiviRecruTab, MessageEquipePopup, MessagesRecusPopup, AdminFormationProduits, UploadPhoto, ESPACE_CHEF_SECTIONS, PERIODE_DUREE_JOURS, PERIODES_PAR_AN, PERIODE_DEBUT_ABSOLU_MS, FAST_START_DAYS, CITATIONS_DEFAULT, ANTHROPIC_API_KEY } from './App';
+import { AdminFormationProduits, UploadPhoto } from './FormationProduitsTab';
+import { DistributeursTab } from './ClientsTab';
+import { ss, sg, sgAll, syncAnnuaire, getPeriodeInfo, getPeriodeActuelle, getPeriodeDebut, fmtPLabel, GrilleJoursCA, MembreStatsCard, ChallengeAppSuiviTab, ActionsBiblioChefTab, MembresTab, AssiduiteTab, DefisTab, PowerHourTab, SuiviRecruTab, MessageEquipePopup, MessagesRecusPopup, ESPACE_CHEF_SECTIONS, PERIODE_DUREE_JOURS, PERIODES_PAR_AN, PERIODE_DEBUT_ABSOLU_MS, FAST_START_DAYS, CITATIONS_DEFAULT, ANTHROPIC_API_KEY } from './App';
 import { todayLocalStr } from './utils';
-import { buildEquipeTree, countEquipeSafe, getLigneeChefs, translateBatch, C, APP_VERSION } from './components';
+import { buildEquipeTree, countEquipeSafe, getLigneeChefs, translateBatch, C, APP_VERSION, BoutonMiseAJour, YTBtn, useLang } from './components';
 
 function StatsEquipeTab({uid, annuaire}){
   const[stats,setStats]=useState(null);

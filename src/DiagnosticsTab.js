@@ -71,7 +71,7 @@ Génère un plan d'action personnalisé en JSON avec cette structure exacte (ne 
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 async function genererOrdonnanceIA(type, reponses, nomClient) {
   // Types business (pas de catalogue produits)
-  const typesBusiness = ["pasrecruiter","pasvendre","reseaux","chargementale","valeurmarche","entrepreneuriat","complementrevenu"];
+  const typesBusiness = ["pasrecruiter","pasvendre","reseaux","chargementale","valeurmarche","entrepreneuriat","complementrevenu","maman","reconversion","confianceensoi","reseauxsociaux2"];
   if(typesBusiness.includes(type)){
     return genererDiagBusiness(type, reponses, nomClient);
   }
@@ -1026,7 +1026,35 @@ const QUESTIONS = {
     {id:"contraintes",question:"Tes contraintes principales ?",multi:true,options:[{value:"enfants",label:"👶 Mes enfants"},{value:"temps",label:"⏰ Manque de temps"},{value:"confiance",label:"😟 Manque de confiance"},{value:"argent_depart",label:"💰 Pas d'argent de départ"}]},
     {id:"urgence",question:"C'est urgent pour toi ?",options:[{value:"tres",label:"🔴 Oui, j'ai besoin d'agir maintenant"},{value:"oui",label:"🟠 Oui, dans les 3 prochains mois"},{value:"moyen_terme",label:"🟡 Plutôt à moyen terme"},{value:"exploration",label:"✅ Je me renseigne, pas d'urgence"}]},
   ],
-  pasrecruiter: [
+  maman: [
+    {id:"situation",question:"Ta situation actuelle ?",options:[{value:"salariee",label:"💼 Salariée à temps plein"},{value:"partiel",label:"🕐 Temps partiel"},{value:"maison",label:"🏠 À la maison avec mes enfants"},{value:"cherche",label:"🔍 En recherche d'emploi"}]},
+    {id:"enfants",question:"Combien d'enfants as-tu ?",options:[{value:"1",label:"1 enfant"},{value:"2",label:"2 enfants"},{value:"3plus",label:"3 enfants ou plus"},{value:"enceinte",label:"🤰 Je suis enceinte"}]},
+    {id:"manque",question:"Ce qui te manque le plus en ce moment ?",multi:true,options:[{value:"argent",label:"💰 Un peu plus d'argent"},{value:"temps",label:"⏰ Du temps pour moi"},{value:"projet",label:"✨ Un projet qui me ressemble"},{value:"reconnue",label:"🌟 Me sentir reconnue et valorisée"}]},
+    {id:"reve",question:"Si tu pouvais changer une chose dans ta vie pro ?",options:[{value:"horaires",label:"🕐 Avoir des horaires flexibles"},{value:"revenus",label:"💰 Gagner plus"},{value:"sens",label:"❤️ Faire quelque chose qui a du sens"},{value:"maison",label:"🏠 Travailler depuis chez moi"}]},
+    {id:"frein",question:"Ce qui t'a freinée jusqu'ici ?",multi:true,options:[{value:"temps",label:"⏰ Pas assez de temps"},{value:"confiance",label:"😟 Peur de ne pas y arriver"},{value:"info",label:"❓ Je ne savais pas que c'était possible"},{value:"argent",label:"💰 Peur d'investir de l'argent"}]},
+    {id:"disponibilite",question:"Tu peux dégager combien de temps par semaine ?",options:[{value:"2h",label:"⏱️ 2-3h — entre les biberons et les devoirs"},{value:"5h",label:"⏰ 5h — quand ils dorment"},{value:"10h",label:"🕐 10h — j'ai de l'organisation"},{value:"plus",label:"⚡ Plus — je suis motivée !"}]},
+  ],
+  reconversion: [
+    {id:"situation",question:"Tu es dans quelle situation ?",options:[{value:"emploi_insatisfait",label:"😔 En emploi mais je m'ennuie/souffre"},{value:"cherche",label:"🔍 En recherche d'emploi"},{value:"conge",label:"🤰 En congé maternité/parental"},{value:"arret",label:"🏠 Sans emploi depuis un moment"}]},
+    {id:"declencheur",question:"Qu'est-ce qui t'a fait penser à changer ?",multi:true,options:[{value:"salaire",label:"💰 Salaire insuffisant"},{value:"epanouissement",label:"❤️ Besoin de sens et d'épanouissement"},{value:"temps",label:"⏰ Horaires incompatibles avec ma famille"},{value:"securite",label:"😰 Peur de perdre mon emploi"}]},
+    {id:"competences",question:"Tes points forts ?",multi:true,options:[{value:"contact",label:"💬 J'adore le contact humain"},{value:"conviction",label:"🔥 Je suis convaincante"},{value:"organisation",label:"📋 Organisée et rigoureuse"},{value:"autonomie",label:"🚀 Autonome et débrouillarde"}]},
+    {id:"objectif",question:"Ton objectif principal ?",options:[{value:"completer",label:"💰 Compléter mon salaire"},{value:"remplacer",label:"🚀 Remplacer mon salaire"},{value:"liberte",label:"🌟 Liberté financière totale"},{value:"sens",label:"❤️ Trouver un projet qui me ressemble"}]},
+    {id:"urgence",question:"C'est urgent pour toi ?",options:[{value:"tres",label:"🔴 Oui, j'ai besoin d'agir maintenant"},{value:"oui",label:"🟠 Oui, dans les 3 prochains mois"},{value:"moyen",label:"🟡 Plutôt à 6 mois"},{value:"exploration",label:"✅ Je me renseigne"}]},
+    {id:"frein",question:"Ce qui t'a freinée jusqu'ici ?",multi:true,options:[{value:"peur_echouer",label:"😟 Peur d'échouer"},{value:"connais_pas",label:"❓ Je ne connaissais pas les options"},{value:"investissement",label:"💰 Peur d'investir"},{value:"seule",label:"🤝 Peur de me lancer seule"}]},
+  ],  confianceensoi: [
+    {id:"regard",question:"Comment tu te sens quand tu parles de ton activité ?",options:[{value:"fiere",label:"😊 Fière et naturelle"},{value:"hesitante",label:"😅 Un peu hésitante selon les personnes"},{value:"peur",label:"😰 J'ai peur du jugement"},{value:"cache",label:"🙈 Je préfère ne pas en parler"}]},
+    {id:"legitimite",question:"Tu te sens légitime pour conseiller des clientes ?",options:[{value:"oui",label:"✅ Oui totalement"},{value:"parfois",label:"🤔 Parfois je doute"},{value:"non",label:"❌ Non, j'ai le syndrome de l'imposteur"},{value:"depend",label:"💡 Ça dépend des sujets"}]},
+    {id:"echec",question:"Comment tu réagis face à un refus ou un échec ?",options:[{value:"rebondit",label:"💪 Je rebondis rapidement"},{value:"analyse",label:"🔍 J'analyse pour m'améliorer"},{value:"decourage",label:"😔 Je me décourage facilement"},{value:"abandonne",label:"😞 J'ai tendance à abandonner"}]},
+    {id:"forces",question:"Tes points forts selon toi ?",multi:true,options:[{value:"ecoute",label:"👂 L'écoute et l'empathie"},{value:"authenticite",label:"💎 L'authenticité"},{value:"perseverance",label:"🔥 La persévérance"},{value:"relationnel",label:"💬 Le relationnel"}]},
+    {id:"objectif",question:"Ce que tu voudrais changer dans ta façon d'être ?",multi:true,options:[{value:"oser",label:"🚀 Oser me montrer davantage"},{value:"dire_non",label:"✋ Savoir dire non"},{value:"valeur",label:"💰 Assumer ma valeur et mes prix"},{value:"reseaux",label:"📱 Être plus à l'aise sur les réseaux"}]},
+  ],
+  reseauxsociaux2: [
+    {id:"presence",question:"Tu es présente sur quels réseaux ?",multi:true,options:[{value:"insta",label:"📸 Instagram"},{value:"facebook",label:"👥 Facebook"},{value:"tiktok",label:"🎵 TikTok"},{value:"aucun",label:"❌ Aucun pour le moment"}]},
+    {id:"frequence",question:"Tu publies combien de fois par semaine ?",options:[{value:"jamais",label:"❌ Jamais ou presque"},{value:"1fois",label:"📅 1 fois par semaine"},{value:"3fois",label:"📅 2-3 fois par semaine"},{value:"quotidien",label:"🔥 Tous les jours"}]},
+    {id:"contenu",question:"Quel type de contenu tu publies ?",multi:true,options:[{value:"vie_perso",label:"📸 Ma vie personnelle"},{value:"produits",label:"💄 Mes produits Mihi"},{value:"conseils",label:"💡 Des conseils beauté/bien-être"},{value:"coulisses",label:"🎬 Les coulisses de mon activité"}]},
+    {id:"engagement",question:"Ton engagement (likes, commentaires) est ?",options:[{value:"fort",label:"🔥 Fort — mes posts génèrent des réactions"},{value:"moyen",label:"😊 Moyen — quelques likes"},{value:"faible",label:"😐 Faible — peu de réactions"},{value:"sais_pas",label:"🤷 Je ne regarde pas"}]},
+    {id:"objectif",question:"Ton objectif sur les réseaux ?",options:[{value:"clients",label:"🛍️ Trouver des clientes"},{value:"recruter",label:"👑 Recruter dans mon équipe"},{value:"visibilite",label:"✨ Développer ma visibilité"},{value:"tout",label:"🚀 Tout ça à la fois !"}]},
+  ],  pasrecruiter: [
     {id:"depuis", question:"Depuis combien de temps tu essaies de recruter ?", multi:true, options:[
       {value:"moins1mois",label:"Moins d'1 mois — je débute"},
       {value:"1a3mois",label:"1 à 3 mois — j'ai essayé sans résultat"},

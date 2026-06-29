@@ -9,6 +9,7 @@ import { CommunauteTab } from './CommunauteTab';
 import { EditorialTab } from './EditorialTab';
 import { CalendrierTab } from './CalendrierTab';
 import { LinkBioTab } from './LinkBioTab';
+import { AdminLinkBioSection } from './EspaceChefTab';
 import { TunnelTab } from './TunnelTab';
 import { DreamBoardWidget, DreamBoardTab } from './DreamBoardTab';
 import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_PRODUITS } from './FormationProduitsTab';
@@ -48,7 +49,7 @@ async function saveFCMToken(uid) {
 }
 
 // ── STORAGE (Firebase Firestore) ──────────────────────────────────────────────
-async function sg(uid, k) {
+export async function sg(uid, k) {
   try {
     const ref = doc(db, "users", uid);
     const snap = await getDoc(ref);
@@ -60,7 +61,7 @@ async function sg(uid, k) {
   } catch { return null; }
 }
 
-async function ss(uid, k, v) {
+export async function ss(uid, k, v) {
   try {
     const ref = doc(db, "users", uid);
     await setDoc(ref, { [k]: v }, { merge: true });
@@ -68,7 +69,7 @@ async function ss(uid, k, v) {
 }
 
 // Charge toutes les données d'un utilisateur en une seule requête
-async function sgAll(uid) {
+export async function sgAll(uid) {
   try {
     const ref = doc(db, "users", uid);
     const snap = await getDoc(ref);
@@ -200,7 +201,7 @@ const SPRINT=[
 ];
 
 // ── CITATIONS DU JOUR ─────────────────────────────────────────────────────────
-const CITATIONS_DEFAULT=[
+export const CITATIONS_DEFAULT=[
   "Le succès, c'est tomber 7 fois et se relever 8.",
   "Chaque jour est une nouvelle chance de changer ta vie.",
   "La discipline, c'est se rappeler ce que tu veux vraiment.",
@@ -820,43 +821,11 @@ function App(){
   const[newMdp2,setNewMdp2]=useState("");
   const[loginStep,setLoginStep]=useState(1);
   const[mdpInput,setMdpInput]=useState("");
-  const[showMdpOublie,setShowMdpOublie]=useState(false);
   const[userId,setUserId]=useState("");
   const[isChefApp,setIsChefApp]=useState(false);
   const[hasTeamApp,setHasTeamApp]=useState(false);
   const[fastStartDone,setFastStartDone]=useState(false);
   const[hasFastStart,setHasFastStart]=useState(false);
-
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const snap=await getDoc(doc(db,"admin","config"));
-        if(snap.exists()){
-          const remoteV=snap.data().appVersion||"1.0";
-          const localV=localStorage.getItem("appVersion");
-          if(localV&&localV!==remoteV){localStorage.setItem("appVersion",remoteV);window.location.reload(true);}else{localStorage.setItem("appVersion",remoteV);}
-        }
-      }catch{}
-    })();
-  },[]);
-
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const snap=await getDoc(doc(db,"admin","config"));
-        if(snap.exists()){
-          const remoteV=snap.data().appVersion||"1.0";
-          const localV=localStorage.getItem("appVersion");
-          if(localV&&localV!==remoteV){
-            localStorage.setItem("appVersion",remoteV);
-            window.location.reload(true);
-          } else {
-            localStorage.setItem("appVersion",remoteV);
-          }
-        }
-      }catch{}
-    })();
-  },[]);
 
   useEffect(()=>{
     if(!userId)return;
@@ -978,7 +947,7 @@ function App(){
       const userSnap=await getDoc(doc(db,"users",uid));
       const alreadyHasChef=userSnap.exists()&&userSnap.data()["chef-equipe"];
 
-      if(!isMelissa&&!alreadyHasChef){
+      if(userSnap.exists()&&userSnap.data()["db-mdp"]){setPendingUid(uid);setPendingName(displayName);setPendingIsMelissa(isMelissa);
         // Charger la liste des chefs et des membres (pour la marraine)
         const chefsSnap=await getDoc(doc(db,"acces","membres"));
         const liste=chefsSnap.exists()?chefsSnap.data().chefs||[]:[];
@@ -1340,9 +1309,7 @@ function App(){
   }
 
   // ── LOGIN ────────────────────────────────────────────────────────────────────
-  
-
-if(screen==="login")return(
+  if(screen==="login")return(
     <div style={{minHeight:"100vh",background:C.brun,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"2rem 1.2rem",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
       <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".25em",color:C.or,marginBottom:".5rem"}}>✦ BLAZING DYNASTY ✦</div>
       <div style={{fontFamily:"Georgia,serif",fontSize:"clamp(1.8rem,5vw,2.6rem)",fontWeight:300,color:C.blanc,textAlign:"center",lineHeight:1.1}}>Espace Formation</div>
@@ -1419,9 +1386,6 @@ if(screen==="login")return(
   const dailyActions=["a1","a2","a3","a4","a5"];
   const actionsToday=dailyActions.filter(id=>checks[`${todayKey}-${id}`]||checks[id]).length;
   const actionsIncomplete=actionsToday<5;
-  
-
-
   const periodeInfo=getPeriodeInfo();
   // J1 seulement = moins de 24h depuis le début de la période
   const isJ1Periode = periodeInfo.pctElapsed<=Math.round(100/21);
@@ -4124,7 +4088,7 @@ export const OBJECTIONS_RECRUTEMENT=[
 // ── PÉRIODE MIHI ─────────────────────────────────────────────────────────────
 // Période de 21 jours, commence un mercredi
 // Référence : période en cours se termine dans 6j 12h à partir d'aujourd'hui (11/06/2026)
-function getPeriodeInfo(){
+export function getPeriodeInfo(){
   // Utiliser le calendrier officiel Mihi
   const campOfficielle = getCampagneMihiActuelle();
   if(campOfficielle){
@@ -6299,9 +6263,9 @@ export let ANTHROPIC_API_KEY="";
 async function chargerCleAPI(){try{const snap=await getDoc(doc(db,"admin","config"));if(snap.exists()&&snap.data().anthropicKey)ANTHROPIC_API_KEY=snap.data().anthropicKey;}catch{}}
 chargerCleAPI();
 
-let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-01T12:00:00").getTime();
-const PERIODE_DUREE_JOURS = 21;
-const PERIODES_PAR_AN = 18;
+export let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-01T12:00:00").getTime();
+export const PERIODE_DUREE_JOURS = 21;
+export const PERIODES_PAR_AN = 18;
 
 // Charge l'ancre depuis Firebase (appelé au démarrage de l'app)
 async function chargerAncrePeriodesFirebase(){
@@ -6318,7 +6282,7 @@ async function chargerAncrePeriodesFirebase(){
 // Appel immédiat au chargement
 chargerAncrePeriodesFirebase();
 
-function getPeriodeDebut(nAbsolu){
+export function getPeriodeDebut(nAbsolu){
   // Utiliser le calendrier officiel Mihi 2026 pour la période actuelle
   const campActuelle = getCampagneMihiActuelle();
   if(campActuelle){
@@ -6360,7 +6324,7 @@ function getPeriodKeys(n=12){
 }
 
 // Label court d'une période : "P7 2026"
-function fmtPLabel(nAbsolu){
+export function fmtPLabel(nAbsolu){
   const debut = getPeriodeDebut(nAbsolu);
   // Ancre 22/01/2026 = P1 Mihi
   const OFFSET_MIHI = 0;
@@ -7010,7 +6974,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
 }
 
 // ── GESTION MEMBRES (Melissa uniquement) ─────────────────────────────────────
-function MembresTab({uid}){
+export function MembresTab({uid}){
   const isMelissa=uid==="melissa"||uid==="melissa-da-silveira";
   const[membres,setMembres]=useState([]);
   const[chefs,setChefs]=useState([]);
@@ -7496,7 +7460,7 @@ export function MembreStatsCard({m, expanded, onToggleExpand}){
 // Onglet "Assiduité équipe" — visible chefs/Melissa : connexions + actions du jour de chaque membre
 const TODAY_ACTIONS_COUNT = 5;
 
-function AssiduiteTab({uid}){
+export function AssiduiteTab({uid}){
   const[loading,setLoading]=useState(true);
   const[isAuthorized,setIsAuthorized]=useState(false);
   const[membres,setMembres]=useState([]);
@@ -7668,8 +7632,8 @@ function AssiduiteTab({uid}){
 
 
 // Onglet "Espace Chef" — regroupe toutes les fonctions chef d'équipe au même endroit
-const ESPACE_CHEF_SECTIONS=[
-  {id:"demandes_mdp",icon:"🔐",label:"Mots de passe",desc:"Demandes de réinitialisation en attente",chefOnly:true},{id:"backup",icon:"💾",label:"Backup données",desc:"Exporter toutes les données de l'équipe en JSON",chefOnly:true},{id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true},
+export const ESPACE_CHEF_SECTIONS=[
+  {id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true},
   {id:"challengeapp",icon:"🎮",label:"Challenge Découverte App",desc:"Progression de chaque membre dans le défi 7 jours",chefOnly:true},
   {id:"membres",icon:"⚙️",label:"Accès équipe",desc:"Gérer les membres, chefs, et assigner les marraines",chefOnly:true},
   {id:"assiduite",icon:"📋",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true},
@@ -7684,7 +7648,7 @@ const ESPACE_CHEF_SECTIONS=[
 
 // ── MESSAGERIE ÉQUIPE ────────────────────────────────────────────────────────
 // Popup pour envoyer un message perso ou groupé à son équipe
-function MessageEquipePopup({uid, userName, annuaire, onClose}){
+export function MessageEquipePopup({uid, userName, annuaire, onClose}){
   const[mode,setMode]=useState("choix"); // choix | perso | groupe
   const[destinataire,setDestinataire]=useState(null);
   const[texte,setTexte]=useState("");
@@ -7841,7 +7805,7 @@ function MessageEquipePopup({uid, userName, annuaire, onClose}){
 }
 
 // Affichage des messages reçus (popup sur le tableau de bord)
-function MessagesRecusPopup({uid, onClose}){
+export function MessagesRecusPopup({uid, onClose}){
   const[msgs,setMsgs]=useState([]);
   const[loading,setLoading]=useState(true);
   const fmt=(id)=>id.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
@@ -7901,7 +7865,7 @@ function MessagesRecusPopup({uid, onClose}){
 
 
 // ── ACTIONS BIBLIO CHEF ───────────────────────────────────────────────────────
-function ActionsBiblioChefTab({uid}){
+export function ActionsBiblioChefTab({uid}){
   const[actions,setActions]=useState([]);
   const[loading,setLoading]=useState(true);
   const[form,setForm]=useState({icon:"⚡",label:"",cat:"ventes"});
@@ -8034,7 +7998,7 @@ function ActionsBiblioChefTab({uid}){
 }
 
 // Composant global — JAMAIS défini à l'intérieur d'un autre composant
-function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCell, editVal, setEditCell, setEditVal, saveJour, setEditPeriode, setEditCA, setEditObj}){
+export function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCell, editVal, setEditCell, setEditVal, saveJour, setEditPeriode, setEditCA, setEditObj}){
   const d=data[`p${pNum}`]||{ca:0,obj:0,jours:{}};
   const debut=getPeriodeDebut(pNum);
   const _n=new Date();const _t=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate(),12,0,0);const _dj=Math.floor((_t.getTime()-debut.getTime())/(24*60*60*1000));const _je=courante?Math.min(21,Math.max(0,_dj+1)):joursEcoules;const isFutur=(i)=>courante&&i>=_je;const isToday=(i)=>courante&&i===_je-1;
@@ -8083,7 +8047,7 @@ function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCel
 }
 
 // ── SUIVI CHALLENGE APP PAR LE CHEF ──────────────────────────────────────────
-function ChallengeAppSuiviTab({annuaire}){
+export function ChallengeAppSuiviTab({annuaire}){
   const[membres,setMembres]=useState([]);
   const[loading,setLoading]=useState(true);
 
@@ -8861,191 +8825,6 @@ function ResumeSemaineChef({annuaire}){
     </div>
   );
 }
-function MdpOublieModal({pendingUid, pendingName, onClose}){
-  const[done,setDone]=useState(false);
-  const[loading,setLoading]=useState(false);
-
-  const envoyer=async()=>{
-    setLoading(true);
-    try{
-      await setDoc(doc(db,"demandes_mdp",pendingUid),{
-        uid:pendingUid,
-        nom:pendingName,
-        date:new Date().toISOString(),
-        traite:false
-      });
-      setDone(true);
-    }catch{}
-    setLoading(false);
-  };
-
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
-      <div style={{background:"#fff",borderRadius:16,padding:"1.5rem",maxWidth:360,width:"100%",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,.2)"}}>
-        <div style={{fontSize:"2rem",marginBottom:".5rem"}}>🔐</div>
-        <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:300,color:"#3D1F0E",marginBottom:".75rem"}}>Mot de passe oublié</div>
-        {done?(
-          <>
-            <div style={{background:"#F0FFF4",border:"1px solid #C0E8D0",borderRadius:8,padding:".75rem",marginBottom:"1rem",fontFamily:"Trebuchet MS,sans-serif",fontSize:".78rem",color:"#2D7A4F",lineHeight:1.6}}>
-              ✅ Ta demande a été envoyée !<br/>Ta conseillère va te recontacter très vite pour te donner ton nouveau code.
-            </div>
-            <button onClick={onClose} style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Fermer</button>
-          </>
-        ):(
-          <>
-            <p style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".78rem",color:"#888",lineHeight:1.7,marginBottom:"1.25rem"}}>
-              Ta demande sera transmise à ta conseillère qui te contactera pour réinitialiser ton code personnel.
-            </p>
-            <div style={{background:"#FBF8F4",borderRadius:10,padding:".75rem",marginBottom:"1.25rem",fontFamily:"Trebuchet MS,sans-serif",fontSize:".82rem",color:"#3D1F0E",fontWeight:600}}>
-              {pendingName||pendingUid}
-            </div>
-            <div style={{display:"flex",gap:".5rem"}}>
-              <button onClick={onClose} style={{flex:1,background:"transparent",border:"1px solid #E8DDD4",borderRadius:10,padding:".65rem",fontSize:".82rem",fontFamily:"inherit",cursor:"pointer",color:"#888"}}>Annuler</button>
-              <button onClick={envoyer} disabled={loading} style={{flex:2,background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".82rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                {loading?"Envoi...":"Envoyer la demande"}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DemandesMdpTab(){
-  const[demandes,setDemandes]=useState([]);
-  const[loading,setLoading]=useState(true);
-
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const snap=await getDocs(collection(db,"demandes_mdp"));
-        const liste=[];
-        snap.forEach(d=>liste.push({id:d.id,...d.data()}));
-        setDemandes(liste.filter(d=>!d.traite).sort((a,b)=>b.date.localeCompare(a.date)));
-      }catch{}
-      setLoading(false);
-    })();
-  },[]);
-
-  const traiter=async(uid)=>{
-    await setDoc(doc(db,"demandes_mdp",uid),{traite:true},{merge:true});
-    setDemandes(p=>p.filter(d=>d.uid!==uid));
-  };
-
-  return(
-    <div style={{padding:"1rem",maxWidth:500,margin:"0 auto"}}>
-      <div style={{fontSize:".6rem",fontWeight:700,color:"#C49A8A",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".75rem"}}>🔐 Demandes de réinitialisation</div>
-      {loading?<div style={{color:"#AAA",fontSize:".78rem"}}>Chargement...</div>
-      :demandes.length===0?<div style={{textAlign:"center",padding:"2rem",color:"#AAA",fontSize:".78rem"}}>✅ Aucune demande en attente</div>
-      :demandes.map(d=>(
-        <div key={d.uid} style={{background:"#fff",borderRadius:12,padding:"1rem",marginBottom:".75rem",boxShadow:"0 2px 12px rgba(0,0,0,.07)",display:"flex",alignItems:"center",gap:"1rem"}}>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:600,fontSize:".85rem",color:"#3D1F0E",marginBottom:".2rem"}}>{d.nom||d.uid}</div>
-            <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".65rem",color:"#AAA"}}>{new Date(d.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
-          </div>
-          <button onClick={()=>traiter(d.uid)} style={{background:"#3D1F0E",color:"white",border:"none",borderRadius:8,padding:".4rem .85rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-            ✓ Traité
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-function BackupTab({uid, annuaire}){
-  const[loading,setLoading]=useState(false);
-  const[done,setDone]=useState(false);
-
-  const runBackup=async()=>{
-    setLoading(true);setDone(false);
-    const backup={date:new Date().toISOString(),generePar:uid,donnees:{}};
-    try{
-      // acces/membres
-      const membres=await getDoc(doc(db,"acces","membres"));
-      if(membres.exists()) backup.donnees.membres=membres.data();
-
-      // admin/ebooks
-      const ebooks=await getDoc(doc(db,"admin","ebooks"));
-      if(ebooks.exists()) backup.donnees.ebooks=ebooks.data();
-
-      // admin/config
-      const config=await getDoc(doc(db,"admin","config"));
-      if(config.exists()) backup.donnees.config=config.data();
-
-      // equipe
-      const equipeSnap=await getDocs(collection(db,"equipe"));
-      backup.donnees.equipe={};
-      equipeSnap.forEach(d=>backup.donnees.equipe[d.id]=d.data());
-
-      // diag_externes
-      const diagSnap=await getDocs(collection(db,"diag_externes"));
-      backup.donnees.diag_externes={};
-      diagSnap.forEach(d=>backup.donnees.diag_externes[d.id]=d.data());
-
-      // linkbio
-      const linkbioSnap=await getDocs(collection(db,"linkbio"));
-      backup.donnees.linkbio={};
-      linkbioSnap.forEach(d=>backup.donnees.linkbio[d.id]=d.data());
-
-      // Par membre : clients, db-suivi-ca, db-objectifs, fast-start
-      const membres_ids=Object.keys(annuaire||{});
-      backup.donnees.users={};
-      await Promise.all(membres_ids.map(async(mUid)=>{
-        backup.donnees.users[mUid]={};
-        try{
-          const userDoc=await getDoc(doc(db,"users",mUid));
-          if(userDoc.exists()) backup.donnees.users[mUid].profil=userDoc.data();
-          const clientsSnap=await getDocs(collection(db,"clients_"+mUid));
-          backup.donnees.users[mUid].clients={};
-          clientsSnap.forEach(d=>backup.donnees.users[mUid].clients[d.id]=d.data());
-          const diagNotesSnap=await getDocs(collection(db,"diag_notes_"+mUid));
-          backup.donnees.users[mUid].diag_notes={};
-          diagNotesSnap.forEach(d=>backup.donnees.users[mUid].diag_notes[d.id]=d.data());
-        }catch{}
-      }));
-
-      // Téléchargement JSON
-      const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url;
-      a.download="blazing-dynasty-backup-"+new Date().toISOString().slice(0,10)+".json";
-      a.click();
-      URL.revokeObjectURL(url);
-      setDone(true);
-    }catch(e){console.error(e);}
-    setLoading(false);
-  };
-
-  return(
-    <div style={{padding:"1.5rem 1rem",maxWidth:500,margin:"0 auto"}}>
-      <div style={{background:"#fff",borderRadius:16,padding:"1.5rem",boxShadow:"0 4px 20px rgba(0,0,0,.07)",textAlign:"center"}}>
-        <div style={{fontSize:"2.5rem",marginBottom:".75rem"}}>💾</div>
-        <div style={{fontSize:"1rem",fontWeight:600,color:C.brun,marginBottom:".5rem",fontFamily:"Georgia,serif"}}>Backup des données</div>
-        <p style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".78rem",color:C.gris,lineHeight:1.7,marginBottom:"1.25rem"}}>
-          Exporte toutes les données de ton équipe en un fichier JSON — membres, clients, ebooks, diagnostics, LinkBio. À faire régulièrement et garder précieusement.
-        </p>
-        <div style={{background:"#FFF8F0",border:"1px solid #F0E0C8",borderRadius:10,padding:".75rem",marginBottom:"1.25rem",fontFamily:"Trebuchet MS,sans-serif",fontSize:".72rem",color:"#8B5E3C",lineHeight:1.6,textAlign:"left"}}>
-          📦 Inclus dans le backup :<br/>
-          ✓ Liste des membres & chefs<br/>
-          ✓ Profils LinkBio de l'équipe<br/>
-          ✓ Clients de chaque distributrice<br/>
-          ✓ Diagnostics externes<br/>
-          ✓ Bibliothèque ebooks<br/>
-          ✓ Configuration de l'app
-        </div>
-        {done&&<div style={{background:"#F0FFF4",border:"1px solid #C0E8D0",borderRadius:8,padding:".6rem",marginBottom:"1rem",fontFamily:"Trebuchet MS,sans-serif",fontSize:".75rem",color:"#2D7A4F"}}>✅ Backup téléchargé avec succès !</div>}
-        <button onClick={runBackup} disabled={loading}
-          style={{width:"100%",background:loading?"#CCC":C.brun,color:"#fff",border:"none",borderRadius:12,padding:".85rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:loading?"not-allowed":"pointer"}}>
-          {loading?"⏳ Export en cours...":"💾 Télécharger le backup"}
-        </button>
-        <p style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".62rem",color:C.gris,marginTop:".75rem"}}>
-          Recommandé : 1 backup par semaine, stocké dans Google Drive ou iCloud.
-        </p>
-      </div>
-    </div>
-  );
-}
 function EspaceChefTab({uid, isChef}){
   const[section,setSection]=useState("");
   const[distrib,setDistrib]=useState([]);
@@ -9092,8 +8871,6 @@ function EspaceChefTab({uid, isChef}){
           style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>
           ← Retour à Espace Chef
         </button>
-        {section=="backup"&&<BackupTab uid={uid} annuaire={annuaire}/>}
-        {section=="demandes_mdp"&&<DemandesMdpTab/>}
         {section==="stats"&&<StatsEquipeTab uid={uid} annuaire={annuaire}/>}
         {section==="challengeapp"&&<ChallengeAppSuiviTab annuaire={annuaire}/>}
         {section==="suivica"&&<SuiviCATab uid={uid}/>}
@@ -9541,244 +9318,7 @@ function AdminConfigPeriodes(){
   );
 }
 
-function AdminVideosDashboardSection(){
-  const ONGLETS=[
-    {id:"prospects",label:"Prospects"},
-    {id:"clients",label:"Clients"},
-    {id:"distributeurs",label:"Distributeurs"},
-    {id:"relances",label:"Relances"},
-    {id:"editorial",label:"Editorial"},
-    {id:"business",label:"Business"},
-    {id:"objectifs",label:"Objectifs"},
-    {id:"aujourd_hui",label:"Aujourd hui"},
-  ];
-  const[videos,setVideos]=useState({});
-  const[loading,setLoading]=useState(true);
-  const[saving,setSaving]=useState(false);
-  const[editOnglet,setEditOnglet]=useState(null);
-  const[inputUrl,setInputUrl]=useState("");
-
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const snap=await getDoc(doc(db,"admin","videos_dashboard"));
-        if(snap.exists()) setVideos(snap.data()||{});
-      }catch{}
-      setLoading(false);
-    })();
-  },[]);
-
-  const save=async(newVideos)=>{
-    setSaving(true);
-    try{await setDoc(doc(db,"admin","videos_dashboard"),newVideos);}catch{}
-    setSaving(false);
-  };
-
-  const startEdit=(id)=>{
-    setEditOnglet(id);
-    setInputUrl(videos[id]||"");
-  };
-
-  const saveVideo=async()=>{
-    const newVideos={...videos,[editOnglet]:inputUrl.trim()};
-    setVideos(newVideos);
-    await save(newVideos);
-    setEditOnglet(null);setInputUrl("");
-  };
-
-  const removeVideo=async(id)=>{
-    const newVideos={...videos};
-    delete newVideos[id];
-    setVideos(newVideos);
-    await save(newVideos);
-  };
-
-  const getYoutubeId=(url)=>{
-    const m=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
-    return m?m[1]:null;
-  };
-
-  return(
-    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
-      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>🎥 Vidéos Guide — Tableau de bord</div>
-      <p style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".7rem",color:C.gris,marginBottom:".75rem",lineHeight:1.6}}>
-        Ajoute une vidéo YouTube pour chaque onglet. Elle apparaîtra dans le bouton ❓ Guide.
-      </p>
-      {loading?<div style={{color:C.gris,fontSize:".75rem"}}>Chargement...</div>:(
-        <>
-          {ONGLETS.map(o=>(
-            <div key={o.id} style={{background:C.creme,borderRadius:10,padding:".6rem .75rem",marginBottom:".4rem",border:`1px solid ${C.pale}`}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:".5rem"}}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:".75rem",fontWeight:600,color:C.brun,marginBottom:".1rem"}}>{o.label}</div>
-                  {videos[o.id]?(
-                    <div style={{fontSize:".62rem",color:C.gris,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:220}}>{videos[o.id]}</div>
-                  ):(
-                    <div style={{fontSize:".62rem",color:"#CCC"}}>Aucune vidéo</div>
-                  )}
-                </div>
-                <div style={{display:"flex",gap:".3rem",flexShrink:0}}>
-                  {videos[o.id]&&<a href={videos[o.id]} target="_blank" rel="noopener noreferrer" style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",color:C.brun,textDecoration:"none"}}>▶</a>}
-                  <button onClick={()=>startEdit(o.id)} style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:C.brun}}>✏️</button>
-                  {videos[o.id]&&<button onClick={()=>removeVideo(o.id)} style={{background:"none",border:"1px solid #fdd",borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:"#B04040"}}>✕</button>}
-                </div>
-              </div>
-              {editOnglet===o.id&&(
-                <div style={{marginTop:".5rem",display:"flex",gap:".4rem"}}>
-                  <input value={inputUrl} onChange={e=>setInputUrl(e.target.value)}
-                    placeholder="https://www.youtube.com/watch?v=..."
-                    style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .65rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
-                  <button onClick={saveVideo} disabled={saving}
-                    style={{background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".4rem .75rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                    {saving?"...":"✓"}
-                  </button>
-                  <button onClick={()=>{setEditOnglet(null);setInputUrl("");}}
-                    style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .6rem",fontSize:".75rem",cursor:"pointer",fontFamily:"inherit",color:C.gris}}>✕</button>
-                </div>
-              )}
-            </div>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
 function AdminEbooksSection(){
-  const THEMES_EBOOKS=[
-    {id:"skincare",label:"✨ Skincare / Visage"},
-    {id:"cheveux",label:"💇 Soin cheveux"},
-    {id:"silhouette",label:"⚖️ Silhouette / Perte de poids"},
-    {id:"recettes",label:"🍽️ Recettes minceur"},
-    {id:"energie",label:"⚡ Énergie, sommeil, stress"},
-    {id:"parfums",label:"🌸 Parfums"},
-    {id:"makeup",label:"💄 Make-up"},
-    {id:"bienetre",label:"🧘 Bien-être général"},
-    {id:"recrutement",label:"🤝 Opportunité / Recrutement"},
-  ];
-  const emptyForm={titre:"",description:"",themes:[],imageCover:"",lienPDF:"",actif:true};
-  const[ebooks,setEbooks]=useState([]);
-  const[loading,setLoading]=useState(true);
-  const[showForm,setShowForm]=useState(false);
-  const[editId,setEditId]=useState(null);
-  const[form,setForm]=useState(emptyForm);
-  const[saving,setSaving]=useState(false);
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const snap=await getDoc(doc(db,"admin","ebooks"));
-        if(snap.exists()) setEbooks(snap.data().items||[]);
-      }catch{}
-      setLoading(false);
-    })();
-  },[]);
-  const saveAll=async(next)=>{
-    setSaving(true);
-    try{await setDoc(doc(db,"admin","ebooks"),{items:next});}catch{}
-    setSaving(false);
-  };
-  const toggleTheme=(id)=>{
-    const cur=form.themes||[];
-    setForm(p=>({...p,themes:cur.includes(id)?cur.filter(t=>t!==id):[...cur,id]}));
-  };
-  const submit=async()=>{
-    if(!form.titre.trim()||!form.lienPDF.trim()) return;
-    let next;
-    if(editId){
-      next=ebooks.map(e=>e.id===editId?{...e,...form}:e);
-    } else {
-      next=[...ebooks,{id:`eb${Date.now()}`,...form}];
-    }
-    setEbooks(next);
-    await saveAll(next);
-    setForm(emptyForm);setShowForm(false);setEditId(null);
-  };
-  const del=async(id)=>{
-    if(!window.confirm("Supprimer cet ebook ?")) return;
-    const next=ebooks.filter(e=>e.id!==id);
-    setEbooks(next);await saveAll(next);
-  };
-  const startEdit=(eb)=>{
-    setForm({titre:eb.titre||"",description:eb.description||"",themes:eb.themes||[],imageCover:eb.imageCover||"",lienPDF:eb.lienPDF||"",actif:eb.actif!==false});
-    setEditId(eb.id);setShowForm(true);
-  };
-  const INP=({label,field,placeholder,textarea=false})=>(
-    <div style={{marginBottom:".5rem"}}>
-      <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{label}</div>
-      {textarea
-        ?<textarea value={form[field]||""} onChange={e=>setForm(p=>({...p,[field]:e.target.value}))} placeholder={placeholder} rows={2}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical"}}/>
-        :<input value={form[field]||""} onChange={e=>setForm(p=>({...p,[field]:e.target.value}))} placeholder={placeholder}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-      }
-    </div>
-  );
-  return(
-    <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
-      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>📚 Ebooks — Bibliothèque</div>
-      <p style={{fontSize:".7rem",color:C.gris,marginBottom:".75rem",lineHeight:1.6}}>
-        Crée les ebooks disponibles pour ton équipe. Chaque distributrice choisit lesquels proposer dans son LinkBio.
-      </p>
-      {loading?<div style={{color:C.gris,fontSize:".75rem"}}>Chargement...</div>:(
-        <>
-          {ebooks.length===0&&!showForm&&(
-            <div style={{textAlign:"center",padding:"1rem",color:C.gris,fontSize:".75rem"}}>Aucun ebook créé pour l'instant.</div>
-          )}
-          {ebooks.map(eb=>(
-            <div key={eb.id} style={{display:"flex",alignItems:"center",gap:".65rem",background:C.creme,borderRadius:10,padding:".55rem .75rem",marginBottom:".4rem",border:`1px solid ${eb.actif!==false?C.pale:"#fdd"}`}}>
-              {eb.imageCover&&<img src={eb.imageCover} alt="" style={{width:36,height:50,objectFit:"cover",borderRadius:5,flexShrink:0}}/>}
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,marginBottom:".15rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{eb.titre}</div>
-                <div style={{fontSize:".62rem",color:C.gris}}>{(eb.themes||[]).map(t=>THEMES_EBOOKS.find(x=>x.id===t)?.label||t).join(" · ")||"Aucun thème"}</div>
-              </div>
-              <div style={{display:"flex",gap:".3rem",flexShrink:0}}>
-                <button onClick={()=>startEdit(eb)} style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:C.brun}}>✏️</button>
-                <button onClick={()=>del(eb.id)} style={{background:"none",border:`1px solid #fdd`,borderRadius:7,padding:".25rem .5rem",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:"#B04040"}}>✕</button>
-              </div>
-            </div>
-          ))}
-          {showForm?(
-            <div style={{background:C.creme,borderRadius:10,padding:".85rem",marginTop:".5rem",border:`1px solid ${C.pale}`}}>
-              <div style={{fontSize:".62rem",fontWeight:700,color:C.rose,textTransform:"uppercase",letterSpacing:".08em",marginBottom:".65rem"}}>{editId?"Modifier l'ebook":"Nouvel ebook"}</div>
-              <INP label="Titre *" field="titre" placeholder="Ex: Carnet Silhouette — 7 jours de recettes"/>
-              <INP label="Description courte" field="description" placeholder="Ex: 7 jours de recettes minceur gourmandes" textarea/>
-              <INP label="Lien PDF / Page *" field="lienPDF" placeholder="https://..."/>
-              <INP label="Image cover (URL)" field="imageCover" placeholder="https://... (URL image)"/>
-              <div style={{marginBottom:".6rem"}}>
-                <div style={{fontSize:".6rem",color:C.gris,marginBottom:".4rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Thèmes (plusieurs possibles)</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:".3rem"}}>
-                  {THEMES_EBOOKS.map(t=>(
-                    <button key={t.id} onClick={()=>toggleTheme(t.id)}
-                      style={{padding:".25rem .55rem",borderRadius:20,border:`1.5px solid ${(form.themes||[]).includes(t.id)?C.rose:C.pale}`,background:(form.themes||[]).includes(t.id)?C.rose+"20":"transparent",fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",color:(form.themes||[]).includes(t.id)?C.rose:C.gris,fontWeight:(form.themes||[]).includes(t.id)?700:400}}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <label style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".65rem",cursor:"pointer"}}>
-                <input type="checkbox" checked={form.actif!==false} onChange={e=>setForm(p=>({...p,actif:e.target.checked}))}/>
-                <span style={{fontSize:".72rem",color:C.brun,fontWeight:600}}>Actif (visible pour l'équipe)</span>
-              </label>
-              <div style={{display:"flex",gap:".4rem"}}>
-                <button onClick={submit} disabled={saving||!form.titre.trim()||!form.lienPDF.trim()}
-                  style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
-                  {saving?"Sauvegarde...":editId?"✓ Modifier":"✓ Ajouter"}
-                </button>
-                <button onClick={()=>{setShowForm(false);setEditId(null);setForm(emptyForm);}}
-                  style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .75rem",fontSize:".78rem",cursor:"pointer",fontFamily:"inherit",color:C.gris}}>Annuler</button>
-              </div>
-            </div>
-          ):(
-            <button onClick={()=>setShowForm(true)}
-              style={{width:"100%",background:"transparent",border:`1.5px dashed ${C.rose}`,color:C.rose,borderRadius:10,padding:".55rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginTop:".25rem"}}>
-              + Ajouter un ebook
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-function AdminLinkBioSection(){
   const[banniere,setBanniere]=useState({texte:"",couleur:"#C49A8A",lien:"",actif:false});
   const[saving,setSaving]=useState(false);
   const[saved,setSaved]=useState(false);
@@ -9856,30 +9396,30 @@ function AdminImportCatalogue(){
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=xlsx.utils.sheet_to_json(ws);
 
-      console.log('ROWS sample:',JSON.stringify(rows.slice(0,2)));const seen=new Set();
+      const seen=new Set();
       const catalogue={};
       Object.values(CAT_MAP).forEach(k=>{catalogue[k]=[];});
 
       for(const row of rows){
-        const nomProduit=String(row['nom produit ']||row['nom produit']||row['Name']||'').trim();
-        const art=String(row['references']||row['Art']||'').replace('.0','').trim();
+        const art=String(row['Art']||'').replace('.0','').trim();
         if(!art||seen.has(art))continue;
         seen.add(art);
-        const cat=nomProduit.includes('.')?nomProduit.split('.')[0].trim():(row['Category']||'Autre');
-        const key=CAT_MAP[cat]||'makeup';
-        const priceRaw=String(row['prix']||row['Price']||'').replace('€','').replace(',','.').trim();
+        const cat=row['Category']||'';
+        const key=CAT_MAP[cat];
+        if(!key)continue;
+        const priceRaw=String(row['Price']||'').replace('€','').replace(',','.').trim();
         const prix=parseFloat(priceRaw)||0;
         const offerPriceRaw=String(row['Offer price']||'').replace('€','').replace(',','.').trim();
         catalogue[key].push({
-          nom:nomProduit,
+          nom:String(row['Name']||''),
           prix,
           ref:art,
           serie:cat,
           offre:row['Offer']?String(row['Offer']):'',
           prixOffre:offerPriceRaw?parseFloat(offerPriceRaw)||0:'',
         });
+      }
 
-            }
       const total=Object.values(catalogue).reduce((s,v)=>s+v.length,0);
       await setDoc(doc(db,"admin","catalogue_mihi"),catalogue);
       const statsObj={};
@@ -10082,8 +9622,6 @@ function AdminTab(){
       </p>
 
       {/* Sections fixes */}
-      <AdminVideosDashboardSection/>
-      <AdminEbooksSection/>
       <AdminLinkBioSection/>
       <AdminConfigPeriodes/>
       <AdminImportCatalogue/>
