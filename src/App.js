@@ -6159,7 +6159,7 @@ const PALIERS_QUALIFICATION=[
 
 // ── CALENDRIER OFFICIEL MIHI PAR ANNÉE ──────────────────────────────────────
 // Dates exactes extraites des catalogues officiels Mihi
-const CALENDRIER_MIHI = {
+export const CALENDRIER_MIHI = {
   2023: [
     {c:1, debut:"2023-01-07", fin:"2023-01-27"},
     {c:2, debut:"2023-01-28", fin:"2023-02-17"},
@@ -6264,6 +6264,47 @@ async function chargerCleAPI(){try{const snap=await getDoc(doc(db,"admin","confi
 chargerCleAPI();
 
 export let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-01T12:00:00").getTime();
+export const CALENDRIER_PERIODES = {
+  2025: [
+    {num:1,debut:"2025-01-09",fin:"2025-01-29"},
+    {num:2,debut:"2025-01-30",fin:"2025-02-19"},
+    {num:3,debut:"2025-02-20",fin:"2025-03-12"},
+    {num:4,debut:"2025-03-13",fin:"2025-04-02"},
+    {num:5,debut:"2025-04-03",fin:"2025-04-23"},
+    {num:6,debut:"2025-04-24",fin:"2025-05-14"},
+    {num:7,debut:"2025-05-15",fin:"2025-06-04"},
+    {num:8,debut:"2025-06-05",fin:"2025-06-25"},
+    {num:9,debut:"2025-06-26",fin:"2025-07-16"},
+    {num:10,debut:"2025-07-17",fin:"2025-08-06"},
+    {num:11,debut:"2025-08-07",fin:"2025-08-27"},
+    {num:12,debut:"2025-08-28",fin:"2025-09-17"},
+    {num:13,debut:"2025-09-18",fin:"2025-10-08"},
+    {num:14,debut:"2025-10-09",fin:"2025-10-29"},
+    {num:15,debut:"2025-10-30",fin:"2025-11-19"},
+    {num:16,debut:"2025-11-20",fin:"2025-12-10"},
+    {num:17,debut:"2025-12-11",fin:"2025-12-31"},
+  ],
+  2024: [
+    {num:18,debut:"2023-12-28",fin:"2024-01-17"},
+    {num:1,debut:"2024-01-18",fin:"2024-02-07"},
+    {num:2,debut:"2024-02-08",fin:"2024-02-28"},
+    {num:3,debut:"2024-02-29",fin:"2024-03-20"},
+    {num:4,debut:"2024-03-21",fin:"2024-04-10"},
+    {num:5,debut:"2024-04-11",fin:"2024-05-01"},
+    {num:6,debut:"2024-05-02",fin:"2024-05-22"},
+    {num:7,debut:"2024-05-23",fin:"2024-06-12"},
+    {num:8,debut:"2024-06-13",fin:"2024-07-03"},
+    {num:9,debut:"2024-07-04",fin:"2024-07-24"},
+    {num:10,debut:"2024-07-25",fin:"2024-08-14"},
+    {num:11,debut:"2024-08-15",fin:"2024-09-04"},
+    {num:12,debut:"2024-09-05",fin:"2024-09-25"},
+    {num:13,debut:"2024-09-26",fin:"2024-10-16"},
+    {num:14,debut:"2024-10-17",fin:"2024-11-06"},
+    {num:15,debut:"2024-11-07",fin:"2024-11-27"},
+    {num:16,debut:"2024-11-28",fin:"2024-12-18"},
+    {num:17,debut:"2024-12-19",fin:"2025-01-08"},
+  ],
+};
 export const PERIODE_DUREE_JOURS = 21;
 export const PERIODES_PAR_AN = 18;
 
@@ -6282,6 +6323,20 @@ async function chargerAncrePeriodesFirebase(){
 // Appel immédiat au chargement
 chargerAncrePeriodesFirebase();
 
+export function getDebutCampagne(annee, numC){
+  if(typeof CALENDRIER_MIHI!=="undefined"&&CALENDRIER_MIHI[annee]){
+    const camp=CALENDRIER_MIHI[annee].find(c=>c.c===numC);
+    if(camp) return new Date(camp.debut+"T12:00:00");
+  }
+  return null;
+}
+export function getFinCampagne(annee, numC){
+  if(typeof CALENDRIER_MIHI!=="undefined"&&CALENDRIER_MIHI[annee]){
+    const camp=CALENDRIER_MIHI[annee].find(c=>c.c===numC);
+    if(camp) return new Date(camp.fin+"T12:00:00");
+  }
+  return null;
+}
 export function getPeriodeDebut(nAbsolu){
   // Utiliser le calendrier officiel Mihi 2026 pour la période actuelle
   const campActuelle = getCampagneMihiActuelle();
@@ -7017,7 +7072,7 @@ export function MembresTab({uid}){
 
   const saveAll=async(liste,chefsList)=>{
     setSaving(true);
-    try{await setDoc(doc(db,"acces","membres"),{liste,chefs:chefsList});}catch{}
+    try{await setDoc(doc(db,"acces","membres"),{liste,chefs:chefsList},{merge:true});}catch{}
     setSaving(false);
   };
 
@@ -8882,7 +8937,7 @@ function EspaceChefTab({uid, isChef}){
         {section==="distributeurs"&&<DistributeursTab distributeurs={distrib} save={saveDistrib} uid={uid}/>}
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
         {section==="nouveaux"&&<SuiviRecruTab uid={uid} isChef={isChef}/>}
-        {section==="admin"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<AdminTab/>}
+        {section==="admin"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<AdminTab uid={uid}/>}
       </div>
     );
   }
@@ -9458,7 +9513,7 @@ function AdminImportCatalogue(){
   );
 }
 
-function AdminTab(){
+function AdminTab({uid}){
   const[items,setItems]=useState([]);
   const[loading,setLoading]=useState(true);
   const[showAdd,setShowAdd]=useState(false);
@@ -9791,6 +9846,10 @@ function AdminTab(){
           style={{background:"#1a5276",color:"white",border:"none",borderRadius:8,padding:".55rem 1rem",fontSize:".75rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
           🔄 Forcer la mise a jour
         </button>
+      </div>
+      <div style={{marginTop:"1.5rem",background:"#F0F7F2",border:"1px solid #5C8A6A40",borderRadius:12,padding:"1rem"}}>
+        <div style={{fontSize:".62rem",fontWeight:700,color:"#3A6A4A",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>💾 Backup données</div>
+        <button onClick={async()=>{try{const snap=await getDoc(doc(db,"users",uid));const data=snap.exists()?snap.data():{};const json=JSON.stringify(data,null,2);const blob=new Blob([json],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="backup-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);}catch(e){alert("Erreur: "+e);}}} style={{background:"#3A6A4A",color:"white",border:"none",borderRadius:10,padding:".55rem 1rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>⬇️ Télécharger backup JSON</button>
       </div>
     </div>
   );

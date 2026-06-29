@@ -1249,7 +1249,16 @@ function DistributeursTab({distributeurs,save,uid}){
     const dUid=(d.prenom+"-"+d.nom).toLowerCase().replace(/\s+/g,"-").replace(/-+$/,"");
     return !descendants||descendants.has(dUid)||Object.values(annuaire).some(m=>(m.prenom===d.prenom&&m.nom===d.nom)&&descendants.has(m.uid));
   });
-  const allEntries = [...autoEntries, ...manualFiltered.map(d=>({...d, auto:false}))].sort((a,b)=>(a.prenom||a.nom||"").localeCompare(b.prenom||b.nom||"","fr"));
+  const AFFILIES_IDS = ["julie-marchand"];
+  const getDescendantUids = (rootUid) => {
+    const r=new Set([rootUid]);const q=[rootUid];
+    while(q.length){const c=q.pop();Object.values(annuaire).forEach(m=>{if(m.marraine===c&&!r.has(m.uid)){r.add(m.uid);q.push(m.uid);}});}
+    return r;
+  };
+  const affiliesUids = new Set(AFFILIES_IDS.flatMap(id=>[...getDescendantUids(id)]));
+  const allEntriesFull = [...autoEntries, ...manualFiltered.map(d=>({...d, auto:false}))].sort((a,b)=>(a.prenom||a.nom||"").localeCompare(b.prenom||b.nom||"","fr"));
+  const allEntries = allEntriesFull.filter(e=>!affiliesUids.has(e.uid||(""+e.prenom+"-"+e.nom).toLowerCase().replace(/\s+/g,"-")));
+  const affiliesEntries = allEntriesFull.filter(e=>affiliesUids.has(e.uid||(""+e.prenom+"-"+e.nom).toLowerCase().replace(/\s+/g,"-")));
 
   // Helpers navigation par équipe (basé sur le champ marraine de l'annuaire)
   const fmtNom=(u)=>u.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
@@ -1519,6 +1528,7 @@ function DistributeursTab({distributeurs,save,uid}){
           </div>
         );
       })}
+      {affiliesEntries.length>0&&(<div style={{marginTop:"1.5rem",background:"#FFF8E1",border:"1px solid #F0C040",borderRadius:12,padding:".75rem 1rem"}}><div style={{fontSize:".62rem",fontWeight:700,color:"#8B6914",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>🌿 Réseau affilié (hors stats Blazing Dynasty)</div>{affiliesEntries.filter(d=>{const t=(d.prenom+" "+(d.nom||"")).toLowerCase();return!search||t.includes(search.toLowerCase());}).map(d=>(<div key={d.id} style={{background:"rgba(255,255,255,.7)",borderRadius:10,padding:".5rem .75rem",marginBottom:".4rem",display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:".82rem",fontWeight:700,color:C.brun}}>{d.prenom} {d.nom||""}</div><div style={{fontSize:".62rem",color:"#8B6914"}}>{d.palier||"2%"} · {d.uid||""}</div></div><div style={{fontSize:".6rem",color:"#8B6914",fontStyle:"italic"}}>affilié</div></div>))}<div style={{fontSize:".62rem",color:"#8B6914",marginTop:".4rem",fontStyle:"italic"}}>Les chiffres de ce réseau ne comptent pas dans vos stats globales.</div></div>)}
     </div>
   );
 }

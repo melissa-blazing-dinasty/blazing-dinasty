@@ -103,7 +103,20 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
         else if(val&&typeof val==="object") produits=[...produits,...Object.values(val).filter(p=>p&&p.nom)];
       });
       if(produits.length>100) produits=produits.slice(0,100);
-      catalogueText=produits.filter(p=>p&&p.nom).map((p,i)=>(i+1)+". "+p.nom+" — "+p.prix+"€").join("\n");
+      // Filtrer par mots-clés selon le type de diagnostic
+      let motsClesType = [];
+      if(type==="cheveux") motsClesType=["cheveu","chevel","shampoo","shampooing","après","apres","masque","huile capil","traitement capil","kératine","keratine","soin capil"];
+      else if(type==="skincare") motsClesType=["visage","crème","creme","sérum","serum","hydrat","nettoy","contour","yeux","peau","antiage","anti-age","eclat","éclat","masque visage","gommage"];
+      else if(type==="sante"||type==="silhouette"||type==="detox") motsClesType=["minceur","detox","complément","complement","vitalité","vitalite","energie","énergie","brûle","brule","coupe faim","digestion","probiotique"];
+      else if(type==="makeup") motsClesType=["fond de teint","rouge","mascara","eye","liner","blush","poudre","concealer","correcteur","levres","lèvres","palette"];
+      
+      let produitsFiltres = produits.filter(p=>p&&p.nom);
+      if(motsClesType.length>0){
+        const filtres = produitsFiltres.filter(p=>motsClesType.some(m=>p.nom.toLowerCase().includes(m)));
+        if(filtres.length>=3) produitsFiltres = filtres;
+      }
+      if(produitsFiltres.length>80) produitsFiltres=produitsFiltres.slice(0,80);
+      catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" — "+p.prix+"€").join("\n");
       console.log("CATALOGUE CHARGE:",produits.length,"produits, cles:",cles);console.log("SAMPLE cat.face:",JSON.stringify(cat[cles[0]])?.substring(0,200));
     }
   } catch (e) { console.error("Erreur chargement catalogue:", e); }

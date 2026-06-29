@@ -5,7 +5,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 
 import { AdminFormationProduits, UploadPhoto } from './FormationProduitsTab';
 import { DistributeursTab } from './ClientsTab';
-import { ss, sg, sgAll, syncAnnuaire, getPeriodeInfo, getPeriodeActuelle, getPeriodeDebut, fmtPLabel, GrilleJoursCA, MembreStatsCard, ChallengeAppSuiviTab, ActionsBiblioChefTab, MembresTab, AssiduiteTab, DefisTab, PowerHourTab, SuiviRecruTab, MessageEquipePopup, MessagesRecusPopup, ESPACE_CHEF_SECTIONS, PERIODE_DUREE_JOURS, PERIODES_PAR_AN, PERIODE_DEBUT_ABSOLU_MS, FAST_START_DAYS, CITATIONS_DEFAULT, ANTHROPIC_API_KEY } from './App';
+import { ss, sg, sgAll, syncAnnuaire, getPeriodeInfo, getPeriodeActuelle, getPeriodeDebut, getDebutCampagne, getFinCampagne, CALENDRIER_MIHI, fmtPLabel, GrilleJoursCA, MembreStatsCard, ChallengeAppSuiviTab, ActionsBiblioChefTab, MembresTab, AssiduiteTab, DefisTab, PowerHourTab, SuiviRecruTab, MessageEquipePopup, MessagesRecusPopup, ESPACE_CHEF_SECTIONS, PERIODE_DUREE_JOURS, PERIODES_PAR_AN, PERIODE_DEBUT_ABSOLU_MS, FAST_START_DAYS, CITATIONS_DEFAULT, ANTHROPIC_API_KEY } from './App';
 import { todayLocalStr } from './utils';
 import { buildEquipeTree, countEquipeSafe, getLigneeChefs, translateBatch, C, APP_VERSION, BoutonMiseAJour, YTBtn, useLang } from './components';
 
@@ -428,7 +428,7 @@ function SuiviCATab({uid}){
   // Périodes d'une année donnée (numéros absolus)
   const periodesDeAnnee=(annee)=>{
     const result=[];
-    for(let n=-50;n<=pCourante;n++){
+    for(let n=-200;n<=pCourante+10;n++){
       if(n===0) continue;
       try{
         const d=getPeriodeDebut(n);
@@ -436,6 +436,7 @@ function SuiviCATab({uid}){
         if(d.getFullYear()===annee||f.getFullYear()===annee) result.push(n);
       }catch{}
     }
+
     return [...new Set(result)].sort((a,b)=>a-b);
   };
 
@@ -549,6 +550,7 @@ function SuiviCATab({uid}){
       </div>
 
       {periodesDeAnnee(histAnnee).reverse().map(num=>{
+
         const d3=data[`p${num}`]||{};
         const pc3=pct(d3.ca||0,d3.obj||0);
         const isCourante=num===pCourante;
@@ -561,7 +563,7 @@ function SuiviCATab({uid}){
               style={{display:'flex',alignItems:'center',gap:'.6rem',background:isCourante?C.brun:isOuverte?C.brun+'08':C.blanc,padding:'.5rem .85rem',cursor:'pointer'}}>
               <div style={{width:36,height:36,borderRadius:'50%',background:isCourante?C.or+'30':C.rose+'15',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:'.65rem',fontWeight:700,color:isCourante?C.or:C.rose}}>P{numAnnee}</div>
               <div style={{flex:1}}>
-                <div style={{fontSize:'.62rem',fontWeight:600,color:isCourante?C.blanc:C.brun}}>{fmtDate(getPeriodeDebut(num))} → {fmtDate(new Date(getPeriodeDebut(num).getTime()+20*24*60*60*1000))}</div>
+                <div style={{fontSize:'.62rem',fontWeight:600,color:isCourante?C.blanc:C.brun}}>{fmtDate(getDebutCampagne(histAnnee,num)||getPeriodeDebut(num))} → {fmtDate(getFinCampagne(histAnnee,num)||new Date(getPeriodeDebut(num).getTime()+20*24*60*60*1000))}</div>
                 <div style={{height:4,background:isCourante?'rgba(255,255,255,.15)':C.pale,borderRadius:10,overflow:'hidden',marginTop:'.2rem'}}>
                   <div style={{height:'100%',background:isCourante?C.or:C.rose,width:pc3+'%',borderRadius:10}}/>
                 </div>
@@ -1584,7 +1586,24 @@ function AdminTab(){
         <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.brun,marginBottom:".75rem"}}>📝 Scripts personnalisés</div>
         <AdminScriptsEditor/>
       </div>
-    </div>
+    
+      {/* Backup données */}
+      <div style={{marginTop:"1.5rem",background:"#F0F7F2",border:"1px solid #5C8A6A40",borderRadius:12,padding:"1rem"}}>
+        <div style={{fontSize:".62rem",fontWeight:700,color:"#3A6A4A",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>💾 Backup données</div>
+        <div style={{fontSize:".72rem",color:C.gris,marginBottom:".75rem"}}>Exporte toutes tes données en JSON pour les sauvegarder.</div>
+        <button onClick={async()=>{
+          try{
+            const snap=await getDoc(doc(db,"users","melissa-da-silveira"));
+            const data=snap.exists()?snap.data():{};
+            const json=JSON.stringify(data,null,2);
+            const blob=new Blob([json],{type:"application/json"});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement("a");
+            a.href=url;a.download="backup-blazing-"+new Date().toISOString().slice(0,10)+".json";
+            document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+          }catch(e){alert("Erreur backup: "+e);}
+        }} style={{background:"#3A6A4A",color:"white",border:"none",borderRadius:10,padding:".55rem 1.2rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>⬇️ Télécharger backup JSON</button>
+      </div></div>
   );
 }
 
