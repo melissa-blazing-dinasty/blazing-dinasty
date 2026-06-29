@@ -4,7 +4,7 @@ import { db } from './firebase';
 import { C } from './constants';
 import { UploadPhoto } from './FormationProduitsTab';
 
-const THEMES_LINKBIO=[
+export const THEMES_LINKBIO=[
   {id:"elegance",label:"Élégance",bg:"linear-gradient(135deg,#3D1F0E,#5C3020)",header:"linear-gradient(135deg,#3D1F0E,#5C3020)",accent:"#C4A882",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#3D1F0E",cardBg:"white",preview:"🤎"},
   {id:"rose_gold",label:"Rose Gold",bg:"linear-gradient(135deg,#F9E5E0,#F2C4BB)",header:"linear-gradient(135deg,#C49A8A,#A0716A)",accent:"#C49A8A",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#5C3020",cardBg:"#FFF5F3",preview:"🌸"},
   {id:"nuit",label:"Nuit Étoilée",bg:"linear-gradient(135deg,#0D0D2B,#1A1A4E)",header:"linear-gradient(135deg,#0D0D2B,#1A1A4E)",accent:"#A89BB5",text:"white",btnPrimary:"#A89BB5",btnSecondary:"rgba(255,255,255,.9)",btnTertiary:"#0D0D2B",cardBg:"#12122E",preview:"🌙"},

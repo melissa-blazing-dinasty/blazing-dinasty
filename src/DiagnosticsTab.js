@@ -2689,7 +2689,13 @@ function LinkBioPublicPage({slug}){
     {id:"nuit",bg:"#1A1A2E",header:"#16213E",accent:"#C49A8A",btnP:"#C49A8A",btnT:"#A89BB5",light:false},
     {id:"soleil",bg:"#FFF8E7",header:"#C4A882",accent:"#C4A882",btnP:"#C4A882",btnT:"#C49A8A",light:true},
     {id:"or_noir",bg:"#0D0D0D",header:"#1A1A1A",accent:"#C4A882",btnP:"#C4A882",btnT:"#888",light:false},
-  ];
+  
+    {id:"elegance",bg:"#FAF7F2",header:"#3D1F0E",accent:"#C4A882",btnP:"#C49A8A",btnT:"#3D1F0E",light:true},
+    {id:"rose_gold",bg:"#F9E5E0",header:"#C49A8A",accent:"#C49A8A",btnP:"#C49A8A",btnT:"#5C3020",light:true},
+    {id:"corail",bg:"#FFF9F7",header:"#FF6B6B",accent:"#FF6B6B",btnP:"#FF6B6B",btnT:"#C62828",light:true},
+    {id:"lavande",bg:"#EDE7F6",header:"#7E57C2",accent:"#7E57C2",btnP:"#9575CD",btnT:"#4527A0",light:true},
+    {id:"ocean",bg:"#E3F2FD",header:"#1565C0",accent:"#1565C0",btnP:"#1976D2",btnT:"#0D47A1",light:true},
+    {id:"minimaliste",bg:"#FAFAFA",header:"#212121",accent:"#212121",btnP:"#212121",btnT:"#000",light:true},];
   const theme=THEMES_PUB.find(t=>t.id===profil.theme)||THEMES_PUB[0];
   const sub=theme.light?"#888":"rgba(255,255,255,.65)";
 
