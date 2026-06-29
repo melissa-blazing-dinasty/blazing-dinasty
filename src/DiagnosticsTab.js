@@ -2702,7 +2702,8 @@ function LinkBioPublicPage({slug}){
   return(
     <div style={{minHeight:"100vh",background:theme.bg,fontFamily:"'Trebuchet MS',sans-serif"}}>
       <div style={{maxWidth:480,margin:"0 auto",minHeight:"100vh",background:theme.bg}}>
-        <div style={{background:theme.header,padding:"2rem 1rem 1.5rem",textAlign:"center"}}>
+{(profil.bannierePersoActif&&profil.bannierePersoTexte)?(<div style={{background:profil.bannierePersoBg||theme.accent||"#C49A8A",padding:".5rem .75rem",textAlign:"center",fontSize:".75rem",fontWeight:700,color:"white",cursor:profil.bannierePersoLien?"pointer":"default"}} onClick={()=>profil.bannierePersoLien&&(window.location.href=profil.bannierePersoLien)}>{profil.bannierePersoTexte}</div>):null}
+                <div style={{background:theme.header,padding:"2rem 1rem 1.5rem",textAlign:"center"}}>
           {profil.photo
             ?<img src={profil.photo} alt="" style={{width:90,height:90,borderRadius:"50%",objectFit:"cover",border:"3px solid rgba(255,255,255,.3)",marginBottom:".75rem",display:"block",margin:"0 auto .75rem"}}/>
             :<div style={{width:90,height:90,borderRadius:"50%",background:"rgba(255,255,255,.2)",margin:"0 auto .75rem",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2.4rem",color:"#fff",fontFamily:"Georgia,serif"}}>
