@@ -23,7 +23,7 @@ function LinkBioTab({uid, userName}){
     accroche:"",nbClientes:"",nbDiags:"",nbEquipe:"",nbAnnees:"",
     ctaLabel:"✨ Faire mon diagnostic gratuit",ctaUrl:"",
     urgence:"",banniere:"",banniereUrl:"",badge:"",
-    lienBoutique:"",lienRecrutement:"",lienDiag:"",
+    lienBoutique:"",lienRecrutement:"",lienDiag:"",lienBoutiqueLabel:"",lienRecrutementLabel:"",
     liensBonusLabel:[],liensBonusUrl:[],liensBonusPhoto:[],
     photos:[],temoignages:[],produitsStar:[],faq:[],
     diagChoisis:["parfum","skincare","silhouette","sante"],
@@ -192,7 +192,7 @@ function LinkBioTab({uid, userName}){
           ].map(f=>(
             <div key={f.key} style={{marginBottom:".6rem"}}>
               <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{f.label}</div>
-              <input value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+              <input value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))}
                 style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
             </div>
           ))}
@@ -219,7 +219,7 @@ function LinkBioTab({uid, userName}){
               {key:"nbEquipe",placeholder:"Ex: 12 dans l'équipe"},
               {key:"nbAnnees",placeholder:"Ex: 2 ans d'exp."},
             ].map(f=>(
-              <input key={f.key} value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+              <input key={f.key} value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))}
                 style={{border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
             ))}
           </div>
@@ -291,12 +291,15 @@ function LinkBioTab({uid, userName}){
         <div>
           <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>Liens principaux</div>
           {[
-            {label:"🛍️ Boutique Mihi",key:"lienBoutique",placeholder:"https://mihi.care/fr/..."},
-            {label:"👑 Rejoindre l'équipe",key:"lienRecrutement",placeholder:"https://mihi.care/fr/..."},
+            {labelKey:"lienBoutiqueLabel",labelDefault:"🛍️ Boutique Mihi",key:"lienBoutique",placeholder:"https://mihi.care/fr/..."},
+            {labelKey:"lienRecrutementLabel",labelDefault:"👑 Rejoindre l'équipe",key:"lienRecrutement",placeholder:"https://mihi.care/fr/..."},
           ].map(f=>(
-            <div key={f.key} style={{marginBottom:".55rem"}}>
-              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600}}>{f.label}</div>
-              <input value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))} placeholder={f.placeholder}
+            <div key={f.key} style={{marginBottom:".75rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>Intitulé du bouton</div>
+              <input value={profil[f.labelKey]||""} onChange={e=>setProfil(p=>({...p,[f.labelKey]:e.target.value}))} placeholder={f.labelDefault}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".38rem .65rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".25rem"}}/>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>URL</div>
+              <input value={profil[f.key]||""} onChange={e=>setProfil(p=>({...p,[f.key]:e.target.value}))}
                 style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
             </div>
           ))}

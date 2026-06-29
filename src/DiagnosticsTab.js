@@ -2713,6 +2713,7 @@ function LinkBioPublicPage({slug}){
           <div style={{fontFamily:"Georgia,serif",fontSize:"1.15rem",fontWeight:600,color:"#fff"}}>{profil.prenom} {profil.nom||""}</div>
           {profil.slogan&&<div style={{fontSize:".72rem",color:"rgba(255,255,255,.8)",marginTop:".3rem",lineHeight:1.5,padding:"0 1rem"}}>{profil.slogan}</div>}
         </div>
+        {profil.accroche&&<div style={{margin:".75rem 1rem",padding:".75rem 1rem",background:"rgba(255,255,255,.1)",borderRadius:12,borderLeft:"3px solid rgba(255,255,255,.4)",fontSize:".82rem",fontStyle:"italic",color:theme.light?"rgba(0,0,0,.7)":"rgba(255,255,255,.9)",lineHeight:1.6}}>❝ {profil.accroche} ❞</div>}
         {profil.histoire&&<div style={{padding:".85rem 1.1rem",fontSize:".78rem",lineHeight:1.7,color:sub,background:theme.bg}}>{profil.histoire}</div>}
         <div style={{background:"linear-gradient(135deg,#C49A8A,#A89BB5)",padding:".65rem 1rem",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}><span style={{fontSize:"1rem"}}>🔥</span><span style={{fontSize:".78rem",fontWeight:700,color:"white",letterSpacing:".02em"}}>{nbDiagsEquipe}+ femmes ont recu leur bilan personnalise — et toi ?</span></div>
         {(profil.nbClientes||profil.nbDiags||profil.nbEquipe||profil.nbAnnees)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",padding:".75rem 1rem",background:theme.bg}}>{[{k:"nbClientes",icon:"👥"},{k:"nbDiags",icon:"🔍"},{k:"nbEquipe",icon:"⭐"},{k:"nbAnnees",icon:"🏆"}].filter(f=>profil[f.k]).map(f=><div key={f.k} style={{background:theme.accent+"15",borderRadius:10,padding:".6rem .75rem",textAlign:"center"}}><div style={{fontSize:".7rem",marginBottom:".2rem"}}>{f.icon}</div><div style={{fontSize:".82rem",fontWeight:700,color:theme.accent}}>{profil[f.k]}</div></div>)}</div>}
@@ -2766,30 +2767,8 @@ function LinkBioPublicPage({slug}){
           <button onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{recrutement:increment(1)},{merge:true});}catch(e){console.error("track:",e);}await new Promise(r=>setTimeout(r,400));window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}} style={{width:"100%",background:"transparent",color:theme.accent||"#A89BB5",border:`1.5px solid ${theme.accent||"#A89BB5"}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👑 Rejoindre l'équipe</button>
         </div>
 
-
         <div style={{padding:"1rem 1rem 2rem",background:theme.bg,display:"flex",flexDirection:"column",gap:".5rem"}}>
-          {profil.lienBoutique&&(
-            <a href={profil.lienBoutique} target="_blank" rel="noopener noreferrer"
-              style={{display:"block",background:theme.btnP,color:"#fff",borderRadius:12,padding:".75rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".85rem",fontWeight:700}}>
-              🛍️ Découvrir les produits
-            </a>
-          )}
-          {(profil.liensDiag||[]).filter(d=>d.url).map((d,i)=>(
-            <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
-              style={{display:"block",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:600}}>
-              {d.label||"✨ Faire mon diagnostic"}
-            </a>
-          ))}
-          {!(profil.liensDiag||[]).filter(d=>d.url).length&&profil.lienDiag&&(
-            <a href={profil.lienDiag} target="_blank" rel="noopener noreferrer"
-              style={{display:"block",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:600}}>
-              ✨ Faire mon diagnostic
-            </a>
-          )}
-          <button onClick={()=>{window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}}
-            style={{display:"block",width:"100%",background:"transparent",color:theme.accent,border:`1.5px solid ${theme.accent}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",border:"none"}}>
-            👑 Rejoindre l'équipe
-          </button>
+          {(profil.liensBonusLabel||[]).map((_,bi)=>profil.liensBonusUrl?.[bi]?(<a key={bi} href={profil.liensBonusUrl[bi]} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"transparent",color:theme.accent,border:"1.5px solid "+theme.accent,borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:600}}>{profil.liensBonusLabel[bi]||profil.liensBonusUrl[bi]}</a>):null)}
         </div>
         <div style={{padding:"1rem",textAlign:"center",fontSize:".6rem",color:theme.accent,opacity:.6}}>Blazing Dynasty × Mihi France</div>
       </div>
