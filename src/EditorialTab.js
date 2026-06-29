@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
@@ -100,6 +100,9 @@ function EditorialTab({ uid, userName }) {
   const [editMode, setEditMode] = useState(null); // {dateStr, postIdx}
   const [showIdees, setShowIdees] = useState(null); // {dateStr, postIdx}
   const [customThemes, setCustomThemes] = useState({}); // {dateStr: {p1Override, p2Override}}
+  const [histoire, setHistoire] = useState(""); // profil global pour influencer l'IA
+  const [notesJour, setNotesJour] = useState({}); // {dateStr: "note du jour"}
+  const [showHistoire, setShowHistoire] = useState(false);
 
   const today = new Date();
   const todayStr = today.toISOString().slice(0,10);
@@ -140,6 +143,8 @@ function EditorialTab({ uid, userName }) {
           setContenu(data.contenu||{});
           setCustomThemes(data.customThemes||{});
           setSavedDays(data.savedDays||{});
+          setHistoire(data.histoire||"");
+          setNotesJour(data.notesJour||{});
         }
       }catch{}
     })();
@@ -151,6 +156,8 @@ function EditorialTab({ uid, userName }) {
         contenu: newContenu !== undefined ? newContenu : contenu,
         customThemes: newCustom !== undefined ? newCustom : customThemes,
         savedDays: newSaved !== undefined ? newSaved : savedDays,
+        histoire: histoire,
+        notesJour: notesJour,
       },{merge:true});
     }catch{}
   };
@@ -182,7 +189,8 @@ function EditorialTab({ uid, userName }) {
     const d = new Date(dateStr);
     const jn = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"][d.getDay()];
     try{
-      const prompt = "Tu es experte content marketing pour Melissa, distributrice Mihi France, maman authentique.\nJour: "+jn+" "+d.getDate()+"/"+d.getMonth()+"\nPost1: "+th.p1.type+" - "+th.p1.hook+"\nPost2: "+th.p2.type+" - "+th.p2.hook+(th.p2.cta?" CTA:"+th.p2.cta:"")+"\nStories: "+th.s.join("|")+"\nReponds UNIQUEMENT en JSON valide sans backticks:\n{\"post1\":{\"hooks\":[\"h1\",\"h2\",\"h3\"],\"legende\":\"150 mots avec emojis\",\"hashtags\":\"#tag1 #tag2 etc\"},\"post2\":{\"hooks\":[\"h1\",\"h2\",\"h3\"],\"legende\":\"avec CTA clair\",\"hashtags\":\"#tag1 #tag2 etc\"},\"stories\":[{\"num\":1,\"script\":\"texte\",\"conseil\":\"visuel\"},{\"num\":2,\"script\":\"sondage\",\"conseil\":\"visuel\"},{\"num\":3,\"script\":\"CTA\",\"conseil\":\"visuel\"}]}";
+      const noteDuJour = notesJour[dateStr]||"";
+      const prompt = "Tu es experte content marketing pour Melissa, distributrice Mihi France, maman authentique."+(histoire?"\n\nPROFIL & HISTOIRE DE MELISSA :\n"+histoire:"")+(noteDuJour?"\n\nNOTE DU JOUR (priorité) :\n"+noteDuJour:"")+"\nJour: "+jn+" "+d.getDate()+"/"+d.getMonth()+"\nPost1: "+th.p1.type+" - "+th.p1.hook+"\nPost2: "+th.p2.type+" - "+th.p2.hook+(th.p2.cta?" CTA:"+th.p2.cta:"")+"\nStories: "+th.s.join("|")+"\nReponds UNIQUEMENT en JSON valide sans backticks:\n{\"post1\":{\"hooks\":[\"h1\",\"h2\",\"h3\"],\"legende\":\"150 mots avec emojis\",\"hashtags\":\"#tag1 #tag2 etc\"},\"post2\":{\"hooks\":[\"h1\",\"h2\",\"h3\"],\"legende\":\"avec CTA clair\",\"hashtags\":\"#tag1 #tag2 etc\"},\"stories\":[{\"num\":1,\"script\":\"texte\",\"conseil\":\"visuel\"},{\"num\":2,\"script\":\"sondage\",\"conseil\":\"visuel\"},{\"num\":3,\"script\":\"CTA\",\"conseil\":\"visuel\"}]}";
       const resp = await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
@@ -334,6 +342,13 @@ function EditorialTab({ uid, userName }) {
         </div>
 
         {isOpen&&<div style={{padding:"0 1rem 1rem",borderTop:"1px solid "+C.pale}}>
+          {/* Note du jour */}
+          <div style={{marginBottom:".65rem"}}>
+            <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,textTransform:"uppercase",letterSpacing:".08em",marginBottom:".25rem"}}>💡 Note pour l'IA aujourd'hui</div>
+            <textarea value={notesJour[dateStr]||""} onChange={e=>{const n={...notesJour,[dateStr]:e.target.value};setNotesJour(n);saveToFirestore(undefined,undefined,undefined);}} rows={2}
+              placeholder="Ex: Je veux parler de la rentrée, de mon retour après les vacances, ou d'un produit spécifique..."
+              style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".45rem .65rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,resize:"none",outline:"none",background:C.creme}}/>
+          </div>
           <button onClick={()=>generer(dateStr)} disabled={!!generating}
             style={{width:"100%",background:isGen?C.pale:C.brun,color:isGen?C.gris:"white",border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:isGen?"wait":"pointer",margin:".65rem 0",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}>
             {isGen?<>⏳ Génération...</>:<>✨ {ct?"Regénérer le contenu IA":"Générer le contenu IA"}</>}
@@ -369,9 +384,29 @@ function EditorialTab({ uid, userName }) {
     <div style={{paddingBottom:"2rem"}}>
       {showIdees&&<BiblioPopup dateStr={showIdees.dateStr} postIdx={showIdees.postIdx} onClose={()=>setShowIdees(null)}/>}
 
-      <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:"1rem"}}>
-        Éditorial <em style={{color:C.rose}}>IA</em>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun}}>Éditorial <em style={{color:C.rose}}>IA</em></div>
+        <button onClick={()=>setShowHistoire(true)} style={{background:C.rose,color:"white",border:"none",borderRadius:20,padding:".35rem .85rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>✨ Mon profil IA</button>
       </div>
+
+      {showHistoire&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+          <div style={{background:"white",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,padding:"1.5rem",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:C.brun,marginBottom:".5rem"}}>✨ Mon profil pour l'IA</div>
+            <div style={{fontSize:".72rem",color:C.gris,marginBottom:"1rem",lineHeight:1.6}}>
+              Décris-toi : qui tu es, pourquoi Mihi, ton style de communication, tes valeurs, ta cible... L'IA s'en inspirera pour tous tes contenus.
+            </div>
+            <textarea value={histoire} onChange={e=>{setHistoire(e.target.value);}} rows={8}
+              placeholder="Ex: Je suis Melissa, maman de 5 enfants, distributrice Mihi depuis 2 ans. J'ai rejoint Mihi pour la liberté financière et l'épanouissement. Mon style est authentique, bienveillant et direct. Ma cible : les mamans qui veulent se sentir belles et libres..."
+              style={{flex:1,border:"1px solid "+C.pale,borderRadius:10,padding:".75rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,resize:"none",outline:"none",marginBottom:"1rem"}}/>
+            <div style={{display:"flex",gap:".5rem"}}>
+              <button onClick={async()=>{await saveToFirestore(undefined,undefined,undefined);setShowHistoire(false);}} style={{flex:1,background:C.brun,color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".82rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>✓ Enregistrer</button>
+              <button onClick={()=>setShowHistoire(false)} style={{background:"none",border:"1px solid "+C.pale,borderRadius:10,padding:".65rem .85rem",fontSize:".78rem",cursor:"pointer",fontFamily:"inherit",color:C.gris}}>Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <VUE/>
 
       {vue==="mois"&&(
