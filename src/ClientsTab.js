@@ -406,8 +406,6 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, P
 
             {/* Recommandation */}
             <RecommandationSection client={c} uid={uid}/>
-            <DiagnosticsRattachesSection client={c} clients={clients} save={save} uid={uid}/>
-            <div style={{marginTop:".75rem"}}><button onClick={()=>telechargerFichePDF(c)} style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📄 Télécharger la fiche complète</button></div>
           </div>
         </div>
       )}
@@ -697,6 +695,7 @@ function RelancesTab({prospects,clients,saveProspects,saveClients}){
   const msgP=(p)=>"Coucou "+(p.name&&p.name.split(" ")[0]||"")+" ! On avait echange il y a quelques jours. Tu as eu le temps de reflechir ? Je suis la si tu as des questions";
   const msgE=(c)=>"Coucou "+c.prenom+" ! Ca fait un moment qu'on ne s'est pas parlees. J'ai pense a toi avec nos nouvelles references. Tu veux qu'on fasse le point sur ta routine ?";
   const marquerFait=(p)=>saveProspects(prospects.map(x=>x.id===p.id?{...x,relance:"",journal:[...(x.journal||[]),{date:todayFr,msg:"Relance effectuee"}]}:x));
+  const pasInteresse=(p)=>saveProspects(prospects.map(x=>x.id===p.id?{...x,statut:"Archive",relance:"",journal:[...(x.journal||[]),{date:todayFr,msg:"Pas interesse"}]}:x));
   const progRelance=(p,j)=>{const d=new Date();d.setDate(d.getDate()+j);saveProspects(prospects.map(x=>x.id===p.id?{...x,relance:d.toISOString().slice(0,10)}:x));};
   return(
     <div style={{paddingBottom:"2rem"}}>
@@ -705,7 +704,7 @@ function RelancesTab({prospects,clients,saveProspects,saveClients}){
         {[[aRecontacter.length,"A recontacter",C.rose],[sansContact.length,"Sans contact 14j+",C.or],[endormies.length,"Endormies 60j+",C.lilas]].map(([val,label,col])=>(<div key={label} style={{background:C.creme,borderRadius:10,padding:".65rem .5rem",textAlign:"center",border:"1px solid "+C.pale}}><div style={{fontSize:"1.2rem",fontWeight:700,color:col}}>{val}</div><div style={{fontSize:".58rem",color:C.gris,lineHeight:1.3}}>{label}</div></div>))}
       </div>
       <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
-        {[{id:"prospects",label:"Prospects ("+(aRecontacter.length+sansContact.length)+")"},{id:"endormies",label:"Endormies ("+endormies.length+")"}].map(t=>(<button key={t.id} onClick={()=>setSection(t.id)} style={{flex:1,padding:".4rem .5rem",fontSize:".7rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(section===t.id?C.rose:C.pale),background:section===t.id?C.rose:"white",color:section===t.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>))}
+        {[{id:"prospects",label:"Prospects ("+(aRecontacter.length+sansContact.length)+")"},{id:"endormies",label:"Endormies ("+endormies.length+")"},{id:"inactives",label:"Inactives ("+(clients||[]).filter(c=>c.statut==="inactif").length+")"}].map(t=>(<button key={t.id} onClick={()=>setSection(t.id)} style={{flex:"none",padding:".4rem .75rem",fontSize:".7rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(section===t.id?C.rose:C.pale),background:section===t.id?C.rose:"white",color:section===t.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>))}
       </div>
       {section==="prospects"&&<div>
         {aRecontacter.length===0&&sansContact.length===0&&<div style={{textAlign:"center",padding:"2rem",color:C.gris}}><div style={{fontSize:"2rem"}}>✅</div><div style={{fontSize:".82rem"}}>Aucun prospect a relancer !</div></div>}
@@ -729,6 +728,10 @@ function RelancesTab({prospects,clients,saveProspects,saveClients}){
             <div style={{display:"flex",gap:".3rem"}}><button onClick={()=>copy(msgP(p),"m2"+p.id)} style={{background:copied==="m2"+p.id?C.vert:C.brun,color:"white",border:"none",borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>{copied==="m2"+p.id?"Copie !":"Copier message"}</button><button onClick={()=>progRelance(p,3)} style={{background:"none",border:"1px solid "+C.rose,color:C.rose,borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontFamily:"inherit",cursor:"pointer"}}>Programmer relance</button></div>
           </div>))}
         </div>}
+      </div>}
+      {section==="inactives"&&<div>
+        {(clients||[]).filter(c=>c.statut==="inactif").length===0&&<div style={{textAlign:"center",padding:"2rem",color:C.gris}}><div style={{fontSize:"2rem"}}>✅</div><div style={{fontSize:".82rem"}}>Aucune cliente inactive !</div></div>}
+        {(clients||[]).filter(c=>c.statut==="inactif").map(c=>(<div key={c.id} style={{background:"white",border:"1.5px solid #5B8DB840",borderRadius:12,padding:".85rem 1rem",marginBottom:".5rem"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".4rem"}}><div><div style={{fontSize:".85rem",fontWeight:700,color:C.brun}}>{c.prenom} {c.nom||""}</div><div style={{fontSize:".65rem",color:C.gris}}>{c.tel||c.email||""}</div></div><div style={{fontSize:".6rem",color:"#5B8DB8",fontWeight:700}}>❄️ Inactive</div></div><div style={{display:"flex",gap:".3rem",flexWrap:"wrap"}}><button onClick={()=>saveClients(clients.map(x=>x.id===c.id?{...x,statut:"consolider"}:x))} style={{background:"none",border:"1px solid "+C.or,color:C.or,borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>🔄 Reactiver</button><button onClick={()=>saveClients(clients.map(x=>x.id===c.id?{...x,pasInteressee:true}:x))} style={{background:"none",border:"1px solid #fdd",color:"#B04040",borderRadius:8,padding:".3rem .6rem",fontSize:".65rem",fontFamily:"inherit",cursor:"pointer"}}>❌ Pas interessee</button></div></div>))}
       </div>}
       {section==="endormies"&&<div>
         {endormies.length===0&&<div style={{textAlign:"center",padding:"2rem",color:C.gris}}><div style={{fontSize:"2rem"}}>🌟</div><div style={{fontSize:".82rem"}}>Toutes tes clientes sont actives !</div></div>}
@@ -1521,74 +1524,6 @@ function DistributeursTab({distributeurs,save,uid}){
 }
 
 
-function telechargerFichePDF(c){
-  const cmds=[...(c.commandes||[])].sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const diags=c.diagnostics||[];
-  const totalCA=cmds.reduce((s,cmd)=>s+(parseFloat(cmd.montant)||0),0);
-  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Fiche ${c.prenom||""} ${c.nom||""}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Georgia,serif;color:#2C1A0E;background:#fff;padding:2rem;}h1{font-size:1.6rem;font-weight:300;color:#3D1F0E;margin-bottom:.25rem;}h1 em{font-style:italic;color:#C49A8A;}.sub{font-family:Trebuchet MS,sans-serif;font-size:.75rem;color:#888;margin-bottom:1.5rem;}.section{margin-bottom:1.5rem;}.section-title{font-family:Trebuchet MS,sans-serif;font-size:.6rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#C49A8A;margin-bottom:.5rem;border-bottom:1px solid #F0E8E0;padding-bottom:.3rem;}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .75rem;}.info-item{font-family:Trebuchet MS,sans-serif;font-size:.78rem;}.info-label{font-size:.6rem;color:#888;text-transform:uppercase;letter-spacing:.08em;}.cmd{background:#FAF7F2;border-radius:6px;padding:.6rem .75rem;margin-bottom:.4rem;font-family:Trebuchet MS,sans-serif;font-size:.75rem;}.cmd-date{font-weight:700;color:#3D1F0E;}.cmd-montant{color:#C49A8A;font-weight:700;}.produit{color:#666;font-size:.7rem;}.diag{background:#F0EBF8;border-radius:6px;padding:.6rem .75rem;margin-bottom:.4rem;font-family:Trebuchet MS,sans-serif;font-size:.75rem;}.notes{font-family:Trebuchet MS,sans-serif;font-size:.78rem;line-height:1.6;color:#5C3D2A;background:#FAF7F2;padding:.75rem;border-radius:6px;white-space:pre-wrap;}.total{font-family:Trebuchet MS,sans-serif;font-size:.85rem;font-weight:700;color:#3D1F0E;text-align:right;margin-top:.5rem;}.footer{margin-top:2rem;font-family:Trebuchet MS,sans-serif;font-size:.65rem;color:#BBB;text-align:center;border-top:1px solid #F0E8E0;padding-top:.75rem;}@media print{body{padding:1rem;}}</style></head><body><h1><em>${c.prenom||""}</em> ${c.nom||""}</h1><div class="sub">Fiche cliente — générée le ${new Date().toLocaleDateString("fr-FR")}</div><div class="section"><div class="section-title">Informations</div><div class="info-grid">${c.tel?`<div class="info-item"><div class="info-label">Téléphone</div>${c.tel}</div>`:""} ${c.email?`<div class="info-item"><div class="info-label">Email</div>${c.email}</div>`:""} ${c.ddn?`<div class="info-item"><div class="info-label">Date de naissance</div>${new Date(c.ddn).toLocaleDateString("fr-FR")}</div>`:""} ${c.statut?`<div class="info-item"><div class="info-label">Statut</div>${c.statut}</div>`:""}</div></div>${c.notes?`<div class="section"><div class="section-title">Notes</div><div class="notes">${c.notes}</div></div>`:""}<div class="section"><div class="section-title">Commandes (${cmds.length})</div>${cmds.length===0?`<div style="font-family:Trebuchet MS,sans-serif;font-size:.75rem;color:#888;">Aucune commande</div>`:cmds.map(cmd=>`<div class="cmd"><div style="display:flex;justify-content:space-between;"><span class="cmd-date">${cmd.date||""}</span><span class="cmd-montant">${parseFloat(cmd.montant)||0}€</span></div>${(cmd.lignes||[]).map(l=>`<div class="produit">• ${l.nom||""}</div>`).join("")}</div>`).join("")}<div class="total">Total CA : ${totalCA.toFixed(2)}€</div></div>${diags.length>0?`<div class="section"><div class="section-title">Diagnostics (${diags.length})</div>${diags.map(d=>`<div class="diag"><div style="font-weight:700;color:#6B4A9E;font-size:.7rem;">${d.type||""} — ${d.date||""}</div></div>`).join("")}</div>`:""}<div class="footer">Blazing Dynasty × Mihi</div></body></html>`;
-  const w=window.open("","_blank");
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(()=>w.print(),500);
-}
-
-function DiagnosticsRattachesSection({client, clients, save, uid}){
-  const[diags,setDiags]=useState([]);
-  const[loading,setLoading]=useState(true);
-  const[showAttach,setShowAttach]=useState(false);
-  const[allDiags,setAllDiags]=useState([]);
-  useEffect(()=>{
-    setDiags(client.diagnostics||[]);
-    (async()=>{
-      try{
-        const snap=await getDoc(doc(db,"users",uid));
-        if(snap.exists()&&snap.data()["db-diagnostics"]){
-          setAllDiags(JSON.parse(snap.data()["db-diagnostics"]));
-        }
-      }catch{}
-      setLoading(false);
-    })();
-  },[client.id]);
-  const rattacher=(diag)=>{
-    const newDiags=[diag,...(client.diagnostics||[])].filter((d,i,arr)=>arr.findIndex(x=>x.id===d.id)===i);
-    save(clients.map(cl=>cl.id===client.id?{...cl,diagnostics:newDiags}:cl));
-    setDiags(newDiags);setShowAttach(false);
-  };
-  const detacher=(diagId)=>{
-    const newDiags=(client.diagnostics||[]).filter(d=>d.id!==diagId);
-    save(clients.map(cl=>cl.id===client.id?{...cl,diagnostics:newDiags}:cl));
-    setDiags(newDiags);
-  };
-  const TL={"besoins":"Soin visage","cheveux":"Cheveux","minceur":"Minceur","recrutement":"Opportunité","blocage":"Maman entrepreneur","parfum":"Parfum","business":"Business"};
-  return(
-    <div style={{marginTop:".75rem"}}>
-      <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>🔬 Diagnostics rattachés</div>
-      {diags.length===0&&<div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".72rem",color:C.gris,marginBottom:".5rem"}}>Aucun diagnostic rattaché</div>}
-      {diags.map(d=>(
-        <div key={d.id} style={{background:C.creme,borderRadius:8,padding:".5rem .65rem",marginBottom:".3rem",border:"1px solid "+C.pale,display:"flex",alignItems:"center",gap:".5rem"}}>
-          <div style={{flex:1}}>
-            <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".72rem",fontWeight:600,color:C.brun}}>{TL[d.type]||d.type} — {d.date}</div>
-          </div>
-          <button onClick={()=>detacher(d.id)} style={{background:"none",border:"1px solid #fdd",borderRadius:6,padding:".2rem .4rem",fontSize:".6rem",cursor:"pointer",color:"#B04040"}}>✕</button>
-        </div>
-      ))}
-      <button onClick={()=>setShowAttach(!showAttach)} style={{width:"100%",background:"transparent",border:"1.5px dashed "+C.rose,color:C.rose,borderRadius:8,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".25rem"}}>
-        + Rattacher un diagnostic
-      </button>
-      {showAttach&&(
-        <div style={{background:C.blanc,border:"1px solid "+C.pale,borderRadius:10,padding:".75rem",marginTop:".25rem"}}>
-          {loading&&<div style={{fontSize:".72rem",color:C.gris}}>Chargement...</div>}
-          {!loading&&allDiags.filter(d=>!(client.diagnostics||[]).find(x=>x.id===d.id)).map(d=>(
-            <div key={d.id} onClick={()=>rattacher(d)} style={{background:C.creme,borderRadius:8,padding:".45rem .65rem",marginBottom:".25rem",cursor:"pointer",border:"1px solid "+C.pale}}>
-              <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".72rem",fontWeight:600,color:C.brun}}>{TL[d.type]||d.type} — {d.nomClient||""} — {d.date}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 function VuePrecisionsClientes({clients, PRECISIONS_STATUT, setSel, setVuePrecisions}){
   const toutesLePrecisions=Object.values(PRECISIONS_STATUT).flat().filter((p,i,arr)=>arr.findIndex(x=>x.id===p.id)===i);
   const clientsAvecPrecision=(pid)=>clients.filter(c=>(c.precisions||[]).includes(pid));
