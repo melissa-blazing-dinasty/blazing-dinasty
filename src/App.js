@@ -670,6 +670,10 @@ function ChallengeAppPopup({uid, onClose, setTab}){
     })();
   },[uid]);
 
+  useEffect(()=>{
+    if(etat==="termine_jour"||etat==="termine"){ onClose(); }
+  },[etat]);
+
   const demarrer=async()=>{
     setSaving(true);
     try{
@@ -707,7 +711,7 @@ function ChallengeAppPopup({uid, onClose, setTab}){
     else if(section==="dreamboard"){ setTab("dreamboard"); }
     onClose();
   };
-  if(etat==="termine_jour"||etat==="termine"){onClose();return null;}  const jour=jourActuel?CHALLENGE_APP_JOURS[jourActuel-1]:null;
+  if(etat==="termine_jour"||etat==="termine"){return null;}  const jour=jourActuel?CHALLENGE_APP_JOURS[jourActuel-1]:null;
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:999,display:"flex",alignItems:"flex-end",justifyContent:"center"}}
@@ -899,10 +903,10 @@ function App(){
             const fr=cfg.exists()?cfg.data().forceReload:0;
             const lastReload=+localStorage.getItem("bd-last-reload")||0;
             if(fr&&fr>lastReload){localStorage.setItem("bd-last-reload",String(fr));window.location.reload();return;}
-            setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);
+            setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);getDoc(doc(db,"users",uid)).then(snapCA=>{const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}).catch(()=>{setTimeout(()=>setShowChallengeApp(true),2000);});
             try{const fk="bd-first-"+uid;if(!localStorage.getItem(fk)){localStorage.setItem(fk,"1");setTimeout(()=>setShowWelcome(true),1500);}}catch{}
           }).catch(()=>{
-            setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);
+            setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);getDoc(doc(db,"users",uid)).then(snapCA=>{const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}).catch(()=>{setTimeout(()=>setShowChallengeApp(true),2000);});
           });
         } else {
           // Session invalide
