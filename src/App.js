@@ -816,6 +816,7 @@ function ChallengeAppPopup({uid, onClose, setTab}){
 function App(){
   const[screen,setScreen]=useState("login");
   const[showWelcome,setShowWelcome]=useState(false);
+  const[showBackupReminder,setShowBackupReminder]=useState(false);
   const[showMdpSetup,setShowMdpSetup]=useState(false);
   const[newMdp,setNewMdp]=useState("");
   const[newMdp2,setNewMdp2]=useState("");
@@ -869,6 +870,15 @@ function App(){
       if(mdpInput.trim()!==mdpStocke){setLoginError("Code personnel incorrect.");setLoginLoading(false);return;}
       try{localStorage.setItem("bd-user",JSON.stringify({uid:pendingUid,n:pendingName,codeOk:true}));}catch{}
       setUserId(pendingUid);setName(pendingName);setScreen("app");load(pendingUid);verifierChangementPeriode(pendingUid);try{const snapCA2=await getDoc(doc(db,"users",pendingUid));const caRaw2=snapCA2.exists()?snapCA2.data()["db-challenge-app"]:null;if(caRaw2){const ca2=JSON.parse(caRaw2);const startDate2=new Date(ca2.startDate);const today2=new Date();today2.setHours(0,0,0,0);const diffJours2=Math.floor((today2-startDate2)/(1000*60*60*24));if(diffJours2<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}catch{setTimeout(()=>setShowChallengeApp(true),2000);}
+      // Rappel backup tous les 3 jours (Melissa uniquement)
+      if(pendingUid==="melissa"||pendingUid==="melissa-da-silveira"){
+        try{
+          const snapBk=await getDoc(doc(db,"users",pendingUid));
+          const lastBk=snapBk.exists()?snapBk.data()["db-last-backup"]:null;
+          const joursDepuis=lastBk?Math.floor((Date.now()-new Date(lastBk).getTime())/(1000*60*60*24)):999;
+          if(joursDepuis>=3) setTimeout(()=>setShowBackupReminder(true),3500);
+        }catch{}
+      }
       saveFCMToken(pendingUid);
       sg(pendingUid,"db-obj-perso").then(data=>{syncAnnuaire(pendingUid,pendingName,data?JSON.parse(data):null);});
     }catch{setLoginError("Erreur. Reessaie.");}
@@ -2463,7 +2473,43 @@ function App(){
         />
       )}
 
-      {/* ── POPUP OBJECTIFS ── */}
+            {/* ── POPUP RAPPEL BACKUP ── */}
+      {showBackupReminder&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}>
+          <div style={{background:"white",borderRadius:20,maxWidth:380,width:"100%",overflow:"hidden"}}>
+            <div style={{background:"#3A6A4A",padding:"1.5rem 1.3rem",textAlign:"center"}}>
+              <div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>💾</div>
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",color:"white",fontWeight:300}}>Petit rappel backup</div>
+              <div style={{fontSize:".75rem",color:"#C8E0CC",marginTop:".25rem"}}>Ca fait plus de 3 jours, pense a sauvegarder !</div>
+            </div>
+            <div style={{padding:"1.25rem 1.3rem"}}>
+              <div style={{background:"#F0F7F2",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",fontSize:".78rem",color:"#3D2B1F",lineHeight:1.7}}>
+                Pour eviter de perdre tes donnees (clientes, CA, prospects...), telecharge un backup regulierement. Ca prend 2 secondes !
+              </div>
+              <button onClick={async()=>{
+                try{
+                  const snap=await getDoc(doc(db,"users",userId));
+                  const data=snap.exists()?snap.data():{};
+                  const json=JSON.stringify(data,null,2);
+                  const blob=new Blob([json],{type:"application/json"});
+                  const url=URL.createObjectURL(blob);
+                  const a=document.createElement("a");
+                  a.href=url;a.download="backup-blazing-"+new Date().toISOString().slice(0,10)+".json";
+                  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+                  await setDoc(doc(db,"users",userId),{"db-last-backup":new Date().toISOString()},{merge:true});
+                }catch(e){alert("Erreur: "+e);}
+                setShowBackupReminder(false);
+              }} style={{width:"100%",background:"#3A6A4A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+                Telecharger mon backup maintenant
+              </button>
+              <button onClick={()=>setShowBackupReminder(false)} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",fontFamily:"inherit",cursor:"pointer",padding:".4rem"}}>
+                Me le rappeler plus tard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+{/* ── POPUP OBJECTIFS ── */}
       {showObjectifs&&(
         <div style={{position:"fixed",bottom:"8rem",right:"1.2rem",width:285,background:C.blanc,borderRadius:16,boxShadow:"0 8px 32px rgba(61,31,14,.25)",border:`1px solid ${C.pale}`,zIndex:199,overflow:"hidden"}}>
           <div style={{background:C.brun,padding:".85rem 1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
