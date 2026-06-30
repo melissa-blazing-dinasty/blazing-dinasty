@@ -85,39 +85,54 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
 
   // Charger le catalogue réel des produits Mihi selon le type
   let catalogueText = "";
+  let complementsText = "";
   try {
     const catSnap = await getDoc(doc(db,"admin","catalogue_mihi"));
     if(catSnap.exists()){
       const cat = catSnap.data();
-      let cles = [];
-      if(type==="skincare") cles=["face"];
-      else if(type==="cheveux") cles=["hair"];
-      else if(type==="sante"||type==="silhouette"||type==="detox"||type==="antiage") cles=["health"];
-      else if(type==="makeup") cles=["makeup","face"];
-      else if(type==="peaucorps") cles=["corps","health"];
-      else cles=["face","corps","hair","makeup","health"];
       let produits=[];
-      // Extraire tous les produits de toutes les categories
       Object.values(cat).forEach(val=>{
         if(Array.isArray(val)) produits=[...produits,...val];
         else if(val&&typeof val==="object") produits=[...produits,...Object.values(val).filter(p=>p&&p.nom)];
       });
-      if(produits.length>100) produits=produits.slice(0,100);
-      // Filtrer par mots-clés selon le type de diagnostic
-      let motsClesType = [];
-      if(type==="cheveux") motsClesType=["cheveu","chevel","shampoo","shampooing","après","apres","masque","huile capil","traitement capil","kératine","keratine","soin capil"];
-      else if(type==="skincare") motsClesType=["visage","crème","creme","sérum","serum","hydrat","nettoy","contour","yeux","peau","antiage","anti-age","eclat","éclat","masque visage","gommage"];
-      else if(type==="sante"||type==="silhouette"||type==="detox") motsClesType=["minceur","detox","complément","complement","vitalité","vitalite","energie","énergie","brûle","brule","coupe faim","digestion","probiotique"];
-      else if(type==="makeup") motsClesType=["fond de teint","rouge","mascara","eye","liner","blush","poudre","concealer","correcteur","levres","lèvres","palette"];
-      
-      let produitsFiltres = produits.filter(p=>p&&p.nom);
-      if(motsClesType.length>0){
-        const filtres = produitsFiltres.filter(p=>motsClesType.some(m=>p.nom.toLowerCase().includes(m)));
-        if(filtres.length>=3) produitsFiltres = filtres;
+      produits = produits.filter(p=>p&&p.nom);
+
+      const MC = {
+        cheveux: ["cheveu","chevel","capillair","shampoo","shampooing","apres-shampo","après-shampo","masque cheveux","masque capillaire","huile cheveux","huile capil","serum cheveux","sérum cheveux","traitement capil","keratine","kératine","soin capil","brillance cheveux","anti-chute","anti chute","pousse cheveux","cuir chevelu"],
+        skincare: ["visage","creme visage","crème visage","serum visage","sérum visage","serum","sérum","hydrat","nettoy","demaquill","démaquill","contour des yeux","contour yeux","peau","anti-age","anti-âge","antiage","eclat","éclat","masque visage","gommage visage","exfoli","tonique","lotion visage","creme de nuit","crème de nuit","creme de jour","crème de jour"],
+        sante: ["complement","complément","vitalite","vitalité","energie","énergie","brule","brûle graisse","coupe-faim","coupe faim","digestion","probiotique","detox","minceur","silhouette","draineur","collagene","collagène","multivitamine","omega","oméga","spiruline","sommeil","stress","immunite","immunité"],
+        makeup: ["fond de teint","rouge a levres","rouge à lèvres","mascara","eyeliner","eye liner","blush","poudre","anticerne","concealer","correcteur","levres","lèvres","palette","ombre a paupieres","ombre à paupières","gel fixateur sourcils","crayon sourcils","highlighter","enlumineur"],
+        peaucorps: ["corps","gommage corps","gel douche","lait corporel","huile corps","beurre corporel","creme corps","crème corps","mains","pieds"],
+      };
+      const EXCLUDE = {
+        cheveux: MC.makeup.concat(MC.sante).concat(["visage","gel douche","lait corporel"]),
+        skincare: MC.makeup.concat(MC.sante).concat(MC.cheveux).concat(["corps"]),
+        sante: MC.makeup.concat(MC.cheveux).concat(["visage","corps"]),
+        makeup: MC.cheveux.concat(MC.sante).concat(["visage hydrat","creme visage","crème visage"]),
+        peaucorps: MC.makeup.concat(MC.sante).concat(MC.cheveux),
+      };
+
+      const typeKey = type==="skincare"?"skincare":type==="cheveux"?"cheveux":(type==="sante"||type==="silhouette"||type==="detox"||type==="antiage")?"sante":type==="makeup"?"makeup":type==="peaucorps"?"peaucorps":null;
+
+      let produitsFiltres = produits;
+      if(typeKey && MC[typeKey]){
+        const inc = MC[typeKey];
+        const exc = EXCLUDE[typeKey]||[];
+        const filtres = produits.filter(p=>{
+          const n = p.nom.toLowerCase();
+          const isIn = inc.some(m=>n.includes(m));
+          const isOut = exc.some(m=>n.includes(m));
+          return isIn && !isOut;
+        });
+        if(filtres.length>=4) produitsFiltres = filtres;
       }
-      if(produitsFiltres.length>80) produitsFiltres=produitsFiltres.slice(0,80);
-      catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" — "+p.prix+"€").join("\n");
-      console.log("CATALOGUE CHARGE:",produits.length,"produits, cles:",cles);console.log("SAMPLE cat.face:",JSON.stringify(cat[cles[0]])?.substring(0,200));
+      if(produitsFiltres.length>90) produitsFiltres=produitsFiltres.slice(0,90);
+      catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" — "+(p.prix!=null?p.prix:"?")+"€").join("\n");
+
+      if(typeKey==="skincare"||typeKey==="cheveux"){
+        const comp = produits.filter(p=>MC.sante.some(m=>p.nom.toLowerCase().includes(m)));
+        complementsText = comp.slice(0,15).map((p,i)=>(i+1)+". "+p.nom+" — "+(p.prix!=null?p.prix:"?")+"€").join("\n");
+      }
     }
   } catch (e) { console.error("Erreur chargement catalogue:", e); }
 
@@ -151,16 +166,18 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
   } catch {}
 
   // eslint-disable-next-line no-use-before-define
+  const isSkincareOuCheveux = (type==="skincare"||type==="cheveux");
   const prompt = `Tu es une experte beauté et santé de la marque MIHI. Tu dois créer une ordonnance produit personnalisée pour ${nomClient||"Cliente"} suite à son diagnostic ${typeLabel}.
+RÈGLES ABSOLUES SUR LES PRODUITS :
+1. Utilise UNIQUEMENT les produits listés dans le CATALOGUE ci-dessous — recopie le nom EXACT et le prix EXACT du catalogue, n'invente jamais un produit ni un prix
+2. Si le catalogue ne contient pas assez de produits pertinents, utilise ceux qui s'en rapprochent le plus plutôt que d'en inventer
 
-RÈGLES ABSOLUES :
-1. Utilise UNIQUEMENT les produits du catalogue ci-dessous — aucun produit inventé
-2. Les prix doivent être EXACTEMENT ceux du catalogue
-3. Pack Essentiel : entre 25€ et 40€ (1-2 produits de base indispensables)
-4. Pack Recommandé : entre 55€ et 75€ (Pack Essentiel + 1-2 produits complémentaires)
-5. Pack Premium : entre 90€ et 115€ (Pack Recommandé + 1-2 produits premium)
-6. Chaque pack inclut les produits du pack précédent PLUS des ajouts
-7. Propose une routine complète matin/soir claire et pratique
+RÈGLES ABSOLUES SUR LES 3 PACKS (BUDGET TOTAL CIBLE — respecte ces fourchettes) :
+- Pack Essentiel ("budget") : total entre 30€ et 50€ — 1 à 2 produits indispensables pour démarrer
+- Pack Recommandé ("bestseller") : total entre 50€ et 80€ — REPREND TOUS les produits du Pack Essentiel + 1 à 2 produits complémentaires en plus
+- Pack Premium ("premium") : total autour de 100€ (entre 90€ et 115€) — REPREND TOUS les produits du Pack Recommandé + 1 à 2 produits premium en plus${isSkincareOuCheveux?' + OBLIGATOIREMENT 1 complément alimentaire (liste "COMPLÉMENTS ALIMENTAIRES DISPONIBLES" ci-dessous) pour booster les résultats de l intérieur':''}
+- Chaque pack est un SUR-ENSEMBLE du pack précédent : ne retire jamais un produit déjà présent dans le pack inférieur, ajoute seulement
+- Propose une routine complète matin/soir claire et pratique pour chaque pack
 
 RÉPONSES AU DIAGNOSTIC :
 ${reponsesText}
@@ -168,6 +185,7 @@ ${reponsesText}
 ${formationText?`INFORMATIONS PRODUITS (pour orienter tes choix) :\n${formationText}\n`:""}
 CATALOGUE PRODUITS MIHI (utilise UNIQUEMENT ces produits avec ces prix exacts) :
 ${catalogueText}
+${complementsText?`COMPLÉMENTS ALIMENTAIRES DISPONIBLES (à utiliser obligatoirement dans le Pack Premium) :\n${complementsText}\n`:""}
 
 ${notesAdmin?`NOTES EXPERTES :\n${notesAdmin}`:""}
 
@@ -237,8 +255,8 @@ Profil cliente: ${reponsesText}
 CATALOGUE MIHI:
 ${catalogueText}
 
-Génère 4 à 5 produits du catalogue pour un pack premium complet. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
-{"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom FR","prix":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;
+RÈGLES : total entre 90€ et 115€ (idéalement autour de 100€). Utilise UNIQUEMENT les produits et prix exacts du catalogue ci-dessus.${isSkincareOuCheveux?" Inclus OBLIGATOIREMENT un complément alimentaire de la liste ci-dessus si disponible.":""} 3 à 5 produits. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
+{"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom EXACT du catalogue","prix":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;;
           const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
           const d2 = await r2.json();
           const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
