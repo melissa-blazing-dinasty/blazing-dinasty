@@ -703,7 +703,7 @@ function EspaceChefTab({uid, isChef}){
         {section==="distributeurs"&&<DistributeursTab distributeurs={distrib} save={saveDistrib} uid={uid}/>}
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
         {section==="nouveaux"&&<SuiviRecruTab uid={uid} isChef={isChef}/>}
-        {section==="admin"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<AdminTab/>}
+        {section==="admin"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<AdminTab uid={uid}/>}
       </div>
     );
   }
@@ -1279,7 +1279,7 @@ function AdminImportCatalogue(){
   );
 }
 
-function AdminTab(){
+function AdminTab({uid}){
   const[items,setItems]=useState([]);
   const[loading,setLoading]=useState(true);
   const[showAdd,setShowAdd]=useState(false);
@@ -1593,7 +1593,7 @@ function AdminTab(){
         <div style={{fontSize:".72rem",color:C.gris,marginBottom:".75rem"}}>Exporte toutes tes données en JSON pour les sauvegarder.</div>
         <button onClick={async()=>{
           try{
-            const snap=await getDoc(doc(db,"users","melissa-da-silveira"));
+            const snap=await getDoc(doc(db,"users",uid));
             const data=snap.exists()?snap.data():{};
             const json=JSON.stringify(data,null,2);
             const blob=new Blob([json],{type:"application/json"});
