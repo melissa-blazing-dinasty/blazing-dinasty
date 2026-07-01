@@ -2635,6 +2635,14 @@ export function NoticePanel({cleOutil,onClose,videoUrl}){
 }
 
 const DECOUVERTE = {
+  diagnostics: [
+    {titre:"Bienvenue !", texte:"Tes clientes repondent a quelques questions et l\u2019IA genere une ordonnance produit personnalisee. C\u2019est un super outil pour les conseiller ! On regarde ca ensemble.", icon:"\uD83D\uDC4B", cible:"decouverte-diag-cats"},
+    {titre:"Etape 1 : choisis une categorie", texte:"Les diagnostics sont ranges par categorie (skincare, cheveux, silhouette...). Clique sur une categorie pour voir les diagnostics disponibles.", icon:"\uD83D\uDCC1", cible:"decouverte-diag-cats"},
+    {titre:"Etape 2 : le prenom de la cliente", texte:"Tu peux indiquer le prenom de ta cliente pour personnaliser le lien. C\u2019est optionnel, elle pourra renseigner ses coordonnees elle-meme a la fin.", icon:"\uD83D\uDC64", cible:"decouverte-diag-prenom"},
+    {titre:"Etape 3 : choisis un diagnostic", texte:"Pour chaque diagnostic, deux options : Remplir maintenant (tu fais le diagnostic avec elle en direct) ou Envoyer le lien (elle repond seule, a son rythme).", icon:"\uD83D\uDCCB", cible:"decouverte-diag-liste"},
+    {titre:"Etape 4 : recois les resultats", texte:"Une fois le diagnostic termine, l\u2019ordonnance est generee automatiquement par l\u2019IA. Tu peux la partager en PDF ou par lien public avec ta cliente.", icon:"\u2728"},
+    {titre:"Bravo, tu es prete !", texte:"Cette experience personnalisee justifie ton role de conseillere et augmente tes ventes !", icon:"\uD83C\uDF89", cible:"decouverte-diag-cats"},
+  ],
   scripts: [
     {titre:"Bienvenue !", texte:"Cette biblioth\u00e8que rassemble des scripts prets a utiliser pour tes conversations. Adapte toujours a ta voix, ce sont des bases de depart !", icon:"\uD83D\uDC4B", cible:"decouverte-scripts-liste"},
     {titre:"Etape 1 : choisis une categorie", texte:"Les scripts sont ranges par categorie (objections, relances, presentation...). Clique sur une categorie pour voir les scripts qu\u2019elle contient.", icon:"\uD83D\uDCC1", cible:"decouverte-scripts-liste"},

@@ -3,7 +3,7 @@ import { db } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
 import { C } from './constants';
 import App from './App';
-import { SCRIPTS_DATA } from './App';
+import { SCRIPTS_DATA, DecouverteTour } from './App';
 import { todayLocalStr } from './utils';
 
 let ANTHROPIC_API_KEY = '';
@@ -1565,6 +1565,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState("");
   const[labelPerso,setLabelPerso]=useState({});const[showLabelInput,setShowLabelInput]=useState({});
+  const[showDecouverte,setShowDecouverte]=useState(false);
 
   const questions = type ? (QUESTIONS[type]||[]) : [];
   const q = questions[step];
@@ -1774,6 +1775,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
   if (mode === "choix") return (
     <div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      {showDecouverte&&<DecouverteTour outil="diagnostics" onClose={()=>setShowDecouverte(false)}/>}
       <div style={{ fontFamily: "Georgia,serif", fontSize: "1.35rem", fontWeight: 300, color: C.brun, marginBottom: ".2rem" }}>
         Diagnostics <em style={{ fontStyle: "italic", color: C.rose }}>& Outils</em>
       </div>
@@ -1782,7 +1785,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       </p>
 
       {/* Onglets de catégories */}
-      <div style={{ display:"flex", gap:".3rem", marginBottom:".75rem", overflowX:"auto", paddingBottom:".2rem" }}>
+      <div id="decouverte-diag-cats" style={{ display:"flex", gap:".3rem", marginBottom:".75rem", overflowX:"auto", paddingBottom:".2rem" }}>
         {CATS_DIAG.map(c=>(
           <button key={c.id} onClick={()=>setCatDiag(c.id)}
             style={{ flex:"none", padding:".4rem .75rem", fontSize:".68rem", fontWeight:600, borderRadius:20, border:`1.5px solid ${catDiag===c.id?c.color:C.pale}`, background:catDiag===c.id?c.color:C.blanc, color:catDiag===c.id?"white":C.gris, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
@@ -1792,7 +1795,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       </div>
 
       {/* Prénom de la cliente — juste pour personnaliser le lien */}
-      <div style={{ background:C.creme, borderRadius:12, padding:".65rem .9rem", marginBottom:".75rem", border:`1px solid ${C.pale}` }}>
+      <div id="decouverte-diag-prenom" style={{ background:C.creme, borderRadius:12, padding:".65rem .9rem", marginBottom:".75rem", border:`1px solid ${C.pale}` }}>
         <div style={{ fontSize:".62rem", fontWeight:700, color:C.brun, marginBottom:".35rem", textTransform:"uppercase", letterSpacing:".08em" }}>👤 Prénom de la cliente (optionnel)</div>
         <input placeholder="Ex: Sophie" value={nomClient} onChange={e=>setNomClient(e.target.value)}
           style={{ width:"100%", border:`1px solid ${C.pale}`, borderRadius:8, padding:".42rem .65rem", fontSize:".82rem", fontFamily:"inherit", color:C.texte, background:"white", outline:"none" }}/>
@@ -1800,7 +1803,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       </div>
 
       {/* Liste diagnostics de la catégorie sélectionnée */}
-      {TYPES_DIAG.filter(t=>t.cat===catDiag).map(t => (
+      <div id="decouverte-diag-liste">{TYPES_DIAG.filter(t=>t.cat===catDiag).map(t => (
         <div key={t.id} style={{ background: C.blanc, border: `1px solid ${C.pale}`, borderRadius: 14, padding: "1rem 1.1rem", marginBottom: ".65rem" }}>
           <div style={{ display: "flex", gap: ".8rem", alignItems: "flex-start", marginBottom: ".5rem" }}>
             <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.rose+"20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", flexShrink: 0 }}>{t.icon}</div>
@@ -1823,6 +1826,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           {showLabelInput[t.id]&&(<div style={{marginTop:".5rem",background:"#FAF7F2",borderRadius:9,padding:".6rem .75rem",border:"1px solid #E8DDD4"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".3rem",fontWeight:600}}>Intitule du lien (optionnel)</div><input value={labelPerso[t.id]||""} onChange={e=>setLabelPerso(p=>({...p,[t.id]:e.target.value}))} placeholder="Ex: Mon diagnostic Skincare gratuit" style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:7,padding:".38rem .55rem",fontSize:".78rem",fontFamily:"inherit",outline:"none",marginBottom:".4rem"}}/><button onClick={()=>{copierLienDirect(t.id,labelPerso[t.id]);setShowLabelInput(p=>({...p,[t.id]:false}));}} style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:8,padding:".42rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Copier le message</button></div>)}
         </div>
       ))}
+      </div>
 
       {/* Scripts pour proposer les diagnostics */}
       <ScriptsDiagSection/>
