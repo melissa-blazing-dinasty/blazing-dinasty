@@ -2,6 +2,7 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
+import { DecouverteTour } from './App';
 
 const FETES_IMPORTANTES=[
   // ── JANVIER ──
@@ -108,6 +109,7 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
   const[events,setEvents]=useState([]);
   const[loaded,setLoaded]=useState(false);
   const[showAdd,setShowAdd]=useState(false);
+  const[showDecouverte,setShowDecouverte]=useState(false);
   const[showFetes,setShowFetes]=useState(true);
   const[fetesOverrides,setFetesOverrides]=useState({}); // {title: {date, notes}}
   const[editFete,setEditFete]=useState(null); // title en cours d'édition
@@ -262,6 +264,8 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
 
   return(
     <div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      {showDecouverte&&<DecouverteTour outil="calendrier" onClose={()=>setShowDecouverte(false)}/>}
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
         Calendrier <em style={{fontStyle:"italic",color:C.rose}}>Équipe</em>
       </div>
@@ -270,10 +274,10 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
       </p>
 
       {canAdd&&(
-        <button onClick={()=>setShowAdd(p=>!p)}
+        <div id="decouverte-cal-add"><button onClick={()=>setShowAdd(p=>!p)}
           style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:"1rem"}}>
           ➕ Ajouter un événement
-        </button>
+        </button></div>
       )}
 
       {showAdd&&(
@@ -309,7 +313,7 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
       )}
 
       {/* Événements à venir */}
-      <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun,marginBottom:".5rem"}}>
+      <div id="decouverte-cal-liste" style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun,marginBottom:".5rem"}}>
         📅 À venir ({upcoming.length})
       </div>
       {upcoming.length===0&&(

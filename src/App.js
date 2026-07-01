@@ -2635,6 +2635,20 @@ export function NoticePanel({cleOutil,onClose,videoUrl}){
 }
 
 const DECOUVERTE = {
+  calendrier: [
+    {titre:"Bienvenue !", texte:"Le calendrier equipe rassemble tous les evenements partages : Zooms de formation, evenements vente, deadlines... On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-cal-liste"},
+    {titre:"Etape 1 : ajoute un evenement", texte:"Si tu es cheffe d\u2019equipe, tu peux ajouter un evenement : titre, date, heure, type et lien Zoom si besoin. Sinon, c\u2019est Melissa ou tes chefs qui les ajoutent pour toi.", icon:"\u2795", cible:"decouverte-cal-add"},
+    {titre:"Etape 2 : les evenements a venir", texte:"Retrouve ici tous les prochains rendez-vous de l\u2019equipe, tries par date.", icon:"\uD83D\uDCC5", cible:"decouverte-cal-liste"},
+    {titre:"Bravo, tu es prete !", texte:"Tu ne rateras plus aucun rendez-vous important de l\u2019equipe !", icon:"\uD83C\uDF89", cible:"decouverte-cal-liste"},
+  ],
+  today: [
+    {titre:"Bienvenue !", texte:"L\u2019onglet Aujourd\u2019hui, c\u2019est ton ecran d\u2019accueil. Tu y retrouves l\u2019essentiel de ta journee en un coup d\u2019oeil. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-jauge"},
+    {titre:"Etape 1 : ta jauge de succes", texte:"Cette jauge te montre en un coup d\u2019oeil ou tu en es par rapport a tes objectifs de CA et de recrutement sur la periode.", icon:"\uD83C\uDFAF", cible:"decouverte-jauge"},
+    {titre:"Etape 2 : tes badges", texte:"Tu debloques des badges au fur et a mesure de tes reussites (regularite, ventes, recrutement...). Une petite recompense pour tes efforts !", icon:"\uD83C\uDFC6", cible:"decouverte-badges"},
+    {titre:"Etape 3 : la citation du jour", texte:"Chaque jour, une citation motivante t\u2019attend ici pour bien demarrer.", icon:"\u2728", cible:"decouverte-citation"},
+    {titre:"Etape 4 : tes actions du jour", texte:"Coche les actions que tu fais chaque jour (messages envoyes, posts publies...). Ca t\u2019aide a rester regulier. Tu peux aussi en ajouter des personnalisees avec le bouton + Actions.", icon:"\u26A1", cible:"decouverte-actions-jour"},
+    {titre:"Bravo, tu es prete !", texte:"Reviens ici chaque jour pour garder une vue d\u2019ensemble de ton activite et rester motivee !", icon:"\uD83C\uDF89", cible:"decouverte-jauge"},
+  ],
   distributeurs: [
     {titre:"Bienvenue !", texte:"Cet onglet te sert a gerer tes recrues : leurs coordonnees, leur Fast Start, le Challenge Decouverte et leur suivi. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-distrib-add"},
     {titre:"Etape 1 : le bouton + Distributeur", texte:"Attention, ce bouton n\u2019est PAS la facon normale d\u2019ajouter une nouvelle distributrice ! Il sert uniquement si quelqu\u2019un rejoint ton equipe mais n\u2019utilise pas l\u2019application. Pour une inscription normale, ca se passe dans les Acces (elle recoit le code secret et se connecte elle-meme).", icon:"\u2795", cible:"decouverte-distrib-add"},

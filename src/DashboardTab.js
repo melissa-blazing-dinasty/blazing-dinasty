@@ -27,6 +27,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const[showDecouverteBusiness,setShowDecouverteBusiness]=useState(false);
   const[showDecouverteRelances,setShowDecouverteRelances]=useState(false);
   const[showDecouverteDistrib,setShowDecouverteDistrib]=useState(false);
+  const[showDecouverteToday,setShowDecouverteToday]=useState(false);
   const[noticeVideos,setNoticeVideos]=useState({});
   useEffect(()=>{
     (async()=>{
@@ -338,6 +339,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       {/* TODAY */}
       {dtab==="today"&&(
         <div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowDecouverteToday(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>{showDecouverteToday&&<DecouverteTour outil="today" onClose={()=>setShowDecouverteToday(false)}/>}
           <Confetti trigger={confettiTrigger}/>
           <MarrainePopup uid={uid} userName={userName}/>
           <AnnonceBanner uid={uid}/>
@@ -378,15 +380,15 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
             </div>
           )}
           <AssistanteIATab uid={uid} userName={userName}/>
-          <JaugeSucces pctCA={pctCAGauge} pctRecrues={pctRecruesGauge}/>
-          <BadgesPanel badges={badges}/>
+          <div id="decouverte-jauge"><JaugeSucces pctCA={pctCAGauge} pctRecrues={pctRecruesGauge}/></div>
+          <div id="decouverte-badges"><BadgesPanel badges={badges}/></div>
           {streak>=2&&(
             <div style={{display:"flex",alignItems:"center",gap:".4rem",background:"rgba(196,168,130,.15)",border:`1px solid ${C.or}40`,borderRadius:10,padding:".5rem .8rem",marginBottom:"1rem",fontSize:".72rem",color:C.brun}}>
               <span style={{fontSize:"1.1rem"}}>🔥</span>
               <span><strong>{streak} jours</strong> de connexion d'affilée — continue comme ça !</span>
             </div>
           )}
-          <CitationDuJour uid={uid}/>
+          <div id="decouverte-citation"><CitationDuJour uid={uid}/></div>
           <DreamBoardWidget uid={uid}/>
           {showBiblio&&<BiblioActionsPopup
             onClose={()=>setShowBiblio(false)}
@@ -398,7 +400,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
             }}
           />}
 
-          <div style={{background:C.brun,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
+          <div id="decouverte-actions-jour" style={{background:C.brun,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".4rem"}}>
               <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:C.or}}>
                 ⚡ MES ACTIONS DU JOUR
