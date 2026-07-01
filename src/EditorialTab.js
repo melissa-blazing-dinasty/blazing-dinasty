@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
 import { MELISSA } from './ClientsTab';
 import { CopyBtn } from './components';
-import { ANTHROPIC_API_KEY } from './App';
+import { ANTHROPIC_API_KEY, DecouverteTour } from './App';
 
 const IDEES_POSTS = {
   storytelling: [
@@ -103,6 +103,7 @@ function EditorialTab({ uid, userName }) {
   const [histoire, setHistoire] = useState(""); // profil global pour influencer l'IA
   const [notesJour, setNotesJour] = useState({}); // {dateStr: "note du jour"}
   const [showHistoire, setShowHistoire] = useState(false);
+  const [showDecouverte, setShowDecouverte] = useState(false);
 
   const today = new Date();
   const todayStr = today.toISOString().slice(0,10);
@@ -381,14 +382,15 @@ function EditorialTab({ uid, userName }) {
   const days = genDays(28);
 
   return(
-    <div style={{paddingBottom:"2rem"}}>
+    <div id="decouverte-calendrier" style={{paddingBottom:"2rem"}}>
       {showIdees&&<BiblioPopup dateStr={showIdees.dateStr} postIdx={showIdees.postIdx} onClose={()=>setShowIdees(null)}/>}
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+      <div id="decouverte-profil-ia" style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
         <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun}}>Éditorial <em style={{color:C.rose}}>IA</em></div>
-        <button onClick={()=>setShowHistoire(true)} style={{background:C.rose,color:"white",border:"none",borderRadius:20,padding:".35rem .85rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>✨ Mon profil IA</button>
+        <button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem .85rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginRight:".4rem"}}>🧭 Découverte</button><button onClick={()=>setShowHistoire(true)} style={{background:C.rose,color:"white",border:"none",borderRadius:20,padding:".35rem .85rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>✨ Mon profil IA</button>
       </div>
 
+      {showDecouverte&&<DecouverteTour outil="editorial" onClose={()=>setShowDecouverte(false)}/>}
       {showHistoire&&(
         <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div style={{background:"white",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,padding:"1.5rem",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>

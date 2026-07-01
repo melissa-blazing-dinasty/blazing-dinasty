@@ -2649,7 +2649,16 @@ const DECOUVERTE = {
     {titre:"Tes statistiques", texte:"Ici tu peux voir combien de personnes ont visit\u00e9 ta page et sur quels boutons elles ont cliqu\u00e9.", icon:"\uD83D\uDCCA", section:"stats"},
     {titre:"Bravo, tu es pr\u00eate !", texte:"Ta page LinkBio est pr\u00eate. Copie ton lien tout en haut de la page et colle-le dans ta bio Instagram ou Facebook !", icon:"\uD83C\uDF89", section:null},
   ],
-  objectifs: [
+    editorial: [
+    {titre:"Bienvenue !", texte:"L\u2019Editorial IA, c\u2019est ton planning de contenu automatique. L\u2019intelligence artificielle te propose des idees de posts et de stories pretes a l\u2019emploi, jour par jour. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-calendrier"},
+    {titre:"Etape 1 : ton profil IA", texte:"Clique sur le bouton Mon profil IA en haut a droite. Raconte qui tu es en quelques mots : tes enfants, ton histoire, ta personnalite. Plus tu en dis, plus l\u2019IA generera du contenu qui te ressemble vraiment.", icon:"\u2728", cible:"decouverte-profil-ia"},
+    {titre:"Etape 2 : ton calendrier", texte:"Voici ton planning sur 4 semaines. Chaque jour a deja un theme prevu pour toi : un post, une conversion, et des stories.", icon:"\uD83D\uDCC5", cible:"decouverte-calendrier"},
+    {titre:"Etape 3 : ouvre un jour", texte:"Clique sur n\u2019importe quel jour du calendrier pour voir en detail les themes proposes pour ce jour-la.", icon:"\uD83D\uDC46"},
+    {titre:"Etape 4 : genere le contenu", texte:"Une fois le jour ouvert, appuie sur le bouton Generer. L\u2019IA va ecrire pour toi un hook (accroche), une legende complete, et des idees de stories.", icon:"\uD83E\uDD16"},
+    {titre:"Etape 5 : copie et utilise", texte:"Clique sur le texte genere pour le copier en un clic. Colle-le ensuite directement dans Instagram ou Facebook au moment de publier.", icon:"\uD83D\uDCCB"},
+    {titre:"Etape 6 : coche quand c\u2019est fait", texte:"Une fois que tu as publie, reviens sur ce jour et coche A faire. Ca t\u2019aide a garder une vue claire de ce qui est deja publie.", icon:"\u2705"},
+    {titre:"Bravo, tu es prete !", texte:"Tu ne seras plus jamais en panne d\u2019inspiration. Reviens chaque jour consulter ton planning !", icon:"\uD83C\uDF89"},
+  ],objectifs: [
     {titre:"Bienvenue !", texte:"Cet onglet te sert \u00e0 suivre ton chiffre d\u2019affaires pendant la p\u00e9riode en cours. Regarde en haut : tu vois la p\u00e9riode actuelle et combien de jours il te reste.", icon:"\uD83D\uDC4B", cible:"decouverte-periode"},
     {titre:"Ton palier", texte:"Le palier, c\u2019est ton niveau actuel (2%, 4%, 6%...). Regarde o\u00f9 tu en es juste en dessous.", icon:"\uD83C\uDFAF", cible:"decouverte-palier"},
     {titre:"Remplis ton objectif", texte:"Dans la case Objectif en euros, \u00e9cris le chiffre d\u2019affaires que tu vises pour cette p\u00e9riode. Fais-le maintenant !", icon:"\u270F", cible:"decouverte-ca"},
@@ -2668,12 +2677,28 @@ export function DecouverteTour({outil, onClose, onStepChange}){
     const s2 = steps[i];
     if(!s2) return;
     if(onStepChange) onStepChange(s2.section);
+    let t=null, el=null;
     if(s2.cible){
-      setTimeout(()=>{
-        const el = document.getElementById(s2.cible);
-        if(el) el.scrollIntoView({behavior:"smooth", block:"center"});
-      }, 150);
+      t=setTimeout(()=>{
+        el=document.getElementById(s2.cible);
+        if(el){
+          el.scrollIntoView({behavior:"smooth", block:"start", inline:"nearest"});window.scrollBy(0,-70);
+          el.classList.add("decouverte-highlight");
+          el.style.outline="3px solid #C49A8A";
+          el.style.outlineOffset="4px";
+          el.style.boxShadow="0 0 0 8px rgba(196,154,138,.3)";
+        }
+      },150);
     }
+    return ()=>{
+      clearTimeout(t);
+      if(el){
+        el.classList.remove("decouverte-highlight");
+        el.style.outline="";
+        el.style.outlineOffset="";
+        el.style.boxShadow="";
+      }
+    };
   },[i]);
   if(steps.length===0) return null;
   const s = steps[i];
