@@ -2635,6 +2635,15 @@ export function NoticePanel({cleOutil,onClose,videoUrl}){
 }
 
 const DECOUVERTE = {
+  prospects: [
+    {titre:"Bienvenue !", texte:"Cet onglet te sert a suivre tes prospects, du premier contact jusqu\u2019a la conversion en cliente ou distributrice. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-ajouter-prospect"},
+    {titre:"Etape 1 : ajoute un prospect", texte:"Ecris son prenom, choisis son statut (chaud, tiede ou froid), precise si elle est interessee par les produits ou par l\u2019activite, ajoute une note si besoin, puis clique sur Ajouter le prospect.", icon:"\u2795", cible:"decouverte-ajouter-prospect"},
+    {titre:"Etape 2 : tes categories", texte:"Tes prospects sont ranges par categorie : Clients potentiels, Distributeurs potentiels, et Recommandations. Clique sur une categorie pour voir la liste.", icon:"\uD83D\uDCC1", cible:"decouverte-categories-prospects"},
+    {titre:"Etape 3 : ouvre une fiche", texte:"Clique sur le nom d\u2019un prospect pour ouvrir sa fiche. Tu peux y noter chaque echange dans le journal, pour te souvenir de tout.", icon:"\uD83D\uDC46", cible:"decouverte-categories-prospects"},
+    {titre:"Etape 4 : programme une relance", texte:"Dans la fiche, choisis une date pour te rappeler de recontacter ce prospect. Tu le retrouveras dans l\u2019onglet Relances le jour venu.", icon:"\uD83D\uDD14", cible:"decouverte-categories-prospects"},
+    {titre:"Etape 5 : convertis-le", texte:"Quand un prospect devient cliente ou distributrice, clique sur le bouton Convertir. Il passera automatiquement dans le bon onglet.", icon:"\u2728", cible:"decouverte-categories-prospects"},
+    {titre:"Bravo, tu es prete !", texte:"Tu as maintenant une vision claire de ton pipeline. Tu sais exactement qui relancer chaque jour !", icon:"\uD83C\uDF89", cible:"decouverte-ajouter-prospect"},
+  ],
   clients: [
     {titre:"Bienvenue !", texte:"Cet onglet centralise toutes tes clientes : leurs commandes, leurs infos, et un suivi automatique pour ne jamais les oublier. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-clients-liste"},
     {titre:"Etape 1 : ajoute une cliente", texte:"Clique sur le bouton + Nouvelle cliente, puis remplis son prenom, nom, telephone et le reste. Clique ensuite sur Ajouter.", icon:"\u2795", cible:"decouverte-nouvelle-cliente"},

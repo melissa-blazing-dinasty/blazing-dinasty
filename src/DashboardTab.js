@@ -23,6 +23,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const[dtab,setDtab]=useState("today");
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
+  const[showDecouverteProspects,setShowDecouverteProspects]=useState(false);
   const[noticeVideos,setNoticeVideos]=useState({});
   useEffect(()=>{
     (async()=>{
@@ -451,7 +452,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       {/* PROSPECTS */}
       {dtab==="prospects"&&(
         <div>
-          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="prospects" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["prospects"]||""}/>}
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowDecouverteProspects(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>{showDecouverteProspects&&<DecouverteTour outil="prospects" onClose={()=>setShowDecouverteProspects(false)}/>}
           <button onClick={async()=>{
             try{
               const snap=await getDoc(doc(db,"users",uid));
@@ -467,7 +468,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
             style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:9,padding:".4rem",fontSize:".68rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
             🔄 Rafraîchir (pour voir les nouvelles recommandations)
           </button>
-          <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
+          <div id="decouverte-ajouter-prospect" style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
             <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".65rem"}}>➕ Ajouter un prospect ({prospects.length})</div>
             <input placeholder="Prénom" value={newP.name} onChange={e=>setNewP(p=>({...p,name:e.target.value}))}
               style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .7rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".45rem"}}/>
@@ -494,7 +495,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
 
           {/* Navigation par dossier : Clients potentiels / Distributeurs potentiels / Non classé */}
           {!prospectInteretFiltre&&(
-            <div>
+            <div id="decouverte-categories-prospects">
               <div style={{fontSize:".68rem",color:C.gris,marginBottom:".6rem"}}>Choisis une catégorie pour voir tes prospects :</div>
               {[
                 ["client","🛍️ Clients potentiels",C.rose],
