@@ -26,6 +26,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
   const[showDecouverteProspects,setShowDecouverteProspects]=useState(false);
   const[showDecouverteBusiness,setShowDecouverteBusiness]=useState(false);
   const[showDecouverteRelances,setShowDecouverteRelances]=useState(false);
+  const[showDecouverteDistrib,setShowDecouverteDistrib]=useState(false);
   const[noticeVideos,setNoticeVideos]=useState({});
   useEffect(()=>{
     (async()=>{
@@ -726,7 +727,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       {/* DISTRIBUTEURS (+ sous-onglet Nouveaux Distributeurs) */}
       {dtab==="distributeurs"&&(
         <div>
-          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="distributeurs" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["distributeurs"]||""}/>}
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowDecouverteDistrib(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>{showDecouverteDistrib&&<DecouverteTour outil="distributeurs" onClose={()=>setShowDecouverteDistrib(false)}/>}
           <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
             <button onClick={()=>setDistriSubTab("distributeurs")}
               style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${distriSubTab==="distributeurs"?C.rose:C.pale}`,background:distriSubTab==="distributeurs"?C.rose:C.blanc,color:distriSubTab==="distributeurs"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>

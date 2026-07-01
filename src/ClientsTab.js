@@ -1364,7 +1364,7 @@ function DistributeursTab({distributeurs,save,uid}){
         {!loaded&&" Chargement de l'annuaire..."}
       </p>
 
-      <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
+      <div id="decouverte-distrib-add" style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
         <input placeholder="🔍 Rechercher..." value={search} onChange={e=>setSearch(e.target.value)}
           style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .7rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
         <button onClick={()=>setShowAdd(p=>!p)}
@@ -1391,7 +1391,7 @@ function DistributeursTab({distributeurs,save,uid}){
       )}
 
       {/* Liste */}
-      {filtered.length===0&&<div style={{fontSize:".76rem",color:C.gris,padding:".5rem"}}>Aucun distributeur trouvé.</div>}
+      <div id="decouverte-distrib-liste">{filtered.length===0&&<div style={{fontSize:".76rem",color:C.gris,padding:".5rem"}}>Aucun distributeur trouvé.</div>}
 
       {filtered.map(d=>{
         const isActive=sel===d.id;
@@ -1529,6 +1529,7 @@ function DistributeursTab({distributeurs,save,uid}){
         );
       })}
       {affiliesEntries.length>0&&(<div style={{marginTop:"1.5rem",background:"#FFF8E1",border:"1px solid #F0C040",borderRadius:12,padding:".75rem 1rem"}}><div style={{fontSize:".62rem",fontWeight:700,color:"#8B6914",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>🌿 Réseau affilié (hors stats Blazing Dynasty)</div>{affiliesEntries.filter(d=>{const t=(d.prenom+" "+(d.nom||"")).toLowerCase();return!search||t.includes(search.toLowerCase());}).map(d=>(<div key={d.id} style={{background:"rgba(255,255,255,.7)",borderRadius:10,padding:".5rem .75rem",marginBottom:".4rem",display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:".82rem",fontWeight:700,color:C.brun}}>{d.prenom} {d.nom||""}</div><div style={{fontSize:".62rem",color:"#8B6914"}}>{d.palier||"2%"} · {d.uid||""}</div></div><div style={{fontSize:".6rem",color:"#8B6914",fontStyle:"italic"}}>affilié</div></div>))}<div style={{fontSize:".62rem",color:"#8B6914",marginTop:".4rem",fontStyle:"italic"}}>Les chiffres de ce réseau ne comptent pas dans vos stats globales.</div></div>)}
+    </div>
     </div>
   );
 }

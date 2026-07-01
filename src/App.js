@@ -2635,6 +2635,15 @@ export function NoticePanel({cleOutil,onClose,videoUrl}){
 }
 
 const DECOUVERTE = {
+  distributeurs: [
+    {titre:"Bienvenue !", texte:"Cet onglet te sert a gerer tes recrues : leurs coordonnees, leur Fast Start, le Challenge Decouverte et leur suivi. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-distrib-add"},
+    {titre:"Etape 1 : le bouton + Distributeur", texte:"Attention, ce bouton n\u2019est PAS la facon normale d\u2019ajouter une nouvelle distributrice ! Il sert uniquement si quelqu\u2019un rejoint ton equipe mais n\u2019utilise pas l\u2019application. Pour une inscription normale, ca se passe dans les Acces (elle recoit le code secret et se connecte elle-meme).", icon:"\u2795", cible:"decouverte-distrib-add"},
+    {titre:"Etape 2 : ta liste et les paliers", texte:"Chaque distributeur affiche son palier actuel. Clique sur son nom pour ouvrir sa fiche et changer son palier au fur et a mesure de sa progression.", icon:"\uD83D\uDC51", cible:"decouverte-distrib-liste"},
+    {titre:"Etape 3 : assigne le Fast Start", texte:"Dans la fiche d\u2019un nouveau distributeur, tu peux assigner le programme Fast Start pour l\u2019accompagner dans ses premiers jours.", icon:"\uD83D\uDE80", cible:"decouverte-distrib-liste"},
+    {titre:"Etape 4 : lance le Challenge Decouverte", texte:"Toujours dans la fiche, tu peux lancer le Challenge Decouverte pour l\u2019aider a prendre en main l\u2019application pas a pas.", icon:"\uD83C\uDFAF", cible:"decouverte-distrib-liste"},
+    {titre:"Etape 5 : suis les nouveaux", texte:"Clique sur l\u2019onglet Nouveaux Distri en haut pour suivre la progression de tes recrues les plus recentes en un coup d\u2019oeil.", icon:"\uD83D\uDCCB"},
+    {titre:"Bravo, tu es prete !", texte:"Tu as maintenant une vue d\u2019ensemble de ton equipe et tu peux l\u2019animer facilement !", icon:"\uD83C\uDF89", cible:"decouverte-distrib-add"},
+  ],
   relances: [
     {titre:"Bienvenue !", texte:"Cet onglet rassemble toutes tes relances au meme endroit : prospects a recontacter et clientes qui n\u2019ont rien commande depuis 60 jours. Consulte-le chaque matin pendant 10 minutes !", icon:"\uD83D\uDC4B", cible:"decouverte-relances-stats"},
     {titre:"Etape 1 : tes 3 chiffres", texte:"En haut, tu vois d\u2019un coup d\u2019oeil combien de prospects sont a recontacter, combien sont sans contact depuis 14 jours, et combien de clientes sont endormies depuis 60 jours.", icon:"\uD83D\uDCCA", cible:"decouverte-relances-stats"},
