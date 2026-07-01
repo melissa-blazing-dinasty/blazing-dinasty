@@ -2,7 +2,7 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
-import { UploadPhoto } from './FormationProduitsTab';
+import { UploadPhoto, UploadVideo } from './FormationProduitsTab';
 
 export const THEMES_LINKBIO=[
   {id:"elegance",label:"Élégance",bg:"linear-gradient(135deg,#3D1F0E,#5C3020)",header:"linear-gradient(135deg,#3D1F0E,#5C3020)",accent:"#C4A882",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#3D1F0E",cardBg:"white",preview:"🤎"},
@@ -29,6 +29,8 @@ function LinkBioTab({uid, userName}){
     diagChoisis:["parfum","skincare","silhouette","sante"],
     showBanniere:true,
     bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,ebooksIds:[],
+    parcoursPhotos:[],parcoursTexte1:"",parcoursTexte2:"",parcoursTexte3:"",parcoursProduits:[],
+    reseauxFacebook:"",reseauxInstagram:"",reseauxTiktok:"",reseauxYoutube:"",
   });
   const[banniereGlobale,setBanniereGlobale]=useState(null);
   const[saving,setSaving]=useState(false);
@@ -82,13 +84,15 @@ function LinkBioTab({uid, userName}){
     }));
   };
 
+  const addParcoursProduit=()=>{setProfil(p=>{const arr=p.parcoursProduits||[];if(arr.length>=10)return p;return {...p,parcoursProduits:[...arr,{nom:"",photo:"",videoUrl:"",texte:""}]};});};
+  const removeParcoursProduit=(i)=>{setProfil(p=>({...p,parcoursProduits:(p.parcoursProduits||[]).filter((_,j)=>j!==i)}));};
   if(loading)return null;
 
   const SECTIONS=[
     {id:"theme",icon:"🎨",label:"Thème"},
     {id:"profil",icon:"✨",label:"Profil"},
     {id:"liens",icon:"🔗",label:"Liens"},
-    {id:"photos",icon:"📸",label:"Photos"},{id:"stats",icon:"📊",label:"Stats"},
+    {id:"photos",icon:"📸",label:"Photos"},{id:"parcours",icon:"🌟",label:"Mon Parcours"},{id:"reseaux",icon:"📱",label:"Reseaux"},{id:"stats",icon:"📊",label:"Stats"},
     {id:"ebooks",icon:"📚",label:"Ebooks"},{id:"banniere",icon:"📢",label:"Bannière"},
   ];
 
@@ -376,6 +380,45 @@ function LinkBioTab({uid, userName}){
         </div>
       )}
 
+      {activeSection==="parcours"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>Mon Parcours</div>
+          <p style={{fontSize:".7rem",color:C.gris,lineHeight:1.6,marginBottom:".75rem"}}>Raconte ton histoire : photos, storytelling, et tes produits phares du quotidien.</p>
+          <div style={{fontSize:".62rem",fontWeight:700,color:C.rose,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".4rem",marginTop:"1rem"}}>Photos</div>
+          {(profil.parcoursPhotos||[]).map((ph,i)=>(
+            <div key={i} style={{marginBottom:".5rem"}}>
+              <UploadPhoto label={"Photo "+(i+1)} value={ph} onChange={v=>{const a=[...(profil.parcoursPhotos||[])];a[i]=v;setProfil(p=>({...p,parcoursPhotos:a}));}}/>
+              <button onClick={()=>{const a=(profil.parcoursPhotos||[]).filter((_,j)=>j!==i);setProfil(p=>({...p,parcoursPhotos:a}));}} style={{background:"none",border:"1px solid "+C.pale,borderRadius:7,padding:".22rem .5rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>Retirer cette photo</button>
+            </div>
+          ))}
+          <button onClick={()=>setProfil(p=>({...p,parcoursPhotos:[...(p.parcoursPhotos||[]),""]}))} style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".45rem .9rem",fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:"1rem"}}>+ Ajouter une photo</button>
+          <div style={{fontSize:".62rem",fontWeight:700,color:C.rose,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".4rem",marginTop:"1rem"}}>Mon histoire</div>
+          <textarea value={profil.parcoursTexte1||""} onChange={e=>setProfil(p=>({...p,parcoursTexte1:e.target.value}))} placeholder="Qui es-tu ? D'ou viens-tu ?" rows={4} style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".5rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",marginBottom:".5rem"}}/>
+          <textarea value={profil.parcoursTexte2||""} onChange={e=>setProfil(p=>({...p,parcoursTexte2:e.target.value}))} placeholder="Qu'est-ce qui a change pour toi ?" rows={4} style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".5rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",marginBottom:".5rem"}}/>
+          <textarea value={profil.parcoursTexte3||""} onChange={e=>setProfil(p=>({...p,parcoursTexte3:e.target.value}))} placeholder="Pourquoi tu fais ce que tu fais aujourd'hui ?" rows={4} style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".5rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",marginBottom:"1rem"}}/>
+          <div style={{fontSize:".62rem",fontWeight:700,color:C.rose,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".4rem",marginTop:"1rem"}}>{"Ce que j'utilise au quotidien ("+(profil.parcoursProduits||[]).length+"/10)"}</div>
+          {(profil.parcoursProduits||[]).map((prod,i)=>(
+            <div key={i} style={{background:C.blanc,border:"1px solid "+C.pale,borderRadius:10,padding:".75rem",marginBottom:".6rem"}}>
+              <input value={prod.nom||""} onChange={e=>{const a=[...(profil.parcoursProduits||[])];a[i]={...a[i],nom:e.target.value};setProfil(p=>({...p,parcoursProduits:a}));}} placeholder="Nom du produit" style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".38rem .55rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+              <UploadPhoto label="Photo du produit" value={prod.photo} onChange={v=>{const a=[...(profil.parcoursProduits||[])];a[i]={...a[i],photo:v};setProfil(p=>({...p,parcoursProduits:a}));}}/>
+              <UploadVideo label="Video (optionnel)" value={prod.videoUrl} uid={uid} onChange={v=>{const a=[...(profil.parcoursProduits||[])];a[i]={...a[i],videoUrl:v};setProfil(p=>({...p,parcoursProduits:a}));}}/>
+              <textarea value={prod.texte||""} onChange={e=>{const a=[...(profil.parcoursProduits||[])];a[i]={...a[i],texte:e.target.value};setProfil(p=>({...p,parcoursProduits:a}));}} placeholder="Pourquoi tu l'utilises, tes resultats..." rows={3} style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".42rem .6rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",marginTop:".4rem",marginBottom:".4rem"}}/>
+              <button onClick={()=>removeParcoursProduit(i)} style={{background:"none",border:"1px solid "+C.pale,borderRadius:7,padding:".22rem .5rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>Retirer ce produit</button>
+            </div>
+          ))}
+          {(profil.parcoursProduits||[]).length<10&&<button onClick={addParcoursProduit} style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".45rem .9rem",fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+ Ajouter un produit phare</button>}
+        </div>
+      )}
+      {activeSection==="reseaux"&&(
+        <div>
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>Reseaux sociaux</div>
+          <p style={{fontSize:".7rem",color:C.gris,lineHeight:1.6,marginBottom:".75rem"}}>Ajoute tes liens. Ils s'afficheront tout en bas de ta page LinkBio.</p>
+          <input value={profil.reseauxFacebook||""} onChange={e=>setProfil(p=>({...p,reseauxFacebook:e.target.value}))} placeholder="Lien Facebook" style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+          <input value={profil.reseauxInstagram||""} onChange={e=>setProfil(p=>({...p,reseauxInstagram:e.target.value}))} placeholder="Lien Instagram" style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+          <input value={profil.reseauxTiktok||""} onChange={e=>setProfil(p=>({...p,reseauxTiktok:e.target.value}))} placeholder="Lien TikTok" style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".4rem"}}/>
+          <input value={profil.reseauxYoutube||""} onChange={e=>setProfil(p=>({...p,reseauxYoutube:e.target.value}))} placeholder="Lien YouTube" style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+        </div>
+      )}
       {/* SECTION BANNIÈRE */}
       {activeSection==="stats"&&<StatsLinkBio uid={slug}/>}
       {activeSection==="ebooks"&&(<EbooksLinkBioSection profil={profil} setProfil={setProfil}/>)}{activeSection==="banniere"&&(
