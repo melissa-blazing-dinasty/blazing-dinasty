@@ -36,7 +36,7 @@ const storage = getStorage(fbApp);
 let messaging = null;
 try { messaging = getMessaging(fbApp); } catch {}
 const auth = getAuth(fbApp);
-const fbFunctions = getFunctions(fbApp,'us-central1');
+export const fbFunctions = getFunctions(fbApp,'us-central1');
 const authentifierFn = httpsCallable(fbFunctions,'authentifier');
 const definirMotDePasseFn = httpsCallable(fbFunctions,'definirMotDePasse');
 

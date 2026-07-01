@@ -127,6 +127,27 @@ exports.authentifier = onCall(async (request) => {
   }
 });
 
+exports.soumettreDiagnostic = onCall(async (request) => {
+  const {uid, type, nomClient, contact, reponses} = request.data || {};
+  if (!uid || !type) throw new HttpsError("invalid-argument", "Donnees manquantes");
+  const ts = Date.now();
+  const dateStr = new Date().toISOString().slice(0,10);
+  const nomFinal = nomClient || "Cliente";
+  await db.collection("diag_externes").doc(uid + "_" + ts).set({
+    uid, type, nomClient: nomFinal, contact: contact || {},
+    reponses: reponses || {}, date: dateStr, ts, traite: false
+  });
+  const userRef = db.collection("users").doc(uid);
+  const snap = await userRef.get();
+  const existing = snap.exists && snap.data()["db-diagnostics"] ? JSON.parse(snap.data()["db-diagnostics"]) : [];
+  const newDiag = {
+    id: "diag" + ts, type, nomClient: nomFinal, contact: contact || {},
+    reponses: reponses || {}, date: dateStr, ts, externe: true, nonLu: true
+  };
+  const nextList = [newDiag].concat(existing).slice(0, 50);
+  await userRef.set({"db-diagnostics": JSON.stringify(nextList)}, {merge: true});
+  return {status: "ok"};
+});
 exports.definirMotDePasse = onCall(async (request) => {
   const auth = request.auth;
   if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "Non connecte");

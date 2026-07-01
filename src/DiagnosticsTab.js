@@ -4,6 +4,8 @@ import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } fro
 import { C } from './constants';
 import App from './App';
 import { SCRIPTS_DATA, DecouverteTour } from './App';
+import { fbFunctions } from './App';
+import { httpsCallable } from 'firebase/functions';
 import { todayLocalStr } from './utils';
 
 let ANTHROPIC_API_KEY = '';
@@ -1628,27 +1630,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         }
         const nomFinal=contact.prenom?(contact.prenom+(contact.nom?" "+contact.nom:"")):(nomClient||"Cliente");
 
-        // Stocker dans diag_externes (pour référence)
-        const ref=doc(db,"diag_externes",`${uid}_${Date.now()}`);
-        await setDoc(ref,{
-          uid, type, nomClient:nomFinal, contact,
-          reponses:repSansContact,
-          date:todayLocalStr(),
-          ts:Date.now(), traite:false
-        });
-        // Stocker aussi dans users/{uid}/db-diagnostics pour apparaître dans l'historique
-        const userRef=doc(db,"users",uid);
-        const snap=await getDoc(userRef);
-        const existing=snap.exists()&&snap.data()["db-diagnostics"]?JSON.parse(snap.data()["db-diagnostics"]):[];
-        const newDiag={
-          id:`diag${Date.now()}`,
-          type, nomClient:nomFinal, contact,
-          reponses:repSansContact,
-          date:todayLocalStr(),
-          ts:Date.now(),
-          externe:true, nonLu:true,
-        };
-        await setDoc(userRef,{"db-diagnostics":JSON.stringify([newDiag,...existing].slice(0,50))},{merge:true});
+        const soumettreDiagnosticFn = httpsCallable(fbFunctions, "soumettreDiagnostic");
+        await soumettreDiagnosticFn({uid, type, nomClient:nomFinal, contact, reponses:repSansContact});
         setMode("attente");
       }catch{
         setErreur("Erreur lors de l'envoi. Merci de contacter ta conseillère directement.");
@@ -2706,6 +2689,8 @@ function DiagAdminEditor(){
 }
 
 function LinkBioPublicPage({slug}){
+  const[dqjsOpen,setDqjsOpen]=useState(false);
+  const[dqjsTab,setDqjsTab]=useState("histoire");
   const [profil,setProfil]=useState(null);
   const [nbDiagsEquipe,setNbDiagsEquipe]=useState(127);
   const [loading,setLoading]=useState(true);
@@ -2792,28 +2777,42 @@ function LinkBioPublicPage({slug}){
         )}
         {((profil.parcoursTexte1||profil.parcoursTexte2||profil.parcoursTexte3||(profil.parcoursPhotos||[]).some(p=>p)||(profil.parcoursProduits||[]).length>0))&&(
           <div style={{padding:"1rem",background:theme.bg}}>
-            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:theme.accent,textAlign:"center",marginBottom:".75rem"}}>Mon Parcours</div>
-            {(profil.parcoursPhotos||[]).filter(p=>p).length>0&&(
-              <div style={{display:"flex",gap:".5rem",overflowX:"auto",marginBottom:".85rem",paddingBottom:".3rem"}}>
-                {profil.parcoursPhotos.filter(p=>p).map((ph,i)=>(<img key={i} src={ph} alt="" style={{width:120,height:120,borderRadius:12,objectFit:"cover",flexShrink:0}}/>))}
-              </div>
-            )}
-            {[profil.parcoursTexte1,profil.parcoursTexte2,profil.parcoursTexte3].filter(t=>t).map((t,i)=>(<div key={i} style={{fontSize:".78rem",lineHeight:1.7,color:sub,marginBottom:".65rem"}}>{t}</div>))}
-            {(profil.parcoursProduits||[]).filter(p=>p.nom||p.photo).length>0&&(
-              <div style={{marginTop:"1rem"}}>
-                <div style={{fontSize:".68rem",fontWeight:700,color:theme.accent,textAlign:"center",marginBottom:".65rem"}}>Ce que j'utilise au quotidien</div>
-                {profil.parcoursProduits.filter(p=>p.nom||p.photo).map((p,i)=>(
-                  <div key={i} style={{background:theme.accent+"10",borderRadius:12,padding:".75rem",marginBottom:".6rem"}}>
-                    <div style={{display:"flex",gap:".65rem",alignItems:"flex-start"}}>
-                      {p.photo&&<img src={p.photo} alt="" style={{width:60,height:60,borderRadius:10,objectFit:"cover",flexShrink:0}}/>}
-                      <div style={{flex:1}}>
-                        {p.nom&&<div style={{fontSize:".8rem",fontWeight:700,color:theme.header,marginBottom:".2rem"}}>{p.nom}</div>}
-                        {p.texte&&<div style={{fontSize:".7rem",color:sub,lineHeight:1.5}}>{p.texte}</div>}
+            <button onClick={()=>setDqjsOpen(o=>!o)} style={{width:"100%",background:`linear-gradient(135deg,${theme.accent},${theme.accent}cc)`,border:"none",borderRadius:14,padding:".85rem 1rem",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"inherit"}}>
+              <span style={{fontSize:".72rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"white"}}>✦ Découvre qui je suis</span>
+              <span style={{fontSize:"1rem",color:"white",transform:dqjsOpen?"rotate(180deg)":"none",transition:"transform .2s"}}>⌄</span>
+            </button>
+            {dqjsOpen&&(
+              <div style={{marginTop:".75rem"}}>
+                <div style={{display:"flex",gap:".4rem",marginBottom:".85rem"}}>
+                  <button onClick={()=>setDqjsTab("histoire")} style={{flex:1,background:dqjsTab==="histoire"?theme.accent:theme.accent+"15",color:dqjsTab==="histoire"?"white":theme.accent,border:"none",borderRadius:10,padding:".55rem .5rem",fontSize:".68rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Mon histoire</button>
+                  <button onClick={()=>setDqjsTab("produits")} style={{flex:1,background:dqjsTab==="produits"?theme.accent:theme.accent+"15",color:dqjsTab==="produits"?"white":theme.accent,border:"none",borderRadius:10,padding:".55rem .5rem",fontSize:".68rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Mes produits préférés</button>
+                </div>
+                {dqjsTab==="histoire"&&(
+                  <div>
+                    {(profil.parcoursPhotos||[]).filter(p=>p).length>0&&(
+                      <div style={{display:"flex",gap:".5rem",overflowX:"auto",marginBottom:".85rem",paddingBottom:".3rem"}}>
+                        {profil.parcoursPhotos.filter(p=>p).map((ph,i)=>(<img key={i} src={ph} alt="" style={{width:120,height:120,borderRadius:12,objectFit:"cover",flexShrink:0}}/>))}
                       </div>
-                    </div>
-                    {p.videoUrl&&<video src={p.videoUrl} controls style={{width:"100%",borderRadius:10,marginTop:".5rem"}}/>}
+                    )}
+                    {[profil.parcoursTexte1,profil.parcoursTexte2,profil.parcoursTexte3].filter(t=>t).map((t,i)=>(<div key={i} style={{fontSize:".78rem",lineHeight:1.7,color:sub,marginBottom:".65rem"}}>{t}</div>))}
                   </div>
-                ))}
+                )}
+                {dqjsTab==="produits"&&(profil.parcoursProduits||[]).filter(p=>p.nom||p.photo).length>0&&(
+                  <div>
+                    {profil.parcoursProduits.filter(p=>p.nom||p.photo).map((p,i)=>(
+                      <div key={i} style={{background:theme.accent+"10",borderRadius:12,padding:".75rem",marginBottom:".6rem"}}>
+                        <div style={{display:"flex",gap:".65rem",alignItems:"flex-start"}}>
+                          {p.photo&&<img src={p.photo} alt="" style={{width:60,height:60,borderRadius:10,objectFit:"cover",flexShrink:0}}/>}
+                          <div style={{flex:1}}>
+                            {p.nom&&<div style={{fontSize:".8rem",fontWeight:700,color:theme.header,marginBottom:".2rem"}}>{p.nom}</div>}
+                            {p.texte&&<div style={{fontSize:".7rem",color:sub,lineHeight:1.5}}>{p.texte}</div>}
+                          </div>
+                        </div>
+                        {p.videoUrl&&<video src={p.videoUrl} controls style={{width:"100%",borderRadius:10,marginTop:".5rem"}}/>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
