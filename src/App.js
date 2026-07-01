@@ -2635,6 +2635,17 @@ export function NoticePanel({cleOutil,onClose,videoUrl}){
 }
 
 const DECOUVERTE = {
+  clients: [
+    {titre:"Bienvenue !", texte:"Cet onglet centralise toutes tes clientes : leurs commandes, leurs infos, et un suivi automatique pour ne jamais les oublier. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-clients-liste"},
+    {titre:"Etape 1 : ajoute une cliente", texte:"Clique sur le bouton + Nouvelle cliente, puis remplis son prenom, nom, telephone et le reste. Clique ensuite sur Ajouter.", icon:"\u2795", cible:"decouverte-nouvelle-cliente"},
+    {titre:"Etape 2 : tes groupes de clientes", texte:"Tes clientes sont rangees automatiquement en 4 groupes : VIP, Fidele, A consolider, et Inactif. Clique sur un groupe pour le deplier et voir la liste.", icon:"\uD83D\uDC65", cible:"decouverte-clients-liste"},
+    {titre:"Etape 3 : ouvre une fiche", texte:"Clique sur le nom d\u2019une cliente pour ouvrir sa fiche complete. C\u2019est ici que tu vas gerer ses commandes, sa carte fidelite et tes rappels.", icon:"\uD83D\uDC46", cible:"decouverte-clients-liste"},
+    {titre:"Etape 4 : ajoute une commande", texte:"Dans la fiche de la cliente, clique sur le bouton pour ajouter une commande. Indique les produits achetes, le montant et la date. Ca alimente automatiquement son historique et sa carte fidelite.", icon:"\uD83D\uDED2", cible:"decouverte-clients-liste"},
+    {titre:"Etape 5 : la carte fidelite", texte:"Toujours dans la fiche, tu trouveras sa carte fidelite. Elle se remplit automatiquement a chaque commande enregistree et te permet de recompenser tes meilleures clientes.", icon:"\uD83D\uDC8E", cible:"decouverte-clients-liste"},
+    {titre:"Etape 6 : la recommandation", texte:"Tu peux aussi generer un lien de recommandation a partager avec ta cliente, pour qu\u2019elle te recommande facilement aupres de ses amies.", icon:"\uD83D\uDCE3", cible:"decouverte-clients-liste"},
+    {titre:"Etape 7 : la vue precisions", texte:"En haut, le bouton Vue precisions te montre des details supplementaires sur chaque cliente (ambassadrice potentielle, hotesse validee...), utile pour organiser tes actions.", icon:"\uD83D\uDCCB", cible:"decouverte-toggle-vue"},
+    {titre:"Bravo, tu es prete !", texte:"Tu ne perdras plus aucune cliente. Reviens ici regulierement pour faire vivre ta relation avec elles !", icon:"\uD83C\uDF89"},
+  ],
   linkbio: [
     {titre:"Bienvenue !", texte:"Le LinkBio, c\u2019est TA page personnelle. Un seul lien \u00e0 mettre dans ta bio Instagram ou Facebook, et tes clientes voient TOUT. On va tout regarder ensemble, \u00e9tape par \u00e9tape. Je vais t\u2019amener sur chaque section pour que tu remplisses en m\u00eame temps !", icon:"\uD83D\uDC4B", section:null},
     {titre:"\u00c9tape 1 : ton th\u00e8me", texte:"Choisis la couleur qui te pla\u00eet le plus en cliquant dessus. Tu peux en changer plus tard si tu changes d\u2019avis !", icon:"\uD83C\uDFA8", section:"theme"},

@@ -15,12 +15,14 @@ import { DreamBoardWidget } from './DreamBoardTab';
 import { EditorialTab } from './EditorialTab';
 import { ClientsTab, ClientsRelanceTab, DistributeursTab, RelancesTab } from './ClientsTab';
 import { SuiviRecruTab } from './App';
+import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
 function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}}){
   const[dtab,setDtab]=useState("today");
   const[showNotice,setShowNotice]=useState(false);
+  const[showDecouverteClients,setShowDecouverteClients]=useState(false);
   const[noticeVideos,setNoticeVideos]=useState({});
   useEffect(()=>{
     (async()=>{
@@ -663,7 +665,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
       {/* CLIENTS (+ sous-onglet Objections) */}
       {dtab==="clients"&&(
         <div>
-          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowNotice(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)",display:"flex",alignItems:"center",gap:".35rem"}}>❓ Guide</button></div>{showNotice&&<NoticePanel cleOutil="clients" onClose={()=>setShowNotice(false)} videoUrl={noticeVideos["clients"]||""}/>}
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowDecouverteClients(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)",display:"flex",alignItems:"center",gap:".35rem"}}>🧭 Découverte</button></div>{showDecouverteClients&&<DecouverteTour outil="clients" onClose={()=>setShowDecouverteClients(false)}/>}
           <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
             <button onClick={()=>setClientsSubTab("clients")}
               style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${clientsSubTab==="clients"?C.rose:C.pale}`,background:clientsSubTab==="clients"?C.rose:C.blanc,color:clientsSubTab==="clients"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>

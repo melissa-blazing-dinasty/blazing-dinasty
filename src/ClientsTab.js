@@ -1013,13 +1013,13 @@ function ClientsTab({clients,save,uid}){
     <div>
       <Confetti trigger={confettiTrigger}/>
 
-      <div style={{display:"flex",gap:".4rem",marginBottom:".65rem"}}>
+      <div id="decouverte-toggle-vue" style={{display:"flex",gap:".4rem",marginBottom:".65rem"}}>
         <button onClick={()=>setVuePrecisions(false)} style={{flex:1,background:!vuePrecisions?C.brun:C.creme,color:!vuePrecisions?C.blanc:C.gris,border:"1px solid "+(!vuePrecisions?C.brun:C.pale),borderRadius:8,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>👥 Mes clientes</button>
         <button onClick={()=>setVuePrecisions(true)} style={{flex:1,background:vuePrecisions?C.brun:C.creme,color:vuePrecisions?C.blanc:C.gris,border:"1px solid "+(vuePrecisions?C.brun:C.pale),borderRadius:8,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>📋 Vue précisions</button>
       </div>
       {vuePrecisions&&<VuePrecisionsClientes clients={clients} PRECISIONS_STATUT={PRECISIONS_STATUT} setSel={setSel} setVuePrecisions={setVuePrecisions}/>}
-      {!vuePrecisions&&<div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+      {!vuePrecisions&&<div id="decouverte-clients-liste">
+      <div id="decouverte-nouvelle-cliente" style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
         <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun}}>
           Mes <em style={{fontStyle:"italic",color:C.rose}}>Clientes</em>
         </div>
