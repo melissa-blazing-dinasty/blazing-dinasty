@@ -2786,7 +2786,34 @@ function LinkBioPublicPage({slug}){
             ))}
           </div>
         )}
-        {/* Section diagnostics */}
+        {((profil.parcoursTexte1||profil.parcoursTexte2||profil.parcoursTexte3||(profil.parcoursPhotos||[]).some(p=>p)||(profil.parcoursProduits||[]).length>0))&&(
+          <div style={{padding:"1rem",background:theme.bg}}>
+            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:theme.accent,textAlign:"center",marginBottom:".75rem"}}>Mon Parcours</div>
+            {(profil.parcoursPhotos||[]).filter(p=>p).length>0&&(
+              <div style={{display:"flex",gap:".5rem",overflowX:"auto",marginBottom:".85rem",paddingBottom:".3rem"}}>
+                {profil.parcoursPhotos.filter(p=>p).map((ph,i)=>(<img key={i} src={ph} alt="" style={{width:120,height:120,borderRadius:12,objectFit:"cover",flexShrink:0}}/>))}
+              </div>
+            )}
+            {[profil.parcoursTexte1,profil.parcoursTexte2,profil.parcoursTexte3].filter(t=>t).map((t,i)=>(<div key={i} style={{fontSize:".78rem",lineHeight:1.7,color:sub,marginBottom:".65rem"}}>{t}</div>))}
+            {(profil.parcoursProduits||[]).filter(p=>p.nom||p.photo).length>0&&(
+              <div style={{marginTop:"1rem"}}>
+                <div style={{fontSize:".68rem",fontWeight:700,color:theme.accent,textAlign:"center",marginBottom:".65rem"}}>Ce que j'utilise au quotidien</div>
+                {profil.parcoursProduits.filter(p=>p.nom||p.photo).map((p,i)=>(
+                  <div key={i} style={{background:theme.accent+"10",borderRadius:12,padding:".75rem",marginBottom:".6rem"}}>
+                    <div style={{display:"flex",gap:".65rem",alignItems:"flex-start"}}>
+                      {p.photo&&<img src={p.photo} alt="" style={{width:60,height:60,borderRadius:10,objectFit:"cover",flexShrink:0}}/>}
+                      <div style={{flex:1}}>
+                        {p.nom&&<div style={{fontSize:".8rem",fontWeight:700,color:theme.header,marginBottom:".2rem"}}>{p.nom}</div>}
+                        {p.texte&&<div style={{fontSize:".7rem",color:sub,lineHeight:1.5}}>{p.texte}</div>}
+                      </div>
+                    </div>
+                    {p.videoUrl&&<video src={p.videoUrl} controls style={{width:"100%",borderRadius:10,marginTop:".5rem"}}/>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}        {/* Section diagnostics */}
         {diagActif ? (
           <div style={{padding:"1rem",background:theme.bg}}>
             <button onClick={()=>setDiagActif(null)}
@@ -2829,7 +2856,14 @@ function LinkBioPublicPage({slug}){
         <div style={{padding:"1rem 1rem 2rem",background:theme.bg,display:"flex",flexDirection:"column",gap:".5rem"}}>
           {(profil.liensBonusLabel||[]).map((_,bi)=>profil.liensBonusUrl?.[bi]?(<a key={bi} href={profil.liensBonusUrl[bi]} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"transparent",color:theme.accent,border:"1.5px solid "+theme.accent,borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:600}}>{profil.liensBonusLabel[bi]||profil.liensBonusUrl[bi]}</a>):null)}
         </div>
-        <div style={{padding:"1rem",textAlign:"center",fontSize:".6rem",color:theme.accent,opacity:.6}}>Blazing Dynasty × Mihi France</div>
+        {(profil.reseauxFacebook||profil.reseauxInstagram||profil.reseauxTiktok||profil.reseauxYoutube)&&(
+          <div style={{padding:"0 1rem 1rem",display:"flex",justifyContent:"center",gap:".6rem"}}>
+            {profil.reseauxFacebook&&<a href={profil.reseauxFacebook} target="_blank" rel="noopener noreferrer" style={{width:38,height:38,borderRadius:"50%",background:"#1877F2",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none",fontWeight:700}}>f</a>}
+            {profil.reseauxInstagram&&<a href={profil.reseauxInstagram} target="_blank" rel="noopener noreferrer" style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#F58529,#DD2A7B,#8134AF,#515BD4)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1.1rem",textDecoration:"none"}}>IG</a>}
+            {profil.reseauxTiktok&&<a href={profil.reseauxTiktok} target="_blank" rel="noopener noreferrer" style={{width:38,height:38,borderRadius:"50%",background:"#000000",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none",fontWeight:700}}>TT</a>}
+            {profil.reseauxYoutube&&<a href={profil.reseauxYoutube} target="_blank" rel="noopener noreferrer" style={{width:38,height:38,borderRadius:"50%",background:"#FF0000",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none"}}>YT</a>}
+          </div>
+        )}        <div style={{padding:"1rem",textAlign:"center",fontSize:".6rem",color:theme.accent,opacity:.6}}>Blazing Dynasty × Mihi France</div>
       </div>
     </div>
   );
