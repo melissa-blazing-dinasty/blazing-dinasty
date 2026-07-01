@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, storage } from './firebase';
+import { ref as storageRefVideo, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { C } from './constants';
 import { useLang, useTranslatedProduit } from './components';
 
@@ -272,6 +273,47 @@ export function UploadPhoto({value, onChange, label="Photo", folder="produits"})
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".32rem .5rem",fontSize:".7rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
         </div>
       </div>
+    </div>
+  );
+}
+export function UploadVideo({value, onChange, label="Video", folder="linkbio-videos", uid="anon"}){
+  const[uploading,setUploading]=useState(false);
+  const[progress,setProgress]=useState(0);
+  const[preview,setPreview]=useState(value||"");
+  useEffect(()=>setPreview(value||""),[value]);
+  const handleFile=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    if(file.size>50*1024*1024){ alert("Video trop volumineuse (50 Mo max)."); return; }
+    setUploading(true);setProgress(0);
+    try{
+      const path=`${folder}/${uid}/${Date.now()}-${file.name}`;
+      const fileRef=storageRefVideo(storage,path);
+      const uploadTask=uploadBytesResumable(fileRef,file);
+      uploadTask.on("state_changed",
+        (snap)=>{ setProgress(Math.round((snap.bytesTransferred/snap.totalBytes)*100)); },
+        (err)=>{ alert("Erreur upload video : "+err.message); setUploading(false); },
+        async()=>{
+          const url=await getDownloadURL(uploadTask.snapshot.ref);
+          setPreview(url);
+          onChange(url);
+          setUploading(false);
+        }
+      );
+    }catch(err){
+      alert("Erreur upload : "+err.message);
+      setUploading(false);
+    }
+  };
+  return(
+    <div style={{marginBottom:".55rem"}}>
+      <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>{label}</div>
+      {preview&&<video src={preview} controls style={{width:"100%",maxWidth:220,borderRadius:8,marginBottom:".3rem",display:"block"}}/>}
+      <label style={{display:"block",background:uploading?"#aaa":C.brun,color:"white",borderRadius:8,padding:".38rem .65rem",fontSize:".72rem",fontWeight:600,textAlign:"center",cursor:uploading?"default":"pointer",fontFamily:"inherit",marginBottom:".25rem"}}>
+        {uploading?`Envoi... ${progress}%`:preview?"Changer la video":"Choisir une video"}
+        <input type="file" accept="video/*" onChange={handleFile} style={{display:"none"}} disabled={uploading}/>
+      </label>
+      {preview&&!uploading&&<button onClick={()=>{setPreview("");onChange("");}} style={{display:"block",width:"100%",background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".22rem .5rem",fontSize:".65rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>Supprimer la video</button>}
     </div>
   );
 }
