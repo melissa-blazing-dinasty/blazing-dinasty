@@ -69,6 +69,51 @@ exports.notifDiag = onDocumentUpdated("diag_ex/{docId}", async (event) => {
     await sendNotifToUid(uid, "Nouveau diagnostic !", prenom + " vient de completer son diagnostic parfum !");
   } catch(e) { console.error("notifDiag error", e); }
 });
+exports.notifChallenge = onDocumentUpdated("challenges/liste", async (event) => {
+  try {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    const itemsBefore = before.items || [];
+    const itemsAfter = after.items || [];
+    const nouveaux = itemsAfter.filter(c => !itemsBefore.find(b => b.id === c.id));
+    if (!nouveaux.length) return;
+    let annuaire = null;
+    const getAnnuaire = async () => {
+      if (annuaire) return annuaire;
+      const snap = await db.collection("equipe").doc("annuaire").get();
+      annuaire = snap.exists ? (snap.data().membres || {}) : {};
+      return annuaire;
+    };
+    const getDescendants = (rootUid, ann) => {
+      const result = new Set();
+      const queue = [rootUid];
+      while (queue.length) {
+        const current = queue.pop();
+        Object.entries(ann).forEach(([k, m]) => {
+          if (m.marraine === current && !result.has(k)) { result.add(k); queue.push(k); }
+        });
+      }
+      return [...result];
+    };
+    for (const c of nouveaux) {
+      const titre = c.titre || "Nouveau challenge";
+      const body = "Un nouveau challenge vient d etre lance : " + titre + ". Viens le decouvrir !";
+      if (c.global || !c.equipesCibles || c.equipesCibles.length === 0 || c.equipesCibles.includes("all")) {
+        await sendNotifToAll("🏆 Nouveau challenge !", body);
+      } else {
+        const ann = await getAnnuaire();
+        const recipients = new Set();
+        c.equipesCibles.forEach(chefUid => {
+          recipients.add(chefUid);
+          getDescendants(chefUid, ann).forEach(u => recipients.add(u));
+        });
+        for (const uid of recipients) {
+          await sendNotifToUid(uid, "🏆 Nouveau challenge !", body);
+        }
+      }
+    }
+  } catch(e) { console.error("notifChallenge error", e); }
+});
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 
 exports.authentifier = onCall(async (request) => {

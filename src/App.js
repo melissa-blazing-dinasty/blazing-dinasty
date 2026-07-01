@@ -826,6 +826,8 @@ function ChallengeAppPopup({uid, onClose, setTab}){
 function App(){
   const[screen,setScreen]=useState("login");
   const[showWelcome,setShowWelcome]=useState(false);
+  const[showNewChallenge,setShowNewChallenge]=useState(false);
+  const[newChallengeData,setNewChallengeData]=useState(null);
   const[showBackupReminder,setShowBackupReminder]=useState(false);
   const[showMdpSetup,setShowMdpSetup]=useState(false);
   const[newMdp,setNewMdp]=useState("");
@@ -971,6 +973,42 @@ function App(){
       try{localStorage.setItem("bd-user",JSON.stringify({uid,n:displayName,codeOk:true}));}catch{}
       // Popup bienvenue si première connexion
       try{const snapW=await getDoc(doc(db,"users",uid));const welcomed=snapW.exists()?snapW.data()["db-welcomed"]:false;if(!welcomed){setShowWelcome(true);await setDoc(doc(db,"users",uid),{"db-welcomed":true},{merge:true});}}catch{}
+      try{
+        const challSnap=await getDoc(doc(db,"challenges","liste"));
+        const challItems=challSnap.exists()?(challSnap.data().items||[]):[];
+        const now2=Date.now();
+        const actifs2=challItems.filter(c=>!c.deadline||c.deadline>now2);
+        if(actifs2.length>0){
+          const userSnapC=await getDoc(doc(db,"users",uid));
+          const vus=userSnapC.exists()?(userSnapC.data()["db-challenges-vus"]||[]):[];
+          const isMelissaC=uid==="melissa"||uid==="melissa-da-silveira";
+          let annuaireC={};
+          try{
+            const annSnapC=await getDoc(doc(db,"equipe","annuaire"));
+            annuaireC=annSnapC.exists()?(annSnapC.data().membres||{}):{};
+          }catch{}
+          const nonVus=actifs2.filter(c=>{
+            if(vus.includes(c.id))return false;
+            if(isMelissaC)return true;
+            if(c.global)return true;
+            if(!c.equipesCibles||c.equipesCibles.length===0)return true;
+            if(c.equipesCibles.includes("all"))return true;
+            if(c.equipesCibles.includes(uid))return true;
+            let current=annuaireC[uid]?.marraine;
+            const visitedC=new Set();
+            while(current&&!visitedC.has(current)){
+              visitedC.add(current);
+              if(c.equipesCibles.includes(current))return true;
+              current=annuaireC[current]?.marraine;
+            }
+            return false;
+          });
+          if(nonVus.length>0){
+            setNewChallengeData(nonVus[0]);
+            setTimeout(()=>setShowNewChallenge(true),3000);
+          }
+        }
+      }catch{}
       setUserId(uid);setName(displayName);setScreen("app");load(uid);verifierChangementPeriode(uid);
       // Afficher le challenge app apres 2s seulement si pas termine
       try{const snapCA=await getDoc(doc(db,"users",uid));const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}catch{setTimeout(()=>setShowChallengeApp(true),2000);}
@@ -2453,6 +2491,17 @@ function App(){
           setShowWelcome(false);
           setTab("formation");
           setFormationSubTab("faststart");
+        }}/>
+      )}
+      {showNewChallenge&&newChallengeData&&(
+        <NouveauChallengePopup challenge={newChallengeData} onClose={async()=>{
+          setShowNewChallenge(false);
+          try{
+            const uRef=doc(db,"users",userId);
+            const uSnap=await getDoc(uRef);
+            const vusActuels=uSnap.exists()?(uSnap.data()["db-challenges-vus"]||[]):[];
+            await setDoc(uRef,{"db-challenges-vus":[...vusActuels,newChallengeData.id]},{merge:true});
+          }catch{}
         }}/>
       )}
 
@@ -5190,6 +5239,41 @@ function WelcomePopup({userName, onClose}){
     </div>
   );
 }
+function NouveauChallengePopup({challenge, onClose}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9999,padding:"0"}}>
+      <div style={{background:C.blanc,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:"1.5rem 1.2rem 1.2rem",textAlign:"center"}}>
+          <div style={{fontSize:"2.2rem",marginBottom:".4rem"}}>🏆</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",fontWeight:300,color:C.blanc,lineHeight:1.3}}>
+            Nouveau challenge !
+          </div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",color:C.pale,marginTop:".3rem",fontStyle:"italic"}}>
+            {challenge.titre}
+          </div>
+        </div>
+        <div style={{padding:"1.2rem"}}>
+          {challenge.description&&(
+            <div style={{background:C.creme,borderRadius:12,padding:".9rem 1rem",marginBottom:"1rem",borderLeft:`3px solid ${C.or}`}}>
+              <div style={{fontSize:".78rem",color:C.brun,lineHeight:1.7}}>
+                {challenge.description}
+              </div>
+            </div>
+          )}
+          {challenge.cadeau&&(
+            <div style={{fontSize:".78rem",color:C.gris,marginBottom:"1rem",textAlign:"center"}}>
+              🎁 A gagner : <strong style={{color:C.brun}}>{challenge.cadeau}</strong>
+            </div>
+          )}
+          <button onClick={onClose}
+            style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:12,padding:".9rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            Je decouvre le challenge 🚀
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── CLASSEMENT PERMANENT VENTES & RECRUTEMENT ────────────────────────────────
 export function CmdPeriodeBlock({cmdPeriode}){
@@ -5987,6 +6071,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
   const[equipes,setEquipes]=useState([]);
   const[declarations,setDeclarations]=useState({});
   const[declareInput,setDeclareInput]=useState({});
+  const[annuaireData,setAnnuaireData]=useState({});
 
   const isMelissa = uid==="melissa"||uid==="melissa-da-silveira";
 
@@ -5999,6 +6084,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
         const annSnap=await getDoc(doc(db,"equipe","annuaire"));
         if(annSnap.exists()){
           annuaire=annSnap.data().membres||{};
+          setAnnuaireData(annuaire);
           // Un "chef" = quelqu'un qui a au moins une filleule OU marqué isChef
           const marraines=new Set(Object.values(annuaire).map(m=>m.marraine).filter(Boolean));
           const chefsEntries=Object.entries(annuaire).filter(([k,v])=>v.isChef||marraines.has(k));
@@ -6061,6 +6147,44 @@ export function DefisTab({uid, userName, canCreate, isChef}){
     const snap=await getDoc(doc(db,"challenges","liste"));
     const existing=snap.exists()?snap.data().items||[]:[];
     await saveAll([nouveau,...existing]);
+    try{
+      const fmtNom=(id)=>id.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+      const getDescendants=(rootUid)=>{
+        const result=new Set();
+        const queue=[rootUid];
+        while(queue.length){
+          const current=queue.pop();
+          Object.entries(annuaireData).forEach(([k,m])=>{
+            if(m.marraine===current&&!result.has(k)){ result.add(k); queue.push(k); }
+          });
+        }
+        return [...result];
+      };
+      let destinataires=[];
+      if(nouveau.global){
+        destinataires=[...new Set([...Object.keys(annuaireData),...getDescendants(uid)])];
+      }else{
+        const dests=new Set();
+        (nouveau.equipesCibles||[]).forEach(chefUid=>{
+          dests.add(chefUid);
+          getDescendants(chefUid).forEach(u=>dests.add(u));
+        });
+        destinataires=[...dests];
+      }
+      destinataires=destinataires.filter(d=>d&&d!==uid);
+      const msg={
+        id:`msg${Date.now()}`,
+        de:uid, deNom:userName,
+        texte:`🏆 Nouveau challenge lance : "${nouveau.titre}"${nouveau.description?" — "+nouveau.description:""}. Viens le decouvrir dans Challenges !`,
+        ts:Date.now(), lu:false,
+      };
+      await Promise.all(destinataires.map(async(destUid)=>{
+        const ref=doc(db,"messages",destUid);
+        const snap=await getDoc(ref);
+        const existing=snap.exists()?snap.data().msgs||[]:[];
+        await setDoc(ref,{msgs:[msg,...existing].slice(0,100)},{merge:false});
+      }));
+    }catch(e){console.error("notif challenge msg error",e);}
     setShowCreate(false);
     setForm({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true});
   };
