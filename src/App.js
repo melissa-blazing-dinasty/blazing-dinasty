@@ -2676,8 +2676,8 @@ const DECOUVERTE = {
     {titre:"Tes ventes personnelles", texte:"Juste en dessous, dans Dont mes ventes perso, mets un objectif et indique combien tu as d\u00e9j\u00e0 vendu.", icon:"\uD83D\uDECD", cible:"decouverte-ca"},
     {titre:"Regarde ta progression", texte:"La barre color\u00e9e te montre en un coup d\u2019oeil o\u00f9 tu en es par rapport \u00e0 ton objectif.", icon:"\uD83D\uDCC8", cible:"decouverte-ca"},
     {titre:"Ton \u00e9quipe", texte:"Si tu as des recrues, cette partie montre le chiffre d\u2019affaires de ton \u00e9quipe. Sinon, elle reste vide, c\u2019est normal.", icon:"\uD83D\uDC65", cible:"decouverte-reste"},
-    {titre:"Ton historique", texte:"Une fois que tu auras termin\u00e9 au moins une p\u00e9riode, un petit r\u00e9sum\u00e9 de tes r\u00e9sultats pr\u00e9c\u00e9dents appara\u00eetra juste au-dessus. Pour l\u2019instant cette zone reste vide, c\u2019est totalement normal !", icon:"\uD83D\uDCD6"},
-    {titre:"Bravo, tu es pr\u00eate !", texte:"Tu sais maintenant lire et remplir ton tableau Objectifs. Reviens ici r\u00e9guli\u00e8rement !", icon:"\uD83C\uDF89"},
+    {titre:"Ton historique", texte:"Une fois que tu auras termin\u00e9 au moins une p\u00e9riode, un petit r\u00e9sum\u00e9 de tes r\u00e9sultats pr\u00e9c\u00e9dents appara\u00eetra juste au-dessus. Pour l\u2019instant cette zone reste vide, c\u2019est totalement normal !", icon:"\uD83D\uDCD6", cible:"decouverte-reste"},
+    {titre:"Bravo, tu es pr\u00eate !", texte:"Tu sais maintenant lire et remplir ton tableau Objectifs. Reviens ici r\u00e9guli\u00e8rement !", icon:"\uD83C\uDF89", cible:"decouverte-periode"},
   ],
 };
 
