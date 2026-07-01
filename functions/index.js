@@ -69,3 +69,71 @@ exports.notifDiag = onDocumentUpdated("diag_ex/{docId}", async (event) => {
     await sendNotifToUid(uid, "Nouveau diagnostic !", prenom + " vient de completer son diagnostic parfum !");
   } catch(e) { console.error("notifDiag error", e); }
 });
+const {onCall, HttpsError} = require("firebase-functions/v2/https");
+
+exports.authentifier = onCall(async (request) => {
+  const {prenom, nom, codeSecret, motDePasse} = request.data || {};
+  if (!prenom || !nom) throw new HttpsError("invalid-argument", "Prenom et nom requis");
+
+  const SECRET_CODE = "BD-2026-FIRE";
+  if ((codeSecret || "").trim().toUpperCase() !== SECRET_CODE) {
+    throw new HttpsError("permission-denied", "Code d'acces incorrect");
+  }
+
+  const fullName = (prenom.trim().toLowerCase() + " " + nom.trim().toLowerCase());
+  const uid = fullName.replace(/\s+/g, "-");
+  const isMelissa = fullName === "melissa da silveira";
+
+  const accRef = db.collection("acces").doc("membres");
+  const accSnap = await accRef.get();
+  const accData = accSnap.exists ? accSnap.data() : {};
+
+  if (isMelissa) {
+    const chefs = accData.chefs || [];
+    const chefsArr = Array.isArray(chefs) ? chefs : Object.values(chefs || {});
+    if (!chefsArr.includes("melissa da silveira")) {
+      await accRef.set(Object.assign({}, accData, {chefs: chefsArr.concat(["melissa da silveira"])}), {merge: true});
+    }
+  } else {
+    const membres = accData.liste || [];
+    const autorise = membres.some((m) => m.toLowerCase() === fullName);
+    if (!autorise) {
+      throw new HttpsError("permission-denied", "Prenom/Nom non reconnu");
+    }
+  }
+
+  const userRef = db.collection("users").doc(uid);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : null;
+  const secretRef = db.collection("secrets").doc(uid);
+  const secretSnap = await secretRef.get();
+  const secretData = secretSnap.exists ? secretSnap.data() : null;
+  const displayName = prenom.trim() + " " + nom.trim();
+
+  const mdpStocke = secretData ? secretData["db-mdp"] : (userData ? userData["db-mdp"] : null);
+
+  if (mdpStocke) {
+    if (!motDePasse) {
+      return {status: "password_required", uid: uid, displayName: displayName};
+    }
+    if (motDePasse !== mdpStocke) {
+      throw new HttpsError("permission-denied", "Code personnel incorrect");
+    }
+    const token = await admin.auth().createCustomToken(uid);
+    return {status: "ok", token: token, uid: uid, displayName: displayName};
+  } else {
+    const token = await admin.auth().createCustomToken(uid);
+    return {status: "nouveau", token: token, uid: uid, displayName: displayName, isMelissa: isMelissa};
+  }
+});
+
+exports.definirMotDePasse = onCall(async (request) => {
+  const auth = request.auth;
+  if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "Non connecte");
+  const {motDePasse} = request.data || {};
+  if (!motDePasse || motDePasse.length < 4) {
+    throw new HttpsError("invalid-argument", "Mot de passe trop court");
+  }
+  await db.collection("secrets").doc(auth.uid).set({"db-mdp": motDePasse}, {merge: true});
+  return {status: "ok"};
+});

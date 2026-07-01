@@ -2,6 +2,8 @@
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getMessaging } from 'firebase/messaging';
+import { getAuth } from 'firebase/auth';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBhsxeZe7JvliHh3kBRgRKSKA2XSiAUg9k',
@@ -15,5 +17,7 @@ const firebaseConfig = {
 export const fbApp = initializeApp(firebaseConfig);
 export const db = getFirestore(fbApp);
 export const storage = getStorage(fbApp);
+export const auth = getAuth(fbApp);
+export const functions = getFunctions(fbApp, 'us-central1');
 export let messaging = null;
 try { messaging = getMessaging(fbApp); } catch {}

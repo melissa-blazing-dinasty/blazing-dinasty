@@ -3,6 +3,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
+import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/auth";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { DiagnosticsTab, DiagResultsTab, DiagnosticParfumTab, LinkBioPublicPage, TunnelHybridePage, RecommandationPubliquePage, FormationAppTab, EntonnoirTab, FORMATION_APP_CATEGORIES, FORMATION_APP_CATEGORIES_DEFAULT } from './DiagnosticsTab';
 import { FicheClienteCard, ClientsRelanceTab, ClientsTab, DistributeursTab, RelancesTab, LiensReseauxSection, MELISSA } from './ClientsTab';
 import { CommunauteTab } from './CommunauteTab';
@@ -33,6 +35,10 @@ const db = getFirestore(fbApp);
 const storage = getStorage(fbApp);
 let messaging = null;
 try { messaging = getMessaging(fbApp); } catch {}
+const auth = getAuth(fbApp);
+const fbFunctions = getFunctions(fbApp,'us-central1');
+const authentifierFn = httpsCallable(fbFunctions,'authentifier');
+const definirMotDePasseFn = httpsCallable(fbFunctions,'definirMotDePasse');
 
 async function saveFCMToken(uid) {
   if (!messaging) return;
@@ -869,9 +875,15 @@ function App(){
     if(!mdpInput.trim())return;
     setLoginLoading(true);setLoginError("");
     try{
-      const snap=await getDoc(doc(db,"users",pendingUid));
-      const mdpStocke=snap.exists()?snap.data()["db-mdp"]:"";
-      if(mdpInput.trim()!==mdpStocke){setLoginError("Code personnel incorrect.");setLoginLoading(false);return;}
+      let authResult;
+      try{
+        authResult=await authentifierFn({prenom:pendingName.split(" ")[0],nom:pendingName.split(" ").slice(1).join(" "),codeSecret:SECRET_CODE,motDePasse:mdpInput.trim()});
+      }catch(e){
+        setLoginError("Code personnel incorrect.");setLoginLoading(false);return;
+      }
+      const authData=authResult.data;
+      if(authData.status!=="ok"){setLoginError("Code personnel incorrect.");setLoginLoading(false);return;}
+      try{ await signInWithCustomToken(auth,authData.token); }catch(e){ console.error("SIGNIN ERROR",e.code,e.message); }
       try{localStorage.setItem("bd-user",JSON.stringify({uid:pendingUid,n:pendingName,codeOk:true}));}catch{}
       setUserId(pendingUid);setName(pendingName);setScreen("app");load(pendingUid);verifierChangementPeriode(pendingUid);try{const snapCA2=await getDoc(doc(db,"users",pendingUid));const caRaw2=snapCA2.exists()?snapCA2.data()["db-challenge-app"]:null;if(caRaw2){const ca2=JSON.parse(caRaw2);const startDate2=new Date(ca2.startDate);const today2=new Date();today2.setHours(0,0,0,0);const diffJours2=Math.floor((today2-startDate2)/(1000*60*60*24));if(diffJours2<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}catch{setTimeout(()=>setShowChallengeApp(true),2000);}
       // Rappel backup tous les 3 jours (Melissa uniquement)
@@ -891,31 +903,33 @@ function App(){
 
   const SECRET_CODE="BD-2026-FIRE";
 
-  // ── AUTO-LOGIN depuis localStorage ──
+  // â”€â”€ AUTO-LOGIN via Firebase Auth â”€â”€
   useEffect(()=>{
-    try{
-      const saved=localStorage.getItem("bd-user");
-      if(saved){
-        const{uid,n,codeOk}=JSON.parse(saved);
-        if(uid&&n&&codeOk===true){
-          // Verifier forceReload
-          getDoc(doc(db,"admin","config")).then(cfg=>{
-            const fr=cfg.exists()?cfg.data().forceReload:0;
-            const lastReload=+localStorage.getItem("bd-last-reload")||0;
-            if(fr&&fr>lastReload){localStorage.setItem("bd-last-reload",String(fr));window.location.reload();return;}
-            setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);getDoc(doc(db,"users",uid)).then(snapCA=>{const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}).catch(()=>{setTimeout(()=>setShowChallengeApp(true),2000);});
-            try{const fk="bd-first-"+uid;if(!localStorage.getItem(fk)){localStorage.setItem(fk,"1");setTimeout(()=>setShowWelcome(true),1500);}}catch{}
-          }).catch(()=>{
-            setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);getDoc(doc(db,"users",uid)).then(snapCA=>{const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}).catch(()=>{setTimeout(()=>setShowChallengeApp(true),2000);});
-          });
-        } else {
-          // Session invalide
-          localStorage.removeItem("bd-user");
-        }
-
-
+    const unsub=onAuthStateChanged(auth,(user)=>{
+      if(user&&user.uid){
+        const uid=user.uid;
+        let n=uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+        try{
+          const saved=localStorage.getItem("bd-user");
+          if(saved){
+            const parsed=JSON.parse(saved);
+            if(parsed.uid===uid&&parsed.n) n=parsed.n;
+          }
+        }catch{}
+        getDoc(doc(db,"admin","config")).then(cfg=>{
+          const fr=cfg.exists()?cfg.data().forceReload:0;
+          const lastReload=+localStorage.getItem("bd-last-reload")||0;
+          if(fr&&fr>lastReload){localStorage.setItem("bd-last-reload",String(fr));window.location.reload();return;}
+          setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);getDoc(doc(db,"users",uid)).then(snapCA=>{const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}).catch(()=>{setTimeout(()=>setShowChallengeApp(true),2000);});
+          try{const fk="bd-first-"+uid;if(!localStorage.getItem(fk)){localStorage.setItem(fk,"1");setTimeout(()=>setShowWelcome(true),1500);}}catch{}
+        }).catch(()=>{
+          setUserId(uid);setName(n);setScreen("app");load(uid);verifierChangementPeriode(uid);getDoc(doc(db,"users",uid)).then(snapCA=>{const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}).catch(()=>{setTimeout(()=>setShowChallengeApp(true),2000);});
+        });
+      } else {
+        try{localStorage.removeItem("bd-user");}catch{}
       }
-    }catch{}
+    });
+    return()=>unsub();
   },[]);
 
   const login=async()=>{
@@ -925,58 +939,32 @@ function App(){
     }
     setLoginLoading(true);setLoginError("");
     try{
-      const ref=doc(db,"acces","membres");
-      const snap=await getDoc(ref);
       const fullName=`${prenomInput.trim().toLowerCase()} ${nomInput.trim().toLowerCase()}`;
       const isMelissa=prenomInput.trim().toLowerCase()==="melissa";
-      // Auto-ajouter Melissa comme chef d'équipe
-      if(isMelissa){
-        try{
-          const accRef=doc(db,"acces","membres");
-          const accSnap=await getDoc(accRef);
-          const existing=accSnap.exists()?accSnap.data():{};
-          const chefs=existing.chefs||[];
-          const melissaId="melissa da silveira";
-          if(!(Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(melissaId)){
-            await setDoc(accRef,{...existing,chefs:[...chefs,melissaId]},{merge:true});
-          }
-        }catch{}
-      }
-      if(!isMelissa){
-        if(!snap.exists()){
-          setLoginError("❌ Accès non autorisé. Contacte Melissa.");
-          setLoginLoading(false);return;
-        }
-        const membres=snap.data().liste||[];
-        const autorise=membres.some(m=>m.toLowerCase()===fullName);
-        if(!autorise){
-          setLoginError("❌ Prénom/Nom non reconnu. Contacte Melissa.");
-          setLoginLoading(false);return;
-        }
-      }
       const uid=fullName.replace(/\s+/g,"-");
       const displayName=`${prenomInput.trim()} ${nomInput.trim()}`;
-
-      // Vérifier si déjà un chef assigné
-      const userSnap=await getDoc(doc(db,"users",uid));
-      const alreadyHasChef=userSnap.exists()&&userSnap.data()["chef-equipe"];
-
-      if(userSnap.exists()&&userSnap.data()["db-mdp"]){setPendingUid(uid);setPendingName(displayName);setPendingIsMelissa(isMelissa);
-        // Charger la liste des chefs et des membres (pour la marraine)
+      let authResult;
+      try{
+        authResult=await authentifierFn({prenom:prenomInput.trim(),nom:nomInput.trim(),codeSecret:codeInput.trim()});
+      }catch(e){
+        setLoginError(e.message&&e.message.includes("reconnu")?"âŒ PrÃ©nom/Nom non reconnu. Contacte Melissa.":"âŒ "+(e.message||"Erreur de connexion."));
+        setLoginLoading(false);return;
+      }
+      const authData=authResult.data;
+      if(authData.status==="password_required"){
+        setPendingUid(uid);setPendingName(displayName);setPendingIsMelissa(isMelissa);
+        setLoginLoading(false);setLoginStep(3);return;
+      }
+      if(authData.status==="nouveau"){
+        try{ await signInWithCustomToken(auth,authData.token); }catch(e){ console.error("SIGNIN ERROR",e.code,e.message); }
+        setPendingUid(uid);setPendingName(displayName);setPendingIsMelissa(isMelissa);
         const chefsSnap=await getDoc(doc(db,"acces","membres"));
         const liste=chefsSnap.exists()?chefsSnap.data().chefs||[]:[];
         const tousMembres=chefsSnap.exists()?chefsSnap.data().liste||[]:[];
-        setPendingUid(uid);setPendingName(displayName);setPendingIsMelissa(false);
         setChefs(liste);
         setMembresListe(["melissa da silveira", ...tousMembres.filter(m=>m.toLowerCase()!==fullName&&m.toLowerCase()!=="melissa da silveira")]);
         setLoginLoading(false);
         setLoginStep(2);return;
-      }
-
-      // Check mot de passe personnel
-      if(userSnap.exists()&&userSnap.data()["db-mdp"]){
-        setPendingUid(uid);setPendingName(displayName);setPendingIsMelissa(isMelissa);
-        setLoginLoading(false);setLoginStep(3);return;
       }
 
       // Connexion directe
