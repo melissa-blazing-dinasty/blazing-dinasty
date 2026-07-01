@@ -2,7 +2,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
-import { CopyBtn } from './App';
+import { CopyBtn, DecouverteTour } from './App';
 import { SCRIPTS_DATA, OBJECTIONS_VENTE, OBJECTIONS_RECRUTEMENT } from './App';
 
 function ObjectionBubbles({objections, titre, sousTitre}){
@@ -64,6 +64,7 @@ export function ObjectionsTab(){
 
 function ScriptsTab(){
   const[open,setOpen]=useState({});
+  const[showDecouverte,setShowDecouverte]=useState(false);
   const[adminScripts,setAdminScripts]=useState([]);
   const[loaded,setLoaded]=useState(false);
 
@@ -79,6 +80,8 @@ function ScriptsTab(){
 
   return(
     <div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      {showDecouverte&&<DecouverteTour outil="scripts" onClose={()=>setShowDecouverte(false)}/>}
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
         Bibliothèque <em style={{fontStyle:"italic",color:C.rose}}>Scripts</em>
       </div>
@@ -120,6 +123,7 @@ function ScriptsTab(){
         </div>
       )}
 
+      <div id="decouverte-scripts-liste">
       {SCRIPTS_DATA.map(cat=>(
         <div key={cat.cat} style={{marginBottom:"1rem"}}>
           <div style={{fontSize:".65rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.brun,marginBottom:".5rem",padding:".25rem .7rem",background:C.pale,borderRadius:20,display:"inline-block"}}>{cat.cat}</div>
@@ -145,6 +149,7 @@ function ScriptsTab(){
           })}
         </div>
       ))}
+    </div>
     </div>
   );
 }

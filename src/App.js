@@ -2635,6 +2635,12 @@ export function NoticePanel({cleOutil,onClose,videoUrl}){
 }
 
 const DECOUVERTE = {
+  scripts: [
+    {titre:"Bienvenue !", texte:"Cette biblioth\u00e8que rassemble des scripts prets a utiliser pour tes conversations. Adapte toujours a ta voix, ce sont des bases de depart !", icon:"\uD83D\uDC4B", cible:"decouverte-scripts-liste"},
+    {titre:"Etape 1 : choisis une categorie", texte:"Les scripts sont ranges par categorie (objections, relances, presentation...). Clique sur une categorie pour voir les scripts qu\u2019elle contient.", icon:"\uD83D\uDCC1", cible:"decouverte-scripts-liste"},
+    {titre:"Etape 2 : ouvre et copie", texte:"Clique sur le titre d\u2019un script pour le lire en entier, puis clique sur Copier pour le mettre dans ton presse-papier. Colle-le ensuite dans ta conversation et personnalise avec le prenom de la personne.", icon:"\uD83D\uDCCB", cible:"decouverte-scripts-liste"},
+    {titre:"Bravo, tu es prete !", texte:"Tu sais toujours quoi repondre, quelle que soit la situation !", icon:"\uD83C\uDF89", cible:"decouverte-scripts-liste"},
+  ],
   calendrier: [
     {titre:"Bienvenue !", texte:"Le calendrier equipe rassemble tous les evenements partages : Zooms de formation, evenements vente, deadlines... On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-cal-liste"},
     {titre:"Etape 1 : ajoute un evenement", texte:"Si tu es cheffe d\u2019equipe, tu peux ajouter un evenement : titre, date, heure, type et lien Zoom si besoin. Sinon, c\u2019est Melissa ou tes chefs qui les ajoutent pour toi.", icon:"\u2795", cible:"decouverte-cal-add"},
