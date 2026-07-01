@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
 import { UploadPhoto, UploadVideo } from './FormationProduitsTab';
+import { DecouverteTour } from './App';
 
 export const THEMES_LINKBIO=[
   {id:"elegance",label:"Élégance",bg:"linear-gradient(135deg,#3D1F0E,#5C3020)",header:"linear-gradient(135deg,#3D1F0E,#5C3020)",accent:"#C4A882",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#3D1F0E",cardBg:"white",preview:"🤎"},
@@ -38,6 +39,7 @@ function LinkBioTab({uid, userName}){
   const[loading,setLoading]=useState(true);
   const[copied,setCopied]=useState(false);
   const[activeSection,setActiveSection]=useState("theme"); // theme|profil|liens|banniere|photos
+  const[showDecouverte,setShowDecouverte]=useState(false);
 
   const slug=(userName||uid).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"-");
   const bioUrl=`https://blazing-dinasty-1fad9.web.app?bio=${slug}`;
@@ -159,6 +161,8 @@ function LinkBioTab({uid, userName}){
         </button>
       </div>
 
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      {showDecouverte&&<DecouverteTour outil="linkbio" onClose={()=>setShowDecouverte(false)} onStepChange={sec=>{if(sec)setActiveSection(sec);}}/>}
       {/* Navigation sections */}
       <div style={{display:"flex",gap:".3rem",marginBottom:"1rem",overflowX:"auto",paddingBottom:".2rem"}}>
         {SECTIONS.map(s=>(

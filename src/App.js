@@ -2634,6 +2634,76 @@ export function NoticePanel({cleOutil,onClose,videoUrl}){
   </div>);
 }
 
+const DECOUVERTE = {
+  linkbio: [
+    {titre:"Bienvenue !", texte:"Le LinkBio, c\u2019est TA page personnelle. Un seul lien \u00e0 mettre dans ta bio Instagram ou Facebook, et tes clientes voient TOUT. On va tout regarder ensemble, \u00e9tape par \u00e9tape. Je vais t\u2019amener sur chaque section pour que tu remplisses en m\u00eame temps !", icon:"\uD83D\uDC4B", section:null},
+    {titre:"\u00c9tape 1 : ton th\u00e8me", texte:"Choisis la couleur qui te pla\u00eet le plus en cliquant dessus. Tu peux en changer plus tard si tu changes d\u2019avis !", icon:"\uD83C\uDFA8", section:"theme"},
+    {titre:"\u00c9tape 2 : ton profil", texte:"Ajoute ta photo, ton pr\u00e9nom, et une petite phrase qui te repr\u00e9sente (ton slogan). Remplis les champs maintenant.", icon:"\u2728", section:"profil"},
+    {titre:"\u00c9tape 3 : tes liens", texte:"Colle ici le lien vers ta boutique et vers ton recrutement. Ce sont les 2 gros boutons que verront tes visiteurs.", icon:"\uD83D\uDD17", section:"liens"},
+    {titre:"\u00c9tape 4 : tes photos", texte:"Ajoute jusqu\u2019\u00e0 5 photos de toi ou de tes moments Mihi. Clique sur chaque case pour choisir une photo.", icon:"\uD83D\uDCF8", section:"photos"},
+    {titre:"\u00c9tape 5 : Mon Parcours", texte:"C\u2019est LA section la plus importante ! Ajoute des photos, raconte ton histoire en 3 petits paragraphes, et montre jusqu\u2019\u00e0 10 produits que tu utilises toi-m\u00eame au quotidien.", icon:"\uD83C\uDF1F", section:"parcours"},
+    {titre:"\u00c9tape 6 : tes r\u00e9seaux", texte:"Colle les liens de tes comptes Facebook, Instagram, TikTok, YouTube. Ils appara\u00eetront en bas de ta page.", icon:"\uD83D\uDCF1", section:"reseaux"},
+    {titre:"\u00c9tape 7 : tes ebooks", texte:"Dans cet onglet, tu peux choisir un ebook gratuit \u00e0 offrir \u00e0 tes visiteuses. C\u2019est un cadeau qui donne envie de te faire confiance.", icon:"\uD83D\uDCDA", section:"ebooks"},
+    {titre:"\u00c9tape 8 : ta banni\u00e8re", texte:"Tu peux ajouter un petit message qui s\u2019affiche tout en haut de ta page, par exemple pour annoncer une promotion. Choisis ta couleur et \u00e9cris ton texte.", icon:"\uD83D\uDCE2", section:"banniere"},
+    {titre:"N\u2019oublie pas d\u2019enregistrer !", texte:"Remonte en haut de la page et clique sur le bouton ENREGISTRER. Sinon tout ce que tu as fait sera perdu !", icon:"\uD83D\uDCBE", section:null},
+    {titre:"Tes statistiques", texte:"Ici tu peux voir combien de personnes ont visit\u00e9 ta page et sur quels boutons elles ont cliqu\u00e9.", icon:"\uD83D\uDCCA", section:"stats"},
+    {titre:"Bravo, tu es pr\u00eate !", texte:"Ta page LinkBio est pr\u00eate. Copie ton lien tout en haut de la page et colle-le dans ta bio Instagram ou Facebook !", icon:"\uD83C\uDF89", section:null},
+  ],
+  objectifs: [
+    {titre:"Bienvenue !", texte:"Cet onglet te sert \u00e0 suivre ton chiffre d\u2019affaires pendant la p\u00e9riode en cours. Regarde en haut : tu vois la p\u00e9riode actuelle et combien de jours il te reste.", icon:"\uD83D\uDC4B", cible:"decouverte-periode"},
+    {titre:"Ton palier", texte:"Le palier, c\u2019est ton niveau actuel (2%, 4%, 6%...). Regarde o\u00f9 tu en es juste en dessous.", icon:"\uD83C\uDFAF", cible:"decouverte-palier"},
+    {titre:"Remplis ton objectif", texte:"Dans la case Objectif en euros, \u00e9cris le chiffre d\u2019affaires que tu vises pour cette p\u00e9riode. Fais-le maintenant !", icon:"\u270F", cible:"decouverte-ca"},
+    {titre:"Tes ventes personnelles", texte:"Juste en dessous, dans Dont mes ventes perso, mets un objectif et indique combien tu as d\u00e9j\u00e0 vendu.", icon:"\uD83D\uDECD", cible:"decouverte-ca"},
+    {titre:"Regarde ta progression", texte:"La barre color\u00e9e te montre en un coup d\u2019oeil o\u00f9 tu en es par rapport \u00e0 ton objectif.", icon:"\uD83D\uDCC8", cible:"decouverte-ca"},
+    {titre:"Ton \u00e9quipe", texte:"Si tu as des recrues, cette partie montre le chiffre d\u2019affaires de ton \u00e9quipe. Sinon, elle reste vide, c\u2019est normal.", icon:"\uD83D\uDC65", cible:"decouverte-reste"},
+    {titre:"Ton historique", texte:"Une fois que tu auras termin\u00e9 au moins une p\u00e9riode, un petit r\u00e9sum\u00e9 de tes r\u00e9sultats pr\u00e9c\u00e9dents appara\u00eetra juste au-dessus. Pour l\u2019instant cette zone reste vide, c\u2019est totalement normal !", icon:"\uD83D\uDCD6"},
+    {titre:"Bravo, tu es pr\u00eate !", texte:"Tu sais maintenant lire et remplir ton tableau Objectifs. Reviens ici r\u00e9guli\u00e8rement !", icon:"\uD83C\uDF89"},
+  ],
+};
+
+export function DecouverteTour({outil, onClose, onStepChange}){
+  const steps = DECOUVERTE[outil] || [];
+  const [i, setI] = useState(0);
+  useEffect(()=>{
+    const s2 = steps[i];
+    if(!s2) return;
+    if(onStepChange) onStepChange(s2.section);
+    if(s2.cible){
+      setTimeout(()=>{
+        const el = document.getElementById(s2.cible);
+        if(el) el.scrollIntoView({behavior:"smooth", block:"center"});
+      }, 150);
+    }
+  },[i]);
+  if(steps.length===0) return null;
+  const s = steps[i];
+  const isFirst = i===0;
+  const isLast = i===steps.length-1;
+  return(
+    <div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:9999,display:"flex",justifyContent:"center",padding:"0 .75rem .75rem",pointerEvents:"none"}}>
+      <div style={{background:"white",borderRadius:16,maxWidth:400,width:"100%",boxShadow:"0 -4px 24px rgba(0,0,0,.25)",pointerEvents:"auto",border:"2px solid #C49A8A"}}>
+        <div style={{background:"#3D1F0E",borderRadius:"14px 14px 0 0",padding:".7rem 1rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+          <span style={{fontSize:"1.3rem"}}>{s.icon}</span>
+          <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",color:"white",fontWeight:300,flex:1}}>{s.titre}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#C49A8A",fontSize:"1.1rem",cursor:"pointer",lineHeight:1}}>{"\u2715"}</button>
+        </div>
+        <div style={{padding:".85rem 1rem"}}>
+          <div style={{fontSize:".78rem",color:"#3D2B1F",lineHeight:1.6,marginBottom:".7rem"}}>{s.texte}</div>
+          <div style={{display:"flex",justifyContent:"center",gap:".25rem",marginBottom:".7rem"}}>
+            {steps.map((_,j)=>(<div key={j} style={{width:j===i?16:6,height:6,borderRadius:3,background:j===i?"#C49A8A":"#E8DDD4",transition:"all .2s"}}/>))}
+          </div>
+          <div style={{display:"flex",gap:".5rem"}}>
+            {!isFirst&&<button onClick={()=>setI(i-1)} style={{flex:1,background:"none",border:"1.5px solid #C49A8A",borderRadius:9,padding:".5rem",fontSize:".76rem",fontWeight:600,color:"#C49A8A",cursor:"pointer",fontFamily:"inherit"}}>{"\u2190 Precedent"}</button>}
+            {!isLast?
+              <button onClick={()=>setI(i+1)} style={{flex:2,background:"#3D1F0E",color:"white",border:"none",borderRadius:9,padding:".5rem",fontSize:".8rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{"Suivant \u2192"}</button>
+              :<button onClick={onClose} style={{flex:2,background:"#3D1F0E",color:"white",border:"none",borderRadius:9,padding:".5rem",fontSize:".8rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{"C\u2019est termin\u00e9 ! \uD83C\uDF89"}</button>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 function HomeRecap({name, objPerso, textes}){
   const periodeInfo=getPeriodeInfo();
   const citation=getCitationDuJour(textes?.citations);
@@ -6819,6 +6889,7 @@ function ResteCalculateur({obj, save, distributeurs=[]}){
 export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   const[confettiTrigger,setConfettiTrigger]=useState(0);
   const[fireworksTrigger,setFireworksTrigger]=useState(0);
+  const[showDecouverte,setShowDecouverte]=useState(false);
   const[suiviCATotal,setSuiviCATotal]=useState(0);useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"users",uid));if(snap.exists()&&snap.data()["db-suivi-ca"]){const sc=JSON.parse(snap.data()["db-suivi-ca"]);const total=Object.values(sc).reduce((s,v)=>s+(parseFloat(v)||0),0);setSuiviCATotal(total);}}catch{}})();},[uid]);
   const[graphEnGros,setGraphEnGros]=useState(null);
   const raw=getPeriodeInfo();
@@ -6927,10 +6998,12 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
     <div>
       <Confetti trigger={confettiTrigger}/>
       <Fireworks trigger={fireworksTrigger}/>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      {showDecouverte&&<DecouverteTour outil="objectifs" onClose={()=>setShowDecouverte(false)}/>}
       {graphEnGros&&historique.length>=2&&<GrandGraph data={historique} dataKey={graphEnGros} color={graphEnGros==="recruesReal"?C.lilas:graphEnGros==="caPerso"?C.rose:C.brun} label={graphEnGros==="recruesReal"?"👥 Recrues":graphEnGros==="caPerso"?"🛍️ Ventes perso":"💰 CA total"} unit={graphEnGros==="recruesReal"?"":" €"}/>}
 
       {/* 1. PÉRIODE EN COURS */}
-      <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:".75rem",color:C.blanc}}>
+      <div id="decouverte-periode" style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:".75rem",color:C.blanc}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <div style={{fontSize:".55rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".15rem"}}>⏱️ Période en cours</div>
@@ -6965,7 +7038,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
       </div>
 
       {/* 3. PALIER À ATTEINDRE */}
-      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".75rem"}}>
+      <div id="decouverte-palier" style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".75rem"}}>
         <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".5rem"}}>🎯 Palier à atteindre</div>
         <div style={{display:"flex",gap:".4rem",flexWrap:"wrap"}}>
           {PALIERS_PERSO.map((p,idx)=>(
@@ -6979,7 +7052,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
       </div>
 
       {/* 4. CHIFFRE D'AFFAIRES */}
-      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:".75rem"}}>
+      <div id="decouverte-ca" style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:".75rem"}}>
         <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>💰 Chiffre d'affaires</div>
         <div style={{display:"flex",gap:".5rem",marginBottom:".6rem"}}>
           <div style={{flex:1}}>
@@ -7042,7 +7115,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
       </div>
 
       {/* 5. CALCUL DU RESTE */}
-      <ResteCalculateur obj={obj} save={save} distributeurs={distributeurs}/>
+      <div id="decouverte-reste"><ResteCalculateur obj={obj} save={save} distributeurs={distributeurs}/></div>
 
       {/* 6. GRAPHIQUES CÔTE À CÔTE */}
       {historique.length>=2&&(
