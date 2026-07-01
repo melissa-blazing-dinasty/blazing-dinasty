@@ -5,6 +5,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 
 import { AdminFormationProduits, UploadPhoto } from './FormationProduitsTab';
 import { DistributeursTab } from './ClientsTab';
+import { DecouverteTour } from './App';
 import { ss, sg, sgAll, syncAnnuaire, getPeriodeInfo, getPeriodeActuelle, getPeriodeDebut, getDebutCampagne, getFinCampagne, CALENDRIER_MIHI, fmtPLabel, GrilleJoursCA, MembreStatsCard, ChallengeAppSuiviTab, ActionsBiblioChefTab, MembresTab, AssiduiteTab, DefisTab, PowerHourTab, SuiviRecruTab, MessageEquipePopup, MessagesRecusPopup, ESPACE_CHEF_SECTIONS, PERIODE_DUREE_JOURS, PERIODES_PAR_AN, PERIODE_DEBUT_ABSOLU_MS, FAST_START_DAYS, CITATIONS_DEFAULT, ANTHROPIC_API_KEY } from './App';
 import { todayLocalStr } from './utils';
 import { buildEquipeTree, countEquipeSafe, getLigneeChefs, translateBatch, C, APP_VERSION, BoutonMiseAJour, YTBtn, useLang } from './components';
@@ -653,6 +654,7 @@ function EspaceChefTab({uid, isChef}){
   const[showMsg,setShowMsg]=useState(false);
   const[showMsgsRecus,setShowMsgsRecus]=useState(false);
   const[nbMsgsNonLus,setNbMsgsNonLus]=useState(0);
+  const[showDecouverte,setShowDecouverte]=useState(false);
   const userName=uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
   const isMelissaChef = uid==="melissa"||uid==="melissa-da-silveira";
   const sections = ESPACE_CHEF_SECTIONS.filter(s=>{
@@ -713,6 +715,8 @@ function EspaceChefTab({uid, isChef}){
       {showMsg&&<MessageEquipePopup uid={uid} userName={userName} annuaire={annuaire} onClose={()=>setShowMsg(false)}/>}
       {showMsgsRecus&&<MessagesRecusPopup uid={uid} onClose={()=>{setShowMsgsRecus(false);setNbMsgsNonLus(0);}}/>}
 
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      {showDecouverte&&<DecouverteTour outil="espacechef" onClose={()=>setShowDecouverte(false)}/>}
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
         Espace <em style={{fontStyle:"italic",color:C.rose}}>Chef</em>
       </div>
@@ -745,7 +749,7 @@ function EspaceChefTab({uid, isChef}){
       <ResumeSemaineChef annuaire={annuaire}/>
 
       {sections.map(s=>(
-        <div key={s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
+        <div key={s.id} id={"decouverte-chef-"+s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
           style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
           <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
             <div style={{width:38,height:38,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{s.icon}</div>

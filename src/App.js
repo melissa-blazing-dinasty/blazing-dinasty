@@ -2730,7 +2730,20 @@ const DECOUVERTE = {
     {titre:"Etape 5 : copie et utilise", texte:"Clique sur le texte genere pour le copier en un clic. Colle-le ensuite directement dans Instagram ou Facebook au moment de publier.", icon:"\uD83D\uDCCB"},
     {titre:"Etape 6 : coche quand c\u2019est fait", texte:"Une fois que tu as publie, reviens sur ce jour et coche A faire. Ca t\u2019aide a garder une vue claire de ce qui est deja publie.", icon:"\u2705"},
     {titre:"Bravo, tu es prete !", texte:"Tu ne seras plus jamais en panne d\u2019inspiration. Reviens chaque jour consulter ton planning !", icon:"\uD83C\uDF89"},
-  ],objectifs: [
+  ],
+  espacechef: [
+    {titre:"Bienvenue !", texte:"L\u2019Espace Chef regroupe tous tes outils d\u2019animation d\u2019equipe : statistiques, suivi CA, gestion des acces, defis collectifs... On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-chef-stats"},
+    {titre:"Etape 1 : Statistiques equipe", texte:"Ici tu retrouves le taux d\u2019utilisation de l\u2019app, la conversion, et les diagnostics realises. Des chiffres utiles pour recruter et motiver ton equipe.", icon:"\uD83D\uDCCA", cible:"decouverte-chef-stats"},
+    {titre:"Etape 2 : Suivi CA", texte:"Ton chiffre d\u2019affaires periode par periode, avec tout l\u2019historique. Accessible a toute distributrice, pas seulement aux cheffes.", icon:"\uD83D\uDCC8", cible:"decouverte-chef-suivica"},
+    {titre:"Etape 3 : Acces equipe", texte:"Gere les membres de ton equipe, nomme des chefs, et assigne les marraines depuis cette section.", icon:"\u2699\uFE0F", cible:"decouverte-chef-membres"},
+    {titre:"Etape 4 : Assiduite equipe", texte:"Suis les connexions et les actions realisees chaque jour par chaque membre de ton equipe.", icon:"\uD83D\uDCCB", cible:"decouverte-chef-assiduite"},
+    {titre:"Etape 5 : Challenge Decouverte App", texte:"Suis la progression de chaque membre dans le defi 7 jours de decouverte de l\u2019application.", icon:"\uD83C\uDFAE", cible:"decouverte-chef-challengeapp"},
+    {titre:"Etape 6 : Challenge Flash et Power Hour", texte:"Lance un defi collectif pour toute l\u2019equipe, ou organise un Power Hour : un sprint synchrone de 20 minutes tous ensemble.", icon:"\uD83D\uDE80", cible:"decouverte-chef-defi"},
+    {titre:"Etape 7 : Distributeurs et Nouveaux Distri", texte:"Navigue dans l\u2019arborescence complete de ton equipe, et suis l\u2019onboarding de tes recrues les plus recentes.", icon:"\uD83D\uDC51", cible:"decouverte-chef-distributeurs"},
+    {titre:"Etape 8 : Actions biblio", texte:"Ajoute des actions a la bibliotheque partagee, utilisee par toute l\u2019equipe dans l\u2019onglet Aujourd\u2019hui.", icon:"\uD83D\uDCA1", cible:"decouverte-chef-actionsbiblio"},
+    {titre:"Bravo, tu es prete !", texte:"Tu as maintenant tous les outils pour animer et faire grandir ton equipe !", icon:"\uD83C\uDF89", cible:"decouverte-chef-stats"},
+  ],
+  objectifs: [
     {titre:"Bienvenue !", texte:"Cet onglet te sert \u00e0 suivre ton chiffre d\u2019affaires pendant la p\u00e9riode en cours. Regarde en haut : tu vois la p\u00e9riode actuelle et combien de jours il te reste.", icon:"\uD83D\uDC4B", cible:"decouverte-periode"},
     {titre:"Ton palier", texte:"Le palier, c\u2019est ton niveau actuel (2%, 4%, 6%...). Regarde o\u00f9 tu en es juste en dessous.", icon:"\uD83C\uDFAF", cible:"decouverte-palier"},
     {titre:"Remplis ton objectif", texte:"Dans la case Objectif en euros, \u00e9cris le chiffre d\u2019affaires que tu vises pour cette p\u00e9riode. Fais-le maintenant !", icon:"\u270F", cible:"decouverte-ca"},
@@ -9090,6 +9103,7 @@ function ResumeSemaineChef({annuaire}){
 }
 function EspaceChefTab({uid, isChef}){
   const[section,setSection]=useState("");
+  const[showDecouverte,setShowDecouverte]=useState(false);
   const[distrib,setDistrib]=useState([]);
   const[annuaire,setAnnuaire]=useState({});
   const[showMsg,setShowMsg]=useState(false);
@@ -9155,6 +9169,8 @@ function EspaceChefTab({uid, isChef}){
       {showMsg&&<MessageEquipePopup uid={uid} userName={userName} annuaire={annuaire} onClose={()=>setShowMsg(false)}/>}
       {showMsgsRecus&&<MessagesRecusPopup uid={uid} onClose={()=>{setShowMsgsRecus(false);setNbMsgsNonLus(0);}}/>}
 
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      {showDecouverte&&<DecouverteTour outil="espacechef" onClose={()=>setShowDecouverte(false)}/>}
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
         Espace <em style={{fontStyle:"italic",color:C.rose}}>Chef</em>
       </div>
@@ -9187,7 +9203,7 @@ function EspaceChefTab({uid, isChef}){
       <ResumeSemaineChef annuaire={annuaire}/>
 
       {sections.map(s=>(
-        <div key={s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
+        <div key={s.id} id={"decouverte-chef-"+s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
           style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
           <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
             <div style={{width:38,height:38,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{s.icon}</div>
