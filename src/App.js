@@ -2635,6 +2635,21 @@ export function NoticePanel({cleOutil,onClose,videoUrl}){
 }
 
 const DECOUVERTE = {
+  relances: [
+    {titre:"Bienvenue !", texte:"Cet onglet rassemble toutes tes relances au meme endroit : prospects a recontacter et clientes qui n\u2019ont rien commande depuis 60 jours. Consulte-le chaque matin pendant 10 minutes !", icon:"\uD83D\uDC4B", cible:"decouverte-relances-stats"},
+    {titre:"Etape 1 : tes 3 chiffres", texte:"En haut, tu vois d\u2019un coup d\u2019oeil combien de prospects sont a recontacter, combien sont sans contact depuis 14 jours, et combien de clientes sont endormies depuis 60 jours.", icon:"\uD83D\uDCCA", cible:"decouverte-relances-stats"},
+    {titre:"Etape 2 : choisis une section", texte:"Clique sur Prospects, Endormies ou Inactives pour voir la liste correspondante.", icon:"\uD83D\uDC46", cible:"decouverte-relances-tabs"},
+    {titre:"Etape 3 : relance un prospect", texte:"Pour chaque prospect, un message est deja pret. Clique sur Copier pour le copier, colle-le dans WhatsApp ou Instagram. Ensuite marque Fait, ou reporte de 3 ou 7 jours si besoin.", icon:"\uD83D\uDCAC", cible:"decouverte-relances-tabs"},
+    {titre:"Etape 4 : clientes endormies", texte:"Meme principe pour tes clientes endormies : un message tendre est pret a copier. Tu peux aussi copier tous les messages d\u2019un coup avec le bouton en bas.", icon:"\uD83D\uDCA4", cible:"decouverte-relances-tabs"},
+    {titre:"Bravo, tu es prete !", texte:"Tes relances deviennent un rituel de 10 minutes. Plus personne ne tombe dans l\u2019oubli !", icon:"\uD83C\uDF89", cible:"decouverte-relances-stats"},
+  ],
+  business: [
+    {titre:"Bienvenue !", texte:"Cet onglet te donne une vue complete de ton activite : ton chiffre d\u2019affaires, ton entonnoir de conversion, et l\u2019historique de toutes tes periodes. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-business-tabs"},
+    {titre:"Etape 1 : le suivi CA", texte:"Dans l\u2019onglet CA, saisis ton chiffre d\u2019affaires jour apres jour. Chaque jour rempli met a jour ton total automatiquement.", icon:"\uD83D\uDCB0", cible:"decouverte-suivi-ca"},
+    {titre:"Etape 2 : l\u2019entonnoir", texte:"Clique sur l\u2019onglet Entonnoir pour voir combien de tes prospects deviennent clientes, puis combien de clientes rejoignent l\u2019equipe. Ca t\u2019aide a comprendre ta conversion.", icon:"\uD83D\uDCC9", cible:"decouverte-business-tabs"},
+    {titre:"Etape 3 : l\u2019historique", texte:"Clique sur l\u2019onglet Historique pour revoir toutes tes periodes precedentes et le detail de tes commandes.", icon:"\uD83D\uDCD6", cible:"decouverte-business-tabs"},
+    {titre:"Bravo, tu es prete !", texte:"Tu pilotes maintenant ton activite avec de vrais chiffres. Reviens ici regulierement pour suivre ta progression !", icon:"\uD83C\uDF89", cible:"decouverte-business-tabs"},
+  ],
   prospects: [
     {titre:"Bienvenue !", texte:"Cet onglet te sert a suivre tes prospects, du premier contact jusqu\u2019a la conversion en cliente ou distributrice. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-ajouter-prospect"},
     {titre:"Etape 1 : ajoute un prospect", texte:"Ecris son prenom, choisis son statut (chaud, tiede ou froid), precise si elle est interessee par les produits ou par l\u2019activite, ajoute une note si besoin, puis clique sur Ajouter le prospect.", icon:"\u2795", cible:"decouverte-ajouter-prospect"},
@@ -8832,7 +8847,7 @@ export function SuiviCATab({uid}){
   };
 
   return(
-    <div>
+    <div id="decouverte-suivi-ca">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".4rem"}}>
         <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun}}>
           Suivi <em style={{fontStyle:"italic",color:C.rose}}>CA</em>

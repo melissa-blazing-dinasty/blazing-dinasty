@@ -700,10 +700,10 @@ function RelancesTab({prospects,clients,saveProspects,saveClients}){
   return(
     <div style={{paddingBottom:"2rem"}}>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>Relances <em style={{fontStyle:"italic",color:C.rose}}>du jour</em></div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:".4rem",marginBottom:"1rem"}}>
+      <div id="decouverte-relances-stats" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:".4rem",marginBottom:"1rem"}}>
         {[[aRecontacter.length,"A recontacter",C.rose],[sansContact.length,"Sans contact 14j+",C.or],[endormies.length,"Endormies 60j+",C.lilas]].map(([val,label,col])=>(<div key={label} style={{background:C.creme,borderRadius:10,padding:".65rem .5rem",textAlign:"center",border:"1px solid "+C.pale}}><div style={{fontSize:"1.2rem",fontWeight:700,color:col}}>{val}</div><div style={{fontSize:".58rem",color:C.gris,lineHeight:1.3}}>{label}</div></div>))}
       </div>
-      <div style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
+      <div id="decouverte-relances-tabs" style={{display:"flex",gap:".3rem",marginBottom:"1rem"}}>
         {[{id:"prospects",label:"Prospects ("+(aRecontacter.length+sansContact.length)+")"},{id:"endormies",label:"Endormies ("+endormies.length+")"},{id:"inactives",label:"Inactives ("+(clients||[]).filter(c=>c.statut==="inactif").length+")"}].map(t=>(<button key={t.id} onClick={()=>setSection(t.id)} style={{flex:"none",padding:".4rem .75rem",fontSize:".7rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(section===t.id?C.rose:C.pale),background:section===t.id?C.rose:"white",color:section===t.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>))}
       </div>
       {section==="prospects"&&<div>
