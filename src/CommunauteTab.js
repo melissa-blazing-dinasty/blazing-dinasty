@@ -3,18 +3,25 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
 import { MELISSA } from './ClientsTab';
+import { UploadPhoto } from './FormationProduitsTab';
+import { WallOfFameTab, DefisTab, PowerHourTab } from './App';
 import { CopyBtn } from './components';
 
-function CommunauteTab({uid, userName}){
+function CommunauteTab({uid, userName, isChef}){
   const[posts,setPosts]=useState([]);
   const[infos,setInfos]=useState([]);
   const[loading,setLoading]=useState(true);
   const[ctab,setCtab]=useState("tous");
+  
   const[newText,setNewText]=useState("");
   const[newType,setNewType]=useState("victoire");
   const[newInfo,setNewInfo]=useState({titre:"",texte:"",important:false});
   const[showAddInfo,setShowAddInfo]=useState(false);
   const[posting,setPosting]=useState(false);
+  const[newPhoto,setNewPhoto]=useState("");
+  const[bulleOuverte,setBulleOuverte]=useState(null);
+  const[commentInputs,setCommentInputs]=useState({});
+  const[openComments,setOpenComments]=useState({});
   const isMelissa=userName.toLowerCase().replace(/\s+/g,"-")===MELISSA||userName.toLowerCase()===MELISSA;
 
   const loadPosts=async()=>{
@@ -57,6 +64,7 @@ function CommunauteTab({uid, userName}){
       author:userName,
       type:newType,
       text:newText.trim(),
+      photo:newPhoto||"",
       ts:Date.now(),
       likes:[],
     };
@@ -64,6 +72,7 @@ function CommunauteTab({uid, userName}){
     setPosts(next);
     await savePosts(next);
     setNewText("");
+    setNewPhoto("");
     setPosting(false);
   };
 
@@ -77,6 +86,18 @@ function CommunauteTab({uid, userName}){
     await savePosts(next);
   };
 
+  const addComment=async(pid)=>{
+    const text=(commentInputs[pid]||"").trim();
+    if(!text)return;
+    const next=posts.map(p=>{
+      if(p.id!==pid)return p;
+      const c={id:`cm${Date.now()}`,author:userName,text,ts:Date.now()};
+      return{...p,comments:[...(p.comments||[]),c]};
+    });
+    setPosts(next);
+    await savePosts(next);
+    setCommentInputs(prev=>({...prev,[pid]:""}));
+  };
   const delPost=async(pid)=>{
     const next=posts.filter(p=>p.id!==pid);
     setPosts(next);
@@ -157,8 +178,31 @@ function CommunauteTab({uid, userName}){
         </div>
       )}
 
+      {/* Bulles cliquables */}
+      <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
+        {[{id:"partager",label:"✍️ Partager",icon:"✍️"},{id:"mur",label:"🏆 Mur de la gloire",icon:"🏆"},{id:"defis",label:"🎯 Défis",icon:"🎯"}].map(b=>(
+          <div key={b.id} onClick={()=>setBulleOuverte(prev=>prev===b.id?null:b.id)}
+            style={{flex:1,textAlign:"center",background:bulleOuverte===b.id?C.rose:C.blanc,border:`1.5px solid ${bulleOuverte===b.id?C.rose:C.pale}`,borderRadius:14,padding:".7rem .4rem",cursor:"pointer",transition:"all .2s"}}>
+            <div style={{fontSize:"1.1rem",marginBottom:".2rem"}}>{b.icon}</div>
+            <div style={{fontSize:".6rem",fontWeight:600,color:bulleOuverte===b.id?"white":C.gris}}>{b.label.replace(b.icon+" ","")}</div>
+          </div>
+        ))}
+      </div>
+      {bulleOuverte==="mur"&&(
+        <div style={{marginBottom:"1rem",background:C.creme,borderRadius:14,padding:"1rem"}}>
+          <WallOfFameTab uid={uid} userName={userName}/>
+        </div>
+      )}
+      {bulleOuverte==="defis"&&(
+        <div style={{marginBottom:"1rem",background:C.creme,borderRadius:14,padding:"1rem"}}>
+          <DefisTab uid={uid} userName={userName} canCreate={true} isChef={isChef}/>
+          <div style={{marginTop:"1rem"}}>
+            <PowerHourTab uid={uid} userName={userName} canCreate={isChef}/>
+          </div>
+        </div>
+      )}
       {/* Formulaire nouveau post — masqué sur onglet infos */}
-      {ctab!=="infos"&&(
+      {ctab!=="infos"&&bulleOuverte==="partager"&&(
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
         <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>
           ✍️ Partager avec l'équipe
@@ -176,6 +220,7 @@ function CommunauteTab({uid, userName}){
           ))}
         </div>
 
+        <UploadPhoto label="Photo (optionnel)" value={newPhoto} onChange={v=>setNewPhoto(v)} folder="communaute"/>
         <textarea
           placeholder={
             newType==="victoire"?"🏆 Partage ta victoire du moment...":
@@ -300,6 +345,7 @@ function CommunauteTab({uid, userName}){
 
             {/* Texte */}
             <p style={{fontSize:".78rem",color:C.texte,lineHeight:1.65,margin:"0 0 .6rem"}}>{p.text}</p>
+            {p.photo&&<img src={p.photo} alt="" style={{width:"100%",borderRadius:10,marginBottom:".6rem",display:"block"}}/>}
 
             {/* Likes */}
             <div style={{display:"flex",alignItems:"center",gap:".5rem"}}>
@@ -314,12 +360,37 @@ function CommunauteTab({uid, userName}){
                 </span>
               )}
             </div>
+            {/* Commentaires */}
+            <div style={{marginTop:".5rem"}}>
+              <button onClick={()=>setOpenComments(prev=>({...prev,[p.id]:!prev[p.id]}))}
+                style={{background:"none",border:"none",color:C.gris,fontSize:".65rem",cursor:"pointer",fontFamily:"inherit",padding:0}}>
+                💬 {(p.comments||[]).length>0?(p.comments.length+" commentaire"+(p.comments.length>1?"s":"")):"Repondre"}
+              </button>
+              {openComments[p.id]&&(
+                <div style={{marginTop:".5rem"}}>
+                  {(p.comments||[]).map(c=>(
+                    <div key={c.id} style={{background:C.creme,borderRadius:8,padding:".4rem .6rem",marginBottom:".3rem"}}>
+                      <div style={{fontSize:".65rem",fontWeight:700,color:C.brun}}>{c.author}</div>
+                      <div style={{fontSize:".7rem",color:C.texte,lineHeight:1.5}}>{c.text}</div>
+                    </div>
+                  ))}
+                  <div style={{display:"flex",gap:".3rem",marginTop:".4rem"}}>
+                    <input value={commentInputs[p.id]||""} onChange={e=>setCommentInputs(prev=>({...prev,[p.id]:e.target.value}))}
+                      onKeyDown={e=>e.key==="Enter"&&addComment(p.id)}
+                      placeholder="Ecris une reponse..."
+                      style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".35rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+                    <button onClick={()=>addComment(p.id)}
+                      style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".35rem .6rem",fontSize:".68rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                      Envoyer
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         );
       })}
     </div>
   );
 }
-
-
 export { CommunauteTab };

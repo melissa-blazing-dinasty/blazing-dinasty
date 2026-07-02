@@ -1349,6 +1349,7 @@ function App(){
   const TABS=[
     {id:"home",label:"🏠"},
     {id:"dashboard",label:"📊 Tableau de bord"},
+    {id:"communaute",label:"🌸 Communauté"},
     {id:"calendrier",label:"📅 Calendrier"},
     {id:"formation",label:"🎓 Formation"},
     {id:"sprint",label:"⚡ Sprint"},
@@ -2543,6 +2544,7 @@ function App(){
         {tab==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name}/>}
         {tab==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
         {tab==="ebooks"&&<EbooksTab/>}
+        {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
         {tab==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="espacechef"&&(isChefApp||hasTeamApp)&&<EspaceChefTab uid={userId} isChef={isChefApp}/>}
         {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab adminItems={adminItems}/>}

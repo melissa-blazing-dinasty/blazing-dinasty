@@ -328,7 +328,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
     {id:"editorial",label:"✍️ Éditorial"},{id:"business",label:"📊 Business"},
     {id:"diagnostics",  label:"🩺 Diagnostics"},
     
-    {id:"equipe-fun",   label:"🏆 Équipe"},
+    
   ];
 
   return(
