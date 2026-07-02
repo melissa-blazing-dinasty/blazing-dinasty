@@ -6185,7 +6185,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
   const[challenges,setChallenges]=useState([]);
   const[loading,setLoading]=useState(true);
   const[showCreate,setShowCreate]=useState(false);
-  const[form,setForm]=useState({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true});
+  const[form,setForm]=useState({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
   const[equipes,setEquipes]=useState([]);
   const[declarations,setDeclarations]=useState({});
   const[declareInput,setDeclareInput]=useState({});
@@ -6257,8 +6257,9 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       id,titre:form.titre.trim(),description:form.description.trim(),
       type:form.type,
       deadline:form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null,
-      objectif:+form.objectif||0,unite:form.unite,
+      objectif:form.type==="action"?0:(+form.objectif||0),unite:form.type==="action"?"actions":form.unite,
       cadeau:form.cadeau.trim(),cadeauImage:form.cadeauImage.trim(),
+      actions:form.type==="action"?form.actionsListe.filter(a=>a.trim()).map((label,i)=>({id:"a"+i,label:label.trim()})):undefined,
       global:form.global,equipesCibles:form.global?[]:form.equipesCibles,
       createdBy:userName,ts:Date.now(),
     };
@@ -6304,7 +6305,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       }));
     }catch(e){console.error("notif challenge msg error",e);}
     setShowCreate(false);
-    setForm({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true});
+    setForm({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
   };
 
   const declarer=async(challengeId,amount)=>{
@@ -6314,6 +6315,20 @@ export function DefisTab({uid, userName, canCreate, isChef}){
     setDeclarations(next);
     await setDoc(doc(db,"challenges","declarations"),next,{merge:true});
     postToWallOfFame&&postToWallOfFame(uid,userName,`a déclaré ${amount} ${form.unite} sur le challenge "${challengeId}" 💪`,"🚀");
+  };
+  const validerAction=async(challengeId,actionId,actionLabel)=>{
+    const current=declarations[challengeId]||[];
+    const dejaFait=current.find(d=>d.uid===uid&&d.actionId===actionId);
+    let next;
+    if(dejaFait){
+      next={...declarations,[challengeId]:current.filter(d=>!(d.uid===uid&&d.actionId===actionId))};
+    }else{
+      const d={uid,userName,count:1,actionId,ts:Date.now()};
+      next={...declarations,[challengeId]:[...current,d]};
+      postToWallOfFame&&postToWallOfFame(uid,userName,`a validé l'action "${actionLabel}" 💪`,"✅");
+    }
+    setDeclarations(next);
+    await setDoc(doc(db,"challenges","declarations"),next,{merge:true});
   };
 
   const supprimer=async(id)=>{
@@ -6351,7 +6366,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
 
           {/* Type */}
           <div style={{display:"flex",gap:".35rem",marginBottom:".5rem"}}>
-            {[{v:"flash",l:"⚡ Challenge Flash (24-72h)"},{v:"long",l:"📅 Challenge Long terme (21j)"},{v:"libre",l:"🎯 Challenge Libre"}].map(t=>(
+            {[{v:"flash",l:"⚡ Challenge Flash (24-72h)"},{v:"long",l:"📅 Challenge Long terme (21j)"},{v:"libre",l:"🎯 Challenge Libre"},{v:"action",l:"✅ Challenge Actions"}].map(t=>(
               <button key={t.v} onClick={()=>setForm(p=>({...p,type:t.v}))}
                 style={{flex:1,padding:".38rem .3rem",fontSize:".65rem",fontWeight:600,borderRadius:8,border:`1px solid ${form.type===t.v?C.rose:C.pale}`,background:form.type===t.v?C.rose:C.blanc,color:form.type===t.v?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
                 {t.l}
@@ -6372,13 +6387,35 @@ export function DefisTab({uid, userName, canCreate, isChef}){
             </div>
           )}
 
-          {/* Objectif + unité */}
-          <div style={{display:"flex",gap:".4rem",marginBottom:".5rem"}}>
-            <input type="number" placeholder="Objectif" value={form.objectif} onChange={e=>setForm(p=>({...p,objectif:e.target.value}))}
-              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .55rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-            <input placeholder="Unité (ventes, €...)" value={form.unite} onChange={e=>setForm(p=>({...p,unite:e.target.value}))}
-              style={{flex:2,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .55rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-          </div>
+          {form.type!=="action"?(
+            <div>
+              {/* Objectif + unite */}
+              <div style={{display:"flex",gap:".4rem",marginBottom:".5rem"}}>
+                <input type="number" placeholder="Objectif" value={form.objectif} onChange={e=>setForm(p=>({...p,objectif:e.target.value}))}
+                  style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .55rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+                <input placeholder="Unite (ventes, e...)" value={form.unite} onChange={e=>setForm(p=>({...p,unite:e.target.value}))}
+                  style={{flex:2,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .55rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+              </div>
+            </div>
+          ):(
+            <div style={{marginBottom:".5rem"}}>
+              <div style={{fontSize:".62rem",color:C.gris,fontWeight:600,textTransform:"uppercase",letterSpacing:".08em",marginBottom:".4rem"}}>Liste des actions a valider</div>
+              {form.actionsListe.map((a,i)=>(
+                <div key={i} style={{display:"flex",gap:".35rem",marginBottom:".35rem"}}>
+                  <input placeholder={"Action "+(i+1)+" (ex: Publier une story)"} value={a} onChange={e=>{const next=[...form.actionsListe];next[i]=e.target.value;setForm(p=>({...p,actionsListe:next}));}}
+                    style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".38rem .55rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+                  {form.actionsListe.length>1&&(
+                    <button onClick={()=>{const next=form.actionsListe.filter((_,j)=>j!==i);setForm(p=>({...p,actionsListe:next}));}}
+                      style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:"0 .5rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>-</button>
+                  )}
+                </div>
+              ))}
+              <button onClick={()=>setForm(p=>({...p,actionsListe:[...p.actionsListe,""]}))}
+                style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:8,padding:".3rem .6rem",fontSize:".7rem",fontWeight:600,color:C.brun,cursor:"pointer",fontFamily:"inherit"}}>
+                + Ajouter une action
+              </button>
+            </div>
+          )}
 
           {/* Cadeau */}
           <input placeholder="🎁 Récompense (ex: Kit produit Mihi, carte cadeau 50€...)" value={form.cadeau} onChange={e=>setForm(p=>({...p,cadeau:e.target.value}))}
@@ -6506,20 +6543,35 @@ export function DefisTab({uid, userName, canCreate, isChef}){
                 </div>
               )}
 
-              {/* Ma participation */}
+              {c.type!=="action"?(
               <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem",display:"flex",alignItems:"center",gap:".6rem"}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:".6rem",color:C.gris,marginBottom:".1rem"}}>Ma participation</div>
                   <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:700,color:C.brun}}>{monTotal} {c.unite}</div>
                 </div>
                 <input type="number" min="1" value={declareInput[c.id]||""} onChange={e=>setDeclareInput(p=>({...p,[c.id]:e.target.value}))}
-                  placeholder="Qté"
+                  placeholder="Qte"
                   style={{width:60,border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .4rem",fontSize:".8rem",fontFamily:"inherit",textAlign:"center",color:C.texte,background:C.blanc,outline:"none"}}/>
                 <button onClick={()=>{declarer(c.id,declareInput[c.id]||1);setDeclareInput(p=>({...p,[c.id]:""}));}}
                   style={{background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".35rem .7rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>
-                  + Déclarer
+                  + Declarer
                 </button>
               </div>
+            ):(
+              <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem"}}>
+                <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem"}}>Coche les actions realisees</div>
+                {(c.actions||[]).map(a=>{
+                  const fait=(declarations[c.id]||[]).some(d=>d.uid===uid&&d.actionId===a.id);
+                  return(
+                    <div key={a.id} onClick={()=>validerAction(c.id,a.id,a.label)}
+                      style={{display:"flex",alignItems:"center",gap:".5rem",padding:".4rem 0",cursor:"pointer"}}>
+                      <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${fait?C.vert:C.pale}`,background:fait?C.vert:"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:".65rem",color:"white"}}>{fait?"✓":""}</div>
+                      <div style={{fontSize:".78rem",color:fait?C.gris:C.texte,textDecoration:fait?"line-through":"none"}}>{a.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
               {/* Classement */}
               {classement.length>0&&(

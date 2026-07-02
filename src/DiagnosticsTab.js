@@ -2760,6 +2760,22 @@ function LinkBioPublicPage({slug}){
           <div style={{fontFamily:"Georgia,serif",fontSize:"1.15rem",fontWeight:600,color:"#fff"}}>{profil.prenom} {profil.nom||""}</div>
           {profil.slogan&&<div style={{fontSize:".72rem",color:"rgba(255,255,255,.8)",marginTop:".3rem",lineHeight:1.5,padding:"0 1rem"}}>{profil.slogan}</div>}
         </div>
+        {(profil.lienBoutique||profil.lienRecrutement)&&(
+          <div style={{display:"flex",gap:".5rem",padding:".85rem 1rem",background:theme.bg}}>
+            {profil.lienBoutique&&(
+              <a href={profil.lienBoutique} target="_blank" rel="noopener noreferrer"
+                style={{flex:1,background:theme.accent,color:"white",textDecoration:"none",textAlign:"center",padding:".7rem .5rem",borderRadius:12,fontSize:".78rem",fontWeight:700,boxShadow:"0 3px 10px rgba(0,0,0,.15)"}}>
+                {profil.lienBoutiqueLabel||"Boutique Mihi"}
+              </a>
+            )}
+            {profil.lienRecrutement&&(
+              <a href={profil.lienRecrutement} target="_blank" rel="noopener noreferrer"
+                style={{flex:1,background:"rgba(255,255,255,.15)",border:"1.5px solid rgba(255,255,255,.4)",color:"white",textDecoration:"none",textAlign:"center",padding:".7rem .5rem",borderRadius:12,fontSize:".78rem",fontWeight:700}}>
+                {profil.lienRecrutementLabel||"Rejoindre l'equipe"}
+              </a>
+            )}
+          </div>
+        )}
         {profil.accroche&&<div style={{margin:".75rem 1rem",padding:".75rem 1rem",background:"rgba(255,255,255,.1)",borderRadius:12,borderLeft:"3px solid rgba(255,255,255,.4)",fontSize:".82rem",fontStyle:"italic",color:theme.light?"rgba(0,0,0,.7)":"rgba(255,255,255,.9)",lineHeight:1.6}}>❝ {profil.accroche} ❞</div>}
         {profil.histoire&&<div style={{padding:".85rem 1.1rem",fontSize:".78rem",lineHeight:1.7,color:sub,background:theme.bg}}>{profil.histoire}</div>}
         <div style={{background:"linear-gradient(135deg,#C49A8A,#A89BB5)",padding:".65rem 1rem",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}><span style={{fontSize:"1rem"}}>🔥</span><span style={{fontSize:".78rem",fontWeight:700,color:"white",letterSpacing:".02em"}}>{nbDiagsEquipe}+ femmes ont recu leur bilan personnalise — et toi ?</span></div>
