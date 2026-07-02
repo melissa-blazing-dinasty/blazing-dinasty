@@ -19,7 +19,7 @@ import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
-function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}}){
+function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}}){
   const[dtab,setDtab]=useState("today");
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
@@ -379,7 +379,7 @@ function DashboardTab({uid, goToFormation, fastStartDone=false, onFastStartDone=
               <div style={{fontSize:".62rem",color:"rgba(255,255,255,.85)",marginTop:".2rem"}}>Touche pour voir tes clientes →</div>
             </div>
           )}
-          <AssistanteIATab uid={uid} userName={userName}/>
+          <AssistanteIATab uid={uid} userName={userName} goToTab={goToTab}/>
           <div id="decouverte-jauge"><JaugeSucces pctCA={pctCAGauge} pctRecrues={pctRecruesGauge}/></div>
           <div id="decouverte-badges"><BadgesPanel badges={badges}/></div>
           {streak>=2&&(

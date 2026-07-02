@@ -2535,7 +2535,7 @@ function App(){
         {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso}/>}
+        {tab==="dashboard"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso}/>}
         {tab==="scripts"&&<ScriptsTab/>}
         {tab==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp}/>}
         {tab==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name}/>}

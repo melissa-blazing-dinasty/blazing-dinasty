@@ -4,7 +4,7 @@ import { db } from './firebase';
 import { C } from './constants';
 import { ANTHROPIC_API_KEY } from './App';
 
-export function AssistanteIATab({uid, userName}){
+export function AssistanteIATab({uid, userName, goToTab=()=>{}}){
   const[ouvert,setOuvert]=useState(false);
   const[messages,setMessages]=useState([]);
   const[input,setInput]=useState("");
@@ -14,7 +14,7 @@ export function AssistanteIATab({uid, userName}){
   const ouvrirChat=()=>{
     setOuvert(true);
     if(messages.length===0){
-      setMessages([{role:"assistant",text:`Coucou ${userName?.split(" ")[0]||""} ! 👋 Je suis ton assistante Blazing Dynasty. Je peux t'aider à conseiller tes clientes sur les produits Mihi (avec ordonnance et prix), répondre à tes questions business, ou juste t'écouter si t'as besoin d'en parler. De quoi as-tu besoin ?`}]);
+      setMessages([{role:"assistant",text:`Coucou ${userName?.split(" ")[0]||""} ! 👋 Je suis ton assistante Blazing Dynasty. Je peux t'aider à conseiller tes clientes sur les produits Mihi (avec ordonnance et prix), répondre à tes questions business, ou juste t'écouter si t'as besoin d'en parler. Ou pour t'aider à utiliser l'appli. De quoi as-tu besoin ?`}]);
     }
   };
 
@@ -74,6 +74,22 @@ ${formationText||"Aucune formation chargée pour l'instant."}
 DÉTAILS PRODUITS (descriptions formation) :
 ${produitsFormationText||"Aucun détail produit chargé."}
 
+AIDE UTILISATION DE L'APPLICATION (utilise ceci si la distributrice demande comment faire quelque chose DANS l'appli Blazing Dynasty, pas pour conseiller une cliente) :
+- dashboard (Aujourd'hui) : ecran d'accueil, jauge de progression vers les objectifs, badges, actions du jour a cocher
+- objectifs : suivre son chiffre d'affaires periode par periode, definir son objectif CA et palier
+- linkbio : creer sa page LinkBio publique (photo, liens boutique/recrutement, Mon Parcours, reseaux sociaux)
+- dreamboard : tableau de visualisation des reves, ajouter des photos/reves avec categorie
+- diagnostics : faire un diagnostic produit personnalise pour une cliente (skincare, parfum, silhouette...)
+- calendrier : voir les evenements d'equipe (Zooms, formations, deadlines)
+- scripts : bibliotheque de messages types prets a copier-coller
+- banqueimages : visuels a partager pour les reseaux sociaux
+- sprint : defis de vente sur une periode courte
+- suivi : suivi onboarding des nouvelles recrues
+- espacechef : (reserve cheffes d'equipe) statistiques equipe, gestion des acces, challenges, suivi assiduite
+- formation : centre de formation (demarrage, vente, recrutement, contenu, developpement perso, outils)
+- Pour changer son mot de passe : bouton 🔐 en haut a droite de l'ecran d'accueil
+- Pour ajouter/suivre des clientes ou prospects : onglets Clients et Prospects (menu principal)
+
 CATALOGUE PRODUITS MIHI AVEC PRIX RÉELS (utilise ces produits en priorité. Si le catalogue ne couvre pas le besoin, utilise tes connaissances sur les produits Mihi et indique que le prix est à vérifier) :
 ${catalogueText||"Catalogue non chargé."}
 
@@ -84,6 +100,7 @@ INSTRUCTIONS :
 - Si la distributrice te pose une question PRODUIT (pour conseiller une cliente) : génère une réponse en JSON avec 3 packs et prix exacts du catalogue (format ci-dessous)
 - Si la question est BUSINESS (stratégie, recrutement, vente, organisation) : réponds en JSON avec type "texte", contenu utile et concret basé sur les formations ci-dessus
 - Si la question est MOOD/personnelle (fatigue, doute, motivation) : réponds en JSON avec type "texte", chaleureux et empathique, sans psychanalyser
+- Si la question porte sur COMMENT UTILISER L'APPLICATION (naviguer, trouver une fonctionnalite, comprendre un outil) : reponds en JSON avec type "app", en te basant sur AIDE UTILISATION DE L'APPLICATION ci-dessus. Inclus le champ "onglet" avec l'identifiant exact de l'outil concerne (ex: "linkbio", "dreamboard") si un seul outil est clairement concerne, sinon omets ce champ
 - Réponds TOUJOURS en français, ton "cash mais élégant" (direct, bienveillant, jamais mièvre)
 - Réponds UNIQUEMENT avec le JSON, sans markdown ni commentaire
 
@@ -91,7 +108,10 @@ FORMAT JSON SI PRODUITS (type="produits") :
 {"type":"produits","analyse":"2-3 phrases analysant le besoin","packs":[{"nom":"Pack Essentiel","emoji":"💚","produits":[{"nom":"Nom exact du catalogue","prix":XX,"role":"pourquoi ce produit"}],"total":XX},{"nom":"Pack Recommandé","emoji":"⭐","produits":[...],"total":XX},{"nom":"Pack Premium","emoji":"👑","produits":[...],"total":XX}],"conseil":"conseil final"}
 
 FORMAT JSON SI TEXTE (type="texte", business ou mood) :
-{"type":"texte","reponse":"ta réponse complète et utile"}`;
+{"type":"texte","reponse":"ta réponse complète et utile"};
+
+FORMAT JSON SI AIDE APPLICATION (type="app") :
+{"type":"app","reponse":"explication claire et concrete des etapes a suivre","onglet":"identifiant_onglet_ou_omis"}`;
 
       const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
@@ -196,6 +216,36 @@ FORMAT JSON SI TEXTE (type="texte", business ou mood) :
             return(
               <div key={i} style={{display:"flex",marginBottom:".6rem"}}>
                 <div style={{background:C.creme,color:C.texte,borderRadius:"12px 12px 12px 2px",padding:".5rem .75rem",fontSize:".78rem",maxWidth:"85%",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.reponse}</div>
+              </div>
+            );
+          }
+          if(m.type==="app"){
+            return(
+              <div key={i} style={{display:"flex",marginBottom:".6rem"}}>
+                <div style={{background:C.creme,color:C.texte,borderRadius:"12px 12px 12px 2px",padding:".5rem .75rem",fontSize:".78rem",maxWidth:"85%",lineHeight:1.6}}>
+                  <div style={{whiteSpace:"pre-wrap",marginBottom:m.onglet?".5rem":0}}>{m.reponse}</div>
+                  {m.onglet&&(
+                    <button onClick={()=>goToTab(m.onglet)}
+                      style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".4rem .7rem",fontSize:".7rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                      Aller à cet outil →
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          }
+          if(m.type==="app"){
+            return(
+              <div key={i} style={{display:"flex",marginBottom:".6rem"}}>
+                <div style={{background:C.creme,color:C.texte,borderRadius:"12px 12px 12px 2px",padding:".5rem .75rem",fontSize:".78rem",maxWidth:"85%",lineHeight:1.6}}>
+                  <div style={{whiteSpace:"pre-wrap",marginBottom:m.onglet?".5rem":0}}>{m.reponse}</div>
+                  {m.onglet&&(
+                    <button onClick={()=>goToTab(m.onglet)}
+                      style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".4rem .7rem",fontSize:".7rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                      Aller à cet outil →
+                    </button>
+                  )}
+                </div>
               </div>
             );
           }

@@ -94,7 +94,7 @@ function LinkBioTab({uid, userName}){
     {id:"theme",icon:"🎨",label:"Thème"},
     {id:"profil",icon:"✨",label:"Profil"},
     {id:"liens",icon:"🔗",label:"Liens"},
-    {id:"photos",icon:"📸",label:"Photos"},{id:"parcours",icon:"🌟",label:"Mon Parcours"},{id:"reseaux",icon:"📱",label:"Reseaux"},{id:"stats",icon:"📊",label:"Stats"},
+    {id:"photos",icon:"💬",label:"Retours clients"},{id:"parcours",icon:"🌟",label:"Mon Parcours"},{id:"reseaux",icon:"📱",label:"Reseaux"},{id:"stats",icon:"📊",label:"Stats"},
     {id:"ebooks",icon:"📚",label:"Ebooks"},{id:"banniere",icon:"📢",label:"Bannière"},
   ];
 
@@ -244,8 +244,6 @@ function LinkBioTab({uid, userName}){
           <input value={profil.urgence||""} onChange={e=>setProfil(p=>({...p,urgence:e.target.value}))} placeholder="Ex: Offre limitée — seulement 5 places cette semaine"
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".6rem"}}/>
 
-          {/* Témoignages */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem"}}>
             
           {/* ── Choix des diagnostics ── */}
           <div style={{marginBottom:".75rem",padding:".75rem",background:C.creme,borderRadius:10,border:`1px solid ${C.pale}`}}>
@@ -272,23 +270,7 @@ function LinkBioTab({uid, userName}){
             })}
           </div>
 
-          <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Témoignages clientes</div>
-            <button onClick={()=>setProfil(p=>({...p,temoignages:[...(p.temoignages||[]),{texte:"",auteur:""}]}))}
-              style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
-          </div>
-          {(profil.temoignages||[]).map((t,i)=>(
-            <div key={i} style={{background:C.creme,borderRadius:9,padding:".55rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
-              <textarea value={t.texte} onChange={e=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],texte:e.target.value};setProfil(p=>({...p,temoignages:a}));}}
-                placeholder="Texte du témoignage" rows={2}
-                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",resize:"none",marginBottom:".3rem"}}/>
-              <div style={{display:"flex",gap:".3rem"}}>
-                <input value={t.auteur} onChange={e=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],auteur:e.target.value};setProfil(p=>({...p,temoignages:a}));}}
-                  placeholder="Prénom de la cliente" style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".28rem .5rem",fontSize:".7rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
-                <button onClick={()=>setProfil(p=>({...p,temoignages:(p.temoignages||[]).filter((_,j)=>j!==i)}))}
-                  style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem"}}>✕</button>
-              </div>
-            </div>
-          ))}
+
 
           <Preview/>
         </div>
@@ -358,29 +340,26 @@ function LinkBioTab({uid, userName}){
       {/* SECTION PHOTOS */}
       {activeSection==="photos"&&(
         <div>
-          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>Galerie photos</div>
-          <p style={{fontSize:".7rem",color:C.gris,lineHeight:1.6,marginBottom:".75rem"}}>
-            Ajoute des photos. Tu peux coller une URL ou utiliser les photos de ta galerie (partage → copier le lien).
-          </p>
-          {Array.from({length:5},(_,i)=>(
-            <div key={i} style={{display:"flex",gap:".5rem",alignItems:"center",marginBottom:".4rem"}}>
-              <div style={{width:52,height:52,borderRadius:8,background:C.creme,border:`1px solid ${C.pale}`,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}
-                onClick={()=>{
-                  // Ouvrir input file caché
-                  document.getElementById(`photo-input-${i}`)?.click();
-                }}>
-                {profil.photos?.[i]
-                  ?<img src={profil.photos[i]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                  :<div style={{textAlign:"center"}}><div style={{fontSize:"1.2rem"}}>📷</div><div style={{fontSize:".5rem",color:C.gris}}>Tap</div></div>
-                }
+          <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".4rem"}}>Retours clients</div>
+          <p style={{fontSize:".7rem",color:C.gris,lineHeight:1.6,marginBottom:".75rem"}}>Partage les avis et messages de tes clientes satisfaites pour rassurer tes visiteuses.</p>
+          <div style={{fontSize:".6rem",color:C.gris,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Témoignages clientes</div>
+            <button onClick={()=>setProfil(p=>({...p,temoignages:[...(p.temoignages||[]),{texte:"",auteur:""}]}))}
+              style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
+          {(profil.temoignages||[]).map((t,i)=>(
+            <div key={i} style={{background:C.creme,borderRadius:9,padding:".55rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
+              <UploadPhoto label="Capture d'écran (optionnel)" value={t.photo||""} onChange={v=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],photo:v};setProfil(p=>({...p,temoignages:a}));}}/>
+              <textarea value={t.texte} onChange={e=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],texte:e.target.value};setProfil(p=>({...p,temoignages:a}));}}
+                placeholder="Texte du témoignage" rows={2}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",resize:"none",marginBottom:".3rem"}}/>
+              <div style={{display:"flex",gap:".3rem"}}>
+                <input value={t.auteur} onChange={e=>{const a=[...(profil.temoignages||[])];a[i]={...a[i],auteur:e.target.value};setProfil(p=>({...p,temoignages:a}));}}
+                  placeholder="Prénom de la cliente" style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".28rem .5rem",fontSize:".7rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+                <button onClick={()=>setProfil(p=>({...p,temoignages:(p.temoignages||[]).filter((_,j)=>j!==i)}))}
+                  style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem"}}>✕</button>
               </div>
-              <input value={profil.photos?.[i]||""} onChange={e=>{const a=[...(profil.photos||["","","","",""])];a[i]=e.target.value;setProfil(p=>({...p,photos:a}));}}
-                placeholder={`URL photo ${i+1}`}
-                style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".38rem .55rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-              {profil.photos?.[i]&&<button onClick={()=>{const a=[...(profil.photos||[])];a[i]="";setProfil(p=>({...p,photos:a}));}} style={{background:"none",border:"none",color:C.gris,cursor:"pointer",flexShrink:0}}>✕</button>}
             </div>
           ))}
-          {(profil.photos||[]).some(p=>p)&&<Preview/>}
+          {(profil.temoignages||[]).some(t=>t.texte)&&<Preview/>}
         </div>
       )}
 

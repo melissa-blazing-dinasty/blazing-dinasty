@@ -2769,6 +2769,7 @@ function LinkBioPublicPage({slug}){
           <div style={{padding:".75rem 1rem",background:theme.bg}}>
             {profil.temoignages.filter(t=>t.texte).map((t,i)=>(
               <div key={i} style={{background:theme.accent+"15",borderRadius:10,padding:".65rem .85rem",marginBottom:".4rem",borderLeft:`3px solid ${theme.accent}`}}>
+                {t.photo&&<img src={t.photo} alt="" style={{width:"100%",borderRadius:8,marginBottom:".4rem",display:"block"}}/>}
                 <div style={{fontSize:".75rem",fontStyle:"italic",color:sub,lineHeight:1.6,marginBottom:".2rem"}}>"{t.texte}"</div>
                 {t.auteur&&<div style={{fontSize:".62rem",fontWeight:600,color:theme.accent}}>— {t.auteur}</div>}
               </div>
