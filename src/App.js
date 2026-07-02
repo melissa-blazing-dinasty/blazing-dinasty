@@ -7451,20 +7451,24 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
       <div id="decouverte-reste"><ResteCalculateur obj={obj} save={save} distributeurs={distributeurs}/></div>
 
       {/* 6. GRAPHIQUES CÔTE À CÔTE */}
-      {historique.length>=2&&(
-        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem",marginBottom:".75rem"}}>
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem",marginBottom:".75rem"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".6rem"}}>
             <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris}}>📈 Évolution</div>
             <button onClick={enregistrerPoint} style={{background:C.lilas,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".62rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Point</button>
           </div>
           <div style={{display:"flex",gap:".5rem"}}>
-            <MiniGraph data={historique} dataKey="ca" color={C.brun} label="💰 CA total" onClick={()=>setGraphEnGros("ca")}/>
+            {historique.length>=2?(<>
+              <MiniGraph data={historique} dataKey="ca" color={C.brun} label="💰 CA total" onClick={()=>setGraphEnGros("ca")}/>
             <MiniGraph data={historique} dataKey="caPerso" color={C.rose} label="🛍️ Ventes perso" onClick={()=>setGraphEnGros("caPerso")}/>
             <MiniGraph data={historique} dataKey="recruesReal" color={C.lilas} label="👥 Recrues" onClick={()=>setGraphEnGros("recruesReal")}/>
+            </>):(
+              <div style={{textAlign:"center",padding:"1rem .5rem",fontSize:".72rem",color:C.gris,lineHeight:1.6}}>
+                Reviens ici une fois que tu auras enregistre au moins 2 periodes pour voir tes graphiques d'evolution.
+              </div>
+            )}
           </div>
           <div style={{fontSize:".58rem",color:C.pale,textAlign:"center",marginTop:".4rem"}}>Clique sur un graphique pour l'agrandir</div>
         </div>
-      )}
 
       {/* 7. PRIMES DE QUALIFICATION */}
       <PrimesAccordeon obj={obj} save={save} onPrimeValidee={()=>setFireworksTrigger(t=>t+1)}/>

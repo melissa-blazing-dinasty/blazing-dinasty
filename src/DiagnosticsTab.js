@@ -1729,7 +1729,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     {id:"beaute",      label:"💆 Beauté & Soins",      color:C.rose},
     {id:"sante",       label:"💚 Santé & Bien-être",    color:C.vert},
     {id:"recrutement", label:"🚀 Recrutement",          color:C.or},
-    {id:"equipe",      label:"👑 Suivi Équipe",         color:C.brun},
+    {id:"equipe",      label:"👑 Je débloque mon activité",         color:C.brun},
   ];
 
   const[catDiag,setCatDiag]=useState("beaute");
@@ -1766,6 +1766,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       <p style={{ fontSize: ".72rem", color: C.gris, marginBottom: ".75rem", lineHeight: 1.65 }}>
         Envoie un lien diagnostic à une cliente ou prospect — elle répond, tu reçois ses résultats et une ordonnance personnalisée.
       </p>
+      <ScriptsDiagSection/>
 
       {/* Onglets de catégories */}
       <div id="decouverte-diag-cats" style={{ display:"flex", gap:".3rem", marginBottom:".75rem", overflowX:"auto", paddingBottom:".2rem" }}>
@@ -1811,8 +1812,6 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       ))}
       </div>
 
-      {/* Scripts pour proposer les diagnostics */}
-      <ScriptsDiagSection/>
     </div>
   );
   function copierLienDirect(diagType, labelCustom) {
