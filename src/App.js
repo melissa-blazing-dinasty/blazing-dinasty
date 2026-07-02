@@ -14,6 +14,7 @@ import { LinkBioTab } from './LinkBioTab';
 import { AdminLinkBioSection } from './EspaceChefTab';
 import { TunnelTab } from './TunnelTab';
 import { DreamBoardWidget, DreamBoardTab } from './DreamBoardTab';
+import { EbooksTab } from './EbooksTab';
 import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_PRODUITS } from './FormationProduitsTab';
 import { DashboardTab } from './DashboardTab';
 import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
@@ -1355,6 +1356,7 @@ function App(){
     {id:"banqueimages",label:"🖼️ Images"},
     {id:"diagnostics",label:"🩺 Diagnostics"},
     {id:"linkbio",label:"🔗 Link-in-Bio"},
+    {id:"ebooks",label:"📚 Ebooks"},
     ...(isChefApp||hasTeamApp?[{id:"espacechef",label:"👑 Espace Chef"}]:[]),
     {id:"dreamboard",label:"✨ Dream Board"},
   ];
@@ -2540,6 +2542,7 @@ function App(){
         {tab==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp}/>}
         {tab==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name}/>}
         {tab==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
+        {tab==="ebooks"&&<EbooksTab/>}
         {tab==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="espacechef"&&(isChefApp||hasTeamApp)&&<EspaceChefTab uid={userId} isChef={isChefApp}/>}
         {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab adminItems={adminItems}/>}
@@ -3656,6 +3659,22 @@ export const SCRIPTS_DATA=[
     {title:"Approche via curiosité (mystère)",text:"[Prénom], je t'envoie quelque chose demain que j'envoie seulement à quelques personnes dans mon entourage...\n\n[lendemain]\n\nVoilà ! C'est un diagnostic beauté personnalisé. Ça prend 2 min et tu repars avec une sélection de produits faite pour toi. Gratuit bien sûr 😊\n\nTu veux essayer ?"},
     {title:"Approche via résultat d'une cliente",text:"Je viens de recevoir un message d'une cliente qui a fait mon diagnostic la semaine dernière... Elle me dit que la routine que je lui ai recommandée a changé l'état de sa peau en 10 jours 🤍\n\nSi tu veux, je peux faire le tien aussi ? C'est gratuit et ça prend 2 minutes 😊"},
   ]},
+{cat:"🎁 Recommandation",scripts:[
+    {title:"Après une commande — demande de recommandation",text:"Merci encore pour ta commande [Prénom] ! 🥰\n\nSi jamais tu as autour de toi une amie qui pourrait aimer ces produits, n'hésite pas à lui parler de moi — je m'occupe d'elle avec le même soin que toi 💛\n\nEt en général, je fais un petit geste pour te remercier de la recommandation 😊"},
+    {title:"DM — Lancer le programme recommandation",text:"Coucou [Prénom] ! 👋\n\nTu sais que quand tu me recommandes une amie et qu'elle passe commande, tu peux avoir un petit cadeau ou une réduction ? 🎁\n\nSi tu as quelqu'un en tête qui pourrait aimer les produits, dis-le moi !"},
+    {title:"Story — Programme recommandation",text:"🎁 Le savais-tu ?\n\nQuand tu recommandes une amie et qu'elle commande, VOUS êtes gagnantes toutes les deux !\n\nElle découvre des produits qu'elle va adorer, et toi tu reçois un petit merci de ma part 💛\n\nÉcris-moi RECO en MP pour en savoir plus"},
+    {title:"Après un retour positif client",text:"Je suis trop contente que le produit te plaise autant [Prénom] ! 🥰\n\nSi tu as une copine qui pourrait en profiter aussi, je serais ravie de m'occuper d'elle. Et comme dit, je te remercie toujours pour les recommandations 🎁"},
+    {title:"Relance douce — programme recommandation",text:"Coucou [Prénom] ! Juste un petit rappel amical 😊\n\nSi jamais l'occasion se présente et que tu penses à quelqu'un qui pourrait aimer nos produits, n'oublie pas que je récompense toujours les recommandations !\n\nMerci d'avance si tu penses à moi 💛"},
+    {title:"Story — Preuve sociale recommandation",text:"[Prénom] m'a recommandé sa copine cette semaine et résultat : 2 clientes hyper contentes ET un petit cadeau pour la remercier 🎁\n\nSi toi aussi tu as quelqu'un en tête, dis-le moi en MP !"},
+    {title:"Explication du programme (message complet)",text:"Petite info que j'aime bien partager 😊\n\nQuand tu recommandes quelqu'un et que cette personne passe sa première commande grâce à toi, je te fais un petit geste de remerciement (cadeau ou réduction selon le montant).\n\nC'est ma façon de dire merci pour la confiance ! Si quelqu'un te vient en tête, envoie-moi juste son prénom et je m'en occupe avec plaisir 💛"},
+  ]},
+  {cat:"💎 Carte fidélité",scripts:[
+    {title:"Présentation carte fidélité après 1ère commande",text:"Merci pour ta première commande [Prénom] ! 🥰\n\nPetite info : j'ai une carte de fidélité pour mes clientes. À chaque commande, tu avances vers des petits cadeaux ou réductions 🎁\n\nJe te tiens au courant de ta progression, pas besoin de t'en occuper !"},
+    {title:"DM — Rappel carte fidélité",text:"Coucou [Prénom] ! 👋\n\nPetit rappel sympa : tu es à [X] commandes de ta prochaine récompense sur ta carte fidélité ! 🎉\n\nSi tu as besoin de quelque chose, n'hésite pas, ça te rapproche encore plus de ton cadeau 💛"},
+    {title:"Story — Carte fidélité (explication générale)",text:"💎 Mes clientes fidèles ont un avantage :\n\nÀ chaque commande, elles avancent sur leur carte fidélité et débloquent des cadeaux ou réductions exclusives.\n\nC'est ma façon de vous remercier pour votre confiance 🥰\n\nTu es déjà cliente ? Écris-moi pour connaître ta progression !"},
+    {title:"Carte fidélité complète — félicitations",text:"[Prénom] ! Tu as complété ta carte de fidélité ! 🎉🎉🎉\n\nTon cadeau t'attend — dis-moi comment tu veux le récupérer 🥰 Merci infiniment pour ta fidélité, ça me touche beaucoup !"},
+    {title:"Relance — encourager à continuer",text:"Coucou [Prénom] ! Juste pour te dire que tu es à mi-chemin sur ta carte fidélité 😊\n\nEncore quelques commandes et tu débloques ta récompense ! Si tu as besoin d'un produit en particulier, dis-moi 💛"},
+    {title:"Nouvelle cliente — présenter l'avantage",text:"Bienvenue [Prénom] ! 🥰\n\nAvant de commencer, sache que chez moi tu bénéficies d'une carte de fidélité : chaque commande te fait avancer vers des cadeaux et réductions.\n\nAucune démarche à faire, je m'occupe de tout suivre pour toi !"},    {title:"Story — Teasing récompense fidélité",text:"👀 Certaines de mes clientes ont déjà débloqué leur 2e cadeau gràce à leur carte fidélité...\n\nEt toi, tu en es où ? Ecris-moi FIDÉLITÉ en MP et je te dis ta progression !"},  ]},
   {cat:"💬 Premier contact",scripts:[
     {title:"Contact WhatsApp — Produits",text:"Coucou [Prénom] 😊 Je pensais à toi ! Je travaille avec une marque de beauté et bien-être qui m'a bluffée. Je me demandais si tu aurais 5 min pour jeter un œil ? Pas d'obligation, juste partager quelque chose qui m'a vraiment plu 🙏"},
     {title:"Contact WhatsApp — Opportunité",text:"Coucou [Prénom] ! J'espère que tu vas bien 🙂 Je développe quelque chose qui m'a permis de gagner un revenu complémentaire depuis chez moi. Ça m'a fait penser à toi — tu serais ouverte à en discuter 5 min ?"},
