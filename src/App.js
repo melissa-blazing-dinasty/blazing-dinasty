@@ -2871,6 +2871,14 @@ const DECOUVERTE = {
     {titre:"Etape 6 : coche quand c\u2019est fait", texte:"Une fois que tu as publie, reviens sur ce jour et coche A faire. Ca t\u2019aide a garder une vue claire de ce qui est deja publie.", icon:"\u2705"},
     {titre:"Bravo, tu es prete !", texte:"Tu ne seras plus jamais en panne d\u2019inspiration. Reviens chaque jour consulter ton planning !", icon:"\uD83C\uDF89"},
   ],
+  dreamboard: [
+    {titre:"Bienvenue !", texte:"Ton Dream Board, c'est ton tableau de visualisation. Ajoute des photos et des reves qui te motivent, et regarde-le chaque jour pour rester connectee a tes objectifs. On regarde ca ensemble !", icon:"\uD83C\uDF1F", cible:"decouverte-dream-add"},
+    {titre:"Etape 1 : ajoute un reve", texte:"Clique sur + Ajouter un reve. Tu peux uploader une photo d'inspiration, ou choisir un emoji si tu n'as pas de photo.", icon:"\u2795", cible:"decouverte-dream-add"},
+    {titre:"Etape 2 : donne-lui vie", texte:"Ecris un titre, une petite description si tu veux, et choisis une categorie (vie de reve, finances, famille, voyages...).", icon:"\u270F", cible:"decouverte-dream-add"},
+    {titre:"Etape 3 : ton tableau", texte:"Tous tes reves s'affichent en mosaique. Clique sur un reve pour l'agrandir, le modifier ou le marquer comme realise.", icon:"\uD83D\uDDBC", cible:"decouverte-dream-mosaique"},
+    {titre:"Etape 4 : celebre tes reussites", texte:"Quand un reve devient realite, marque-le comme Realise. Il rejoint une section speciale pour celebrer tout ce que tu as accompli.", icon:"\u2705", cible:"decouverte-dream-mosaique"},
+    {titre:"Bravo, tu es prete !", texte:"Reviens ici chaque matin, regarde ton board, et laisse-le te rappeler pourquoi tu te leves chaque jour !", icon:"\uD83C\uDF89", cible:"decouverte-dream-add"},
+  ],
   espacechef: [
     {titre:"Bienvenue !", texte:"L\u2019Espace Chef regroupe tous tes outils d\u2019animation d\u2019equipe : statistiques, suivi CA, gestion des acces, defis collectifs... On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-chef-stats"},
     {titre:"Etape 1 : Statistiques equipe", texte:"Ici tu retrouves le taux d\u2019utilisation de l\u2019app, la conversion, et les diagnostics realises. Des chiffres utiles pour recruter et motiver ton equipe.", icon:"\uD83D\uDCCA", cible:"decouverte-chef-stats"},

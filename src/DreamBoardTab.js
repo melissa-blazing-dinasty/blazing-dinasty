@@ -4,6 +4,7 @@ import { db } from './firebase';
 import { C } from './constants';
 import { UploadPhoto } from './FormationProduitsTab';
 import { todayLocalStr } from './utils';
+import { DecouverteTour } from './App';
 
 function DreamBoardWidget({uid}){
   const[dreams,setDreams]=useState([]);
@@ -66,6 +67,7 @@ function DreamBoardTab({uid}){
   const[saving,setSaving]=useState(false);
   const[zoom,setZoom]=useState(null); // reve zoomé en plein écran
   const[vue,setVue]=useState("mosaique"); // mosaique | liste
+  const[showDecouverte,setShowDecouverte]=useState(false);
 
   const CATEGORIES=[
     {id:"vie",label:"✨ Vie de rêve",color:C.or},
@@ -146,6 +148,8 @@ function DreamBoardTab({uid}){
 
   return(
     <div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      {showDecouverte&&<DecouverteTour outil="dreamboard" onClose={()=>setShowDecouverte(false)}/>}
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
         Mon <em style={{fontStyle:"italic",color:C.or}}>Dream Board</em>
       </div>
@@ -155,7 +159,7 @@ function DreamBoardTab({uid}){
 
       {/* Barre d'actions */}
       <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
-        <button onClick={()=>{setShowForm(true);setEditIdx(null);setForm({titre:"",description:"",emoji:"🌟",image:"",categorie:"vie"});}}
+        <button id="decouverte-dream-add" onClick={()=>{setShowForm(true);setEditIdx(null);setForm({titre:"",description:"",emoji:"🌟",image:"",categorie:"vie"});}}
           style={{flex:1,background:`linear-gradient(135deg,${C.brun},${C.brun2})`,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
           + Ajouter un rêve
         </button>
@@ -242,7 +246,7 @@ function DreamBoardTab({uid}){
 
       {/* VUE MOSAÏQUE */}
       {vue==="mosaique"&&dreams.length>0&&(
-        <div>
+        <div id="decouverte-dream-mosaique">
           {/* Rêves réalisés séparés */}
           {dreams.filter(d=>!d.realise).length>0&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",marginBottom:"1rem"}}>
