@@ -62,6 +62,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   const[clients,setClients]=useState([]);
   const[distributeurs,setDistributeurs]=useState([]);
   const[objPerso,setObjPerso]=useState({ca:"",caObj:"",palier:"2%",recruesObj:"0"});
+  const[showCaReminder,setShowCaReminder]=useState(false);
   const[isChefDash,setIsChefDash]=useState(false);
   const[loaded,setLoaded]=useState(false);
   const[totalRecrues,setTotalRecrues]=useState(0);
@@ -145,6 +146,17 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
         ss(uid,"db-last-login",today);
       }
       setStreak(newStreak);
+
+      // Rappel CA si actif depuis 3+ jours et CA de la periode vide
+      try{
+        const objRaw2=data["db-obj-perso"];
+        const objP=objRaw2?JSON.parse(objRaw2):{};
+        const lastCaReminder=data["db-last-ca-reminder"];
+        const joursDepuisReminder=lastCaReminder?Math.floor((Date.now()-new Date(lastCaReminder).getTime())/(1000*60*60*24)):999;
+        if(newStreak>=3&&!objP.ca&&joursDepuisReminder>=3){
+          setTimeout(()=>setShowCaReminder(true),4000);
+        }
+      }catch{}
 
       setLoaded(true);
     });
@@ -322,6 +334,28 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   return(
     <div>
       <SecTitle title="Tableau" em="de bord" desc="Tes actions quotidiennes · Tes prospects · Tes publications · Tes stats."/>
+      {showCaReminder&&(
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}>
+          <div style={{background:"white",borderRadius:20,maxWidth:380,width:"100%",overflow:"hidden"}}>
+            <div style={{background:"#C49A8A",padding:"1.5rem 1.3rem",textAlign:"center"}}>
+              <div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>é</div>
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",color:"white",fontWeight:300}}>N'oublie pas ton CA !</div>
+              <div style={{fontSize:".75rem",color:"#F5E6DC",marginTop:".25rem"}}>Tu es active depuis plusieurs jours, pense à remplir ton chiffre d'affaires.</div>
+            </div>
+            <div style={{padding:"1.25rem 1.3rem"}}>
+              <div style={{background:"#FAF3EE",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",fontSize:".78rem",color:"#3D2B1F",lineHeight:1.7}}>
+                Remplir ton CA réguliérement permet à ta marraine de suivre ta progression et de mieux t'accompagner.
+              </div>
+              <button onClick={async()=>{setShowCaReminder(false);try{await setDoc(doc(db,"users",uid),{"db-last-ca-reminder":new Date().toISOString()},{merge:true});}catch{}setDtab("objperso");}} style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+                Remplir mon CA maintenant
+              </button>
+              <button onClick={async()=>{setShowCaReminder(false);try{await setDoc(doc(db,"users",uid),{"db-last-ca-reminder":new Date().toISOString()},{merge:true});}catch{}}} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",fontFamily:"inherit",cursor:"pointer",padding:".4rem"}}>
+                Me le rappeler plus tard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sub-nav */}
       <div style={{display:"flex",gap:".3rem",marginBottom:"1rem",overflowX:"auto",paddingBottom:".3rem"}}>

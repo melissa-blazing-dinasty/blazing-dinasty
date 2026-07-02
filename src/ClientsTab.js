@@ -1172,6 +1172,7 @@ function DistributeursTab({distributeurs,save,uid}){
   const[annuaire,setAnnuaire]=useState({});
   const[loaded,setLoaded]=useState(false);
   const[path,setPath]=useState([]);
+  const[expandedFiche,setExpandedFiche]=useState({});
 
   useEffect(()=>{
     (async()=>{
@@ -1483,8 +1484,8 @@ function DistributeursTab({distributeurs,save,uid}){
                 {d.auto&&dUid&&(
                   <MembreStatsCard
                     m={{...d, uid:dUid, historique:d.historique||[]}}
-                    expanded={false}
-                    onToggleExpand={()=>{}}
+                    expanded={!!expandedFiche[d.id]}
+                    onToggleExpand={()=>setExpandedFiche(p=>({...p,[d.id]:!p[d.id]}))}
                   />
                 )}
 

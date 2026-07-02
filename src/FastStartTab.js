@@ -52,11 +52,15 @@ export function FastStartTab({uid, userName, goToFormation}){
   useEffect(()=>{
     (async()=>{
       const data = await sg(uid,"db-fast-start");
-      if(data){
-        const parsed = JSON.parse(data);
-        setStartDate(parsed.startDate);
-        setDoneTasks(parsed.doneTasks||{});
-        setModulesValides(parsed.modulesValides||{});
+      try{
+        if(data){
+          const parsed = JSON.parse(data);
+          setStartDate(parsed.startDate);
+          setDoneTasks(parsed.doneTasks||{});
+          setModulesValides(parsed.modulesValides||{});
+        }
+      }catch(e){
+        console.error("Erreur lecture db-fast-start:",e);
       }
       // Charger la marraine depuis l'annuaire
       try{
