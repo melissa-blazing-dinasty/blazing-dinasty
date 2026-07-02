@@ -6259,7 +6259,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       deadline:form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null,
       objectif:form.type==="action"?0:(+form.objectif||0),unite:form.type==="action"?"actions":form.unite,
       cadeau:form.cadeau.trim(),cadeauImage:form.cadeauImage.trim(),
-      actions:form.type==="action"?form.actionsListe.filter(a=>a.trim()).map((label,i)=>({id:"a"+i,label:label.trim()})):undefined,
+      actions:form.type==="action"?form.actionsListe.filter(a=>a.trim()).map((label,i)=>({id:"a"+i,label:label.trim()})):[],
       global:form.global,equipesCibles:form.global?[]:form.equipesCibles,
       createdBy:userName,ts:Date.now(),
     };

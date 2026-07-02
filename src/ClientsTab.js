@@ -696,7 +696,7 @@ function RelancesTab({prospects,clients,saveProspects,saveClients}){
   const msgE=(c)=>"Coucou "+c.prenom+" ! Ca fait un moment qu'on ne s'est pas parlees. J'ai pense a toi avec nos nouvelles references. Tu veux qu'on fasse le point sur ta routine ?";
   const marquerFait=(p)=>saveProspects(prospects.map(x=>x.id===p.id?{...x,relance:"",journal:[...(x.journal||[]),{date:todayFr,msg:"Relance effectuee"}]}:x));
   const pasInteresse=(p)=>saveProspects(prospects.map(x=>x.id===p.id?{...x,statut:"Archive",relance:"",journal:[...(x.journal||[]),{date:todayFr,msg:"Pas interesse"}]}:x));
-  const progRelance=(p,j)=>{const d=new Date();d.setDate(d.getDate()+j);saveProspects(prospects.map(x=>x.id===p.id?{...x,relance:d.toISOString().slice(0,10)}:x));};
+  const progRelance=(p,j)=>{const d=new Date();d.setDate(d.getDate()+j);const ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");saveProspects(prospects.map(x=>x.id===p.id?{...x,relance:ds}:x));};
   return(
     <div style={{paddingBottom:"2rem"}}>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>Relances <em style={{fontStyle:"italic",color:C.rose}}>du jour</em></div>
