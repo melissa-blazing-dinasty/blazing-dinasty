@@ -39,6 +39,7 @@ const auth = getAuth(fbApp);
 export const fbFunctions = getFunctions(fbApp,'us-central1');
 const authentifierFn = httpsCallable(fbFunctions,'authentifier');
 const definirMotDePasseFn = httpsCallable(fbFunctions,'definirMotDePasse');
+const reinitialiserMotDePasseFn = httpsCallable(fbFunctions,'reinitialiserMotDePasse');
 
 async function saveFCMToken(uid) {
   if (!messaging) return;
@@ -828,6 +829,18 @@ function App(){
   const[showWelcome,setShowWelcome]=useState(false);
   const[showNewChallenge,setShowNewChallenge]=useState(false);
   const[newChallengeData,setNewChallengeData]=useState(null);
+  const[showForgotPwd,setShowForgotPwd]=useState(false);
+  const[forgotMdp1,setForgotMdp1]=useState("");
+  const[forgotMdp2,setForgotMdp2]=useState("");
+  const[forgotLoading,setForgotLoading]=useState(false);
+  const[forgotError,setForgotError]=useState("");
+  const[showMonCompte,setShowMonCompte]=useState(false);
+  const[compteMdpAncien,setCompteMdpAncien]=useState("");
+  const[compteMdp1,setCompteMdp1]=useState("");
+  const[compteMdp2,setCompteMdp2]=useState("");
+  const[compteLoading,setCompteLoading]=useState(false);
+  const[compteError,setCompteError]=useState("");
+  const[compteSuccess,setCompteSuccess]=useState(false);
   const[showBackupReminder,setShowBackupReminder]=useState(false);
   const[showMdpSetup,setShowMdpSetup]=useState(false);
   const[newMdp,setNewMdp]=useState("");
@@ -901,6 +914,37 @@ function App(){
       sg(pendingUid,"db-obj-perso").then(data=>{syncAnnuaire(pendingUid,pendingName,data?JSON.parse(data):null);});
     }catch{setLoginError("Erreur. Reessaie.");}
     setLoginLoading(false);
+  };
+
+  const reinitialiserMdp=async()=>{
+    if(!forgotMdp1.trim()||forgotMdp1!==forgotMdp2){setForgotError("Les codes ne correspondent pas.");return;}
+    if(forgotMdp1.trim().length<4){setForgotError("Le code doit faire au moins 4 caracteres.");return;}
+    setForgotLoading(true);setForgotError("");
+    try{
+      const result=await reinitialiserMotDePasseFn({prenom:pendingName.split(" ")[0],nom:pendingName.split(" ").slice(1).join(" "),codeSecret:SECRET_CODE,nouveauMotDePasse:forgotMdp1.trim()});
+      const data=result.data;
+      if(data.status==="ok"){
+        try{ await signInWithCustomToken(auth,data.token); }catch(e){ console.error("SIGNIN ERROR",e.code,e.message); }
+        try{localStorage.setItem("bd-user",JSON.stringify({uid:data.uid,n:data.displayName,codeOk:true}));}catch{}
+        setShowForgotPwd(false);setForgotMdp1("");setForgotMdp2("");
+        setUserId(data.uid);setName(data.displayName);setScreen("app");load(data.uid);verifierChangementPeriode(data.uid);
+        saveFCMToken(data.uid);
+      }
+    }catch(e){setForgotError(e.message&&e.message.includes("reconnu")?"Prenom/Nom non reconnu.":"Erreur, reessaie.");}
+    setForgotLoading(false);
+  };
+
+  const changerMdpCompte=async()=>{
+    if(!compteMdp1.trim()||compteMdp1!==compteMdp2){setCompteError("Les codes ne correspondent pas.");return;}
+    if(compteMdp1.trim().length<4){setCompteError("Le code doit faire au moins 4 caracteres.");return;}
+    setCompteLoading(true);setCompteError("");
+    try{
+      await definirMotDePasseFn({motDePasse:compteMdp1.trim()});
+      setCompteSuccess(true);
+      setCompteMdpAncien("");setCompteMdp1("");setCompteMdp2("");
+      setTimeout(()=>{setCompteSuccess(false);setShowMonCompte(false);},2000);
+    }catch(e){setCompteError("Erreur, reessaie.");}
+    setCompteLoading(false);
   };
 
   const SECRET_CODE="BD-2026-FIRE";
@@ -1414,6 +1458,30 @@ function App(){
             style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
             {loginLoading?"Verification...":"Acceder →"}
           </button>
+          {!showForgotPwd&&(
+            <button onClick={()=>{setShowForgotPwd(true);setForgotError("");}}
+              style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit",marginTop:".6rem"}}>
+              Mot de passe oublie ?
+            </button>
+          )}
+          {showForgotPwd&&(
+            <div style={{marginTop:"1rem",padding:"1rem",background:"#FAF6F2",borderRadius:12,border:"1px solid #E8DDD4"}}>
+              <div style={{fontSize:".78rem",color:"#3D1F0E",fontWeight:600,marginBottom:".6rem",textAlign:"center"}}>Cree un nouveau code personnel</div>
+              <input type="password" placeholder="Nouveau code personnel" value={forgotMdp1} onChange={e=>setForgotMdp1(e.target.value)}
+                style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".55rem .8rem",fontSize:".82rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+              <input type="password" placeholder="Confirme le code" value={forgotMdp2} onChange={e=>setForgotMdp2(e.target.value)}
+                style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".55rem .8rem",fontSize:".82rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+              {forgotError&&<div style={{color:"#C44B1A",fontSize:".72rem",marginBottom:".5rem",textAlign:"center"}}>{forgotError}</div>}
+              <button onClick={reinitialiserMdp} disabled={!forgotMdp1.trim()||forgotLoading}
+                style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".6rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".4rem"}}>
+                {forgotLoading?"Enregistrement...":"Enregistrer et me connecter"}
+              </button>
+              <button onClick={()=>{setShowForgotPwd(false);setForgotMdp1("");setForgotMdp2("");setForgotError("");}}
+                style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".7rem",cursor:"pointer",fontFamily:"inherit"}}>
+                Annuler
+              </button>
+            </div>
+          )}
         </>}
 
       </div>
@@ -1446,7 +1514,29 @@ function App(){
 
       {showWelcome&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:20,maxWidth:420,width:"100%",overflow:"hidden"}}><div style={{background:"#3D1F0E",padding:"1.5rem 1.3rem",textAlign:"center"}}><div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>👑</div><div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",color:"white",fontWeight:300}}>Bienvenue {name&&name.split(" ")[0]} !</div><div style={{fontSize:".78rem",color:"#C49A8A",marginTop:".25rem"}}>Tu fais maintenant partie de Blazing Dynasty ✨</div></div><div style={{padding:"1.25rem 1.3rem"}}><div style={{background:"#FAF7F2",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",fontSize:".78rem",color:"#3D2B1F",lineHeight:1.7}}>🌸 Nous sommes tellement heureuses de t'accueillir dans notre équipe. Tu as fait le bon choix — maintenant on est là pour t'accompagner à chaque étape. Let's go ! 🔥</div><div style={{fontSize:".6rem",fontWeight:700,color:"#888",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>✦ TES ACCÈS DU MOMENT</div>{[{icon:"🚀",titre:"Fast Start",desc:"7 modules progressifs pour bien démarrer — commence par là !"},{icon:"📱",titre:"Formation Application",desc:"Apprends à utiliser l'appli pour te faciliter la vie"}].map((item,i)=>(<div key={i} onClick={()=>{setShowWelcome(false);setTab("formation");}} style={{display:"flex",alignItems:"center",gap:".75rem",background:"#3D1F0E",borderRadius:10,padding:".7rem .85rem",marginBottom:".4rem",cursor:"pointer"}}><span style={{fontSize:"1.3rem"}}>{item.icon}</span><div style={{flex:1}}><div style={{fontSize:".82rem",fontWeight:700,color:"white"}}>{item.titre}</div><div style={{fontSize:".68rem",color:"#C49A8A"}}>{item.desc}</div></div><span style={{color:"#C49A8A"}}>→</span></div>))}<button onClick={()=>setShowWelcome(false)} style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:".75rem"}}>Commencer mon aventure → 🚀</button></div></div></div>)}
 
-      {showMdpSetup&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem",textAlign:"center"}}>🔐 Crée ton code personnel</div><div style={{fontSize:".75rem",color:"#888",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>Pour sécuriser ton espace, choisis un code personnel que tu saisiras à chaque connexion.</div><input type="password" placeholder="Ton code personnel" value={newMdp} onChange={e=>setNewMdp(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/><input type="password" placeholder="Confirme ton code" value={newMdp2} onChange={e=>setNewMdp2(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>{newMdp&&newMdp!==newMdp2&&<div style={{fontSize:".7rem",color:"#C44B1A",marginBottom:".5rem"}}>Les codes ne correspondent pas</div>}<button onClick={async()=>{if(!newMdp.trim()||newMdp!==newMdp2)return;try{await setDoc(doc(db,"users",userId),{"db-mdp":newMdp.trim()},{merge:true});setShowMdpSetup(false);setNewMdp("");setNewMdp2("");}catch{}}} disabled={!newMdp.trim()||newMdp!==newMdp2} style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>Enregistrer mon code</button><button onClick={()=>setShowMdpSetup(false)} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>Plus tard</button></div></div>)}
+      {showMdpSetup&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem",textAlign:"center"}}>🔐 Crée ton code personnel</div><div style={{fontSize:".75rem",color:"#888",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>Pour sécuriser ton espace, choisis un code personnel que tu saisiras à chaque connexion.</div><input type="password" placeholder="Ton code personnel" value={newMdp} onChange={e=>setNewMdp(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/><input type="password" placeholder="Confirme ton code" value={newMdp2} onChange={e=>setNewMdp2(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>{newMdp&&newMdp!==newMdp2&&<div style={{fontSize:".7rem",color:"#C44B1A",marginBottom:".5rem"}}>Les codes ne correspondent pas</div>}<button onClick={async()=>{if(!newMdp.trim()||newMdp!==newMdp2)return;try{await definirMotDePasseFn({motDePasse:newMdp.trim()});setShowMdpSetup(false);setNewMdp("");setNewMdp2("");}catch{}}} disabled={!newMdp.trim()||newMdp!==newMdp2} style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>Enregistrer mon code</button><button onClick={()=>setShowMdpSetup(false)} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>Plus tard</button></div></div>)}
+      {showMonCompte&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem",textAlign:"center"}}>🔐 Mon compte</div>
+        <div style={{fontSize:".75rem",color:"#888",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>Change ton code personnel de connexion.</div>
+        {compteSuccess?(
+          <div style={{textAlign:"center",padding:"1rem",color:"#5A8A5A",fontSize:".85rem",fontWeight:600}}>✅ Code modifie avec succes !</div>
+        ):(<>
+          <input type="password" placeholder="Nouveau code personnel" value={compteMdp1} onChange={e=>setCompteMdp1(e.target.value)}
+            style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+          <input type="password" placeholder="Confirme le nouveau code" value={compteMdp2} onChange={e=>setCompteMdp2(e.target.value)}
+            style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>
+          {compteMdp1&&compteMdp2&&compteMdp1!==compteMdp2&&<div style={{fontSize:".7rem",color:"#C44B1A",marginBottom:".5rem"}}>Les codes ne correspondent pas</div>}
+          {compteError&&<div style={{fontSize:".7rem",color:"#C44B1A",marginBottom:".5rem"}}>{compteError}</div>}
+          <button onClick={changerMdpCompte} disabled={!compteMdp1.trim()||compteMdp1!==compteMdp2||compteLoading}
+            style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+            {compteLoading?"Enregistrement...":"Enregistrer mon nouveau code"}
+          </button>
+          <button onClick={()=>{setShowMonCompte(false);setCompteMdp1("");setCompteMdp2("");setCompteError("");}}
+            style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>
+            Annuler
+          </button>
+        </>)}
+      </div></div>)}
       {/* BANNIÈRE NOUVELLE PÉRIODE */}
       {showPeriodeBanner&&(
         <div style={{background:"linear-gradient(135deg,#C44B1A,#8B3010)",padding:".85rem 1rem",display:"flex",gap:".75rem",alignItems:"flex-start",position:"sticky",top:0,zIndex:150}}>
@@ -1511,6 +1601,7 @@ function App(){
                 <span style={{fontSize:".6rem",color:C.vert,fontWeight:600}}>Journée complète !</span>
               </div>
             )}
+            <button onClick={()=>{setShowMonCompte(true);setCompteError("");setCompteSuccess(false);}} style={{padding:".25rem .5rem",fontSize:".7rem",color:C.gris,border:`1px solid rgba(196,168,130,.2)`,borderRadius:20,background:"none",cursor:"pointer",fontFamily:"inherit"}}>🔐</button>
             <button onClick={()=>{try{localStorage.removeItem("bd-user");}catch{}setScreen("login");}} style={{padding:".25rem .6rem",fontSize:".6rem",color:C.gris,border:`1px solid rgba(196,168,130,.2)`,borderRadius:20,background:"none",cursor:"pointer",fontFamily:"inherit"}}>↩</button>
           </div>
         </div>

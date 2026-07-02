@@ -203,3 +203,26 @@ exports.definirMotDePasse = onCall(async (request) => {
   await db.collection("secrets").doc(auth.uid).set({"db-mdp": motDePasse}, {merge: true});
   return {status: "ok"};
 });
+exports.reinitialiserMotDePasse = onCall(async (request) => {
+  const {prenom, nom, codeSecret, nouveauMotDePasse} = request.data || {};
+  if (!prenom || !nom || !nouveauMotDePasse) throw new HttpsError("invalid-argument", "Donnees manquantes");
+  if (nouveauMotDePasse.length < 4) throw new HttpsError("invalid-argument", "Mot de passe trop court");
+  const SECRET_CODE = "BD-2026-FIRE";
+  if ((codeSecret || "").trim().toUpperCase() !== SECRET_CODE) {
+    throw new HttpsError("permission-denied", "Code d'acces incorrect");
+  }
+  const fullName = (prenom.trim().toLowerCase() + " " + nom.trim().toLowerCase());
+  const uid = fullName.replace(/\s+/g, "-");
+  const isMelissa = fullName === "melissa da silveira";
+  if (!isMelissa) {
+    const accRef = db.collection("acces").doc("membres");
+    const accSnap = await accRef.get();
+    const accData = accSnap.exists ? accSnap.data() : {};
+    const membres = accData.liste || [];
+    const autorise = membres.some((m) => m.toLowerCase() === fullName);
+    if (!autorise) throw new HttpsError("permission-denied", "Prenom/Nom non reconnu");
+  }
+  await db.collection("secrets").doc(uid).set({"db-mdp": nouveauMotDePasse}, {merge: true});
+  const token = await admin.auth().createCustomToken(uid);
+  return {status: "ok", token: token, uid: uid, displayName: prenom.trim() + " " + nom.trim()};
+});
