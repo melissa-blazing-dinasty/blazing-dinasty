@@ -10,7 +10,7 @@ export async function saveFCMToken(uid) {
     const token = await getToken(messaging, {
       vapidKey: 'BFI7Uodh64p0EnejAc9xQ6y0hOS0w4CVA2QO-3mCxFmcm13orUtX7mYDwSRuaS8iDs8ovcClbKj2j2JzMi47sRE'
     });
-    if (token) await setDoc(doc(db, 'fcm_tokens', uid), { token, uid, updatedAt: Date.now() });
+    if (token) await setDoc(doc(db, 'fcm_tokens', uid), { web: token });
   } catch {}
 }
 
