@@ -21,6 +21,7 @@ function CommunauteTab({uid, userName, isChef}){
   const[newPhoto,setNewPhoto]=useState("");
   const[bulleOuverte,setBulleOuverte]=useState(null);
   const[challengeATraiter,setChallengeATraiter]=useState(false);
+  const[nouvelleInfo,setNouvelleInfo]=useState(false);
   useEffect(()=>{
     (async()=>{
       try{
@@ -41,7 +42,7 @@ function CommunauteTab({uid, userName, isChef}){
   },[uid]);
   const[commentInputs,setCommentInputs]=useState({});
   const[openComments,setOpenComments]=useState({});
-  const isMelissa=userName.toLowerCase().replace(/\s+/g,"-")===MELISSA||userName.toLowerCase()===MELISSA;
+  const isMelissa=uid==="melissa"||uid==="melissa-da-silveira";
 
   const loadPosts=async()=>{
     try{
@@ -58,7 +59,14 @@ function CommunauteTab({uid, userName, isChef}){
       const snap2=await getDoc(ref2);
       if(snap2.exists()){
         const data2=snap2.data();
-        setInfos(Object.values(data2).sort((a,b)=>b.ts-a.ts));
+        const infosArr=Object.values(data2).sort((a,b)=>b.ts-a.ts);
+        setInfos(infosArr);
+        try{
+          const uSnap=await getDoc(doc(db,"users",uid));
+          const lastVu=uSnap.exists()?(uSnap.data()["db-last-infos-vu"]||0):0;
+          const plusRecente=infosArr.length>0?Math.max(...infosArr.map(i=>i.ts||0)):0;
+          setNouvelleInfo(plusRecente>lastVu);
+        }catch{}
       }
     }catch{}
     setLoading(false);
@@ -318,8 +326,11 @@ function CommunauteTab({uid, userName, isChef}){
       {/* Filtres */}
       <div style={{display:"flex",gap:".3rem",overflowX:"auto",marginBottom:"1rem",paddingBottom:".3rem"}}>
         {CTABS.map(t=>(
-          <button key={t.id} onClick={()=>setCtab(t.id)}
-            style={{flex:"none",padding:".38rem .75rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1px solid ${ctab===t.id?C.rose:C.pale}`,background:ctab===t.id?C.rose:C.blanc,color:ctab===t.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",transition:"all .2s",whiteSpace:"nowrap"}}>
+          <button key={t.id} onClick={async()=>{setCtab(t.id);if(t.id==="infos"&&nouvelleInfo){setNouvelleInfo(false);try{await setDoc(doc(db,"users",uid),{"db-last-infos-vu":Date.now()},{merge:true});}catch{}}}}
+            style={{flex:"none",padding:".38rem .75rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1px solid ${ctab===t.id?C.rose:C.pale}`,background:ctab===t.id?C.rose:C.blanc,color:ctab===t.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",transition:"all .2s",whiteSpace:"nowrap",position:"relative"}}>
+            {t.id==="infos"&&nouvelleInfo&&(
+              <span style={{position:"absolute",top:-3,right:-3,width:11,height:11,borderRadius:"50%",background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)"}}/>
+            )}
             {t.label}
           </button>
         ))}

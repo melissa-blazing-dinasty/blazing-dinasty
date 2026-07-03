@@ -2910,6 +2910,8 @@ const DECOUVERTE = {
     {titre:"\u00c9tape 1 : ton th\u00e8me", texte:"Choisis la couleur qui te pla\u00eet le plus en cliquant dessus. Tu peux en changer plus tard si tu changes d\u2019avis !", icon:"\uD83C\uDFA8", section:"theme"},
     {titre:"\u00c9tape 2 : ton profil", texte:"Ajoute ta photo, ton pr\u00e9nom, et une petite phrase qui te repr\u00e9sente (ton slogan). Remplis les champs maintenant.", icon:"\u2728", section:"profil"},
     {titre:"\u00c9tape 3 : tes liens", texte:"Colle ici le lien vers ta boutique et vers ton recrutement. Ce sont les 2 gros boutons que verront tes visiteurs.", icon:"\uD83D\uDD17", section:"liens"},
+    {titre:"\u00c9tape bonus : ton contact direct", texte:"Dans Mon compte (l\u2019ic\u00f4ne cadenas en haut de l\u2019application), tu peux ajouter ton num\u00e9ro WhatsApp, ton Messenger et ton Instagram. Ainsi, apr\u00e8s un diagnostic ou un tunnel de vente, tes prospects pourront te contacter en 1 clic !", icon:"\uD83D\uDCAC", section:null},
+    
     {titre:"\u00c9tape 4 : tes photos", texte:"Ajoute jusqu\u2019\u00e0 5 photos de toi ou de tes moments Mihi. Clique sur chaque case pour choisir une photo.", icon:"\uD83D\uDCF8", section:"photos"},
     {titre:"\u00c9tape 5 : Mon Parcours", texte:"C\u2019est LA section la plus importante ! Ajoute des photos, raconte ton histoire en 3 petits paragraphes, et montre jusqu\u2019\u00e0 10 produits que tu utilises toi-m\u00eame au quotidien.", icon:"\uD83C\uDF1F", section:"parcours"},
     {titre:"\u00c9tape 6 : tes r\u00e9seaux", texte:"Colle les liens de tes comptes Facebook, Instagram, TikTok, YouTube. Ils appara\u00eetront en bas de ta page.", icon:"\uD83D\uDCF1", section:"reseaux"},
