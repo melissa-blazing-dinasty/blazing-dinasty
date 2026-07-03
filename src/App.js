@@ -836,6 +836,10 @@ function App(){
   const[forgotLoading,setForgotLoading]=useState(false);
   const[forgotError,setForgotError]=useState("");
   const[showMonCompte,setShowMonCompte]=useState(false);
+  const[contactWhatsapp,setContactWhatsapp]=useState("");
+  const[contactMessenger,setContactMessenger]=useState("");
+  const[contactInstagram,setContactInstagram]=useState("");
+  const[contactSaved,setContactSaved]=useState(false);
   const[compteMdpAncien,setCompteMdpAncien]=useState("");
   const[compteMdp1,setCompteMdp1]=useState("");
   const[compteMdp2,setCompteMdp2]=useState("");
@@ -935,6 +939,15 @@ function App(){
     setForgotLoading(false);
   };
 
+  const sauverContacts=async()=>{
+    try{
+      await ss(userId,"db-contact-whatsapp",contactWhatsapp.trim());
+      await ss(userId,"db-contact-messenger",contactMessenger.trim());
+      await ss(userId,"db-contact-instagram",contactInstagram.trim());
+      setContactSaved(true);
+      setTimeout(()=>setContactSaved(false),2000);
+    }catch{}
+  };
   const changerMdpCompte=async()=>{
     if(!compteMdp1.trim()||compteMdp1!==compteMdp2){setCompteError("Les codes ne correspondent pas.");return;}
     if(compteMdp1.trim().length<4){setCompteError("Le code doit faire au moins 4 caracteres.");return;}
@@ -1534,7 +1547,22 @@ function App(){
             style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
             {compteLoading?"Enregistrement...":"Enregistrer mon nouveau code"}
           </button>
-          <button onClick={()=>{setShowMonCompte(false);setCompteMdp1("");setCompteMdp2("");setCompteError("");}}
+          <div style={{borderTop:"1px solid #E8DDD4",margin:"1rem 0",paddingTop:"1rem"}}>
+          <div style={{fontSize:".75rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem"}}>💬 Mes liens de contact</div>
+          <div style={{fontSize:".68rem",color:"#888",marginBottom:".6rem",lineHeight:1.5}}>Pour que tes prospects puissent te contacter en 1 clic apres un diagnostic ou tunnel.</div>
+          <input placeholder="Numero WhatsApp (ex: 33612345678)" value={contactWhatsapp} onChange={e=>setContactWhatsapp(e.target.value)}
+            style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".55rem .8rem",fontSize:".78rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+          <input placeholder="Ton nom d'utilisateur Facebook (pas le lien)" value={contactMessenger} onChange={e=>setContactMessenger(e.target.value)}
+            style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".55rem .8rem",fontSize:".78rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+          <input placeholder="Pseudo Instagram (sans le @)" value={contactInstagram} onChange={e=>setContactInstagram(e.target.value)}
+            style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".55rem .8rem",fontSize:".78rem",fontFamily:"inherit",marginBottom:".6rem",outline:"none"}}/>
+          <div style={{fontSize:".62rem",color:"#B8905F",marginBottom:".6rem",lineHeight:1.5}}>ℹ️ Instagram ouvrira ton profil, la personne devra cliquer sur "Envoyer un message" elle-meme (limite technique d'Instagram).</div>
+          <button onClick={sauverContacts}
+            style={{width:"100%",background:contactSaved?"#5A8A5A":"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".6rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            {contactSaved?"✅ Enregistre !":"Enregistrer mes liens"}
+          </button>
+        </div>
+        <button onClick={()=>{setShowMonCompte(false);setCompteMdp1("");setCompteMdp2("");setCompteError("");}}
             style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>
             Annuler
           </button>
@@ -1604,7 +1632,7 @@ function App(){
                 <span style={{fontSize:".6rem",color:C.vert,fontWeight:600}}>Journée complète !</span>
               </div>
             )}
-            <button onClick={()=>{setShowMonCompte(true);setCompteError("");setCompteSuccess(false);}} style={{padding:".25rem .5rem",fontSize:".7rem",color:C.gris,border:`1px solid rgba(196,168,130,.2)`,borderRadius:20,background:"none",cursor:"pointer",fontFamily:"inherit"}}>🔐</button>
+            <button onClick={async()=>{setShowMonCompte(true);setCompteError("");setCompteSuccess(false);try{const d=await sgAll(userId);setContactWhatsapp(d?.["db-contact-whatsapp"]||"");setContactMessenger(d?.["db-contact-messenger"]||"");setContactInstagram(d?.["db-contact-instagram"]||"");}catch{}}} style={{padding:".25rem .5rem",fontSize:".7rem",color:C.gris,border:`1px solid rgba(196,168,130,.2)`,borderRadius:20,background:"none",cursor:"pointer",fontFamily:"inherit"}}>🔐</button>
             <button onClick={()=>{try{localStorage.removeItem("bd-user");}catch{}setScreen("login");}} style={{padding:".25rem .6rem",fontSize:".6rem",color:C.gris,border:`1px solid rgba(196,168,130,.2)`,borderRadius:20,background:"none",cursor:"pointer",fontFamily:"inherit"}}>↩</button>
           </div>
         </div>
