@@ -226,3 +226,67 @@ exports.reinitialiserMotDePasse = onCall(async (request) => {
   const token = await admin.auth().createCustomToken(uid);
   return {status: "ok", token: token, uid: uid, displayName: prenom.trim() + " " + nom.trim()};
 });
+
+exports.notifRelance = onSchedule({ schedule: "0 8 * * *", timeZone: "Europe/Paris" }, async () => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const usersSnap = await db.collection("users").get();
+    for (const doc of usersSnap.docs) {
+      const uid = doc.id;
+      const data = doc.data();
+      let dues = 0;
+      try {
+        const prospects = data["db-prospects"] ? JSON.parse(data["db-prospects"]) : [];
+        dues += prospects.filter(p => p.relance && p.relance <= today && p.statut !== "Converti" && p.statut !== "Archive").length;
+      } catch (e) {}
+      try {
+        const clients = data["db-clients"] ? JSON.parse(data["db-clients"]) : [];
+        clients.forEach(c => {
+          (c.rappels || []).forEach(r => {
+            if (!r.fait && r.date && r.date <= today) dues += 1;
+          });
+        });
+      } catch (e) {}
+      if (dues > 0) {
+        const msg = dues === 1 ? "Tu as 1 relance a faire aujourd hui !" : ("Tu as " + dues + " relances a faire aujourd hui !");
+        await sendNotifToUid(uid, "🔔 Relances du jour", msg);
+      }
+    }
+  } catch (e) { console.error("notifRelance error", e); }
+});
+
+exports.notifInfoImportante = onDocumentUpdated("communaute/infos", async (event) => {
+  try {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    const idsBefore = Object.keys(before);
+    const idsAfter = Object.keys(after);
+    const nouveaux = idsAfter.filter(id => !idsBefore.includes(id));
+    if (!nouveaux.length) return;
+    for (const id of nouveaux) {
+      const info = after[id];
+      await sendNotifToAll("📌 Info importante", info.titre || "Une nouvelle info a ete publiee");
+    }
+  } catch (e) { console.error("notifInfoImportante error", e); }
+});
+
+exports.notifCommentaire = onDocumentUpdated("communaute/posts", async (event) => {
+  try {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    for (const id of Object.keys(after)) {
+      const postAvant = before[id];
+      const postApres = after[id];
+      if (!postAvant || !postApres) continue;
+      const commentsAvant = (postAvant.comments || []).length;
+      const commentsApres = (postApres.comments || []).length;
+      if (commentsApres > commentsAvant) {
+        const dernierComment = postApres.comments[postApres.comments.length - 1];
+        const auteurUid = (postApres.author || "").toLowerCase().replace(/\s+/g, "-");
+        if (dernierComment && dernierComment.author !== postApres.author) {
+          await sendNotifToUid(auteurUid, "💬 Nouveau commentaire", dernierComment.author + " a repondu a ton post");
+        }
+      }
+    }
+  } catch (e) { console.error("notifCommentaire error", e); }
+});
