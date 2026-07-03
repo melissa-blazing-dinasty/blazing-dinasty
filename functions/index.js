@@ -1,5 +1,5 @@
 ﻿const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onDocumentUpdated, onDocumentCreated} = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 admin.initializeApp();
 const db = admin.firestore();
@@ -60,9 +60,10 @@ exports.notifReco = onDocumentUpdated("users/{uid}", async (event) => {
   } catch(e) { console.error("notifReco error", e); }
 });
 
-exports.notifDiag = onDocumentUpdated("diag_ex/{docId}", async (event) => {
+exports.notifDiag = onDocumentCreated("diag_ex/{docId}", async (event) => {
   try {
-    const after = event.data.after.data();
+    const snap = event.data;
+    const after = snap.data();
     const uid = after.distributeurId || after.uid;
     if (!uid) return;
     const prenom = after.prenom || "Une cliente";

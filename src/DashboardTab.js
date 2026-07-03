@@ -60,6 +60,21 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   const[newPost,setNewPost]=useState({type:"Post",sujet:"",fait:false});
   const[stats,setStats]=useState({messages:"",reponses:"",presentations:"",ventes:"",recrues:"",objectif:"2"});
   const[clients,setClients]=useState([]);
+  useEffect(()=>{
+    try{
+      const todayR=todayLocalStr();
+      const duesProspects=(prospects||[]).filter(p=>p.relance&&p.relance<=todayR&&p.statut!=="Converti"&&p.statut!=="Archive").map(p=>({id:p.id,name:p.name,type:"prospect",texte:p.relanceHeure?"a "+p.relanceHeure:""}));
+      const duesClientes=[];
+      (clients||[]).forEach(c=>{
+        (c.rappels||[]).forEach(r=>{
+          if(!r.fait&&r.date&&r.date<=todayR){
+            duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:r.texte,type:"cliente"});
+          }
+        });
+      });
+      setRelancesDuJour([...duesProspects,...duesClientes]);
+    }catch{}
+  },[clients,prospects]);
   const[distributeurs,setDistributeurs]=useState([]);
   const[objPerso,setObjPerso]=useState({ca:"",caObj:"",palier:"2%",recruesObj:"0"});
   const[showCaReminder,setShowCaReminder]=useState(false);
@@ -152,24 +167,6 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
       }
       setStreak(newStreak);
 
-      // Rappel relances du jour - banniere permanente dans Aujourd'hui (prospects + clientes)
-      try{
-        const prospectsRaw2=data["db-prospects"];
-        const prospectsList=prospectsRaw2?JSON.parse(prospectsRaw2):[];
-        const todayR=todayLocalStr();
-        const duesProspects=prospectsList.filter(p=>p.relance&&p.relance<=todayR&&p.statut!=="Converti"&&p.statut!=="Archive").map(p=>({id:p.id,name:p.name,type:"prospect",texte:p.relanceHeure?"a "+p.relanceHeure:""}));
-        const clientsRaw2=data["db-clients"];
-        const clientsList=clientsRaw2?JSON.parse(clientsRaw2):[];
-        const duesClientes=[];
-        clientsList.forEach(c=>{
-          (c.rappels||[]).forEach(r=>{
-            if(!r.fait&&r.date&&r.date<=todayR){
-              duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:r.texte,type:"cliente"});
-            }
-          });
-        });
-        setRelancesDuJour([...duesProspects,...duesClientes]);
-      }catch{}
       // Rappel CA si actif depuis 3+ jours et CA de la periode vide
       try{
         const objRaw2=data["db-obj-perso"];
