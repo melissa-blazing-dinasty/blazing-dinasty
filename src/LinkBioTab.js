@@ -293,6 +293,15 @@ function LinkBioTab({uid, userName}){
                 style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
             </div>
           ))}
+          <div style={{display:"flex",alignItems:"center",gap:".5rem",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:10,padding:".65rem .8rem",marginTop:".5rem"}}>
+            <div onClick={()=>setProfil(p=>({...p,catalogueActif:!p.catalogueActif}))}
+              style={{width:20,height:20,borderRadius:5,border:`2px solid ${C.rose}`,background:profil.catalogueActif?C.rose:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {profil.catalogueActif&&<span style={{fontSize:".6rem",color:"white",fontWeight:700}}>OK</span>}
+            </div>
+            <div style={{fontSize:".72rem",color:C.texte,cursor:"pointer"}} onClick={()=>setProfil(p=>({...p,catalogueActif:!p.catalogueActif}))}>
+              Afficher le bouton catalogue produits sur ma page
+            </div>
+          </div>
 
           {/* Diagnostics multiples */}
           <div style={{height:1,background:C.pale,margin:"1rem 0"}}/>

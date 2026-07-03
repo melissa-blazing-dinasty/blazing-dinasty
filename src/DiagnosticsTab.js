@@ -2723,11 +2723,12 @@ function LinkBioPublicPage({slug}){
   const [nbDiagsEquipe,setNbDiagsEquipe]=useState(127);
   const [loading,setLoading]=useState(true);
   const [diagActif,setDiagActif]=useState(null);
+  const [catalogueLienPublic,setCatalogueLienPublic]=useState("");
   useEffect(()=>{
     (async()=>{
       try{
         const s=await getDoc(doc(db,"linkbio",slug));
-        if(s.exists()){setProfil(s.data());try{const sRef=doc(db,"linkbio_stats",slug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking:",e);}}
+        if(s.exists()){setProfil(s.data());try{const cfgSnap=await getDoc(doc(db,"admin","config"));if(cfgSnap.exists()&&cfgSnap.data().catalogueLien)setCatalogueLienPublic(cfgSnap.data().catalogueLien);}catch{}try{const sRef=doc(db,"linkbio_stats",slug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking:",e);}}
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
@@ -2804,7 +2805,15 @@ function LinkBioPublicPage({slug}){
               </a>
             )}
           </div>
+        )}{profil.catalogueActif&&catalogueLienPublic&&(
+          <div style={{padding:"0 1rem .85rem"}}>
+            <a href={catalogueLienPublic} target="_blank" rel="noopener noreferrer"
+              style={{display:"block",background:theme.bg,border:`1.5px solid ${theme.accent}`,color:theme.accent,textDecoration:"none",textAlign:"center",padding:".7rem .5rem",borderRadius:12,fontSize:".78rem",fontWeight:700}}>
+              Voir le catalogue produits
+            </a>
+          </div>
         )}
+        
         {profil.accroche&&<div style={{margin:".75rem 1rem",padding:".75rem 1rem",background:"rgba(255,255,255,.1)",borderRadius:12,borderLeft:"3px solid rgba(255,255,255,.4)",fontSize:".82rem",fontStyle:"italic",color:theme.light?"rgba(0,0,0,.7)":"rgba(255,255,255,.9)",lineHeight:1.6}}>❝ {profil.accroche} ❞</div>}
         {profil.histoire&&<div style={{padding:".85rem 1.1rem",fontSize:".78rem",lineHeight:1.7,color:sub,background:theme.bg}}>{profil.histoire}</div>}
         <div style={{background:"linear-gradient(135deg,#C49A8A,#A89BB5)",padding:".65rem 1rem",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}><span style={{fontSize:"1rem"}}>🔥</span><span style={{fontSize:".78rem",fontWeight:700,color:"white",letterSpacing:".02em"}}>{nbDiagsEquipe}+ femmes ont recu leur bilan personnalise — et toi ?</span></div>

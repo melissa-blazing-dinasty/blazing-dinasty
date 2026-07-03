@@ -10108,7 +10108,11 @@ function AdminTab({uid}){
   const[anthropicKey,setAnthropicKey]=useState("");
   const[savingKey,setSavingKey]=useState(false);
   const[savedKey,setSavedKey]=useState(false);
-  useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"admin","config"));if(snap.exists()&&snap.data().anthropicKey)setAnthropicKey(snap.data().anthropicKey);}catch{}})();},[]);
+  useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"admin","config"));if(snap.exists()&&snap.data().anthropicKey)setAnthropicKey(snap.data().anthropicKey);if(snap.exists()&&snap.data().catalogueLien)setCatalogueLien(snap.data().catalogueLien);}catch{}})();},[]);
+  const[catalogueLien,setCatalogueLien]=useState("");
+  const[savingCatalogue,setSavingCatalogue]=useState(false);
+  const[savedCatalogue,setSavedCatalogue]=useState(false);
+  const sauvegarderCatalogue=async()=>{setSavingCatalogue(true);try{await setDoc(doc(db,"admin","config"),{catalogueLien:catalogueLien.trim()},{merge:true});setSavedCatalogue(true);setTimeout(()=>setSavedCatalogue(false),2000);}catch{}setSavingCatalogue(false);};
   const sauvegarderCle=async()=>{setSavingKey(true);try{await setDoc(doc(db,"admin","config"),{anthropicKey},{merge:true});ANTHROPIC_API_KEY=anthropicKey;setSavedKey(true);setTimeout(()=>setSavedKey(false),2000);}catch{}setSavingKey(false);};
   const[savingFS,setSavingFS]=useState(false);
   const[filterDest,setFilterDest]=useState("all");
@@ -10400,7 +10404,18 @@ function AdminTab({uid}){
         </button>
       </div>
 
-      {/* Scripts personnalisés */}
+      {/* Lien catalogue LinkBio */}
+      <div style={{background:C.creme,borderRadius:12,padding:"1rem",marginTop:"1rem",border:"1px solid "+C.pale}}>
+        <div style={{fontSize:".68rem",fontWeight:700,color:C.brun,marginBottom:".4rem"}}>Lien du catalogue produits (LinkBio)</div>
+        <div style={{fontSize:".68rem",color:C.gris,marginBottom:".6rem",lineHeight:1.5}}>Ce lien sera utilisable par toutes les distributrices qui activent le catalogue sur leur page LinkBio.</div>
+        <input placeholder="https://..." value={catalogueLien} onChange={e=>setCatalogueLien(e.target.value)}
+          style={{width:"100%",border:"1px solid "+C.pale,borderRadius:8,padding:".45rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none",marginBottom:".5rem"}}/>
+        <button onClick={sauvegarderCatalogue} disabled={savingCatalogue}
+          style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".45rem 1rem",fontSize:".75rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          {savingCatalogue?"...":savedCatalogue?"Enregistre !":"Sauvegarder le lien"}
+        </button>
+      </div>
+            {/* Scripts personnalisés */}
       <div style={{background:C.creme,borderRadius:12,padding:"1rem",marginTop:"1rem",border:"1px solid "+C.pale}}>
         <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.brun,marginBottom:".75rem"}}>📝 Scripts personnalisés</div>
         <AdminScriptsEditor/>
