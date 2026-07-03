@@ -941,9 +941,11 @@ function App(){
 
   const sauverContacts=async()=>{
     try{
-      await ss(userId,"db-contact-whatsapp",contactWhatsapp.trim());
-      await ss(userId,"db-contact-messenger",contactMessenger.trim());
-      await ss(userId,"db-contact-instagram",contactInstagram.trim());
+      await setDoc(doc(db,"users",userId),{
+        "db-contact-whatsapp":contactWhatsapp.trim(),
+        "db-contact-messenger":contactMessenger.trim(),
+        "db-contact-instagram":contactInstagram.trim()
+      },{merge:true});
       setContactSaved(true);
       setTimeout(()=>setContactSaved(false),2000);
     }catch{}
