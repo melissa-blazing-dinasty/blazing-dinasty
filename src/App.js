@@ -855,6 +855,7 @@ function App(){
   const[userId,setUserId]=useState("");
   const[isChefApp,setIsChefApp]=useState(false);
   const[challengeATraiterApp,setChallengeATraiterApp]=useState(false);
+  const[forceQuizJourApp,setForceQuizJourApp]=useState(null);
   useEffect(()=>{
     if(!userId)return;
     (async()=>{
@@ -1088,6 +1089,11 @@ function App(){
             setTimeout(()=>setShowNewChallenge(true),3000);
           }
         }
+      }catch{}
+      try{
+        const snapFS=await getDoc(doc(db,"users",uid));
+        const quizOuvert=snapFS.exists()?(snapFS.data()["db-faststart-quiz-ouvert"]||""):"";
+        if(quizOuvert)setForceQuizJourApp(quizOuvert);
       }catch{}
       setUserId(uid);setName(displayName);setScreen("app");load(uid);verifierChangementPeriode(uid);
       // Afficher le challenge app apres 2s seulement si pas termine
@@ -2591,7 +2597,7 @@ function App(){
         {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso}/>}
+        {tab==="dashboard"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp}/>}
         {tab==="scripts"&&<ScriptsTab/>}
         {tab==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp}/>}
         {tab==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name}/>}

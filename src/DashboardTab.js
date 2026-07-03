@@ -19,8 +19,8 @@ import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
-function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}}){
-  const[dtab,setDtab]=useState("today");
+function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null}){
+  const[dtab,setDtab]=useState(forceQuizJour?"faststart":"today");
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
   const[showDecouverteProspects,setShowDecouverteProspects]=useState(false);
@@ -409,7 +409,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
       </div>
 
       {/* FAST START J1-J7 */}
-      {dtab==="faststart"&&<FastStartTab uid={uid} userName={userName} goToFormation={goToFormation}/>}
+      {dtab==="faststart"&&<FastStartTab uid={uid} userName={userName} goToFormation={goToFormation} forceQuizJour={forceQuizJour}/>}
 
       {/* TODAY */}
       {dtab==="today"&&(

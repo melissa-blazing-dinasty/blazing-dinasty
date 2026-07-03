@@ -7,7 +7,7 @@ import { useLang, translateBatch } from './components';
 import { FAST_START_DAYS, Confetti, postToWallOfFame, FAST_START_QUIZ, FastStartQuizPopup } from './App';
 import { FORMATION_APP_CATEGORIES_DEFAULT, FORMATION_APP_CATEGORIES } from './DiagnosticsTab';
 
-export function FastStartTab({uid, userName, goToFormation}){
+export function FastStartTab({uid, userName, goToFormation, forceQuizJour}){
   const {lang} = useLang();
   const[taskTranslations,setTaskTranslations]=useState({});
 
@@ -118,6 +118,9 @@ export function FastStartTab({uid, userName, goToFormation}){
     }
   };
 
+  useEffect(()=>{
+    if(loaded&&forceQuizJour){setShowQuiz(Number(forceQuizJour));}
+  },[loaded,forceQuizJour]);
   if(!loaded) return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
 
   if(!startDate){
@@ -155,8 +158,8 @@ export function FastStartTab({uid, userName, goToFormation}){
           uid={uid}
           userName={userName}
           marraineUid={marraineUid}
-          onClose={()=>setShowQuiz(null)}
-          onValide={(j)=>{validerModule(j);setShowQuiz(null);}}
+          onClose={()=>{setShowQuiz(null);ss(uid,"db-faststart-quiz-ouvert","");}}
+          onValide={(j)=>{validerModule(j);setShowQuiz(null);ss(uid,"db-faststart-quiz-ouvert","");}}
         />
       )}
 
@@ -246,7 +249,7 @@ export function FastStartTab({uid, userName, goToFormation}){
 
             {/* Bouton exercice + quiz quand toutes les tâches sont cochées */}
             {dayDone&&!moduleValide&&hasQuiz&&(
-              <button onClick={()=>setShowQuiz(d.jour)}
+              <button onClick={()=>{setShowQuiz(d.jour);ss(uid,"db-faststart-quiz-ouvert",String(d.jour));}}
                 style={{width:"100%",marginTop:".65rem",background:`linear-gradient(135deg,${C.brun},${C.brun2})`,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}>
                 📝 Exercice + Quiz de validation →
               </button>
