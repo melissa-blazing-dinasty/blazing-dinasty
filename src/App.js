@@ -854,6 +854,26 @@ function App(){
   const[mdpInput,setMdpInput]=useState("");
   const[userId,setUserId]=useState("");
   const[isChefApp,setIsChefApp]=useState(false);
+  const[challengeATraiterApp,setChallengeATraiterApp]=useState(false);
+  useEffect(()=>{
+    if(!userId)return;
+    (async()=>{
+      try{
+        const snapC2=await getDoc(doc(db,"challenges","liste"));
+        const items2=snapC2.exists()?(snapC2.data().items||[]):[];
+        const now2=Date.now();
+        const actifs2=items2.filter(c=>!c.deadline||c.deadline>now2);
+        if(actifs2.length===0){setChallengeATraiterApp(false);return;}
+        const snapD2=await getDoc(doc(db,"challenges","declarations"));
+        const decls2=snapD2.exists()?snapD2.data():{};
+        const pasFait2=actifs2.some(c=>{
+          const mesDecl2=(decls2[c.id]||[]).filter(d=>d.uid===userId);
+          return mesDecl2.length===0;
+        });
+        setChallengeATraiterApp(pasFait2);
+      }catch{}
+    })();
+  },[userId]);
   const[hasTeamApp,setHasTeamApp]=useState(false);
   const[fastStartDone,setFastStartDone]=useState(false);
   const[hasFastStart,setHasFastStart]=useState(false);
@@ -1654,7 +1674,10 @@ function App(){
       <div style={{background:C.blanc,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 8px rgba(61,31,14,.06)"}}>
         {TABS.map(tb=>(
           <button key={tb.id} onClick={()=>setTab(tb.id)}
-            style={{flex:"none",padding:".72rem .85rem",fontSize:".6rem",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase",color:tab===tb.id?C.brun:C.gris,border:"none",borderBottom:`2px solid ${tab===tb.id?C.rose:"transparent"}`,background:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",transition:"all .2s"}}>
+            style={{flex:"none",padding:".72rem .85rem",fontSize:".6rem",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase",color:tab===tb.id?C.brun:C.gris,border:"none",borderBottom:`2px solid ${tab===tb.id?C.rose:"transparent"}`,background:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",transition:"all .2s",position:"relative"}}>
+            {tb.id==="communaute"&&challengeATraiterApp&&(
+              <span style={{position:"absolute",top:2,right:2,width:9,height:9,borderRadius:"50%",background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)"}}/>
+            )}
             {tb.label}
           </button>
         ))}

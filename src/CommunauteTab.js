@@ -20,6 +20,25 @@ function CommunauteTab({uid, userName, isChef}){
   const[posting,setPosting]=useState(false);
   const[newPhoto,setNewPhoto]=useState("");
   const[bulleOuverte,setBulleOuverte]=useState(null);
+  const[challengeATraiter,setChallengeATraiter]=useState(false);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snapC=await getDoc(doc(db,"challenges","liste"));
+        const items=snapC.exists()?(snapC.data().items||[]):[];
+        const now=Date.now();
+        const actifs=items.filter(c=>!c.deadline||c.deadline>now);
+        if(actifs.length===0){setChallengeATraiter(false);return;}
+        const snapD=await getDoc(doc(db,"challenges","declarations"));
+        const decls=snapD.exists()?snapD.data():{};
+        const pasFait=actifs.some(c=>{
+          const mesDecl=(decls[c.id]||[]).filter(d=>d.uid===uid);
+          return mesDecl.length===0;
+        });
+        setChallengeATraiter(pasFait);
+      }catch{}
+    })();
+  },[uid]);
   const[commentInputs,setCommentInputs]=useState({});
   const[openComments,setOpenComments]=useState({});
   const isMelissa=userName.toLowerCase().replace(/\s+/g,"-")===MELISSA||userName.toLowerCase()===MELISSA;
@@ -182,7 +201,10 @@ function CommunauteTab({uid, userName, isChef}){
       <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
         {[{id:"partager",label:"✍️ Partager",icon:"✍️"},{id:"mur",label:"🏆 Mur de la gloire",icon:"🏆"},{id:"defis",label:"🎯 Défis",icon:"🎯"}].map(b=>(
           <div key={b.id} onClick={()=>setBulleOuverte(prev=>prev===b.id?null:b.id)}
-            style={{flex:1,textAlign:"center",background:bulleOuverte===b.id?C.rose:C.blanc,border:`1.5px solid ${bulleOuverte===b.id?C.rose:C.pale}`,borderRadius:14,padding:".7rem .4rem",cursor:"pointer",transition:"all .2s"}}>
+            style={{flex:1,textAlign:"center",background:bulleOuverte===b.id?C.rose:C.blanc,border:`1.5px solid ${bulleOuverte===b.id?C.rose:C.pale}`,borderRadius:14,padding:".7rem .4rem",cursor:"pointer",transition:"all .2s",position:"relative"}}>
+            {b.id==="defis"&&challengeATraiter&&(
+              <span style={{position:"absolute",top:-4,right:-4,width:18,height:18,borderRadius:"50%",background:"#E63946",border:"2px solid white",boxShadow:"0 0 0 3px rgba(230,57,70,.3), 0 2px 6px rgba(230,57,70,.5)"}}/>
+            )}
             <div style={{fontSize:"1.1rem",marginBottom:".2rem"}}>{b.icon}</div>
             <div style={{fontSize:".6rem",fontWeight:600,color:bulleOuverte===b.id?"white":C.gris}}>{b.label.replace(b.icon+" ","")}</div>
           </div>
