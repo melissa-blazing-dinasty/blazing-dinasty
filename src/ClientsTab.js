@@ -125,7 +125,7 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, P
   const delRappel=(rid)=>save(clients.map(cl=>cl.id===c.id?{...cl,rappels:(cl.rappels||[]).filter(r=>r.id!==rid)}:cl));
 
   return(
-    <div>
+    <div id={"client-"+c.id}>
       {/* Ligne cliente */}
       <div style={{display:"flex",alignItems:"center",gap:".6rem",background:isActive?C.brun+"08":C.creme,border:`1.5px solid ${overdue?"#E6A817":isActive?C.rose:C.pale}`,borderRadius:isActive?"10px 10px 0 0":10,padding:".5rem .75rem",cursor:"pointer"}}
         onClick={()=>setSel(isActive?null:c.id)}>
@@ -590,11 +590,12 @@ function RappelsSection({clientId, rappels, clients, save}){
   const[show,setShow]=useState(false);
   const[texte,setTexte]=useState("");
   const[date,setDate]=useState("");
+  const[heure,setHeure]=useState("");
   const ajouter=()=>{
     if(!texte.trim()||!date)return;
-    const r={id:Date.now(),texte,date,fait:false};
+    const r={id:Date.now(),texte,date,heure,fait:false};
     save(clients.map(c=>c.id===clientId?{...c,rappels:[...(c.rappels||[]),r]}:c));
-    setTexte("");setDate("");setShow(false);
+    setTexte("");setDate("");setHeure("");setShow(false);
   };
   const supprimer=(rid)=>save(clients.map(c=>c.id===clientId?{...c,rappels:(c.rappels||[]).filter(r=>r.id!==rid)}:c));
   const toggle=(rid)=>save(clients.map(c=>c.id===clientId?{...c,rappels:(c.rappels||[]).map(r=>r.id===rid?{...r,fait:!r.fait}:r)}:c));
@@ -608,8 +609,15 @@ function RappelsSection({clientId, rappels, clients, save}){
         <div style={{background:C.creme,borderRadius:9,padding:".6rem",marginBottom:".4rem",border:`1px solid ${C.pale}`}}>
           <input placeholder="Note de rappel..." value={texte} onChange={e=>setTexte(e.target.value)}
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".74rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".35rem"}}/>
-          <input type="date" value={date} onChange={e=>setDate(e.target.value)}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".74rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".35rem"}}/>
+          <div style={{display:"flex",gap:".35rem",marginBottom:".35rem"}}>
+            <div style={{position:"relative",flex:1}}>
+              <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .55rem",fontSize:".74rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+              <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:".8rem"}}>📅</span>
+            </div>
+            <input type="time" value={heure} onChange={e=>setHeure(e.target.value)}
+              style={{width:90,border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .4rem",fontSize:".74rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none"}}/>
+          </div>
           <div style={{display:"flex",gap:".35rem"}}>
             <button onClick={ajouter} style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Ajouter</button>
             <button onClick={()=>setShow(false)} style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:7,padding:".4rem",fontSize:".72rem",fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
@@ -620,7 +628,7 @@ function RappelsSection({clientId, rappels, clients, save}){
         <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:r.fait?"#E8F5E9":C.creme,borderRadius:8,padding:".4rem .7rem",marginBottom:".3rem",border:`1px solid ${r.fait?C.vert:C.pale}`}}>
           <div>
             <div style={{fontSize:".73rem",color:C.texte,textDecoration:r.fait?"line-through":"none"}}>{r.texte}</div>
-            <div style={{fontSize:".58rem",color:C.gris}}>{r.date&&new Date(r.date).toLocaleDateString("fr-FR")}</div>
+            <div style={{fontSize:".58rem",color:C.gris}}>{r.date&&new Date(r.date).toLocaleDateString("fr-FR")}{r.heure&&" a "+r.heure}</div>
           </div>
           <div style={{display:"flex",gap:".25rem"}}>
             <button onClick={()=>toggle(r.id)} style={{background:r.fait?C.vert:"none",border:`1px solid ${r.fait?C.vert:C.pale}`,borderRadius:5,padding:".15rem .38rem",fontSize:".6rem",color:r.fait?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>{r.fait?"✓":"Fait"}</button>
@@ -873,8 +881,9 @@ function ClientsRelanceTab({clients,save,uid}){
   );
 }
 
-function ClientsTab({clients,save,uid}){
+function ClientsTab({clients,save,uid,cibleId}){
   const[sel,setSel]=useState(null);
+  useEffect(()=>{if(cibleId){setSel(cibleId);const cible=clients.find(c=>c.id===cibleId);if(cible){const key=cible.statut||"sans";setGroupesOuverts(g=>({...g,[key]:true}));}}},[cibleId]);
   const[form,setForm]=useState({nom:"",prenom:"",tel:"",email:"",ddn:"",adresse:"",notes:""});
   const[editMode,setEditMode]=useState(false);
   const[editForm,setEditForm]=useState({});

@@ -63,6 +63,11 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   const[distributeurs,setDistributeurs]=useState([]);
   const[objPerso,setObjPerso]=useState({ca:"",caObj:"",palier:"2%",recruesObj:"0"});
   const[showCaReminder,setShowCaReminder]=useState(false);
+  const[showRelanceReminder,setShowRelanceReminder]=useState(false);
+  const[relancesDuJour,setRelancesDuJour]=useState([]);
+  const[relanceBannerOuverte,setRelanceBannerOuverte]=useState(false);
+  const[cibleRappel,setCibleRappel]=useState(null);
+  const[clientCibleId,setClientCibleId]=useState(null);
   const[isChefDash,setIsChefDash]=useState(false);
   const[loaded,setLoaded]=useState(false);
   const[totalRecrues,setTotalRecrues]=useState(0);
@@ -147,6 +152,24 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
       }
       setStreak(newStreak);
 
+      // Rappel relances du jour - banniere permanente dans Aujourd'hui (prospects + clientes)
+      try{
+        const prospectsRaw2=data["db-prospects"];
+        const prospectsList=prospectsRaw2?JSON.parse(prospectsRaw2):[];
+        const todayR=todayLocalStr();
+        const duesProspects=prospectsList.filter(p=>p.relance&&p.relance<=todayR&&p.statut!=="Converti"&&p.statut!=="Archive").map(p=>({id:p.id,name:p.name,type:"prospect",texte:p.relanceHeure?"a "+p.relanceHeure:""}));
+        const clientsRaw2=data["db-clients"];
+        const clientsList=clientsRaw2?JSON.parse(clientsRaw2):[];
+        const duesClientes=[];
+        clientsList.forEach(c=>{
+          (c.rappels||[]).forEach(r=>{
+            if(!r.fait&&r.date&&r.date<=todayR){
+              duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:r.texte,type:"cliente"});
+            }
+          });
+        });
+        setRelancesDuJour([...duesProspects,...duesClientes]);
+      }catch{}
       // Rappel CA si actif depuis 3+ jours et CA de la periode vide
       try{
         const objRaw2=data["db-obj-perso"];
@@ -331,6 +354,24 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
     
   ];
 
+  useEffect(()=>{
+    if(!cibleRappel)return;
+    const domId=(cibleRappel.type==="prospect"?"prospect-":"client-")+cibleRappel.id;
+    const tenter=(essais)=>{
+      const el=document.getElementById(domId);
+      if(el){
+        el.scrollIntoView({behavior:"smooth",block:"center"});
+        el.style.transition="background .3s";
+        const bgAvant=el.style.background;
+        el.style.background="#FFE8CC";
+        setTimeout(()=>{el.style.background=bgAvant;},2500);
+        setCibleRappel(null);
+      }else if(essais<10){
+        setTimeout(()=>tenter(essais+1),200);
+      }
+    };
+    tenter(0);
+  },[cibleRappel,dtab]);
   return(
     <div>
       <SecTitle title="Tableau" em="de bord" desc="Tes actions quotidiennes · Tes prospects · Tes publications · Tes stats."/>
@@ -377,6 +418,33 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
           <Confetti trigger={confettiTrigger}/>
           <MarrainePopup uid={uid} userName={userName}/>
           <AnnonceBanner uid={uid}/>
+          {relancesDuJour.length>0&&(
+            <div style={{background:"#FFF3EC",border:"1.5px solid #C44B1A50",borderRadius:14,marginBottom:"1rem",overflow:"hidden"}}>
+              <div onClick={()=>setRelanceBannerOuverte(p=>!p)}
+                style={{display:"flex",alignItems:"center",gap:".6rem",padding:".75rem 1rem",cursor:"pointer"}}>
+                <span style={{fontSize:"1.2rem"}}>🔔</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:".82rem",fontWeight:700,color:"#C44B1A"}}>{relancesDuJour.length} relance{relancesDuJour.length>1?"s":""} à faire aujourd'hui</div>
+                </div>
+                <span style={{color:"#C44B1A",fontSize:".8rem",transform:relanceBannerOuverte?"rotate(180deg)":"none",transition:"transform .2s"}}>⌄</span>
+              </div>
+              {relanceBannerOuverte&&(
+                <div style={{padding:"0 1rem .85rem"}}>
+                  {relancesDuJour.map((p,i)=>(
+                    <div key={i} onClick={()=>{if(p.id){setDtab(p.type==="cliente"?"clients":"prospects");if(p.type==="cliente"){setClientsSubTab("clients");setClientCibleId(p.id);}setCibleRappel({id:p.id,type:p.type});}}}
+                      style={{background:"white",borderRadius:9,padding:".5rem .7rem",marginBottom:".4rem",fontSize:".78rem",color:"#3D2B1F",fontWeight:600,display:"flex",flexDirection:"column",cursor:p.id?"pointer":"default"}}>
+                      <span>{p.type==="cliente"?"💜 ":"👥 "}{p.name}</span>
+                      {p.texte&&<span style={{fontSize:".68rem",color:"#888",fontWeight:400,marginTop:".15rem"}}>{p.texte}</span>}
+                    </div>
+                  ))}
+                  <button onClick={()=>setDtab("relances")}
+                    style={{width:"100%",background:"#C44B1A",color:"white",border:"none",borderRadius:9,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:".3rem"}}>
+                    Voir toutes mes relances
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* POPUP CONVERSION PROSPECT */}
           {conversionPopup&&(
@@ -617,10 +685,17 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
               </div>
               <div style={{display:"flex",alignItems:"center",gap:".4rem",marginTop:".5rem",paddingTop:".5rem",borderTop:`1px solid ${C.pale}`}}>
                 <span style={{fontSize:".62rem",color:C.gris}}>🔔 Relance :</span>
-                <input type="date" value={p.relance||""} onChange={e=>{
-                  const next=prospects.map(x=>x.id===p.id?{...x,relance:e.target.value}:x);
+                <div style={{position:"relative"}}>
+                  <input type="date" value={p.relance||""} onChange={e=>{
+                    const next=prospects.map(x=>x.id===p.id?{...x,relance:e.target.value}:x);
+                    saveProspects(next);
+                  }} style={{border:`1px solid ${C.pale}`,borderRadius:6,padding:".25rem 1.3rem .25rem .4rem",fontSize:".68rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+                  <span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:".7rem"}}>📅</span>
+                </div>
+                <input type="time" value={p.relanceHeure||""} onChange={e=>{
+                  const next=prospects.map(x=>x.id===p.id?{...x,relanceHeure:e.target.value}:x);
                   saveProspects(next);
-                }} style={{border:`1px solid ${C.pale}`,borderRadius:6,padding:".25rem .4rem",fontSize:".68rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+                }} style={{border:`1px solid ${C.pale}`,borderRadius:6,padding:".25rem .35rem",fontSize:".68rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",width:75}}/>
                 {p.relance&&(
                   <button onClick={()=>{
                     const next=prospects.map(x=>x.id===p.id?{...x,relance:""}:x);
@@ -720,7 +795,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
               💬 Objections
             </button>
           </div>
-          {clientsSubTab==="clients"&&<ClientsTab clients={clients} save={saveClients} uid={uid}/>}
+          {clientsSubTab==="clients"&&<ClientsTab clients={clients} save={saveClients} uid={uid} cibleId={clientCibleId}/>}
           {clientsSubTab==="relance"&&<ClientsRelanceTab clients={clients} save={saveClients} uid={uid}/>}
           {clientsSubTab==="objections"&&<ObjectionsTab/>}
         </div>
@@ -808,7 +883,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
             <span style={{color:C.vert}}>{posts.filter(p=>p.fait).length} publié{posts.filter(p=>p.fait).length>1?"s":""}</span>
           </div>
           {posts.map(p=>(
-            <div key={p.id} style={{background:p.fait?C.pale+"60":C.blanc,border:`1px solid ${p.fait?C.rose:C.pale}`,borderRadius:10,padding:".65rem .9rem",marginBottom:".4rem",display:"flex",gap:".6rem",alignItems:"center"}}>
+            <div key={p.id} id={"prospect-"+p.id} style={{background:p.fait?C.pale+"60":C.blanc,border:`1px solid ${p.fait?C.rose:C.pale}`,borderRadius:10,padding:".65rem .9rem",marginBottom:".4rem",display:"flex",gap:".6rem",alignItems:"center"}}>
               <div onClick={()=>savePosts(posts.map(x=>x.id===p.id?{...x,fait:!x.fait}:x))}
                 style={{width:18,height:18,borderRadius:4,border:`2px solid ${p.fait?C.rose:C.pale}`,background:p.fait?C.rose:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .15s"}}>
                 {p.fait&&<span style={{fontSize:".55rem",color:"white",fontWeight:700}}>✓</span>}
