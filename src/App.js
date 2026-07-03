@@ -875,6 +875,7 @@ function App(){
       }catch{}
     })();
   },[userId]);
+  
   const[hasTeamApp,setHasTeamApp]=useState(false);
   const[fastStartDone,setFastStartDone]=useState(false);
   const[hasFastStart,setHasFastStart]=useState(false);
@@ -1155,6 +1156,60 @@ function App(){
     setLoginLoading(false);
   };
   const[tab,setTab]=useState("dashboard");
+  useEffect(()=>{
+    if(!userId)return;
+    (async()=>{
+      try{
+        let total=0;
+        try{
+          const snapC3=await getDoc(doc(db,"challenges","liste"));
+          const items3=snapC3.exists()?(snapC3.data().items||[]):[];
+          const now3=Date.now();
+          const actifs3=items3.filter(c=>!c.deadline||c.deadline>now3);
+          if(actifs3.length>0){
+            const snapD3=await getDoc(doc(db,"challenges","declarations"));
+            const decls3=snapD3.exists()?snapD3.data():{};
+            const nonFaits=actifs3.filter(c=>{
+              const mesDecl3=(decls3[c.id]||[]).filter(d=>d.uid===userId);
+              return mesDecl3.length===0;
+            });
+            total+=nonFaits.length;
+          }
+        }catch{}
+        try{
+          const snapI3=await getDoc(doc(db,"communaute","infos"));
+          if(snapI3.exists()){
+            const infosArr3=Object.values(snapI3.data());
+            const uSnap3=await getDoc(doc(db,"users",userId));
+            const lastVu3=uSnap3.exists()?(uSnap3.data()["db-last-infos-vu"]||0):0;
+            const nonVues=infosArr3.filter(i=>(i.ts||0)>lastVu3);
+            total+=nonVues.length;
+          }
+        }catch{}
+        try{
+          const uSnap4=await getDoc(doc(db,"users",userId));
+          if(uSnap4.exists()){
+            const data4=uSnap4.data();
+            const today4=todayLocalStr();
+            const prospects4=data4["db-prospects"]?JSON.parse(data4["db-prospects"]):[];
+            total+=prospects4.filter(p=>p.relance&&p.relance<=today4&&p.statut!=="Converti"&&p.statut!=="Archive").length;
+            const clients4=data4["db-clients"]?JSON.parse(data4["db-clients"]):[];
+            clients4.forEach(c=>{
+              (c.rappels||[]).forEach(r=>{
+                if(!r.fait&&r.date&&r.date<=today4)total+=1;
+              });
+            });
+          }
+        }catch{}
+        if("setAppBadge" in navigator){
+          try{
+            if(total>0)navigator.setAppBadge(total);
+            else navigator.clearAppBadge();
+          }catch{}
+        }
+      }catch{}
+    })();
+  },[userId,tab]);
   const[formationSubTab,setFormationSubTab]=useState("");
   const[showObjectifs,setShowObjectifs]=useState(false);
   const[lang,setLang]=useState("fr");

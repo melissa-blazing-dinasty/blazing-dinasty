@@ -326,7 +326,7 @@ function CommunauteTab({uid, userName, isChef}){
       {/* Filtres */}
       <div style={{display:"flex",gap:".3rem",overflowX:"auto",marginBottom:"1rem",paddingBottom:".3rem"}}>
         {CTABS.map(t=>(
-          <button key={t.id} onClick={async()=>{setCtab(t.id);if(t.id==="infos"&&nouvelleInfo){setNouvelleInfo(false);try{await setDoc(doc(db,"users",uid),{"db-last-infos-vu":Date.now()},{merge:true});}catch{}}}}
+          <button key={t.id} onClick={async()=>{setCtab(t.id);if(t.id==="infos"){setNouvelleInfo(false);try{await setDoc(doc(db,"users",uid),{"db-last-infos-vu":Date.now()},{merge:true});}catch{}}}}
             style={{flex:"none",padding:".38rem .75rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1px solid ${ctab===t.id?C.rose:C.pale}`,background:ctab===t.id?C.rose:C.blanc,color:ctab===t.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",transition:"all .2s",whiteSpace:"nowrap",position:"relative"}}>
             {t.id==="infos"&&nouvelleInfo&&(
               <span style={{position:"absolute",top:-3,right:-3,width:11,height:11,borderRadius:"50%",background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)"}}/>
