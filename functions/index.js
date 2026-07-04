@@ -291,3 +291,20 @@ exports.notifCommentaire = onDocumentUpdated("communaute/posts", async (event) =
     }
   } catch (e) { console.error("notifCommentaire error", e); }
 });
+
+
+exports.notifMessage = onDocumentUpdated("conversations/{convId}", async (event) => {
+  try {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    const msgsBefore = before.messages || [];
+    const msgsAfter = after.messages || [];
+    if (msgsAfter.length <= msgsBefore.length) return;
+    const dernierMsg = msgsAfter[msgsAfter.length - 1];
+    const participants = after.participants || [];
+    const destinataire = participants.find(p => p !== dernierMsg.de);
+    if (!destinataire) return;
+    const apercu = dernierMsg.texte ? dernierMsg.texte.slice(0, 60) : "Photo";
+    await sendNotifToUid(destinataire, "💬 " + dernierMsg.deNom, apercu);
+  } catch (e) { console.error("notifMessage error", e); }
+});

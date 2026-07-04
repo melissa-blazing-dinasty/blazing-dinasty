@@ -5,6 +5,7 @@ import { C } from './constants';
 import { MELISSA } from './ClientsTab';
 import { UploadPhoto } from './FormationProduitsTab';
 import { WallOfFameTab, DefisTab, PowerHourTab } from './App';
+import { MessagerieTab } from './MessagerieTab';
 import { CopyBtn } from './components';
 
 function CommunauteTab({uid, userName, isChef}){
@@ -207,7 +208,7 @@ function CommunauteTab({uid, userName, isChef}){
 
       {/* Bulles cliquables */}
       <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
-        {[{id:"partager",label:"✍️ Partager",icon:"✍️"},{id:"mur",label:"🏆 Mur de la gloire",icon:"🏆"},{id:"defis",label:"🎯 Défis",icon:"🎯"}].map(b=>(
+        {[{id:"partager",label:"✍️ Partager",icon:"✍️"},{id:"mur",label:"🏆 Mur de la gloire",icon:"🏆"},{id:"defis",label:"🎯 Défis",icon:"🎯"},{id:"messages",label:"💬 Messages",icon:"💬"}].map(b=>(
           <div key={b.id} onClick={()=>setBulleOuverte(prev=>prev===b.id?null:b.id)}
             style={{flex:1,textAlign:"center",background:bulleOuverte===b.id?C.rose:C.blanc,border:`1.5px solid ${bulleOuverte===b.id?C.rose:C.pale}`,borderRadius:14,padding:".7rem .4rem",cursor:"pointer",transition:"all .2s",position:"relative"}}>
             {b.id==="defis"&&challengeATraiter&&(
@@ -229,6 +230,11 @@ function CommunauteTab({uid, userName, isChef}){
           <div style={{marginTop:"1rem"}}>
             <PowerHourTab uid={uid} userName={userName} canCreate={isChef}/>
           </div>
+        </div>
+      )}
+      {bulleOuverte==="messages"&&(
+        <div style={{marginBottom:"1rem",background:C.creme,borderRadius:14,padding:"1rem"}}>
+          <MessagerieTab uid={uid} userName={userName}/>
         </div>
       )}
       {/* Formulaire nouveau post — masqué sur onglet infos */}
