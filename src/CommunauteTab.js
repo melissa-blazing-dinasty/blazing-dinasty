@@ -5,7 +5,7 @@ import { C } from './constants';
 import { MELISSA } from './ClientsTab';
 import { UploadPhoto } from './FormationProduitsTab';
 import { WallOfFameTab, DefisTab, PowerHourTab } from './App';
-import { MessagerieTab } from './MessagerieTab';
+import { MessagerieTab, getUnreadMessagesCount } from './MessagerieTab';
 import { CopyBtn } from './components';
 
 function CommunauteTab({uid, userName, isChef}){
@@ -23,6 +23,12 @@ function CommunauteTab({uid, userName, isChef}){
   const[bulleOuverte,setBulleOuverte]=useState(null);
   const[challengeATraiter,setChallengeATraiter]=useState(false);
   const[nouvelleInfo,setNouvelleInfo]=useState(false);
+  const[messagesNonLus,setMessagesNonLus]=useState(0);
+  const chargerMessagesNonLus=async()=>{
+    const n=await getUnreadMessagesCount(uid);
+    setMessagesNonLus(n);
+  };
+  useEffect(()=>{chargerMessagesNonLus();},[uid]);
   useEffect(()=>{
     (async()=>{
       try{
@@ -209,10 +215,15 @@ function CommunauteTab({uid, userName, isChef}){
       {/* Bulles cliquables */}
       <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
         {[{id:"partager",label:"✍️ Partager",icon:"✍️"},{id:"mur",label:"🏆 Mur de la gloire",icon:"🏆"},{id:"defis",label:"🎯 Défis",icon:"🎯"},{id:"messages",label:"💬 Messages",icon:"💬"}].map(b=>(
-          <div key={b.id} onClick={()=>setBulleOuverte(prev=>prev===b.id?null:b.id)}
+          <div key={b.id} onClick={()=>{setBulleOuverte(prev=>{const next=prev===b.id?null:b.id;if(b.id==="messages"&&prev==="messages")chargerMessagesNonLus();return next;});}}
             style={{flex:1,textAlign:"center",background:bulleOuverte===b.id?C.rose:C.blanc,border:`1.5px solid ${bulleOuverte===b.id?C.rose:C.pale}`,borderRadius:14,padding:".7rem .4rem",cursor:"pointer",transition:"all .2s",position:"relative"}}>
             {b.id==="defis"&&challengeATraiter&&(
               <span style={{position:"absolute",top:-4,right:-4,width:18,height:18,borderRadius:"50%",background:"#E63946",border:"2px solid white",boxShadow:"0 0 0 3px rgba(230,57,70,.3), 0 2px 6px rgba(230,57,70,.5)"}}/>
+            )}
+            {b.id==="messages"&&messagesNonLus>0&&(
+              <span style={{position:"absolute",top:-4,right:-4,minWidth:18,height:18,borderRadius:9,background:"#E63946",border:"2px solid white",boxShadow:"0 0 0 3px rgba(230,57,70,.3), 0 2px 6px rgba(230,57,70,.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:"0 .25rem"}}>
+                <span style={{color:"white",fontSize:".6rem",fontWeight:700}}>{messagesNonLus}</span>
+              </span>
             )}
             <div style={{fontSize:"1.1rem",marginBottom:".2rem"}}>{b.icon}</div>
             <div style={{fontSize:".6rem",fontWeight:600,color:bulleOuverte===b.id?"white":C.gris}}>{b.label.replace(b.icon+" ","")}</div>

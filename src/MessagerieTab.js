@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
@@ -54,7 +54,7 @@ function MessagerieTab({ uid, userName }) {
       const idxSnap = await getDoc(idxRef);
       const partenaires = idxSnap.exists() ? (idxSnap.data().partenaires || {}) : {};
       if (partenaires[autreUid]) {
-        partenaires[autreUid] = { ...partenaires[autreUid], unread: false };
+        partenaires[autreUid] = { ...partenaires[autreUid], unreadCount: 0 };
         await setDoc(idxRef, { partenaires }, { merge: true });
         setConversations(partenaires);
       }
@@ -89,7 +89,7 @@ function MessagerieTab({ uid, userName }) {
       const idxRefAutre = doc(db, 'messagerie_index', contactActif.uid);
       const idxAutreSnap = await getDoc(idxRefAutre);
       const partenairesAutre = idxAutreSnap.exists() ? (idxAutreSnap.data().partenaires || {}) : {};
-      partenairesAutre[uid] = { nom: userName, lastMsg: texte.trim() || 'Photo', lastTs: msg.ts, unread: true };
+      partenairesAutre[uid] = { nom: userName, lastMsg: texte.trim() || 'Photo', lastTs: msg.ts, unreadCount: ((partenairesAutre[uid]&&partenairesAutre[uid].unreadCount)||0)+1 };
       await setDoc(idxRefAutre, { partenaires: partenairesAutre }, { merge: true });
 
       setTexte('');
@@ -196,19 +196,28 @@ function MessagerieTab({ uid, userName }) {
       )}
       {listeConversations.map(([mUid, c]) => (
         <div key={mUid} onClick={() => ouvrirConversation(mUid, c.nom)}
-          style={{ display: 'flex', alignItems: 'center', gap: '.6rem', background: 'white', border: `1px solid ${c.unread ? C.rose : C.pale}`, borderRadius: 10, padding: '.6rem .8rem', marginBottom: '.4rem', cursor: 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: '.6rem', background: 'white', border: `1px solid ${c.unreadCount ? C.rose : C.pale}`, borderRadius: 10, padding: '.6rem .8rem', marginBottom: '.4rem', cursor: 'pointer' }}>
           <div style={{ width: 36, height: 36, borderRadius: '50%', background: C.rose + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.85rem', fontWeight: 700, color: C.rose, flexShrink: 0 }}>
             {(c.nom || '?')[0].toUpperCase()}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '.8rem', color: C.texte, fontWeight: c.unread ? 700 : 600 }}>{c.nom}</div>
+            <div style={{ fontSize: '.8rem', color: C.texte, fontWeight: c.unreadCount ? 700 : 600 }}>{c.nom}</div>
             <div style={{ fontSize: '.7rem', color: C.gris, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.lastMsg}</div>
           </div>
-          {c.unread && <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#E63946', flexShrink: 0 }} />}
+          {c.unreadCount > 0 && <div style={{ minWidth: 20, height: 20, borderRadius: 10, background: '#E63946', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 .3rem' }}><span style={{ color: 'white', fontSize: '.65rem', fontWeight: 700 }}>{c.unreadCount}</span></div>}
         </div>
       ))}
     </div>
   );
 }
 
-export { MessagerieTab };
+async function getUnreadMessagesCount(uid) {
+  try {
+    const snap = await getDoc(doc(db, 'messagerie_index', uid));
+    if (!snap.exists()) return 0;
+    const partenaires = snap.data().partenaires || {};
+    return Object.values(partenaires).reduce((s, p) => s + (p.unreadCount || 0), 0);
+  } catch { return 0; }
+}
+
+export { MessagerieTab, getUnreadMessagesCount };

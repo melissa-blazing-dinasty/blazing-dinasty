@@ -7,6 +7,7 @@ import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/aut
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { DiagnosticsTab, DiagResultsTab, DiagnosticParfumTab, LinkBioPublicPage, TunnelHybridePage, RecommandationPubliquePage, FormationAppTab, EntonnoirTab, FORMATION_APP_CATEGORIES, FORMATION_APP_CATEGORIES_DEFAULT } from './DiagnosticsTab';
 import { FicheClienteCard, ClientsRelanceTab, ClientsTab, DistributeursTab, RelancesTab, LiensReseauxSection, MELISSA } from './ClientsTab';
+import { getUnreadMessagesCount } from './MessagerieTab';
 import { CommunauteTab } from './CommunauteTab';
 import { EditorialTab } from './EditorialTab';
 import { CalendrierTab } from './CalendrierTab';
@@ -1200,6 +1201,9 @@ function App(){
               });
             });
           }
+        }catch{}
+        try{
+          total+=await getUnreadMessagesCount(userId);
         }catch{}
         if("setAppBadge" in navigator){
           try{
