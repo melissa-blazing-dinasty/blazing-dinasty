@@ -42,6 +42,9 @@ export const fbFunctions = getFunctions(fbApp,'us-central1');
 const authentifierFn = httpsCallable(fbFunctions,'authentifier');
 const definirMotDePasseFn = httpsCallable(fbFunctions,'definirMotDePasse');
 const reinitialiserMotDePasseFn = httpsCallable(fbFunctions,'reinitialiserMotDePasse');
+const creerCompteStripeConnectFn = httpsCallable(fbFunctions,'creerCompteStripeConnect');
+const verifierStatutStripeFn = httpsCallable(fbFunctions,'verifierStatutStripe');
+const creerSessionCheckoutFn = httpsCallable(fbFunctions,'creerSessionCheckout');
 
 async function saveFCMToken(uid) {
   if (!messaging) return;
@@ -838,6 +841,25 @@ function App(){
   const[forgotError,setForgotError]=useState("");
   const[showMonCompte,setShowMonCompte]=useState(false);
   const[contactWhatsapp,setContactWhatsapp]=useState("");
+  const[stripeConnecte,setStripeConnecte]=useState(false);
+  const[stripePret,setStripePret]=useState(false);
+  const[stripeLoading,setStripeLoading]=useState(false);
+  const connecterStripe=async()=>{
+    setStripeLoading(true);
+    try{
+      const res=await creerCompteStripeConnectFn();
+      if(res.data&&res.data.url) window.location.href=res.data.url;
+    }catch(e){alert("Erreur : "+e.message);}
+    setStripeLoading(false);
+  };
+  const verifierStripe=async()=>{
+    try{
+      const res=await verifierStatutStripeFn();
+      setStripeConnecte(res.data.connecte);
+      setStripePret(res.data.pret);
+    }catch{}
+  };
+  useEffect(()=>{if(showMonCompte)verifierStripe();},[showMonCompte]);
   const[contactMessenger,setContactMessenger]=useState("");
   const[contactInstagram,setContactInstagram]=useState("");
   const[contactSaved,setContactSaved]=useState(false);
@@ -872,7 +894,22 @@ function App(){
           const mesDecl2=(decls2[c.id]||[]).filter(d=>d.uid===userId);
           return mesDecl2.length===0;
         });
-        setChallengeATraiterApp(pasFait2);
+        let alerteFinale=pasFait2;
+        try{
+          const nbMsg=await getUnreadMessagesCount(userId);
+          if(nbMsg>0)alerteFinale=true;
+        }catch{}
+        try{
+          const snapI4=await getDoc(doc(db,"communaute","infos"));
+          if(snapI4.exists()){
+            const infosArr4=Object.values(snapI4.data());
+            const uSnap5=await getDoc(doc(db,"users",userId));
+            const lastVu4=uSnap5.exists()?(uSnap5.data()["db-last-infos-vu"]||0):0;
+            const plusRecente4=infosArr4.length>0?Math.max(...infosArr4.map(i=>i.ts||0)):0;
+            if(plusRecente4>lastVu4)alerteFinale=true;
+          }
+        }catch{}
+        setChallengeATraiterApp(alerteFinale);
       }catch{}
     })();
   },[userId]);
@@ -968,6 +1005,11 @@ function App(){
         "db-contact-whatsapp":contactWhatsapp.trim(),
         "db-contact-messenger":contactMessenger.trim(),
         "db-contact-instagram":contactInstagram.trim()
+      },{merge:true});
+      await setDoc(doc(db,"contacts_publics",userId),{
+        whatsapp:contactWhatsapp.trim(),
+        messenger:contactMessenger.trim(),
+        instagram:contactInstagram.trim()
       },{merge:true});
       setContactSaved(true);
       setTimeout(()=>setContactSaved(false),2000);
@@ -1653,9 +1695,25 @@ function App(){
             {contactSaved?"✅ Enregistre !":"Enregistrer mes liens"}
           </button>
         </div>
+        {isChefApp&&(
+<div style={{background:"#F4F0FF",borderRadius:12,padding:"1rem",marginBottom:"1rem",border:"1px solid #D8CCFF"}}>
+          <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E",marginBottom:".3rem"}}>🛍️ Boutique en ligne</div>
+          <div style={{fontSize:".68rem",color:"#888",marginBottom:".6rem",lineHeight:1.5}}>
+            {stripePret?"Ton compte est active ! Tu peux recevoir des paiements directement de tes clientes.":stripeConnecte?"Ton compte est en cours de verification par Stripe.":"Active les paiements pour vendre directement en ligne a tes clientes."}
+          </div>
+          {stripePret?(
+            <div style={{background:"#E8F5E9",color:"#2D5A3D",borderRadius:8,padding:".5rem",fontSize:".72rem",fontWeight:600,textAlign:"center"}}>✅ Paiements actives</div>
+          ):(
+            <button onClick={connecterStripe} disabled={stripeLoading}
+              style={{width:"100%",background:"#635BFF",color:"white",border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+              {stripeLoading?"...":stripeConnecte?"Continuer la configuration Stripe":"Activer les paiements (Stripe)"}
+            </button>
+          )}
+        </div>
+        )}
         <button onClick={()=>{setShowMonCompte(false);setCompteMdp1("");setCompteMdp2("");setCompteError("");}}
             style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>
-            Annuler
+            Fermer
           </button>
         </>)}
       </div></div>)}

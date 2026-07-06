@@ -314,3 +314,153 @@ exports.notifMessage = onDocumentUpdated("conversations/{convId}", async (event)
 });
 
 
+
+
+const {defineSecret} = require("firebase-functions/params");
+const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+
+exports.creerCompteStripeConnect = onCall({secrets: [stripeSecretKey]}, async (request) => {
+  const auth = request.auth;
+  if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "Non connecte");
+  const uid = auth.uid;
+  const stripe = require("stripe")(stripeSecretKey.value());
+
+  const userRef = db.collection("users").doc(uid);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  let stripeAccountId = userData["db-stripe-account-id"];
+
+  if (!stripeAccountId) {
+    const account = await stripe.accounts.create({
+      type: "express",
+      country: "FR",
+      capabilities: {
+        card_payments: {requested: true},
+        transfers: {requested: true}
+      }
+    });
+    stripeAccountId = account.id;
+    await userRef.set({"db-stripe-account-id": stripeAccountId}, {merge: true});
+  }
+
+  const accountLink = await stripe.accountLinks.create({
+    account: stripeAccountId,
+    refresh_url: "https://blazing-dinasty-1fad9.web.app?stripe_refresh=true",
+    return_url: "https://blazing-dinasty-1fad9.web.app?stripe_return=true",
+    type: "account_onboarding"
+  });
+
+  return {url: accountLink.url};
+});
+
+exports.verifierStatutStripe = onCall({secrets: [stripeSecretKey]}, async (request) => {
+  const auth = request.auth;
+  if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "Non connecte");
+  const uid = auth.uid;
+  const stripe = require("stripe")(stripeSecretKey.value());
+
+  const userRef = db.collection("users").doc(uid);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  const stripeAccountId = userData["db-stripe-account-id"];
+
+  if (!stripeAccountId) return {connecte: false};
+
+  const account = await stripe.accounts.retrieve(stripeAccountId);
+  const pret = account.charges_enabled && account.details_submitted;
+
+  if (pret) {
+    await userRef.set({"db-stripe-pret": true}, {merge: true});
+  }
+
+  return {connecte: true, pret: pret};
+});
+
+exports.creerSessionCheckout = onCall({secrets: [stripeSecretKey]}, async (request) => {
+  const {distributeurUid, items, clientInfo} = request.data || {};
+  if (!distributeurUid || !items || !items.length) {
+    throw new HttpsError("invalid-argument", "Donnees manquantes");
+  }
+  const stripe = require("stripe")(stripeSecretKey.value());
+
+  const distribRef = db.collection("users").doc(distributeurUid);
+  const distribSnap = await distribRef.get();
+  const distribData = distribSnap.exists ? distribSnap.data() : {};
+  const stripeAccountId = distribData["db-stripe-account-id"];
+  if (!stripeAccountId || !distribData["db-stripe-pret"]) {
+    throw new HttpsError("failed-precondition", "Cette distributrice n'a pas encore active les paiements");
+  }
+
+  const lineItems = items.map(item => ({
+    price_data: {
+      currency: "eur",
+      product_data: {name: item.nom},
+      unit_amount: Math.round(item.prix * 100)
+    },
+    quantity: item.quantite || 1
+  }));
+
+  const totalCentimes = items.reduce((s, i) => s + Math.round(i.prix * 100) * (i.quantite || 1), 0);
+  const fraisPlateforme = Math.round(totalCentimes * 0.015) + 25; // approx frais Stripe (1.5% + 0.25e) pour equilibre neutre
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: lineItems,
+    payment_intent_data: {
+      application_fee_amount: fraisPlateforme,
+      transfer_data: {destination: stripeAccountId}
+    },
+    success_url: "https://blazing-dinasty-1fad9.web.app?commande=succes",
+    cancel_url: "https://blazing-dinasty-1fad9.web.app?commande=annulee",
+    metadata: {
+      distributeurUid,
+      clientNom: clientInfo?.nom || "",
+      clientEmail: clientInfo?.email || "",
+      clientTel: clientInfo?.tel || "",
+      items: JSON.stringify(items.map(i => ({nom: i.nom, prix: i.prix, quantite: i.quantite || 1})))
+    }
+  });
+
+  return {url: session.url};
+});
+
+exports.stripeWebhook = onRequest({secrets: [stripeSecretKey]}, async (req, res) => {
+  const stripe = require("stripe")(stripeSecretKey.value());
+  let event;
+  try {
+    event = req.body;
+  } catch (e) {
+    res.status(400).send("Webhook error");
+    return;
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const meta = session.metadata || {};
+    const distributeurUid = meta.distributeurUid;
+    if (distributeurUid) {
+      try {
+        const items = meta.items ? JSON.parse(meta.items) : [];
+        const total = items.reduce((s, i) => s + i.prix * (i.quantite || 1), 0);
+        const userRef = db.collection("users").doc(distributeurUid);
+        const userSnap = await userRef.get();
+        const clientsExistants = userSnap.exists && userSnap.data()["db-clients"] ? JSON.parse(userSnap.data()["db-clients"]) : [];
+        const nouveauClient = {
+          id: "c" + Date.now(),
+          nom: meta.clientNom || "Cliente boutique",
+          email: meta.clientEmail || "",
+          tel: meta.clientTel || "",
+          source: "boutique-en-ligne",
+          commandes: [{items, total, date: new Date().toISOString().slice(0,10), ts: Date.now()}],
+          rappels: []
+        };
+        await userRef.set({"db-clients": JSON.stringify([nouveauClient, ...clientsExistants])}, {merge: true});
+        await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", (meta.clientNom || "Une cliente") + " vient de commander pour " + total.toFixed(2) + " euros !");
+      } catch (e) {
+        console.error("Erreur creation client depuis webhook Stripe:", e);
+      }
+    }
+  }
+
+  res.status(200).send("ok");
+});

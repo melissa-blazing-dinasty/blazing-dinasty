@@ -625,10 +625,10 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
     if(!uid)return;
     (async()=>{
       try{
-        const cSnap4=await getDoc(doc(db,"users",uid));
+        const cSnap4=await getDoc(doc(db,"contacts_publics",uid));
         if(cSnap4.exists()){
           const cd4=cSnap4.data();
-          setContactLinksParfum({whatsapp:cd4["db-contact-whatsapp"]||"",messenger:cd4["db-contact-messenger"]||"",instagram:cd4["db-contact-instagram"]||""});
+          setContactLinksParfum({whatsapp:cd4.whatsapp||"",messenger:cd4.messenger||"",instagram:cd4.instagram||""});
         }
       }catch{}
     })();
@@ -1572,10 +1572,10 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     if(!uid)return;
     (async()=>{
       try{
-        const cSnap3=await getDoc(doc(db,"users",uid));
+        const cSnap3=await getDoc(doc(db,"contacts_publics",uid));
         if(cSnap3.exists()){
           const cd3=cSnap3.data();
-          setContactLinksDirect({whatsapp:cd3["db-contact-whatsapp"]||"",messenger:cd3["db-contact-messenger"]||"",instagram:cd3["db-contact-instagram"]||""});
+          setContactLinksDirect({whatsapp:cd3.whatsapp||"",messenger:cd3.messenger||"",instagram:cd3.instagram||""});
         }
       }catch{}
     })();
@@ -3121,12 +3121,12 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
         if(snap.exists()){
           const pData=snap.data();
           setProfil(pData);
-          if(pData.uid){try{const cSnap=await getDoc(doc(db,"users",pData.uid));if(cSnap.exists()){const cd=cSnap.data();setContactLinks({whatsapp:cd["db-contact-whatsapp"]||"",messenger:cd["db-contact-messenger"]||"",instagram:cd["db-contact-instagram"]||""});}}catch{}}
+          if(pData.uid){try{const cSnap=await getDoc(doc(db,"contacts_publics",pData.uid));if(cSnap.exists()){const cd=cSnap.data();setContactLinks({whatsapp:cd.whatsapp||"",messenger:cd.messenger||"",instagram:cd.instagram||""});}}catch{}}
         }
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
-          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);if(qProfil.uid){try{const cSnap2=await getDoc(doc(db,"users",qProfil.uid));if(cSnap2.exists()){const cd2=cSnap2.data();setContactLinks({whatsapp:cd2["db-contact-whatsapp"]||"",messenger:cd2["db-contact-messenger"]||"",instagram:cd2["db-contact-instagram"]||""});}}catch{}}try{const realSlug=qProfil.slug||slug;const sRef=doc(db,"linkbio_stats",realSlug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking query:",e);}}
+          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);if(qProfil.uid){try{const cSnap2=await getDoc(doc(db,"contacts_publics",qProfil.uid));if(cSnap2.exists()){const cd2=cSnap2.data();setContactLinks({whatsapp:cd2.whatsapp||"",messenger:cd2.messenger||"",instagram:cd2.instagram||""});}}catch{}}try{const realSlug=qProfil.slug||slug;const sRef=doc(db,"linkbio_stats",realSlug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking query:",e);}}
         }
       }catch{}
       setLoading(false);
