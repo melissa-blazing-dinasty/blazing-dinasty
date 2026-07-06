@@ -8694,7 +8694,7 @@ export function ActionsBiblioChefTab({uid}){
 }
 
 // Composant global — JAMAIS défini à l'intérieur d'un autre composant
-export function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCell, editVal, setEditCell, setEditVal, saveJour, setEditPeriode, setEditCA, setEditObj}){
+export function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCell, editVal, setEditCell, setEditVal, saveJour, setEditPeriode, setEditCA, setEditObj, setEditNote}){
   const d=data[`p${pNum}`]||{ca:0,obj:0,jours:{}};
   const debut=getPeriodeDebut(pNum);
   const _n=new Date();const _t=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate(),12,0,0);const _dj=Math.floor((_t.getTime()-debut.getTime())/(24*60*60*1000));const _je=courante?Math.min(21,Math.max(0,_dj+1)):joursEcoules;const isFutur=(i)=>courante&&i>=_je;const isToday=(i)=>courante&&i===_je-1;
@@ -8705,7 +8705,7 @@ export function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, 
       <div style={{background:courante?`linear-gradient(135deg,${C.brun},${C.brun2})`:color+'15',padding:'.5rem .5rem .4rem',borderBottom:`1px solid ${color}30`}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div style={{fontSize:'.6rem',fontWeight:700,color:courante?C.or:color}}>{fmtPLabel(pNum)}</div>
-          <button onClick={()=>{setEditPeriode(pNum);setEditCA(d.ca||'');setEditObj(d.obj||'');}}
+          <button onClick={()=>{setEditPeriode(pNum);setEditCA(d.ca||'');setEditObj(d.obj||'');setEditNote(d.note||'');}}
             style={{background:'none',border:`1px solid ${courante?'rgba(255,255,255,.25)':color+'40'}`,borderRadius:5,padding:'.1rem .35rem',fontSize:'.52rem',color:courante?C.pale:color,cursor:'pointer',fontFamily:'inherit'}}>✏️</button>
         </div>
         <div style={{fontFamily:'Georgia,serif',fontSize:'.95rem',fontWeight:700,color:courante?C.blanc:color}}>
@@ -9241,6 +9241,7 @@ export function SuiviCATab({uid}){
   const[editPeriode,setEditPeriode]=useState(null);
   const[editCA,setEditCA]=useState('');
   const[editObj,setEditObj]=useState('');
+  const[editNote,setEditNote]=useState('');
 
   // Historique — navigation
   const[histAnnee,setHistAnnee]=useState(new Date().getFullYear());
@@ -9281,7 +9282,7 @@ export function SuiviCATab({uid}){
   const saveEdit=()=>{
     const pKey=`p${editPeriode}`;
     const cur=data[pKey]||{jours:{}};
-    saveData({...data,[pKey]:{...cur,ca:parseFloat(editCA)||0,obj:parseFloat(editObj)||0}});
+    saveData({...data,[pKey]:{...cur,ca:parseFloat(editCA)||0,obj:parseFloat(editObj)||0,note:editNote.trim()}});
     setEditPeriode(null);
   };
 
@@ -9367,7 +9368,7 @@ export function SuiviCATab({uid}){
             <span onClick={()=>setEditColB(true)} style={{fontSize:'.55rem',fontWeight:700,color:'#888',cursor:'pointer',textAlign:'center'}}>{editColB?<input type='number' autoFocus value={inputB} onChange={e=>setInputB(e.target.value)} onBlur={()=>{const v=parseInt(inputB);if(v>0)setCompareB(v);setEditColB(false);}} onKeyDown={e=>e.key==='Enter'&&(setCompareB(parseInt(inputB)||1),setEditColB(false))} style={{width:36,border:'1px solid #888',borderRadius:4,fontSize:'.55rem',padding:'.08rem',textAlign:'center',fontFamily:'inherit'}}/>:fmtPLabel(compareB)}</span>
             <button onClick={()=>setCompareB(b=>Math.min(pCourante-1,b+1))} style={{background:'none',border:'none',color:'#aaa',cursor:'pointer',fontSize:'.85rem',lineHeight:1,padding:0}}>›</button>
           </div>
-          <GrilleJoursCA pNum={compareB} color='#888' joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj}/>
+          <GrilleJoursCA pNum={compareB} color='#888' joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote}/>
         </div>
 
         {/* Colonne A */}
@@ -9377,11 +9378,11 @@ export function SuiviCATab({uid}){
             <span onClick={()=>setEditColA(true)} style={{fontSize:'.55rem',fontWeight:700,color:C.lilas,cursor:'pointer',textAlign:'center'}}>{editColA?<input type='number' autoFocus value={inputA} onChange={e=>setInputA(e.target.value)} onBlur={()=>{const v=parseInt(inputA);if(v>0)setCompareA(v);setEditColA(false);}} onKeyDown={e=>e.key==='Enter'&&(setCompareA(parseInt(inputA)||1),setEditColA(false))} style={{width:36,border:`1px solid ${C.lilas}`,borderRadius:4,fontSize:'.55rem',padding:'.08rem',textAlign:'center',fontFamily:'inherit'}}/>:fmtPLabel(compareA)}</span>
             <button onClick={()=>setCompareA(a=>Math.min(pCourante-1,a+1))} style={{background:'none',border:'none',color:C.lilas,cursor:'pointer',fontSize:'.85rem',lineHeight:1,padding:0}}>›</button>
           </div>
-          <GrilleJoursCA pNum={compareA} color={C.lilas} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj}/>
+          <GrilleJoursCA pNum={compareA} color={C.lilas} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote}/>
         </div>
         {/* Colonne courante */}
         <div style={{border:`1.5px solid ${C.rose}40`,borderRadius:12,overflow:'hidden'}}>
-          <GrilleJoursCA pNum={pCourante} color={C.rose} courante={true} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj}/>
+          <GrilleJoursCA pNum={pCourante} color={C.rose} courante={true} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote}/>
         </div>
       </div>
 
@@ -9400,6 +9401,11 @@ export function SuiviCATab({uid}){
               <input type='number' value={editObj} onChange={e=>setEditObj(e.target.value)} placeholder='0'
                 style={{width:'100%',border:`1px solid ${C.pale}`,borderRadius:8,padding:'.45rem .65rem',fontSize:'.85rem',fontFamily:'inherit',color:C.texte,background:C.creme,outline:'none',fontWeight:700}}/>
             </div>
+          </div>
+          <div style={{marginBottom:'.6rem'}}>
+            <div style={{fontSize:'.6rem',color:C.gris,marginBottom:'.2rem'}}>Note (optionnel)</div>
+            <textarea value={editNote} onChange={e=>setEditNote(e.target.value)} placeholder="Ex: mois plus calme, congés..."
+              style={{width:'100%',border:`1px solid ${C.pale}`,borderRadius:8,padding:'.45rem .65rem',fontSize:'.78rem',fontFamily:'inherit',color:C.texte,background:C.creme,outline:'none',resize:'vertical',minHeight:50}}/>
           </div>
           <div style={{display:'flex',gap:'.4rem'}}>
             <button onClick={saveEdit} disabled={saving}
@@ -9455,10 +9461,10 @@ export function SuiviCATab({uid}){
               <div style={{borderTop:`1px solid ${C.pale}`,background:C.blanc}}>
                 <div style={{padding:'.5rem .65rem .2rem',background:C.creme,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div style={{fontSize:'.6rem',color:C.gris}}>Clique sur un jour pour saisir ou modifier</div>
-                  <button onClick={()=>{setEditPeriode(num);setEditCA(d3.ca||'');setEditObj(d3.obj||'');}}
+                  <button onClick={()=>{setEditPeriode(num);setEditCA(d3.ca||'');setEditObj(d3.obj||'');setEditNote(d3.note||'');}}
                     style={{background:C.brun,color:C.blanc,border:'none',borderRadius:6,padding:'.2rem .5rem',fontSize:'.6rem',fontWeight:600,fontFamily:'inherit',cursor:'pointer'}}>✏️ Total & Obj.</button>
                 </div>
-                <GrilleJoursCA pNum={num} color={isCourante?C.rose:C.lilas} courante={isCourante} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj}/>
+                <GrilleJoursCA pNum={num} color={isCourante?C.rose:C.lilas} courante={isCourante} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote}/>
               </div>
             )}
           </div>
