@@ -1097,6 +1097,10 @@ function App(){
         const quizOuvert=snapFS.exists()?(snapFS.data()["db-faststart-quiz-ouvert"]||""):"";
         if(quizOuvert)setForceQuizJourApp(quizOuvert);
       }catch{}
+      try{
+        const snapDatesCA=await getDoc(doc(db,"admin","dates_manuelles_ca"));
+        if(snapDatesCA.exists()) DATES_MANUELLES_CA=snapDatesCA.data().periodes||{};
+      }catch{}
       setUserId(uid);setName(displayName);setScreen("app");load(uid);verifierChangementPeriode(uid);
       // Afficher le challenge app apres 2s seulement si pas termine
       try{const snapCA=await getDoc(doc(db,"users",uid));const caRaw=snapCA.exists()?snapCA.data()["db-challenge-app"]:null;if(caRaw){const ca=JSON.parse(caRaw);const startDate=new Date(ca.startDate);const today=new Date();today.setHours(0,0,0,0);const diffJours=Math.floor((today-startDate)/(1000*60*60*24));if(diffJours<7)setTimeout(()=>setShowChallengeApp(true),2000);}else{setTimeout(()=>setShowChallengeApp(true),2000);}}catch{setTimeout(()=>setShowChallengeApp(true),2000);}
@@ -6898,6 +6902,22 @@ async function chargerCleAPI(){try{const snap=await getDoc(doc(db,"admin","confi
 chargerCleAPI();
 
 export let PERIODE_DEBUT_ABSOLU_MS = new Date("2026-01-01T12:00:00").getTime();
+export let DATES_MANUELLES_CA = {
+  "-34":"2023-12-28","-33":"2024-01-18","-32":"2024-02-08","-31":"2024-02-29","-30":"2024-03-21",
+  "-29":"2024-04-11","-28":"2024-05-02","-27":"2024-05-23","-26":"2024-06-13","-25":"2024-07-04",
+  "-24":"2024-07-25","-23":"2024-08-15","-22":"2024-09-05","-21":"2024-09-26","-20":"2024-10-17",
+  "-19":"2024-11-07","-18":"2024-11-28","-17":"2024-12-19",
+  "-16":"2025-01-09","-15":"2025-01-30","-14":"2025-02-20","-13":"2025-03-13","-12":"2025-04-03",
+  "-11":"2025-04-24","-10":"2025-05-15","-9":"2025-06-05","-8":"2025-06-26","-7":"2025-07-17",
+  "-6":"2025-08-07","-5":"2025-08-28","-4":"2025-09-18","-3":"2025-10-09","-2":"2025-10-30",
+  "-1":"2025-11-20","0":"2025-12-11"
+}; // {nAbsolu: "YYYY-MM-DD"} pour 2024/2025 uniquement - dates reelles fournies par Melissa
+export let NUMEROS_MANUELS_CA = {
+  "-34":1,"-33":2,"-32":3,"-31":4,"-30":5,"-29":6,"-28":7,"-27":8,"-26":9,"-25":10,
+  "-24":11,"-23":12,"-22":13,"-21":14,"-20":15,"-19":16,"-18":17,"-17":18,
+  "-16":1,"-15":2,"-14":3,"-13":4,"-12":5,"-11":6,"-10":7,"-9":8,"-8":9,"-7":10,
+  "-6":11,"-5":12,"-4":13,"-3":14,"-2":15,"-1":16,"0":17
+}; // vrai numero de campagne (C1-C18) pour chaque nAbsolu de 2024/2025
 export const CALENDRIER_PERIODES = {
   2025: [
     {num:1,debut:"2025-01-09",fin:"2025-01-29"},
@@ -6972,6 +6992,7 @@ export function getFinCampagne(annee, numC){
   return null;
 }
 export function getPeriodeDebut(nAbsolu){
+  if(DATES_MANUELLES_CA[nAbsolu]) return new Date(DATES_MANUELLES_CA[nAbsolu]+"T12:00:00");
   // Utiliser le calendrier officiel Mihi 2026 pour la période actuelle
   const campActuelle = getCampagneMihiActuelle();
   if(campActuelle){
@@ -6997,7 +7018,7 @@ function getPeriodeLabel(nAbsolu){
   const fmt=(d)=>d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
   // Numéro dans l'année et année
   // P1 2025 = abs 1, P18 2025 = abs 18, P1 2026 = abs 19...
-  const numDansAnnee = ((nAbsolu-1) % PERIODES_PAR_AN + PERIODES_PAR_AN) % PERIODES_PAR_AN + 1;
+  const numDansAnnee = NUMEROS_MANUELS_CA[nAbsolu]!==undefined ? NUMEROS_MANUELS_CA[nAbsolu] : ((nAbsolu-1) % PERIODES_PAR_AN + PERIODES_PAR_AN) % PERIODES_PAR_AN + 1;
   const annee = debut.getFullYear();
   return `P${numDansAnnee} ${annee} · ${fmt(debut)}→${fmt(fin)}`;
 }
@@ -7017,7 +7038,7 @@ export function fmtPLabel(nAbsolu){
   const debut = getPeriodeDebut(nAbsolu);
   // Ancre 22/01/2026 = P1 Mihi
   const OFFSET_MIHI = 0;
-  const numAnnee = ((nAbsolu - 1 + OFFSET_MIHI) % PERIODES_PAR_AN + PERIODES_PAR_AN) % PERIODES_PAR_AN + 1;
+  const numAnnee = NUMEROS_MANUELS_CA[nAbsolu]!==undefined ? NUMEROS_MANUELS_CA[nAbsolu] : ((nAbsolu - 1 + OFFSET_MIHI) % PERIODES_PAR_AN + PERIODES_PAR_AN) % PERIODES_PAR_AN + 1;
   return `P${numAnnee} ${debut.getFullYear()}`;
 }
 
@@ -9307,7 +9328,6 @@ export function SuiviCATab({uid}){
   const periodesDeAnnee=(annee)=>{
     const result=[];
     for(let n=-50;n<=pCourante;n++){
-      if(n===0) continue;
       try{
         const d=getPeriodeDebut(n);
         const f=new Date(d.getTime()+PERIODE_DUREE_JOURS*24*60*60*1000-1);
@@ -10178,6 +10198,20 @@ function AdminTab({uid}){
   const[savingCatalogue,setSavingCatalogue]=useState(false);
   const[savedCatalogue,setSavedCatalogue]=useState(false);
   const sauvegarderCatalogue=async()=>{setSavingCatalogue(true);try{await setDoc(doc(db,"admin","config"),{catalogueLien:catalogueLien.trim()},{merge:true});setSavedCatalogue(true);setTimeout(()=>setSavedCatalogue(false),2000);}catch{}setSavingCatalogue(false);};
+  const[datesCA,setDatesCA]=useState({});
+  const[savingDatesCA,setSavingDatesCA]=useState(false);
+  const[savedDatesCA,setSavedDatesCA]=useState(false);
+  useEffect(()=>{(async()=>{try{const snapDCA=await getDoc(doc(db,"admin","dates_manuelles_ca"));if(snapDCA.exists()&&Object.keys(snapDCA.data().periodes||{}).length>0)setDatesCA(snapDCA.data().periodes);else setDatesCA(DATES_MANUELLES_CA);}catch{setDatesCA(DATES_MANUELLES_CA);}})();},[]);
+  const sauvegarderDatesCA=async()=>{
+    setSavingDatesCA(true);
+    try{
+      await setDoc(doc(db,"admin","dates_manuelles_ca"),{periodes:datesCA},{merge:true});
+      DATES_MANUELLES_CA=datesCA;
+      setSavedDatesCA(true);
+      setTimeout(()=>setSavedDatesCA(false),2000);
+    }catch{}
+    setSavingDatesCA(false);
+  };
   const sauvegarderCle=async()=>{setSavingKey(true);try{await setDoc(doc(db,"admin","config"),{anthropicKey},{merge:true});ANTHROPIC_API_KEY=anthropicKey;setSavedKey(true);setTimeout(()=>setSavedKey(false),2000);}catch{}setSavingKey(false);};
   const[savingFS,setSavingFS]=useState(false);
   const[filterDest,setFilterDest]=useState("all");
@@ -10480,7 +10514,24 @@ function AdminTab({uid}){
           {savingCatalogue?"...":savedCatalogue?"Enregistre !":"Sauvegarder le lien"}
         </button>
       </div>
-            {/* Scripts personnalisés */}
+            {/* Dates manuelles Suivi CA 2024/2025 */}
+      <div style={{background:C.creme,borderRadius:12,padding:"1rem",marginTop:"1rem",border:"1px solid "+C.pale}}>
+        <div style={{fontSize:".68rem",fontWeight:700,color:C.brun,marginBottom:".4rem"}}>Dates manuelles Suivi CA (2024 et 2025 uniquement)</div>
+        <div style={{fontSize:".68rem",color:C.gris,marginBottom:".6rem",lineHeight:1.5}}>Ces dates remplacent le calcul automatique uniquement pour les 36 periodes de 2024 et 2025. Une fois validees, elles s'appliquent a toute l'equipe. Les autres annees ne sont pas concernees.</div>
+        <div style={{maxHeight:400,overflowY:"auto",marginBottom:".6rem"}}>
+          {Array.from({length:36},(_,i)=>-35+i).map(n=>(
+            <div key={n} style={{display:"flex",alignItems:"center",gap:".5rem",marginBottom:".35rem"}}>
+              <div style={{fontSize:".68rem",color:C.texte,width:50,flexShrink:0}}>n={n}</div>
+              <input type="date" value={datesCA[n]||""} onChange={e=>setDatesCA(p=>({...p,[n]:e.target.value}))}
+                style={{flex:1,border:"1px solid "+C.pale,borderRadius:8,padding:".35rem .5rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:"white",outline:"none"}}/>
+            </div>
+          ))}
+        </div>
+        <button onClick={sauvegarderDatesCA} disabled={savingDatesCA}
+          style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".45rem 1rem",fontSize:".75rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          {savingDatesCA?"...":savedDatesCA?"Valide et applique a tous !":"Valider les dates"}
+        </button>
+      </div>      {/* Scripts personnalisés */}
       <div style={{background:C.creme,borderRadius:12,padding:"1rem",marginTop:"1rem",border:"1px solid "+C.pale}}>
         <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.brun,marginBottom:".75rem"}}>📝 Scripts personnalisés</div>
         <AdminScriptsEditor/>
