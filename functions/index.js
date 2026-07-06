@@ -1,7 +1,8 @@
 ﻿const {onSchedule} = require("firebase-functions/v2/scheduler");
+const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentUpdated, onDocumentCreated} = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
-admin.initializeApp();
+admin.initializeApp({storageBucket: "blazing-dinasty-1fad9.firebasestorage.app"});
 const db = admin.firestore();
 const messaging = admin.messaging();
 
@@ -311,3 +312,5 @@ exports.notifMessage = onDocumentUpdated("conversations/{convId}", async (event)
     }
   } catch (e) { console.error("notifMessage error", e); }
 });
+
+

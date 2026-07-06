@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { ref as storageRefMsg, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db, storage } from './firebase';
 import { C } from './constants';
-import { UploadPhoto } from './FormationProduitsTab';
+import { UploadPhoto, UploadVideo } from './FormationProduitsTab';
 
 function convId(a, b) {
   return [a, b].sort().join('_');
@@ -12,16 +13,112 @@ function newGroupId() {
   return 'groupe_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 }
 
+function VoiceRecorder({ uid, onChange, value, autoStart, onSent }) {
+  const [recording, setRecording] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState(value || '');
+  const [seconds, setSeconds] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const timerRef = useRef(null);
+
+  useEffect(() => setPreview(value || ''), [value]);
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStart && !autoStarted.current && !value) {
+      autoStarted.current = true;
+      demarrer();
+    }
+  }, [autoStart]);
+
+  const demarrer = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(timerRef.current);
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        setUploading(true);
+        try {
+          const path = `messagerie-vocaux/${uid}/${Date.now()}.webm`;
+          const fileRef = storageRefMsg(storage, path);
+          const uploadTask = uploadBytesResumable(fileRef, blob);
+          uploadTask.on('state_changed', () => {}, (err) => {
+            alert('Erreur upload vocal : ' + err.message);
+            setUploading(false);
+          }, async () => {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            setPreview(url);
+            onChange(url);
+            setUploading(false);
+            if (onSent) onSent(url);
+          });
+        } catch (err) {
+          alert('Erreur : ' + err.message);
+          setUploading(false);
+        }
+      };
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setRecording(true);
+      setSeconds(0);
+      timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
+    } catch (err) {
+      alert("Impossible d'acceder au microphone : " + err.message);
+    }
+  };
+
+  const arreter = () => {
+    if (mediaRecorderRef.current && recording) {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
+    }
+  };
+
+  const fmtSec = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  if (preview && !recording) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.4rem', marginBottom: '.5rem' }}>
+        <audio src={preview} controls style={{ flex: 1, height: 32 }} />
+        <button onClick={() => { setPreview(''); onChange(''); }}
+          style={{ background: 'none', border: `1px solid ${C.pale}`, borderRadius: 7, padding: '.3rem .5rem', fontSize: '.65rem', color: C.gris, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: '.5rem' }}>
+      {uploading ? (
+        <div style={{ fontSize: '.72rem', color: C.gris, textAlign: 'center', padding: '.4rem' }}>Envoi du vocal...</div>
+      ) : (
+        <button onClick={recording ? arreter : demarrer}
+          style={{ width: '100%', background: recording ? '#E63946' : 'white', border: `1.5px solid ${recording ? '#E63946' : C.pale}`, color: recording ? 'white' : C.texte, borderRadius: 10, padding: '.5rem', fontSize: '.78rem', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
+          {recording ? `⏺ Enregistrement... ${fmtSec(seconds)} (toucher pour arreter et envoyer)` : '🎤 Message vocal'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function MessagerieTab({ uid, userName }) {
-  const [ecran, setEcran] = useState('liste'); // liste | recherche | conversation | creerGroupe
+  const [ecran, setEcran] = useState('liste');
   const [conversations, setConversations] = useState({});
   const [loading, setLoading] = useState(true);
   const [annuaire, setAnnuaire] = useState({});
   const [recherche, setRecherche] = useState('');
-  const [contactActif, setContactActif] = useState(null); // {id, nom, isGroupe, participants}
+  const [contactActif, setContactActif] = useState(null);
   const [messages, setMessages] = useState([]);
   const [texte, setTexte] = useState('');
   const [photo, setPhoto] = useState('');
+  const [video, setVideo] = useState('');
+  const [vocal, setVocal] = useState('');
+  const [modeJoint, setModeJoint] = useState(null); // null | 'photo' | 'video' | 'vocal'
   const [envoi, setEnvoi] = useState(false);
   const [groupeNom, setGroupeNom] = useState('');
   const [groupeMembres, setGroupeMembres] = useState([]);
@@ -67,8 +164,17 @@ function MessagerieTab({ uid, userName }) {
     } catch {}
   };
 
-  const envoyerMessage = async () => {
-    if (!texte.trim() && !photo) return;
+  const apercuDernierMsg = (texte, photo, video, vocal) => {
+    if (texte) return texte;
+    if (photo) return 'Photo';
+    if (video) return 'Video';
+    if (vocal) return 'Message vocal';
+    return '';
+  };
+
+  const envoyerMessage = async (vocalOverride) => {
+    const vocalAEnvoyer = vocalOverride || vocal;
+    if (!texte.trim() && !photo && !video && !vocalAEnvoyer) return;
     if (!contactActif) return;
     setEnvoi(true);
     try {
@@ -79,6 +185,8 @@ function MessagerieTab({ uid, userName }) {
         deNom: userName,
         texte: texte.trim(),
         photo: photo || '',
+        video: video || '',
+        vocal: vocalAEnvoyer || '',
         ts: Date.now(),
       };
       const next = [...messages, msg];
@@ -91,15 +199,15 @@ function MessagerieTab({ uid, userName }) {
         nomGroupe: contactActif.isGroupe ? contactActif.nom : '',
       }, { merge: true });
 
-      // Mettre a jour mon propre index
+      const apercu = apercuDernierMsg(texte.trim(), photo, video, vocalAEnvoyer);
+
       const idxRefMoi = doc(db, 'messagerie_index', uid);
       const idxMoiSnap = await getDoc(idxRefMoi);
       const partenairesMoi = idxMoiSnap.exists() ? (idxMoiSnap.data().partenaires || {}) : {};
-      partenairesMoi[contactActif.id] = { nom: contactActif.nom, lastMsg: texte.trim() || 'Photo', lastTs: msg.ts, unreadCount: 0, isGroupe: !!contactActif.isGroupe, participants: contactActif.isGroupe ? participants : undefined };
+      partenairesMoi[contactActif.id] = { nom: contactActif.nom, lastMsg: apercu, lastTs: msg.ts, unreadCount: 0, isGroupe: !!contactActif.isGroupe, participants: contactActif.isGroupe ? participants : undefined };
       await setDoc(idxRefMoi, { partenaires: partenairesMoi }, { merge: true });
       setConversations(partenairesMoi);
 
-      // Mettre a jour l'index de chaque autre participant
       const autresParticipants = participants.filter(p => p !== uid);
       for (const autreUid of autresParticipants) {
         try {
@@ -110,7 +218,7 @@ function MessagerieTab({ uid, userName }) {
           const nomPourAutre = contactActif.isGroupe ? contactActif.nom : userName;
           partenairesAutre[cleAutre] = {
             nom: nomPourAutre,
-            lastMsg: (contactActif.isGroupe ? (userName + ': ') : '') + (texte.trim() || 'Photo'),
+            lastMsg: (contactActif.isGroupe ? (userName + ': ') : '') + apercu,
             lastTs: msg.ts,
             unreadCount: ((partenairesAutre[cleAutre] && partenairesAutre[cleAutre].unreadCount) || 0) + 1,
             isGroupe: !!contactActif.isGroupe,
@@ -122,6 +230,9 @@ function MessagerieTab({ uid, userName }) {
 
       setTexte('');
       setPhoto('');
+      setVideo('');
+      setVocal('');
+      setModeJoint(null);
     } catch {}
     setEnvoi(false);
   };
@@ -213,7 +324,7 @@ function MessagerieTab({ uid, userName }) {
   if (ecran === 'conversation' && contactActif) {
     return (
       <div>
-        <button onClick={() => { setEcran('liste'); chargerIndex(); }}
+        <button onClick={() => { setEcran('liste'); chargerIndex(); setModeJoint(null); }}
           style={{ background: 'none', border: 'none', color: C.rose, fontSize: '.78rem', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '.75rem', padding: 0 }}>
           ← Retour aux conversations
         </button>
@@ -233,7 +344,9 @@ function MessagerieTab({ uid, userName }) {
                 <div style={{ fontSize: '.62rem', color: C.rose, fontWeight: 700, marginBottom: '.15rem', marginLeft: '.2rem' }}>{m.deNom}</div>
               )}
               <div style={{ background: m.de === uid ? C.rose : 'white', color: m.de === uid ? 'white' : C.texte, borderRadius: 12, padding: '.55rem .75rem', fontSize: '.8rem', lineHeight: 1.5 }}>
-                {m.photo && <img src={m.photo} alt="" style={{ width: '100%', borderRadius: 8, marginBottom: m.texte ? '.4rem' : 0, display: 'block' }} />}
+                {m.photo && <img src={m.photo} alt="" style={{ width: '100%', borderRadius: 8, marginBottom: (m.texte || m.video || m.vocal) ? '.4rem' : 0, display: 'block' }} />}
+                {m.video && <video src={m.video} controls style={{ width: '100%', borderRadius: 8, marginBottom: (m.texte || m.vocal) ? '.4rem' : 0, display: 'block' }} />}
+                {m.vocal && <audio src={m.vocal} controls style={{ width: '100%', marginBottom: (m.texte) ? '.4rem' : 0, display: 'block' }} />}
                 {m.texte && <div>{m.texte}</div>}
               </div>
               <div style={{ fontSize: '.6rem', color: C.gris, marginTop: '.2rem', textAlign: m.de === uid ? 'right' : 'left' }}>
@@ -242,13 +355,32 @@ function MessagerieTab({ uid, userName }) {
             </div>
           ))}
         </div>
-        <UploadPhoto label="Photo (optionnel)" value={photo} onChange={(v) => setPhoto(v)} folder="messagerie" />
+
+        <div style={{ display: 'flex', gap: '.3rem', marginBottom: '.5rem' }}>
+          <button onClick={() => setModeJoint(modeJoint === 'photo' ? null : 'photo')}
+            style={{ flex: 1, background: modeJoint === 'photo' ? C.rose : 'white', color: modeJoint === 'photo' ? 'white' : C.texte, border: `1px solid ${modeJoint === 'photo' ? C.rose : C.pale}`, borderRadius: 8, padding: '.4rem', fontSize: '.68rem', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
+            📷 Photo
+          </button>
+          <button onClick={() => setModeJoint(modeJoint === 'video' ? null : 'video')}
+            style={{ flex: 1, background: modeJoint === 'video' ? C.rose : 'white', color: modeJoint === 'video' ? 'white' : C.texte, border: `1px solid ${modeJoint === 'video' ? C.rose : C.pale}`, borderRadius: 8, padding: '.4rem', fontSize: '.68rem', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
+            🎬 Video
+          </button>
+          <button onClick={() => setModeJoint(modeJoint === 'vocal' ? null : 'vocal')}
+            style={{ flex: 1, background: modeJoint === 'vocal' ? C.rose : 'white', color: modeJoint === 'vocal' ? 'white' : C.texte, border: `1px solid ${modeJoint === 'vocal' ? C.rose : C.pale}`, borderRadius: 8, padding: '.4rem', fontSize: '.68rem', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
+            🎤 Vocal
+          </button>
+        </div>
+
+        {modeJoint === 'photo' && <UploadPhoto label="Photo" value={photo} onChange={(v) => setPhoto(v)} folder="messagerie" />}
+        {modeJoint === 'video' && <UploadVideo label="Video" value={video} onChange={(v) => setVideo(v)} folder="messagerie-videos" uid={uid} />}
+        {modeJoint === 'vocal' && <VoiceRecorder uid={uid} value={vocal} onChange={(v) => setVocal(v)} autoStart={true} onSent={(url) => envoyerMessage(url)} />}
+
         <div style={{ display: 'flex', gap: '.4rem', marginTop: '.5rem' }}>
           <input value={texte} onChange={(e) => setTexte(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && envoyerMessage()}
             placeholder="Ecris ton message..."
             style={{ flex: 1, border: `1px solid ${C.pale}`, borderRadius: 10, padding: '.55rem .75rem', fontSize: '.8rem', fontFamily: 'inherit', color: C.texte, background: 'white', outline: 'none' }} />
-          <button onClick={envoyerMessage} disabled={envoi || (!texte.trim() && !photo)}
+          <button onClick={() => envoyerMessage()} disabled={envoi || (!texte.trim() && !photo && !video && !vocal)}
             style={{ background: C.brun, color: 'white', border: 'none', borderRadius: 10, padding: '.55rem 1rem', fontSize: '.8rem', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
             Envoyer
           </button>
