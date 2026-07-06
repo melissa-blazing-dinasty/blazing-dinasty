@@ -662,7 +662,10 @@ function EditClientForm({client, onSave, onCancel}){
       </div>
       <GInput value={f.tel} onChange={e=>setF(p=>({...p,tel:e.target.value}))} placeholder="Téléphone"/>
       <GInput value={f.email} onChange={e=>setF(p=>({...p,email:e.target.value}))} placeholder="Email"/>
-      <GInput type="date" value={f.ddn} onChange={e=>setF(p=>({...p,ddn:e.target.value}))}/>
+      <div style={{position:"relative"}}>
+        <GInput type="date" value={f.ddn} onChange={e=>setF(p=>({...p,ddn:e.target.value}))}/>
+        <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:".85rem"}}>🎂</span>
+      </div>
       <GInput value={f.adresse} onChange={e=>setF(p=>({...p,adresse:e.target.value}))} placeholder="Adresse"/>
       <textarea value={f.notes} onChange={e=>setF(p=>({...p,notes:e.target.value}))} placeholder="Notes"
         style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".75rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",resize:"vertical",minHeight:50,marginBottom:".4rem"}}/>
@@ -1048,7 +1051,10 @@ function ClientsTab({clients,save,uid,cibleId}){
           </div>
           <GInput placeholder="Téléphone / WhatsApp" value={form.tel} onChange={e=>setForm(p=>({...p,tel:e.target.value}))}/>
           <GInput placeholder="Email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
-          <GInput type="date" value={form.ddn} onChange={e=>setForm(p=>({...p,ddn:e.target.value}))} style={{marginBottom:".45rem"}}/>
+          <div style={{position:"relative",marginBottom:".45rem"}}>
+            <GInput type="date" value={form.ddn} onChange={e=>setForm(p=>({...p,ddn:e.target.value}))}/>
+            <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:".85rem"}}>🎂</span>
+          </div>
           <GInput placeholder="Adresse (optionnel)" value={form.adresse} onChange={e=>setForm(p=>({...p,adresse:e.target.value}))}/>
           <textarea placeholder="Notes" value={form.notes} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}
             style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",minHeight:60,marginBottom:".65rem"}}/>
