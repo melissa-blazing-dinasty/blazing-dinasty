@@ -302,9 +302,12 @@ exports.notifMessage = onDocumentUpdated("conversations/{convId}", async (event)
     if (msgsAfter.length <= msgsBefore.length) return;
     const dernierMsg = msgsAfter[msgsAfter.length - 1];
     const participants = after.participants || [];
-    const destinataire = participants.find(p => p !== dernierMsg.de);
-    if (!destinataire) return;
+    const destinataires = participants.filter(p => p !== dernierMsg.de);
+    if (!destinataires.length) return;
     const apercu = dernierMsg.texte ? dernierMsg.texte.slice(0, 60) : "Photo";
-    await sendNotifToUid(destinataire, "💬 " + dernierMsg.deNom, apercu);
+    const titre = after.isGroupe ? ("💬 " + (after.nomGroupe || "Groupe") + " · " + dernierMsg.deNom) : ("💬 " + dernierMsg.deNom);
+    for (const dest of destinataires) {
+      await sendNotifToUid(dest, titre, apercu);
+    }
   } catch (e) { console.error("notifMessage error", e); }
 });
