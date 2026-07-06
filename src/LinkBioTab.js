@@ -303,26 +303,6 @@ function LinkBioTab({uid, userName}){
             </div>
           </div>
 
-          {/* Diagnostics multiples */}
-          <div style={{height:1,background:C.pale,margin:"1rem 0"}}/>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
-            <div style={{fontSize:".6rem",fontWeight:700,color:C.rose,letterSpacing:".1em",textTransform:"uppercase"}}>✨ Liens Diagnostics</div>
-            <button onClick={()=>setProfil(p=>({...p,liensDiag:[...(p.liensDiag||[]),{label:"",url:""}]}))}
-              style={{background:C.rose,color:"white",border:"none",borderRadius:7,padding:".22rem .55rem",fontSize:".65rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>+ Ajouter</button>
-          </div>
-          {(profil.liensDiag||[{label:"✨ Faire mon diagnostic",url:profil.lienDiag||""}]).map((d,i)=>(
-            <div key={i} style={{display:"flex",gap:".3rem",marginBottom:".35rem",alignItems:"center"}}>
-              <input value={d.label} onChange={e=>{const a=[...(profil.liensDiag||[])];a[i]={...a[i],label:e.target.value};setProfil(p=>({...p,liensDiag:a}));}}
-                placeholder="Label ex: Diagnostic Skincare"
-                style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-              <input value={d.url} onChange={e=>{const a=[...(profil.liensDiag||[])];a[i]={...a[i],url:e.target.value};setProfil(p=>({...p,liensDiag:a}));}}
-                placeholder="URL https://..."
-                style={{flex:2,border:`1px solid ${C.pale}`,borderRadius:7,padding:".38rem .5rem",fontSize:".72rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
-              <button onClick={()=>setProfil(p=>({...p,liensDiag:(p.liensDiag||[]).filter((_,j)=>j!==i)}))}
-                style={{background:"none",border:"none",color:C.gris,cursor:"pointer",fontSize:".75rem",flexShrink:0}}>✕</button>
-            </div>
-          ))}
-
           {/* Liens bonus */}
           <div style={{height:1,background:C.pale,margin:"1rem 0"}}/>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".6rem"}}>
