@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
+import { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut } from 'firebase/auth';
 import { C } from './constants';
 import App from './App';
 import { SCRIPTS_DATA, DecouverteTour } from './App';
@@ -2950,6 +2951,17 @@ function BoutiquePubliquePage({slug}){
   const [retourCommande]=useState(()=>new URLSearchParams(window.location.search).get("commande"));
   const [retourFidelite]=useState(()=>new URLSearchParams(window.location.search).get("fidelite")==="milestone");
   const [showSuccessBanner,setShowSuccessBanner]=useState(true);
+  const [clientUser,setClientUser]=useState(null);
+  const [authReady,setAuthReady]=useState(false);
+  const [showAccountPanel,setShowAccountPanel]=useState(false);
+  const [loginEmail,setLoginEmail]=useState("");
+  const [loginSent,setLoginSent]=useState(false);
+  const [loginError,setLoginError]=useState("");
+  const [loginLoading,setLoginLoading]=useState(false);
+  const [accountData,setAccountData]=useState(null);
+  const [accountLoading,setAccountLoading]=useState(false);
+  const [favoris,setFavoris]=useState([]);
+  const [accountTab,setAccountTab]=useState("commandes");
 
   useEffect(()=>{
     (async()=>{
@@ -3024,6 +3036,79 @@ function BoutiquePubliquePage({slug}){
     return ()=>clearTimeout(t);
   },[toast]);
 
+  // Connexion cliente par lien magique : detection du retour de clic email
+  useEffect(()=>{
+    (async()=>{
+      try{
+        if(isSignInWithEmailLink(auth,window.location.href)){
+          let emailPourConnexion=window.localStorage.getItem("bd-boutique-email-"+slug);
+          if(!emailPourConnexion){emailPourConnexion=window.prompt("Confirme ton email pour te connecter :");}
+          if(emailPourConnexion){
+            await signInWithEmailLink(auth,emailPourConnexion,window.location.href);
+            window.localStorage.removeItem("bd-boutique-email-"+slug);
+            const url=new URL(window.location.href);
+            url.searchParams.delete("apiKey");url.searchParams.delete("oobCode");url.searchParams.delete("mode");url.searchParams.delete("lang");
+            window.history.replaceState({},"",url.toString());
+            setShowAccountPanel(true);
+          }
+        }
+      }catch(e){console.error("connexion lien magique:",e);}
+      setAuthReady(true);
+    })();
+  },[slug]);
+
+  useEffect(()=>{
+    const unsub=onAuthStateChanged(auth,u=>setClientUser(u));
+    return unsub;
+  },[]);
+
+  useEffect(()=>{
+    if(!clientUser||!profil||profil==="404")return;
+    (async()=>{
+      setAccountLoading(true);
+      try{
+        const fn=httpsCallable(fbFunctions,"obtenirDonneesClientBoutique");
+        const res=await fn({distributeurUid:profil.uid});
+        setAccountData(res.data);
+      }catch(e){console.error("donnees client:",e);}
+      try{
+        const favSnap=await getDoc(doc(db,"favoris_clients",clientUser.uid));
+        setFavoris(favSnap.exists()?(favSnap.data().items||[]):[]);
+      }catch(e){console.error("favoris:",e);}
+      setAccountLoading(false);
+    })();
+  },[clientUser,profil]);
+
+  const envoyerLienConnexion=async()=>{
+    if(!loginEmail.trim()||!loginEmail.includes("@")){setLoginError("Merci d'indiquer un email valide.");return;}
+    setLoginLoading(true);setLoginError("");
+    try{
+      const url=new URL(window.location.href);
+      url.searchParams.set("boutique",slug);
+      await sendSignInLinkToEmail(auth,loginEmail.trim(),{url:url.toString(),handleCodeInApp:true});
+      window.localStorage.setItem("bd-boutique-email-"+slug,loginEmail.trim());
+      setLoginSent(true);
+    }catch(e){
+      setLoginError("Erreur : "+e.message);
+    }
+    setLoginLoading(false);
+  };
+
+  const seDeconnecter=async()=>{
+    await signOut(auth);
+    setAccountData(null);setFavoris([]);setShowAccountPanel(false);
+  };
+
+  const toggleFavori=async(ref)=>{
+    if(!clientUser){setShowAccountPanel(true);return;}
+    const dejaFavori=favoris.includes(ref);
+    const nouveauxFavoris=dejaFavori?favoris.filter(r=>r!==ref):[...favoris,ref];
+    setFavoris(nouveauxFavoris);
+    try{
+      await setDoc(doc(db,"favoris_clients",clientUser.uid),{items:nouveauxFavoris,distributeurUid:profil.uid,updatedAt:new Date().toISOString()});
+    }catch(e){console.error("maj favoris:",e);}
+  };
+
   const totalPanier=cart.reduce((s,i)=>s+i.prix*i.quantite,0);
   const nbArticles=cart.reduce((s,i)=>s+i.quantite,0);
   const FRAIS_PORT=5.90;
@@ -3077,12 +3162,16 @@ function BoutiquePubliquePage({slug}){
 
   const categories=Object.keys(CAT_LABELS).filter(k=>catalogue&&catalogue[k]&&catalogue[k].length);
   const hasBestSellers=profil&&profil.bestSellers&&profil.bestSellers.length>0;
-  const allCategoriesTabs=hasBestSellers?["bestsellers",...categories]:categories;
-  const CAT_LABELS_FULL={...CAT_LABELS,bestsellers:"✨ Best-sellers"};
+  const hasFavoris=clientUser&&favoris.length>0;
+  const allCategoriesTabs=[...(hasBestSellers?["bestsellers"]:[]),...(hasFavoris?["favoris"]:[]),...categories];
+  const CAT_LABELS_FULL={...CAT_LABELS,bestsellers:"✨ Best-sellers",favoris:"❤️ Mes favoris"};
   let produits=[];
   if(activeCat==="bestsellers"&&catalogue){
     const tousProduits=Object.values(catalogue).flat();
     produits=profil.bestSellers.map(ref=>tousProduits.find(p=>p.ref===ref)).filter(Boolean);
+  }else if(activeCat==="favoris"&&catalogue){
+    const tousProduits=Object.values(catalogue).flat();
+    produits=favoris.map(ref=>tousProduits.find(p=>p.ref===ref)).filter(Boolean);
   }else{
     produits=(catalogue&&catalogue[activeCat])||[];
   }
@@ -3106,7 +3195,11 @@ function BoutiquePubliquePage({slug}){
       )}
       <div className="boutique-container" style={{margin:"0 auto",minHeight:"100vh",background:theme.bgPage,position:"relative"}}>
 
-        <div style={{background:theme.header,padding:"1.5rem 1rem 1.25rem",textAlign:"center"}}>
+        <div style={{background:theme.header,padding:"1.5rem 1rem 1.25rem",textAlign:"center",position:"relative"}}>
+          <button className="boutique-btn" onClick={()=>setShowAccountPanel(true)}
+            style={{position:"absolute",top:".85rem",right:".85rem",background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",borderRadius:20,padding:".3rem .7rem",fontSize:".65rem",fontWeight:700,color:"white",cursor:"pointer",fontFamily:"inherit"}}>
+            👤 {clientUser?(accountData?.prenom||"Mon compte"):"Connexion"}
+          </button>
           {profil.photo
             ?<img src={profil.photo} alt="" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover",border:"2px solid rgba(255,255,255,.3)",marginBottom:".5rem",display:"block",margin:"0 auto .5rem"}}/>
             :<div style={{width:64,height:64,borderRadius:"50%",background:"rgba(255,255,255,.2)",margin:"0 auto .5rem",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.7rem",color:"#fff",fontFamily:"Georgia,serif"}}>
@@ -3159,7 +3252,11 @@ function BoutiquePubliquePage({slug}){
             const enPanier=cart.find(i=>i.ref===prod.ref);
             const prixAffiche=(prod.offre&&prod.prixOffre)?prod.prixOffre:prod.prix;
             return(
-              <div key={prod.ref} className="boutique-card" style={{background:"white",borderRadius:12,padding:".55rem .45rem",border:"1px solid #E8DDD4",display:"flex",flexDirection:"column"}}>
+              <div key={prod.ref} className="boutique-card" style={{background:"white",borderRadius:12,padding:".55rem .45rem",border:"1px solid #E8DDD4",display:"flex",flexDirection:"column",position:"relative"}}>
+                <button onClick={()=>toggleFavori(prod.ref)}
+                  style={{position:"absolute",top:6,right:6,zIndex:2,background:"rgba(255,255,255,.9)",border:"none",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:".8rem",boxShadow:"0 1px 4px rgba(0,0,0,.15)"}}>
+                  {favoris.includes(prod.ref)?"❤️":"🤍"}
+                </button>
                 {prod.image&&!prod._imgFailed
                   ?<img src={prod.image} alt={prod.nom} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,marginBottom:".4rem",background:theme.bgPage}} onError={e=>{prod._imgFailed=true;e.target.style.display="none";e.target.nextSibling.style.display="flex";}}/>
                   :null}
@@ -3255,6 +3352,99 @@ function BoutiquePubliquePage({slug}){
               <button onClick={()=>setShowCheckout(false)}
                 style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".75rem",cursor:"pointer",fontFamily:"inherit"}}>
                 ← Retour au panier
+              </button>
+            </>)}
+          </div>
+        </div>
+      )}
+
+      {showAccountPanel&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:250,display:"flex",alignItems:"flex-end"}}>
+          <div style={{background:"white",width:"100%",maxWidth:480,margin:"0 auto",borderRadius:"20px 20px 0 0",maxHeight:"85vh",overflowY:"auto",padding:"1.25rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"#3D1F0E"}}>👤 Mon compte</div>
+              <button onClick={()=>setShowAccountPanel(false)} style={{background:"none",border:"none",fontSize:"1.3rem",color:"#888",cursor:"pointer"}}>✕</button>
+            </div>
+
+            {!clientUser?(<>
+              {!loginSent?(<>
+                <div style={{fontSize:".78rem",color:"#666",marginBottom:"1rem",lineHeight:1.6}}>
+                  Connecte-toi avec ton email pour retrouver tes commandes, ta carte de fidélité et tes favoris. Pas de mot de passe : tu recevras un lien de connexion par email.
+                </div>
+                <input placeholder="Ton email" type="email" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)}
+                  style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".6rem",outline:"none"}}/>
+                {loginError&&<div style={{fontSize:".72rem",color:"#C44B1A",marginBottom:".6rem"}}>{loginError}</div>}
+                <button className="boutique-btn" onClick={envoyerLienConnexion} disabled={loginLoading}
+                  style={{width:"100%",background:theme.btn,color:"white",border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                  {loginLoading?"...":"Recevoir mon lien de connexion"}
+                </button>
+              </>):(
+                <div style={{textAlign:"center",padding:"1rem 0"}}>
+                  <div style={{fontSize:"2rem",marginBottom:".5rem"}}>📩</div>
+                  <div style={{fontSize:".85rem",fontWeight:700,color:"#3D1F0E",marginBottom:".4rem"}}>Vérifie tes emails !</div>
+                  <div style={{fontSize:".75rem",color:"#666",lineHeight:1.5}}>On vient d'envoyer un lien de connexion à {loginEmail}. Clique dessus pour accéder à ton compte.</div>
+                </div>
+              )}
+            </>):(<>
+              <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
+                <button className="boutique-btn" onClick={()=>setAccountTab("commandes")}
+                  style={{flex:1,background:accountTab==="commandes"?theme.accent:"white",color:accountTab==="commandes"?"white":"#3D1F0E",border:`1.5px solid ${theme.accent}`,borderRadius:8,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                  📦 Commandes
+                </button>
+                <button className="boutique-btn" onClick={()=>setAccountTab("fidelite")}
+                  style={{flex:1,background:accountTab==="fidelite"?theme.accent:"white",color:accountTab==="fidelite"?"white":"#3D1F0E",border:`1.5px solid ${theme.accent}`,borderRadius:8,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                  🎁 Fidélité
+                </button>
+                <button className="boutique-btn" onClick={()=>setAccountTab("favoris")}
+                  style={{flex:1,background:accountTab==="favoris"?theme.accent:"white",color:accountTab==="favoris"?"white":"#3D1F0E",border:`1.5px solid ${theme.accent}`,borderRadius:8,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                  ❤️ Favoris
+                </button>
+              </div>
+
+              {accountLoading?(
+                <div style={{textAlign:"center",padding:"1.5rem 0",fontSize:".78rem",color:"#888"}}>Chargement...</div>
+              ):(<>
+                {accountTab==="commandes"&&(
+                  !accountData?.commandes?.length?(
+                    <div style={{textAlign:"center",padding:"1.5rem 0",fontSize:".78rem",color:"#888"}}>Aucune commande pour l'instant.</div>
+                  ):(
+                    [...accountData.commandes].reverse().map((cmd,i)=>(
+                      <div key={i} style={{padding:".6rem 0",borderBottom:"1px solid #F0EBE3"}}>
+                        <div style={{fontSize:".72rem",color:"#888"}}>{new Date(cmd.date).toLocaleDateString("fr-FR")}</div>
+                        <div style={{fontSize:".78rem",color:"#3D1F0E",fontWeight:600}}>{cmd.produits}</div>
+                        <div style={{fontSize:".78rem",color:theme.accent,fontWeight:700}}>{parseFloat(cmd.montant||0).toFixed(2)}€</div>
+                      </div>
+                    ))
+                  )
+                )}
+                {accountTab==="fidelite"&&(
+                  <div style={{textAlign:"center",padding:"1rem 0"}}>
+                    <div style={{fontSize:"1.6rem",marginBottom:".5rem"}}>{"⭐".repeat(accountData?.fideliteTampons||0)}{"☆".repeat(Math.max(0,10-(accountData?.fideliteTampons||0)))}</div>
+                    <div style={{fontSize:".78rem",color:"#666"}}>{accountData?.fideliteTampons||0} commande{(accountData?.fideliteTampons||0)>1?"s":""} enregistrée{(accountData?.fideliteTampons||0)>1?"s":""}</div>
+                  </div>
+                )}
+                {accountTab==="favoris"&&(
+                  !favoris.length?(
+                    <div style={{textAlign:"center",padding:"1.5rem 0",fontSize:".78rem",color:"#888"}}>Aucun favori pour l'instant — clique sur les cœurs des produits qui te plaisent !</div>
+                  ):(
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:".5rem"}}>
+                      {favoris.map(ref=>{
+                        const prod=catalogue&&Object.values(catalogue).flat().find(p=>p.ref===ref);
+                        if(!prod)return null;
+                        return(
+                          <div key={ref} style={{textAlign:"center"}}>
+                            {prod.image?<img src={prod.image} alt={prod.nom} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,marginBottom:".3rem"}}/>:<div style={{width:"100%",aspectRatio:"1",borderRadius:8,background:theme.bgPage,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.3rem",marginBottom:".3rem"}}>🧴</div>}
+                            <div style={{fontSize:".6rem",color:"#3D1F0E",lineHeight:1.25}}>{prod.nom}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </>)}
+
+              <button onClick={seDeconnecter} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit",marginTop:"1rem"}}>
+                Se déconnecter
               </button>
             </>)}
           </div>

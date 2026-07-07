@@ -546,3 +546,30 @@ exports.stripeWebhook = onRequest({secrets: [stripeSecretKey]}, async (req, res)
 
   res.status(200).send("ok");
 });
+
+// Donnees personnelles d'une cliente boutique connectee (lien magique) — ne renvoie que des champs surs
+exports.obtenirDonneesClientBoutique = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Connexion requise");
+  }
+  const {distributeurUid} = request.data || {};
+  if (!distributeurUid) {
+    throw new HttpsError("invalid-argument", "distributeurUid manquant");
+  }
+  const email = (request.auth.token.email || "").trim().toLowerCase();
+  if (!email) {
+    throw new HttpsError("failed-precondition", "Email introuvable sur ce compte");
+  }
+  const userSnap = await db.collection("users").doc(distributeurUid).get();
+  const clients = userSnap.exists && userSnap.data()["db-clients"] ? JSON.parse(userSnap.data()["db-clients"]) : [];
+  const clientMatch = clients.find(c => (c.email || "").trim().toLowerCase() === email);
+  if (!clientMatch) {
+    return {trouve: false, commandes: [], fideliteTampons: 0};
+  }
+  return {
+    trouve: true,
+    prenom: clientMatch.prenom || "",
+    commandes: (clientMatch.commandes || []).map(c => ({date: c.date, produits: c.produits, montant: c.montant})),
+    fideliteTampons: clientMatch.fideliteTampons || 0
+  };
+});
