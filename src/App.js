@@ -10200,6 +10200,7 @@ function AdminImportCatalogue(){
           serie:cat,
           offre:row['Offer']?String(row['Offer']):'',
           prixOffre:offerPriceRaw?parseFloat(offerPriceRaw)||0:'',
+          image:row['Image']?String(row['Image']).trim():'',
         });
       }
 

@@ -32,6 +32,7 @@ function LinkBioTab({uid, userName}){
     bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,ebooksIds:[],
     parcoursPhotos:[],parcoursTexte1:"",parcoursTexte2:"",parcoursTexte3:"",parcoursProduits:[],
     reseauxFacebook:"",reseauxInstagram:"",reseauxTiktok:"",reseauxYoutube:"",
+    boutiqueActive:false,boutiquePresentation:"",bestSellers:[],livraisonGratuite:false,
   });
   const[banniereGlobale,setBanniereGlobale]=useState(null);
   const[saving,setSaving]=useState(false);
@@ -44,6 +45,18 @@ function LinkBioTab({uid, userName}){
   const slug=(userName||uid).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"-");
   const bioUrl=`https://blazing-dinasty-1fad9.web.app?bio=${slug}`;
   const tunnelUrl=`https://blazing-dinasty-1fad9.web.app?tunnel=${slug}`;
+  const boutiqueUrl=`https://blazing-dinasty-1fad9.web.app?boutique=${slug}`;
+  const [catalogueProduits,setCatalogueProduits]=useState(null);
+  const [filtreBestSellers,setFiltreBestSellers]=useState("");
+  const [copiedBoutique,setCopiedBoutique]=useState(false);
+  const copyBoutiqueUrl=()=>{navigator.clipboard?.writeText(boutiqueUrl);setCopiedBoutique(true);setTimeout(()=>setCopiedBoutique(false),2000);};
+  useEffect(()=>{
+    if(activeSection==="boutique"&&!catalogueProduits){
+      getDoc(doc(db,"admin","catalogue_mihi")).then(snap=>{
+        if(snap.exists())setCatalogueProduits(Object.values(snap.data()).flat());
+      }).catch(()=>{});
+    }
+  },[activeSection]);
   const theme=THEMES_LINKBIO.find(t=>t.id===profil.theme)||THEMES_LINKBIO[0];
 
   useEffect(()=>{
@@ -95,7 +108,7 @@ function LinkBioTab({uid, userName}){
     {id:"profil",icon:"✨",label:"Profil"},
     {id:"liens",icon:"🔗",label:"Liens"},
     {id:"photos",icon:"💬",label:"Retours clients"},{id:"parcours",icon:"🌟",label:"Mon Parcours"},{id:"reseaux",icon:"📱",label:"Reseaux"},{id:"stats",icon:"📊",label:"Stats"},
-    {id:"ebooks",icon:"📚",label:"Ebooks"},{id:"banniere",icon:"📢",label:"Bannière"},
+    {id:"ebooks",icon:"📚",label:"Ebooks"},{id:"banniere",icon:"📢",label:"Bannière"},{id:"boutique",icon:"🛍️",label:"Boutique"},
   ];
 
   // Prévisualisation
@@ -430,6 +443,83 @@ function LinkBioTab({uid, userName}){
           {(profil.bannierePersoActif&&profil.bannierePersoTexte)||(banniereGlobale?.actif&&profil.showBanniere!==false)&&(
             <div style={{marginTop:"1rem"}}><Preview/></div>
           )}
+        </div>
+      )}
+
+      {/* SECTION BOUTIQUE */}
+      {activeSection==="boutique"&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:".6rem",marginBottom:"1rem",padding:".75rem",background:C.creme,borderRadius:10,border:`1px solid ${C.pale}`}}>
+            <div onClick={()=>setProfil(p=>({...p,boutiqueActive:!p.boutiqueActive}))}
+              style={{width:20,height:20,borderRadius:5,border:`2px solid ${C.rose}`,background:profil.boutiqueActive?C.rose:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {profil.boutiqueActive&&<span style={{fontSize:".6rem",color:"white",fontWeight:700}}>OK</span>}
+            </div>
+            <div style={{fontSize:".72rem",color:C.texte,cursor:"pointer",fontWeight:600}} onClick={()=>setProfil(p=>({...p,boutiqueActive:!p.boutiqueActive}))}>
+              Activer ma boutique en ligne (visible sur mon LinkBio)
+            </div>
+          </div>
+
+          {profil.boutiqueActive&&(<>
+            <div style={{display:"flex",alignItems:"center",gap:".6rem",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".65rem .85rem",marginBottom:"1rem"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase",marginBottom:".2rem"}}>🛍️ Lien de ma boutique</div>
+                <div style={{fontSize:".68rem",color:C.pale,wordBreak:"break-all"}}>{boutiqueUrl}</div>
+              </div>
+              <button onClick={copyBoutiqueUrl} style={{background:C.or,color:C.brun,border:"none",borderRadius:8,padding:".38rem .7rem",fontSize:".7rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+                {copiedBoutique?"✓ Copié!":"📋 Copier"}
+              </button>
+            </div>
+
+            <div style={{marginBottom:"1rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>💬 Présentation affichée sur ta boutique</div>
+              <textarea value={profil.boutiquePresentation||""} onChange={e=>setProfil(p=>({...p,boutiquePresentation:e.target.value}))} placeholder="Ex: Bienvenue dans ma boutique ! Retrouve ici tous mes produits Mihi preferes, choisis avec soin pour toi." rows={3}
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",lineHeight:1.55}}/>
+            </div>
+
+            <div style={{marginBottom:"1rem",padding:".75rem",background:C.creme,borderRadius:10,border:`1px solid ${C.pale}`}}>
+              <label style={{display:"flex",alignItems:"center",gap:".6rem",cursor:"pointer"}}>
+                <input type="checkbox" checked={!!profil.livraisonGratuite} onChange={e=>setProfil(p=>({...p,livraisonGratuite:e.target.checked}))}/>
+                <span style={{fontSize:".74rem",color:C.brun,fontWeight:600}}>🚚 Offrir la livraison dès 60€ d'achat</span>
+              </label>
+              <div style={{fontSize:".65rem",color:C.gris,marginTop:".4rem",lineHeight:1.5}}>
+                Les frais de livraison sont de 5,90€. Si tu actives cette option, ils seront automatiquement offerts pour toute commande de 60€ ou plus sur ta boutique.
+              </div>
+            </div>
+
+            <div style={{marginBottom:".6rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".4rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>✨ Best-sellers à mettre en avant</div>
+              <div style={{fontSize:".65rem",color:C.gris,marginBottom:".5rem",lineHeight:1.5}}>
+                Choisis les produits qui apparaîtront en premier sur ta boutique, dans un onglet dédié "Best-sellers".
+              </div>
+              {!catalogueProduits?(
+                <div style={{fontSize:".72rem",color:C.gris,padding:".5rem"}}>Chargement du catalogue...</div>
+              ):(<>
+                <input value={filtreBestSellers} onChange={e=>setFiltreBestSellers(e.target.value)} placeholder="🔍 Rechercher un produit..."
+                  style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".5rem"}}/>
+                <div style={{fontSize:".68rem",color:C.rose,fontWeight:700,marginBottom:".4rem"}}>{(profil.bestSellers||[]).length} sélectionné{(profil.bestSellers||[]).length>1?"s":""}</div>
+                <div style={{maxHeight:280,overflowY:"auto",border:`1px solid ${C.pale}`,borderRadius:10}}>
+                  {catalogueProduits.filter(p=>!filtreBestSellers||p.nom.toLowerCase().includes(filtreBestSellers.toLowerCase())).slice(0,60).map(p=>{
+                    const selectionne=(profil.bestSellers||[]).includes(p.ref);
+                    return(
+                      <label key={p.ref} style={{display:"flex",alignItems:"center",gap:".6rem",padding:".5rem .65rem",borderBottom:`1px solid ${C.pale}`,cursor:"pointer",background:selectionne?C.rose+"12":"transparent"}}>
+                        <input type="checkbox" checked={selectionne} onChange={()=>{
+                          setProfil(p2=>{
+                            const arr=p2.bestSellers||[];
+                            return {...p2,bestSellers:selectionne?arr.filter(r=>r!==p.ref):[...arr,p.ref]};
+                          });
+                        }}/>
+                        <span style={{fontSize:".74rem",color:C.texte,flex:1}}>{p.nom}</span>
+                        <span style={{fontSize:".68rem",color:C.gris,fontWeight:600}}>{p.prix?.toFixed?.(2)}€</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {filtreBestSellers&&catalogueProduits.filter(p=>p.nom.toLowerCase().includes(filtreBestSellers.toLowerCase())).length>60&&(
+                  <div style={{fontSize:".65rem",color:C.gris,marginTop:".3rem"}}>Affinage la recherche pour voir plus de résultats (60 max affichés à la fois).</div>
+                )}
+              </>)}
+            </div>
+          </>)}
         </div>
       )}
 

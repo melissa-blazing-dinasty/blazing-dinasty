@@ -377,7 +377,7 @@ exports.verifierStatutStripe = onCall({secrets: [stripeSecretKey]}, async (reque
 });
 
 exports.creerSessionCheckout = onCall({secrets: [stripeSecretKey]}, async (request) => {
-  const {distributeurUid, items, clientInfo} = request.data || {};
+  const {distributeurUid, items, clientInfo, slug} = request.data || {};
   if (!distributeurUid || !items || !items.length) {
     throw new HttpsError("invalid-argument", "Donnees manquantes");
   }
@@ -401,7 +401,41 @@ exports.creerSessionCheckout = onCall({secrets: [stripeSecretKey]}, async (reque
   }));
 
   const totalCentimes = items.reduce((s, i) => s + Math.round(i.prix * 100) * (i.quantite || 1), 0);
-  const fraisPlateforme = Math.round(totalCentimes * 0.015) + 25; // approx frais Stripe (1.5% + 0.25e) pour equilibre neutre
+
+  const FRAIS_PORT = 590; // 5,90 EUR
+  const SEUIL_GRATUIT = 6000; // 60,00 EUR
+  const linkbioSnap = await db.collection("linkbio").doc(distributeurUid).get();
+  const livraisonGratuiteActivee = linkbioSnap.exists ? !!linkbioSnap.data().livraisonGratuite : false;
+  const fraisPort = (livraisonGratuiteActivee && totalCentimes >= SEUIL_GRATUIT) ? 0 : FRAIS_PORT;
+  if (fraisPort > 0) {
+    lineItems.push({
+      price_data: {
+        currency: "eur",
+        product_data: {name: "Frais de livraison"},
+        unit_amount: fraisPort
+      },
+      quantity: 1
+    });
+  }
+
+  const totalAvecPortCentimes = totalCentimes + fraisPort;
+  const fraisPlateforme = Math.round(totalAvecPortCentimes * 0.015) + 25; // approx frais Stripe (1.5% + 0.25e) pour equilibre neutre
+
+  // Anticipation du palier fidelite (5eme, 10eme... commande) pour personnaliser le retour post-paiement
+  let estPalierFidelite = false;
+  try {
+    const emailNorm = (clientInfo?.email || "").trim().toLowerCase();
+    const telNorm = (clientInfo?.tel || "").replace(/\s+/g, "");
+    const clientsExistants = distribData["db-clients"] ? JSON.parse(distribData["db-clients"]) : [];
+    let clientExistant = null;
+    if (emailNorm) clientExistant = clientsExistants.find(c => (c.email || "").trim().toLowerCase() === emailNorm);
+    if (!clientExistant && telNorm) clientExistant = clientsExistants.find(c => (c.tel || "").replace(/\s+/g, "") === telNorm);
+    const commandesActuelles = clientExistant ? (clientExistant.commandes || []).length : 0;
+    estPalierFidelite = (commandesActuelles + 1) % 5 === 0;
+  } catch (e) {}
+
+  const slugParam = slug ? "&boutique=" + encodeURIComponent(slug) : "";
+  const fideliteParam = estPalierFidelite ? "&fidelite=milestone" : "";
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -410,13 +444,14 @@ exports.creerSessionCheckout = onCall({secrets: [stripeSecretKey]}, async (reque
       application_fee_amount: fraisPlateforme,
       transfer_data: {destination: stripeAccountId}
     },
-    success_url: "https://blazing-dinasty-1fad9.web.app?commande=succes",
-    cancel_url: "https://blazing-dinasty-1fad9.web.app?commande=annulee",
+    success_url: "https://blazing-dinasty-1fad9.web.app?commande=succes" + slugParam + fideliteParam,
+    cancel_url: "https://blazing-dinasty-1fad9.web.app?commande=annulee" + slugParam,
     metadata: {
       distributeurUid,
       clientNom: clientInfo?.nom || "",
       clientEmail: clientInfo?.email || "",
       clientTel: clientInfo?.tel || "",
+      fraisPort: String(fraisPort),
       items: JSON.stringify(items.map(i => ({nom: i.nom, prix: i.prix, quantite: i.quantite || 1})))
     }
   });
@@ -444,18 +479,65 @@ exports.stripeWebhook = onRequest({secrets: [stripeSecretKey]}, async (req, res)
         const total = items.reduce((s, i) => s + i.prix * (i.quantite || 1), 0);
         const userRef = db.collection("users").doc(distributeurUid);
         const userSnap = await userRef.get();
-        const clientsExistants = userSnap.exists && userSnap.data()["db-clients"] ? JSON.parse(userSnap.data()["db-clients"]) : [];
-        const nouveauClient = {
-          id: "c" + Date.now(),
-          nom: meta.clientNom || "Cliente boutique",
-          email: meta.clientEmail || "",
-          tel: meta.clientTel || "",
-          source: "boutique-en-ligne",
-          commandes: [{items, total, date: new Date().toISOString().slice(0,10), ts: Date.now()}],
-          rappels: []
+        const userData = userSnap.exists ? userSnap.data() : {};
+        const clientsExistants = userData["db-clients"] ? JSON.parse(userData["db-clients"]) : [];
+
+        let nbTampons = 10;
+        try {
+          if (userData["db-fidelite-config"]) nbTampons = JSON.parse(userData["db-fidelite-config"]).nbTampons || 10;
+        } catch (e) {}
+
+        const emailNorm = (meta.clientEmail || "").trim().toLowerCase();
+        const telNorm = (meta.clientTel || "").replace(/\s+/g, "");
+        let clientExistantIdx = -1;
+        if (emailNorm) clientExistantIdx = clientsExistants.findIndex(c => (c.email || "").trim().toLowerCase() === emailNorm);
+        if (clientExistantIdx === -1 && telNorm) clientExistantIdx = clientsExistants.findIndex(c => (c.tel || "").replace(/\s+/g, "") === telNorm);
+
+        const cmd = {
+          id: Date.now(),
+          date: new Date().toISOString().slice(0, 10),
+          lignes: items.map(i => ({nom: i.nom, typeProduit: "autre", typeLabel: "Boutique en ligne", dureeJours: null, prix: i.prix, quantite: i.quantite || 1})),
+          produits: items.map(i => i.nom + (i.quantite > 1 ? " x" + i.quantite : "")).join(", "),
+          montant: total,
+          suivi8: false,
+          suivi21: false,
+          source: "boutique-en-ligne"
         };
-        await userRef.set({"db-clients": JSON.stringify([nouveauClient, ...clientsExistants])}, {merge: true});
-        await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", (meta.clientNom || "Une cliente") + " vient de commander pour " + total.toFixed(2) + " euros !");
+
+        let clientsMisAJour;
+        let nomPourNotif;
+        if (clientExistantIdx !== -1) {
+          const existant = clientsExistants[clientExistantIdx];
+          const nouveauxTampons = Math.min((existant.fideliteTampons || 0) + 1, nbTampons);
+          const clientMaj = {...existant, commandes: [...(existant.commandes || []), cmd], fideliteTampons: nouveauxTampons};
+          clientsMisAJour = clientsExistants.map((c, i) => i === clientExistantIdx ? clientMaj : c);
+          nomPourNotif = existant.prenom || existant.nom || "Une cliente";
+        } else {
+          const partsNom = (meta.clientNom || "Cliente boutique").trim().split(/\s+/);
+          const nouveauClient = {
+            id: "c" + Date.now(),
+            prenom: partsNom[0] || "Cliente",
+            nom: partsNom.slice(1).join(" ") || "",
+            tel: meta.clientTel || "",
+            email: meta.clientEmail || "",
+            ddn: "", adresse: "", notes: "",
+            source: "boutique-en-ligne",
+            commandes: [cmd],
+            fideliteTampons: Math.min(1, nbTampons)
+          };
+          clientsMisAJour = [nouveauClient, ...clientsExistants];
+          nomPourNotif = nouveauClient.prenom;
+        }
+
+        await userRef.set({"db-clients": JSON.stringify(clientsMisAJour)}, {merge: true});
+        await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", nomPourNotif + " vient de commander pour " + total.toFixed(2) + " euros !");
+
+        const nbCommandesFinal = clientExistantIdx !== -1
+          ? (clientsExistants[clientExistantIdx].commandes || []).length + 1
+          : 1;
+        if (nbCommandesFinal % 5 === 0) {
+          await sendNotifToUid(distributeurUid, "🎁 Palier fidélité atteint !", nomPourNotif + " vient de passer sa " + nbCommandesFinal + "eme commande — pense a lui envoyer une recommandation personnalisee !");
+        }
       } catch (e) {
         console.error("Erreur creation client depuis webhook Stripe:", e);
       }
