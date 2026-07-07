@@ -2984,10 +2984,30 @@ function BoutiquePubliquePage({slug}){
   const [clientEmail,setClientEmail]=useState("");
   const [clientTel,setClientTel]=useState("");
   const [checkoutLoading,setCheckoutLoading]=useState(false);
+  const [moyensPaiement,setMoyensPaiement]=useState({stripePret:false,paypalPret:false});
+  const [paypalCaptureEnCours,setPaypalCaptureEnCours]=useState(false);
   const [checkoutError,setCheckoutError]=useState("");
   const [retourCommande]=useState(()=>new URLSearchParams(window.location.search).get("commande"));
   const [retourFidelite]=useState(()=>new URLSearchParams(window.location.search).get("fidelite")==="milestone");
   const [showSuccessBanner,setShowSuccessBanner]=useState(true);
+  const [paypalRetourStatut,setPaypalRetourStatut]=useState(null); // null|"loading"|"succes"|"erreur"
+
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("paypal")==="retour"&&params.get("token")){
+      setPaypalRetourStatut("loading");
+      setPaypalCaptureEnCours(true);
+      const fn=httpsCallable(fbFunctions,"capturerCommandePaypal");
+      fn({orderId:params.get("token")})
+        .then(()=>{setPaypalRetourStatut("succes");})
+        .catch(e=>{console.error("capture paypal:",e);setPaypalRetourStatut("erreur");})
+        .finally(()=>setPaypalCaptureEnCours(false));
+      const url=new URL(window.location.href);
+      url.searchParams.delete("token");url.searchParams.delete("PayerID");
+      window.history.replaceState({},"",url.toString());
+    }
+  },[]);
+
   const [clientUser,setClientUser]=useState(null);
   const [authReady,setAuthReady]=useState(false);
   const [showAccountPanel,setShowAccountPanel]=useState(false);
@@ -3017,6 +3037,13 @@ function BoutiquePubliquePage({slug}){
           if(!qs.empty) profilData=qs.docs[0].data();
         }
         setProfil(profilData||"404");
+        if(profilData&&profilData.uid){
+          try{
+            const fnMoyens=httpsCallable(fbFunctions,"verifierMoyensPaiementBoutique");
+            const resMoyens=await fnMoyens({distributeurUid:profilData.uid});
+            setMoyensPaiement(resMoyens.data);
+          }catch(e){console.error("moyens paiement:",e);}
+        }
       }catch(e){console.error("boutique profil:",e);setProfil("404");}
       try{
         const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
@@ -3195,6 +3222,29 @@ function BoutiquePubliquePage({slug}){
     setCheckoutLoading(false);
   };
 
+  const lancerCheckoutPaypal=async()=>{
+    if(!clientNom.trim()){setCheckoutError("Merci d'indiquer ton prénom.");return;}
+    setCheckoutLoading(true);setCheckoutError("");
+    try{
+      const fn=httpsCallable(fbFunctions,"creerCommandePaypal");
+      const res=await fn({
+        distributeurUid:profil.uid,
+        slug:profil.slug||slug,
+        items:cart.map(i=>({nom:i.nom,prix:i.prix,quantite:i.quantite})),
+        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim()}
+      });
+      if(res.data&&res.data.url)window.location.href=res.data.url;
+      else setCheckoutError("Une erreur est survenue, réessaie.");
+    }catch(e){
+      if((e.code||"").includes("failed-precondition")){
+        setCheckoutError("Le paiement PayPal n'est pas encore actif sur cette boutique. Contacte directement "+((profil&&profil.prenom)||"la distributrice")+" pour passer commande.");
+      }else{
+        setCheckoutError("Erreur : "+e.message);
+      }
+    }
+    setCheckoutLoading(false);
+  };
+
   if(loading)return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#FAF7F2"}}>
       <div style={{textAlign:"center"}}>
@@ -3271,6 +3321,23 @@ function BoutiquePubliquePage({slug}){
             <button onClick={()=>setShowSuccessBanner(false)} style={{position:"absolute",top:8,right:10,background:"none",border:"none",fontSize:"1rem",color:"#5C8A60",cursor:"pointer"}}>✕</button>
             <div style={{fontSize:".85rem",fontWeight:700,color:"#2E7D32",marginBottom:".2rem"}}>🎉 Merci pour ta commande !</div>
             <div style={{fontSize:".75rem",color:"#3D5C42",lineHeight:1.5}}>Ta commande a bien été enregistrée. Tu recevras des nouvelles très vite.</div>
+          </div>
+        )}
+        {paypalRetourStatut==="loading"&&(
+          <div style={{margin:"1rem",padding:"1rem",background:theme.bgPage,border:`1.5px solid ${theme.accent}`,borderRadius:14,textAlign:"center"}}>
+            <div style={{fontSize:".8rem",color:"#3D1F0E"}}>Validation de ton paiement PayPal en cours...</div>
+          </div>
+        )}
+        {paypalRetourStatut==="succes"&&showSuccessBanner&&(
+          <div style={{margin:"1rem",padding:"1rem",background:"#E8F5E9",border:"1.5px solid #7FAF8A",borderRadius:14,position:"relative"}}>
+            <button onClick={()=>setShowSuccessBanner(false)} style={{position:"absolute",top:8,right:10,background:"none",border:"none",fontSize:"1rem",color:"#5C8A60",cursor:"pointer"}}>✕</button>
+            <div style={{fontSize:".85rem",fontWeight:700,color:"#2E7D32",marginBottom:".2rem"}}>🎉 Merci pour ta commande !</div>
+            <div style={{fontSize:".75rem",color:"#3D5C42",lineHeight:1.5}}>Ton paiement PayPal a bien été validé. Tu recevras des nouvelles très vite.</div>
+          </div>
+        )}
+        {paypalRetourStatut==="erreur"&&(
+          <div style={{margin:"1rem",padding:"1rem",background:"#FFF3F0",border:"1.5px solid #E8A88A",borderRadius:14}}>
+            <div style={{fontSize:".8rem",fontWeight:700,color:"#C44B1A"}}>Une erreur est survenue avec ton paiement PayPal. Contacte directement {(profil&&profil.prenom)||"la distributrice"} pour vérifier ta commande.</div>
           </div>
         )}
         {retourCommande==="succes"&&retourFidelite&&showSuccessBanner&&profil.bestSellers&&profil.bestSellers.length>0&&catalogue&&(
@@ -3399,10 +3466,24 @@ function BoutiquePubliquePage({slug}){
               <input placeholder="Téléphone" value={clientTel} onChange={e=>setClientTel(e.target.value)}
                 style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>
               {checkoutError&&<div style={{fontSize:".72rem",color:"#C44B1A",marginBottom:".6rem",lineHeight:1.5}}>{checkoutError}</div>}
-              <button className="boutique-btn" onClick={lancerCheckout} disabled={checkoutLoading}
-                style={{width:"100%",background:"#635BFF",color:"white",border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
-                {checkoutLoading?"...":"💳 Payer "+totalAvecPort.toFixed(2)+"€"}
-              </button>
+              {!moyensPaiement.stripePret&&!moyensPaiement.paypalPret?(
+                <div style={{fontSize:".75rem",color:"#C44B1A",padding:".6rem",background:"#FFF3F0",borderRadius:8,marginBottom:".5rem",lineHeight:1.5}}>
+                  Cette boutique n'a pas encore de moyen de paiement actif. Contacte directement {(profil&&profil.prenom)||"la distributrice"} pour passer commande.
+                </div>
+              ):(<>
+                {moyensPaiement.stripePret&&(
+                  <button className="boutique-btn" onClick={lancerCheckout} disabled={checkoutLoading}
+                    style={{width:"100%",background:"#635BFF",color:"white",border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+                    {checkoutLoading?"...":"💳 Payer "+totalAvecPort.toFixed(2)+"€ par carte"}
+                  </button>
+                )}
+                {moyensPaiement.paypalPret&&(
+                  <button className="boutique-btn" onClick={lancerCheckoutPaypal} disabled={checkoutLoading}
+                    style={{width:"100%",background:"#0070BA",color:"white",border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
+                    {checkoutLoading?"...":"🅿️ Payer "+totalAvecPort.toFixed(2)+"€ avec PayPal"}
+                  </button>
+                )}
+              </>)}
               <button onClick={()=>setShowCheckout(false)}
                 style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".75rem",cursor:"pointer",fontFamily:"inherit"}}>
                 ← Retour au panier

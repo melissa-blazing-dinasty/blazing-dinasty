@@ -860,6 +860,35 @@ function App(){
     }catch{}
   };
   useEffect(()=>{if(showMonCompte)verifierStripe();},[showMonCompte]);
+  const[paypalClientId,setPaypalClientId]=useState("");
+  const[paypalClientSecret,setPaypalClientSecret]=useState("");
+  const[paypalActif,setPaypalActif]=useState(false);
+  const[paypalSaving,setPaypalSaving]=useState(false);
+  const[paypalSaved,setPaypalSaved]=useState(false);
+  const chargerPaypal=async()=>{
+    try{
+      const snap=await getDoc(doc(db,"users",userId));
+      if(snap.exists()){
+        const d=snap.data();
+        setPaypalClientId(d["db-paypal-client-id"]||"");
+        setPaypalClientSecret(d["db-paypal-client-secret"]||"");
+        setPaypalActif(!!d["db-paypal-pret"]);
+      }
+    }catch{}
+  };
+  useEffect(()=>{if(showMonCompte)chargerPaypal();},[showMonCompte]);
+  const sauverPaypal=async()=>{
+    setPaypalSaving(true);
+    try{
+      await setDoc(doc(db,"users",userId),{
+        "db-paypal-client-id":paypalClientId.trim(),
+        "db-paypal-client-secret":paypalClientSecret.trim(),
+        "db-paypal-pret":paypalActif&&!!paypalClientId.trim()&&!!paypalClientSecret.trim()
+      },{merge:true});
+      setPaypalSaved(true);setTimeout(()=>setPaypalSaved(false),2000);
+    }catch(e){alert("Erreur : "+e.message);}
+    setPaypalSaving(false);
+  };
   const[contactMessenger,setContactMessenger]=useState("");
   const[contactInstagram,setContactInstagram]=useState("");
   const[contactSaved,setContactSaved]=useState(false);
@@ -1709,6 +1738,25 @@ function App(){
               {stripeLoading?"...":stripeConnecte?"Continuer la configuration Stripe":"Activer les paiements (Stripe)"}
             </button>
           )}
+
+          <div style={{marginTop:"1rem",paddingTop:"1rem",borderTop:"1px solid #D8CCFF"}}>
+            <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E",marginBottom:".3rem"}}>🅿️ PayPal (optionnel, en plus de Stripe)</div>
+            <div style={{fontSize:".65rem",color:"#888",marginBottom:".6rem",lineHeight:1.5}}>
+              PayPal prend environ 2,9% + 0,35€ par vente (contre ~1,5% + 0,25€ pour Stripe). Tu peux activer les deux, un seul, ou aucun — la boutique proposera automatiquement les moyens de paiement que tu as actives.
+            </div>
+            <input value={paypalClientId} onChange={e=>setPaypalClientId(e.target.value)} placeholder="Client ID PayPal"
+              style={{width:"100%",border:"1px solid #D8CCFF",borderRadius:8,padding:".42rem .65rem",fontSize:".76rem",fontFamily:"inherit",marginBottom:".4rem",outline:"none"}}/>
+            <input value={paypalClientSecret} onChange={e=>setPaypalClientSecret(e.target.value)} placeholder="Secret PayPal" type="password"
+              style={{width:"100%",border:"1px solid #D8CCFF",borderRadius:8,padding:".42rem .65rem",fontSize:".76rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+            <label style={{display:"flex",alignItems:"center",gap:".5rem",cursor:"pointer",marginBottom:".6rem"}}>
+              <input type="checkbox" checked={paypalActif} onChange={e=>setPaypalActif(e.target.checked)}/>
+              <span style={{fontSize:".72rem",color:"#3D1F0E",fontWeight:600}}>Activer PayPal sur ma boutique</span>
+            </label>
+            <button onClick={sauverPaypal} disabled={paypalSaving}
+              style={{width:"100%",background:paypalSaved?"#2E7D32":"#0070BA",color:"white",border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+              {paypalSaving?"...":paypalSaved?"✅ Enregistré !":"Enregistrer PayPal"}
+            </button>
+          </div>
         </div>
         )}
         <button onClick={()=>{setShowMonCompte(false);setCompteMdp1("");setCompteMdp2("");setCompteError("");}}

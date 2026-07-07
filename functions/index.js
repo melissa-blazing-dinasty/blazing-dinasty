@@ -459,6 +459,73 @@ exports.creerSessionCheckout = onCall({secrets: [stripeSecretKey]}, async (reque
   return {url: session.url};
 });
 
+// Enregistre une commande boutique (Stripe ou PayPal) sur la fiche cliente + fait avancer la fidelite
+async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
+  const total = items.reduce((s, i) => s + i.prix * (i.quantite || 1), 0);
+  const userRef = db.collection("users").doc(distributeurUid);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  const clientsExistants = userData["db-clients"] ? JSON.parse(userData["db-clients"]) : [];
+
+  let nbTampons = 10;
+  try {
+    if (userData["db-fidelite-config"]) nbTampons = JSON.parse(userData["db-fidelite-config"]).nbTampons || 10;
+  } catch (e) {}
+
+  const emailNorm = (clientInfo.email || "").trim().toLowerCase();
+  const telNorm = (clientInfo.tel || "").replace(/\s+/g, "");
+  let clientExistantIdx = -1;
+  if (emailNorm) clientExistantIdx = clientsExistants.findIndex(c => (c.email || "").trim().toLowerCase() === emailNorm);
+  if (clientExistantIdx === -1 && telNorm) clientExistantIdx = clientsExistants.findIndex(c => (c.tel || "").replace(/\s+/g, "") === telNorm);
+
+  const cmd = {
+    id: Date.now(),
+    date: new Date().toISOString().slice(0, 10),
+    lignes: items.map(i => ({nom: i.nom, typeProduit: "autre", typeLabel: "Boutique en ligne", dureeJours: null, prix: i.prix, quantite: i.quantite || 1})),
+    produits: items.map(i => i.nom + (i.quantite > 1 ? " x" + i.quantite : "")).join(", "),
+    montant: total,
+    suivi8: false,
+    suivi21: false,
+    source: "boutique-en-ligne"
+  };
+
+  let clientsMisAJour;
+  let nomPourNotif;
+  if (clientExistantIdx !== -1) {
+    const existant = clientsExistants[clientExistantIdx];
+    const nouveauxTampons = Math.min((existant.fideliteTampons || 0) + 1, nbTampons);
+    const clientMaj = {...existant, commandes: [...(existant.commandes || []), cmd], fideliteTampons: nouveauxTampons};
+    clientsMisAJour = clientsExistants.map((c, i) => i === clientExistantIdx ? clientMaj : c);
+    nomPourNotif = existant.prenom || existant.nom || "Une cliente";
+  } else {
+    const partsNom = (clientInfo.nom || "Cliente boutique").trim().split(/\s+/);
+    const nouveauClient = {
+      id: "c" + Date.now(),
+      prenom: partsNom[0] || "Cliente",
+      nom: partsNom.slice(1).join(" ") || "",
+      tel: clientInfo.tel || "",
+      email: clientInfo.email || "",
+      ddn: "", adresse: "", notes: "",
+      source: "boutique-en-ligne",
+      commandes: [cmd],
+      fideliteTampons: Math.min(1, nbTampons)
+    };
+    clientsMisAJour = [nouveauClient, ...clientsExistants];
+    nomPourNotif = nouveauClient.prenom;
+  }
+
+  await userRef.set({"db-clients": JSON.stringify(clientsMisAJour)}, {merge: true});
+  await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", nomPourNotif + " vient de commander pour " + total.toFixed(2) + " euros !");
+
+  const nbCommandesFinal = clientExistantIdx !== -1
+    ? (clientsExistants[clientExistantIdx].commandes || []).length + 1
+    : 1;
+  if (nbCommandesFinal % 5 === 0) {
+    await sendNotifToUid(distributeurUid, "🎁 Palier fidélité atteint !", nomPourNotif + " vient de passer sa " + nbCommandesFinal + "eme commande — pense a lui envoyer une recommandation personnalisee !");
+  }
+  return total;
+}
+
 exports.stripeWebhook = onRequest({secrets: [stripeSecretKey]}, async (req, res) => {
   const stripe = require("stripe")(stripeSecretKey.value());
   let event;
@@ -476,68 +543,11 @@ exports.stripeWebhook = onRequest({secrets: [stripeSecretKey]}, async (req, res)
     if (distributeurUid) {
       try {
         const items = meta.items ? JSON.parse(meta.items) : [];
-        const total = items.reduce((s, i) => s + i.prix * (i.quantite || 1), 0);
-        const userRef = db.collection("users").doc(distributeurUid);
-        const userSnap = await userRef.get();
-        const userData = userSnap.exists ? userSnap.data() : {};
-        const clientsExistants = userData["db-clients"] ? JSON.parse(userData["db-clients"]) : [];
-
-        let nbTampons = 10;
-        try {
-          if (userData["db-fidelite-config"]) nbTampons = JSON.parse(userData["db-fidelite-config"]).nbTampons || 10;
-        } catch (e) {}
-
-        const emailNorm = (meta.clientEmail || "").trim().toLowerCase();
-        const telNorm = (meta.clientTel || "").replace(/\s+/g, "");
-        let clientExistantIdx = -1;
-        if (emailNorm) clientExistantIdx = clientsExistants.findIndex(c => (c.email || "").trim().toLowerCase() === emailNorm);
-        if (clientExistantIdx === -1 && telNorm) clientExistantIdx = clientsExistants.findIndex(c => (c.tel || "").replace(/\s+/g, "") === telNorm);
-
-        const cmd = {
-          id: Date.now(),
-          date: new Date().toISOString().slice(0, 10),
-          lignes: items.map(i => ({nom: i.nom, typeProduit: "autre", typeLabel: "Boutique en ligne", dureeJours: null, prix: i.prix, quantite: i.quantite || 1})),
-          produits: items.map(i => i.nom + (i.quantite > 1 ? " x" + i.quantite : "")).join(", "),
-          montant: total,
-          suivi8: false,
-          suivi21: false,
-          source: "boutique-en-ligne"
-        };
-
-        let clientsMisAJour;
-        let nomPourNotif;
-        if (clientExistantIdx !== -1) {
-          const existant = clientsExistants[clientExistantIdx];
-          const nouveauxTampons = Math.min((existant.fideliteTampons || 0) + 1, nbTampons);
-          const clientMaj = {...existant, commandes: [...(existant.commandes || []), cmd], fideliteTampons: nouveauxTampons};
-          clientsMisAJour = clientsExistants.map((c, i) => i === clientExistantIdx ? clientMaj : c);
-          nomPourNotif = existant.prenom || existant.nom || "Une cliente";
-        } else {
-          const partsNom = (meta.clientNom || "Cliente boutique").trim().split(/\s+/);
-          const nouveauClient = {
-            id: "c" + Date.now(),
-            prenom: partsNom[0] || "Cliente",
-            nom: partsNom.slice(1).join(" ") || "",
-            tel: meta.clientTel || "",
-            email: meta.clientEmail || "",
-            ddn: "", adresse: "", notes: "",
-            source: "boutique-en-ligne",
-            commandes: [cmd],
-            fideliteTampons: Math.min(1, nbTampons)
-          };
-          clientsMisAJour = [nouveauClient, ...clientsExistants];
-          nomPourNotif = nouveauClient.prenom;
-        }
-
-        await userRef.set({"db-clients": JSON.stringify(clientsMisAJour)}, {merge: true});
-        await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", nomPourNotif + " vient de commander pour " + total.toFixed(2) + " euros !");
-
-        const nbCommandesFinal = clientExistantIdx !== -1
-          ? (clientsExistants[clientExistantIdx].commandes || []).length + 1
-          : 1;
-        if (nbCommandesFinal % 5 === 0) {
-          await sendNotifToUid(distributeurUid, "🎁 Palier fidélité atteint !", nomPourNotif + " vient de passer sa " + nbCommandesFinal + "eme commande — pense a lui envoyer une recommandation personnalisee !");
-        }
+        await enregistrerCommandeClient(distributeurUid, items, {
+          nom: meta.clientNom || "",
+          email: meta.clientEmail || "",
+          tel: meta.clientTel || ""
+        });
       } catch (e) {
         console.error("Erreur creation client depuis webhook Stripe:", e);
       }
@@ -572,4 +582,118 @@ exports.obtenirDonneesClientBoutique = onCall(async (request) => {
     commandes: (clientMatch.commandes || []).map(c => ({date: c.date, produits: c.produits, montant: c.montant})),
     fideliteTampons: clientMatch.fideliteTampons || 0
   };
+});
+
+// Verifie quels moyens de paiement sont actifs pour une distributrice — ne renvoie que 2 booleens, rien de sensible
+exports.verifierMoyensPaiementBoutique = onCall(async (request) => {
+  const {distributeurUid} = request.data || {};
+  if (!distributeurUid) throw new HttpsError("invalid-argument", "distributeurUid manquant");
+  const snap = await db.collection("users").doc(distributeurUid).get();
+  const d = snap.exists ? snap.data() : {};
+  return {stripePret: !!d["db-stripe-pret"], paypalPret: !!d["db-paypal-pret"]};
+});
+
+// --- PAYPAL (chaque distributrice utilise son propre compte PayPal Business classique) ---
+
+async function obtenirTokenPaypal(clientId, clientSecret) {
+  const auth = Buffer.from(clientId + ":" + clientSecret).toString("base64");
+  const resp = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
+    method: "POST",
+    headers: {
+      "Authorization": "Basic " + auth,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+  const data = await resp.json();
+  if (!data.access_token) throw new Error("Impossible de s'authentifier aupres de PayPal");
+  return data.access_token;
+}
+
+exports.creerCommandePaypal = onCall(async (request) => {
+  const {distributeurUid, items, clientInfo, slug} = request.data || {};
+  if (!distributeurUid || !items || !items.length) {
+    throw new HttpsError("invalid-argument", "Donnees manquantes");
+  }
+  const distribSnap = await db.collection("users").doc(distributeurUid).get();
+  const distribData = distribSnap.exists ? distribSnap.data() : {};
+  const clientId = distribData["db-paypal-client-id"];
+  const clientSecret = distribData["db-paypal-client-secret"];
+  if (!clientId || !clientSecret || !distribData["db-paypal-pret"]) {
+    throw new HttpsError("failed-precondition", "Cette distributrice n'a pas encore active PayPal");
+  }
+
+  const totalCentimes = items.reduce((s, i) => s + Math.round(i.prix * 100) * (i.quantite || 1), 0);
+  const FRAIS_PORT = 590;
+  const SEUIL_GRATUIT = 6000;
+  const linkbioSnap = await db.collection("linkbio").doc(distributeurUid).get();
+  const livraisonGratuiteActivee = linkbioSnap.exists ? !!linkbioSnap.data().livraisonGratuite : false;
+  const fraisPort = (livraisonGratuiteActivee && totalCentimes >= SEUIL_GRATUIT) ? 0 : FRAIS_PORT;
+  const totalFinal = ((totalCentimes + fraisPort) / 100).toFixed(2);
+
+  const slugParam = slug ? "&boutique=" + encodeURIComponent(slug) : "";
+
+  try {
+    const token = await obtenirTokenPaypal(clientId, clientSecret);
+    const orderResp = await fetch("https://api-m.paypal.com/v2/checkout/orders", {
+      method: "POST",
+      headers: {"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+      body: JSON.stringify({
+        intent: "CAPTURE",
+        purchase_units: [{amount: {currency_code: "EUR", value: totalFinal}}],
+        application_context: {
+          return_url: "https://blazing-dinasty-1fad9.web.app?paypal=retour" + slugParam,
+          cancel_url: "https://blazing-dinasty-1fad9.web.app?commande=annulee" + slugParam,
+          shipping_preference: "NO_SHIPPING",
+          user_action: "PAY_NOW"
+        }
+      })
+    });
+    const order = await orderResp.json();
+    if (!order.id) throw new Error("Creation de la commande PayPal impossible");
+
+    await db.collection("paypal_commandes_attente").doc(order.id).set({
+      distributeurUid, items, clientInfo: clientInfo || {}, fraisPort, createdAt: new Date().toISOString()
+    });
+
+    const approveLink = (order.links || []).find(l => l.rel === "approve");
+    return {url: approveLink ? approveLink.href : null};
+  } catch (e) {
+    throw new HttpsError("internal", "Erreur PayPal : " + e.message);
+  }
+});
+
+exports.capturerCommandePaypal = onCall(async (request) => {
+  const {orderId} = request.data || {};
+  if (!orderId) throw new HttpsError("invalid-argument", "orderId manquant");
+
+  const attenteSnap = await db.collection("paypal_commandes_attente").doc(orderId).get();
+  if (!attenteSnap.exists) throw new HttpsError("not-found", "Commande introuvable ou deja traitee");
+  const {distributeurUid, items, clientInfo} = attenteSnap.data();
+
+  const distribSnap = await db.collection("users").doc(distributeurUid).get();
+  const distribData = distribSnap.exists ? distribSnap.data() : {};
+  const clientId = distribData["db-paypal-client-id"];
+  const clientSecret = distribData["db-paypal-client-secret"];
+  if (!clientId || !clientSecret) throw new HttpsError("failed-precondition", "Configuration PayPal manquante");
+
+  try {
+    const token = await obtenirTokenPaypal(clientId, clientSecret);
+    const captureResp = await fetch("https://api-m.paypal.com/v2/checkout/orders/" + orderId + "/capture", {
+      method: "POST",
+      headers: {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+    });
+    const capture = await captureResp.json();
+    const statut = capture.status || (capture.purchase_units?.[0]?.payments?.captures?.[0]?.status);
+    if (statut !== "COMPLETED") {
+      throw new Error("Paiement non finalise (statut : " + statut + ")");
+    }
+
+    await enregistrerCommandeClient(distributeurUid, items, clientInfo || {});
+    await attenteSnap.ref.delete();
+
+    return {succes: true};
+  } catch (e) {
+    throw new HttpsError("internal", "Erreur validation PayPal : " + e.message);
+  }
 });
