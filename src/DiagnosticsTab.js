@@ -2935,6 +2935,43 @@ function LinkBioPublicPage({slug}){
 }
 
 
+async function conseillerProduitsIA(demande, catalogue){
+  const tousProduits=Object.values(catalogue||{}).flat();
+  const listeProduits=tousProduits.map(p=>`${p.ref} | ${p.nom} | ${p.prix?.toFixed?.(2)||p.prix}€`).join("\n");
+
+  const prompt=`Tu es une conseillere beaute pour une boutique en ligne de produits Mihi (cosmetiques et bien-etre naturels). Une visiteuse te decrit ce qu'elle cherche. Voici le catalogue disponible (reference | nom | prix) :
+
+${listeProduits}
+
+Demande de la visiteuse : "${demande}"
+
+Reponds UNIQUEMENT en JSON avec cette structure exacte, sans rien d'autre autour :
+{
+  "message": "2-3 phrases chaleureuses expliquant pourquoi tu recommandes ces produits, ton naturel et bienveillant",
+  "produits_recommandes": ["reference1", "reference2", "reference3"]
+}
+
+Choisis entre 2 et 4 produits maximum, uniquement parmi les references reelles du catalogue ci-dessus. Ne recommande jamais une reference qui n'existe pas dans la liste.`;
+
+  const response=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key":ANTHROPIC_API_KEY,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true",
+    },
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,messages:[{role:"user",content:prompt}]}),
+  });
+  const data=await response.json();
+  if(data.error)throw new Error(data.error.message);
+  const text=data.content?.map(i=>i.text||"").join("")||"";
+  const clean=text.replace(/```json|```/g,"").trim();
+  const parsed=JSON.parse(clean);
+  const produitsTrouves=(parsed.produits_recommandes||[]).map(ref=>tousProduits.find(p=>p.ref===ref)).filter(Boolean);
+  return {message:parsed.message||"", produits:produitsTrouves};
+}
+
 function BoutiquePubliquePage({slug}){
   const [profil,setProfil]=useState(null);
   const [catalogue,setCatalogue]=useState(null);
@@ -2962,6 +2999,11 @@ function BoutiquePubliquePage({slug}){
   const [accountLoading,setAccountLoading]=useState(false);
   const [favoris,setFavoris]=useState([]);
   const [accountTab,setAccountTab]=useState("commandes");
+  const [showIA,setShowIA]=useState(false);
+  const [demandeIA,setDemandeIA]=useState("");
+  const [reponseIA,setReponseIA]=useState(null);
+  const [chargementIA,setChargementIA]=useState(false);
+  const [erreurIA,setErreurIA]=useState("");
 
   useEffect(()=>{
     (async()=>{
@@ -3107,6 +3149,18 @@ function BoutiquePubliquePage({slug}){
     try{
       await setDoc(doc(db,"favoris_clients",clientUser.uid),{items:nouveauxFavoris,distributeurUid:profil.uid,updatedAt:new Date().toISOString()});
     }catch(e){console.error("maj favoris:",e);}
+  };
+
+  const demanderConseilIA=async()=>{
+    if(!demandeIA.trim()||!catalogue)return;
+    setChargementIA(true);setErreurIA("");setReponseIA(null);
+    try{
+      const res=await conseillerProduitsIA(demandeIA.trim(),catalogue);
+      setReponseIA(res);
+    }catch(e){
+      setErreurIA("Je n'ai pas pu répondre, réessaie dans un instant.");
+    }
+    setChargementIA(false);
   };
 
   const totalPanier=cart.reduce((s,i)=>s+i.prix*i.quantite,0);
@@ -3353,6 +3407,61 @@ function BoutiquePubliquePage({slug}){
                 style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".75rem",cursor:"pointer",fontFamily:"inherit"}}>
                 ← Retour au panier
               </button>
+            </>)}
+          </div>
+        </div>
+      )}
+
+      {!showIA&&(
+        <button className="boutique-btn" onClick={()=>setShowIA(true)}
+          style={{position:"fixed",bottom:nbArticles>0?86:20,right:20,zIndex:150,background:theme.header,color:"white",border:"none",borderRadius:30,padding:".7rem 1.1rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,.25)",display:"flex",alignItems:"center",gap:".4rem",transition:"bottom .2s"}}>
+          ✨ Besoin d'aide ?
+        </button>
+      )}
+
+      {showIA&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:260,display:"flex",alignItems:"flex-end"}}>
+          <div style={{background:"white",width:"100%",maxWidth:480,margin:"0 auto",borderRadius:"20px 20px 0 0",maxHeight:"85vh",overflowY:"auto",padding:"1.25rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+              <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"#3D1F0E"}}>✨ Une question ? Demande-moi !</div>
+              <button onClick={()=>setShowIA(false)} style={{background:"none",border:"none",fontSize:"1.3rem",color:"#888",cursor:"pointer"}}>✕</button>
+            </div>
+
+            <div style={{fontSize:".75rem",color:"#666",marginBottom:".75rem",lineHeight:1.5}}>
+              Dis-moi ce que tu cherches (ex : "un soin pour peau sèche" ou "un cadeau pour ma sœur") et je te propose ce qu'il te faut.
+            </div>
+
+            <textarea value={demandeIA} onChange={e=>setDemandeIA(e.target.value)} placeholder="Ex : Je cherche quelque chose pour l'hydratation du visage..." rows={3}
+              style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".6rem",outline:"none",resize:"vertical"}}/>
+
+            {erreurIA&&<div style={{fontSize:".72rem",color:"#C44B1A",marginBottom:".6rem"}}>{erreurIA}</div>}
+
+            <button className="boutique-btn" onClick={demanderConseilIA} disabled={chargementIA||!demandeIA.trim()}
+              style={{width:"100%",background:theme.btn,color:"white",border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:"1rem"}}>
+              {chargementIA?"Je réfléchis...":"✨ Trouve-moi un produit"}
+            </button>
+
+            {reponseIA&&(<>
+              <div style={{fontSize:".8rem",color:"#3D1F0E",lineHeight:1.6,marginBottom:"1rem",padding:".75rem",background:theme.bgPage,borderRadius:10}}>
+                {reponseIA.message}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:".6rem"}}>
+                {reponseIA.produits.map(prod=>{
+                  const enPanier=cart.find(i=>i.ref===prod.ref);
+                  const prixAffiche=(prod.offre&&prod.prixOffre)?prod.prixOffre:prod.prix;
+                  return(
+                    <div key={prod.ref} style={{background:"white",border:"1px solid #E8DDD4",borderRadius:12,padding:".6rem"}}>
+                      {prod.image?<img src={prod.image} alt={prod.nom} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,marginBottom:".4rem"}}/>:<div style={{width:"100%",aspectRatio:"1",borderRadius:8,background:theme.bgPage,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem",marginBottom:".4rem"}}>🧴</div>}
+                      <div style={{fontSize:".68rem",fontWeight:700,color:"#3D1F0E",marginBottom:".25rem",lineHeight:1.3}}>{prod.nom}</div>
+                      <div style={{fontSize:".75rem",fontWeight:700,color:theme.accent,marginBottom:".4rem"}}>{prixAffiche.toFixed(2)}€</div>
+                      <button className="boutique-btn" onClick={()=>ajouterPanier(prod)} disabled={!!enPanier}
+                        style={{width:"100%",background:enPanier?"#ccc":theme.btn,color:"white",border:"none",borderRadius:7,padding:".35rem",fontSize:".62rem",fontWeight:700,fontFamily:"inherit",cursor:enPanier?"default":"pointer"}}>
+                        {enPanier?"✓ Ajouté":"+ Ajouter"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </>)}
           </div>
         </div>
