@@ -318,6 +318,7 @@ exports.notifMessage = onDocumentUpdated("conversations/{convId}", async (event)
 
 const {defineSecret} = require("firebase-functions/params");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const resendApiKey = defineSecret("RESEND_API_KEY");
 
 exports.creerCompteStripeConnect = onCall({secrets: [stripeSecretKey]}, async (request) => {
   const auth = request.auth;
@@ -827,5 +828,51 @@ exports.capturerCommandePaypal = onCall(async (request) => {
     return {succes: true};
   } catch (e) {
     throw new HttpsError("internal", "Erreur validation PayPal : " + e.message);
+  }
+});
+
+// --- CONNEXION CLIENTE BOUTIQUE : lien magique envoye via Resend (meilleure delivrabilite que Firebase par defaut) ---
+exports.envoyerLienConnexionClient = onCall({secrets: [resendApiKey]}, async (request) => {
+  const {email, redirectUrl} = request.data || {};
+  if (!email || !redirectUrl) {
+    throw new HttpsError("invalid-argument", "email et redirectUrl requis");
+  }
+  const emailNorm = email.trim().toLowerCase();
+
+  const actionCodeSettings = {url: redirectUrl, handleCodeInApp: true};
+  let lien;
+  try {
+    lien = await admin.auth().generateSignInWithEmailLink(emailNorm, actionCodeSettings);
+  } catch (e) {
+    throw new HttpsError("internal", "Erreur generation du lien : " + e.message);
+  }
+
+  try {
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + resendApiKey.value(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: "Blazing Dynasty <boutique@blazingdinasty.com>",
+        to: [emailNorm],
+        subject: "Ton lien de connexion — Blazing Dynasty",
+        html: `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:2rem 1rem;color:#3D1F0E;">
+          <div style="font-size:1.3rem;font-weight:600;margin-bottom:1rem;">Blazing <em style="color:#C49A8A;">Dynasty</em></div>
+          <p style="font-size:.95rem;line-height:1.6;">Bonjour,</p>
+          <p style="font-size:.95rem;line-height:1.6;">Clique sur le bouton ci-dessous pour te connecter à ton compte et retrouver tes commandes, ta fidélité et tes favoris.</p>
+          <a href="${lien}" style="display:inline-block;background:#3D1F0E;color:white;text-decoration:none;padding:.85rem 1.5rem;border-radius:10px;font-weight:700;font-size:.9rem;margin:1rem 0;">Me connecter</a>
+          <p style="font-size:.75rem;color:#888;margin-top:1.5rem;">Si tu n'as pas demandé ce lien, tu peux ignorer cet email sans danger.</p>
+        </div>`
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.message || "Erreur envoi Resend");
+    }
+    return {succes: true};
+  } catch (e) {
+    throw new HttpsError("internal", "Erreur envoi email : " + e.message);
   }
 });

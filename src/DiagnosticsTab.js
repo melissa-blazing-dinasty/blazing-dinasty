@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
-import { sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut } from 'firebase/auth';
+import { isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut } from 'firebase/auth';
 import { C } from './constants';
 import App from './App';
 import { SCRIPTS_DATA, DecouverteTour } from './App';
@@ -3205,7 +3205,8 @@ function BoutiquePubliquePage({slug}){
     try{
       const url=new URL(window.location.href);
       url.searchParams.set("boutique",slug);
-      await sendSignInLinkToEmail(auth,loginEmail.trim(),{url:url.toString(),handleCodeInApp:true});
+      const fn=httpsCallable(fbFunctions,"envoyerLienConnexionClient");
+      await fn({email:loginEmail.trim(),redirectUrl:url.toString()});
       window.localStorage.setItem("bd-boutique-email-"+slug,loginEmail.trim());
       setLoginSent(true);
     }catch(e){
