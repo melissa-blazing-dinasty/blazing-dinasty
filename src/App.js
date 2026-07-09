@@ -1350,6 +1350,12 @@ function App(){
     };
   },[tab,formationSubTab,userId]);
   const[formationTerminees,setFormationTerminees]=useState({});
+  const[formationNouveautes,setFormationNouveautes]=useState({});
+  const FORMATION_DATES_MAJ={
+    mihibd:"2026-01-01", demarrage:"2026-01-01", vente:"2026-07-09",
+    recrutement:"2026-07-09", contenu:"2026-01-01", devperso:"2026-07-09",
+    outils:"2026-07-09", formaproduits:"2026-07-09",
+  };
   useEffect(()=>{
     if(!userId)return;
     (async()=>{
@@ -1357,8 +1363,15 @@ function App(){
         const data=await sgAll(userId);
         const progress=data["db-formation-progress"]?JSON.parse(data["db-formation-progress"]):{};
         const termines={};
+        const nouveautes={};
         Object.keys(progress).forEach(k=>{if(progress[k]?.termine)termines[k]=true;});
+        FORMATION_SUBTABS_SUIVIES.forEach(id=>{
+          const maj=FORMATION_DATES_MAJ[id];
+          const vue=progress[id]?.derniereConsultation;
+          if(maj&&(!vue||new Date(vue)<new Date(maj)))nouveautes[id]=true;
+        });
         setFormationTerminees(termines);
+        setFormationNouveautes(nouveautes);
       }catch{}
     })();
   },[userId]);
@@ -1976,7 +1989,7 @@ function App(){
             {(()=>{
               let n=0;
               if(tb.id==="communaute")n=nbNotifCommunaute;
-              if(tb.id==="formation")n=FORMATION_SUBTABS_SUIVIES.filter(s=>!formationTerminees[s]).length;
+              if(tb.id==="formation")n=Object.keys(formationNouveautes).length;
               if(tb.id==="boiteaoutils")n=nbDiagNonLus;
               if(tb.id==="dashboard"){
                 const nUrgent=(objPeriodeRemplis?0:1)+nbNotifDashboard.relances;
@@ -2116,24 +2129,27 @@ function App(){
               const formationDebloquee = fastStartDone || isChefApp || hasTeamApp;
               // Onglets bloqués si Fast Start non terminé (sauf formationapp et demarrage)
               const bloque = false;
-              const suivie=FORMATION_SUBTABS_SUIVIES.includes(f.id);
+              const nouveau=!!formationNouveautes[f.id];
               const termine=formationTerminees[f.id];
               return(
                 <div key={f.id} onClick={()=>!bloque&&setFormationSubTab(f.id)}
-                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:bloque?C.creme:C.blanc,border:`1px solid ${bloque?"#ddd":(suivie&&!termine?C.rose:C.pale)}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:bloque?"default":"pointer",opacity:bloque?.6:1}}>
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:bloque?C.creme:C.blanc,border:`1px solid ${bloque?"#ddd":(nouveau?C.rose:C.pale)}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:bloque?"default":"pointer",opacity:bloque?.6:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
                     <div style={{width:38,height:38,borderRadius:"50%",background:bloque?"#ddd":f.col+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0,position:"relative"}}>
                       {bloque?"🔒":f.icon}
-                      {suivie&&!termine&&!bloque&&(
+                      {nouveau&&!bloque&&(
                         <span style={{position:"absolute",top:-2,right:-2,width:11,height:11,borderRadius:"50%",background:"#E63946",border:"1.5px solid white"}}/>
                       )}
                     </div>
                     <div>
-                      <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:bloque?C.gris:C.brun}}>{f.label.replace(/^\S+\s/,"")}</div>
+                      <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:bloque?C.gris:C.brun,display:"flex",alignItems:"center",gap:".4rem"}}>
+                        {f.label.replace(/^\S+\s/,"")}
+                        {nouveau&&!bloque&&<span style={{background:"#E63946",color:"white",fontSize:".55rem",fontWeight:700,padding:".1rem .4rem",borderRadius:20,letterSpacing:".03em"}}>NOUVEAU</span>}
+                      </div>
                       <div style={{fontSize:".66rem",color:bloque?"#bbb":C.gris}}>{bloque?"Se débloque après le Fast Start":f.desc}</div>
                     </div>
                   </div>
-                  {suivie&&termine?<span style={{color:C.vert,fontSize:".85rem"}}>✅</span>:<span style={{color:bloque?"#ccc":C.pale}}>{bloque?"🔒":"›"}</span>}
+                  {termine?<span style={{color:C.vert,fontSize:".85rem"}}>✅</span>:<span style={{color:bloque?"#ccc":C.pale}}>{bloque?"🔒":"›"}</span>}
                 </div>
               );
             })}
