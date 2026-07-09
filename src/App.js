@@ -758,9 +758,9 @@ function ChallengeAppPopup({uid, onClose, setTab}){
   const allerSection=(section)=>{
     if(section==="prospects"||section==="clients"||section==="equipe-fun"||section==="objperso"){
       setTab("dashboard");
-    } else if(section==="diagnostics"){ setTab("diagnostics"); }
-    else if(section==="linkbio"){ setTab("linkbio"); }
-    else if(section==="dreamboard"){ setTab("dreamboard"); }
+    } else if(section==="diagnostics"){ setTab("boiteaoutils"); }
+    else if(section==="linkbio"){ setTab("boiteaoutils"); }
+    else if(section==="dreamboard"){ setTab("dashboard"); }
     onClose();
   };
   if(etat==="termine_jour"||etat==="termine"){return null;}  const jour=jourActuel?CHALLENGE_APP_JOURS[jourActuel-1]:null;
@@ -947,26 +947,29 @@ function App(){
   const[userId,setUserId]=useState("");
   const[isChefApp,setIsChefApp]=useState(false);
   const[challengeATraiterApp,setChallengeATraiterApp]=useState(false);
+  const[nbNotifCommunaute,setNbNotifCommunaute]=useState(0);
   const[forceQuizJourApp,setForceQuizJourApp]=useState(null);
   useEffect(()=>{
     if(!userId)return;
     (async()=>{
       try{
+        let total=0;
         const snapC2=await getDoc(doc(db,"challenges","liste"));
         const items2=snapC2.exists()?(snapC2.data().items||[]):[];
         const now2=Date.now();
         const actifs2=items2.filter(c=>!c.deadline||c.deadline>now2);
-        if(actifs2.length===0){setChallengeATraiterApp(false);return;}
-        const snapD2=await getDoc(doc(db,"challenges","declarations"));
-        const decls2=snapD2.exists()?snapD2.data():{};
-        const pasFait2=actifs2.some(c=>{
-          const mesDecl2=(decls2[c.id]||[]).filter(d=>d.uid===userId);
-          return mesDecl2.length===0;
-        });
-        let alerteFinale=pasFait2;
+        if(actifs2.length>0){
+          const snapD2=await getDoc(doc(db,"challenges","declarations"));
+          const decls2=snapD2.exists()?snapD2.data():{};
+          const nbChallengesNonFaits=actifs2.filter(c=>{
+            const mesDecl2=(decls2[c.id]||[]).filter(d=>d.uid===userId);
+            return mesDecl2.length===0;
+          }).length;
+          total+=nbChallengesNonFaits;
+        }
         try{
           const nbMsg=await getUnreadMessagesCount(userId);
-          if(nbMsg>0)alerteFinale=true;
+          total+=nbMsg;
         }catch{}
         try{
           const snapI4=await getDoc(doc(db,"communaute","infos"));
@@ -975,10 +978,11 @@ function App(){
             const uSnap5=await getDoc(doc(db,"users",userId));
             const lastVu4=uSnap5.exists()?(uSnap5.data()["db-last-infos-vu"]||0):0;
             const plusRecente4=infosArr4.length>0?Math.max(...infosArr4.map(i=>i.ts||0)):0;
-            if(plusRecente4>lastVu4)alerteFinale=true;
+            if(plusRecente4>lastVu4)total+=1;
           }
         }catch{}
-        setChallengeATraiterApp(alerteFinale);
+        setNbNotifCommunaute(total);
+        setChallengeATraiterApp(total>0);
       }catch{}
     })();
   },[userId]);
@@ -1556,6 +1560,20 @@ function App(){
   const[showChallengeApp,setShowChallengeApp]=useState(false);
   const[dismissedPeriode,setDismissedPeriode]=useState(false);
   const[objPosesLocal,setObjPosesLocal]=useState(false);
+  const[nbNotifDashboard,setNbNotifDashboard]=useState({relances:0,actions:0});
+  const[nbDiagNonLus,setNbDiagNonLus]=useState(0);
+  useEffect(()=>{
+    if(!userId)return;
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",userId));
+        if(snap.exists()&&snap.data()["db-diagnostics"]){
+          const arr=JSON.parse(snap.data()["db-diagnostics"]);
+          setNbDiagNonLus(arr.filter(d=>d.nonLu).length);
+        }
+      }catch{}
+    })();
+  },[userId]);
 
   // ── Admin items ──
   const[adminItems,setAdminItems]=useState([]);
@@ -1617,15 +1635,24 @@ function App(){
     {id:"communaute",label:"🌸 Communauté"},
     {id:"calendrier",label:"📅 Calendrier"},
     {id:"formation",label:"🎓 Formation"},
+    {id:"boiteaoutils",label:"🛠️ Ma Boîte à Outils"},
+    ...(isChefApp||hasTeamApp?[{id:"espacechef",label:"👑 Espace Chef"}]:[]),
+  ];
+
+  const DASHBOARD_SOUS_ONGLETS=[
+    {id:"quotidien",label:"📊 Quotidien"},
     {id:"sprint",label:"⚡ Sprint"},
+    {id:"dreamboard",label:"✨ Dream Board"},
+  ];
+  const OUTILS_SOUS_ONGLETS=[
     {id:"scripts",label:"📝 Scripts"},
     {id:"banqueimages",label:"🖼️ Images"},
     {id:"diagnostics",label:"🩺 Diagnostics"},
     {id:"linkbio",label:"🔗 Link-in-Bio"},
     {id:"ebooks",label:"📚 Ebooks"},
-    ...(isChefApp||hasTeamApp?[{id:"espacechef",label:"👑 Espace Chef"}]:[]),
-    {id:"dreamboard",label:"✨ Dream Board"},
   ];
+  const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
+  const[outilsSousOnglet,setOutilsSousOnglet]=useState("scripts");
 
   // Sous-onglets du menu Formation
   const FORMATION_TABS=[
@@ -1940,16 +1967,70 @@ function App(){
         {TABS.map(tb=>(
           <button key={tb.id} onClick={()=>setTab(tb.id)}
             style={{flex:"none",padding:".72rem .85rem",fontSize:".6rem",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase",color:tab===tb.id?C.brun:C.gris,border:"none",borderBottom:`2px solid ${tab===tb.id?C.rose:"transparent"}`,background:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",transition:"all .2s",position:"relative"}}>
-            {tb.id==="communaute"&&challengeATraiterApp&&(
-              <span style={{position:"absolute",top:2,right:2,width:9,height:9,borderRadius:"50%",background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)"}}/>
-            )}
-            {tb.id==="dashboard"&&!objPeriodeRemplis&&(
-              <span style={{position:"absolute",top:2,right:2,width:9,height:9,borderRadius:"50%",background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)"}}/>
-            )}
+            {(()=>{
+              let n=0;
+              if(tb.id==="communaute")n=nbNotifCommunaute;
+              if(tb.id==="formation")n=FORMATION_SUBTABS_SUIVIES.filter(s=>!formationTerminees[s]).length;
+              if(tb.id==="boiteaoutils")n=nbDiagNonLus;
+              if(tb.id==="dashboard"){
+                const nUrgent=(objPeriodeRemplis?0:1)+nbNotifDashboard.relances;
+                const nActions=nbNotifDashboard.actions;
+                return(<>
+                  {nUrgent>0&&(
+                    <span style={{position:"absolute",top:1,right:1,minWidth:15,height:15,padding:"0 3px",borderRadius:20,background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)",color:"white",fontSize:".55rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+                      {nUrgent>99?"99+":nUrgent}
+                    </span>
+                  )}
+                  {nActions>0&&(
+                    <span style={{position:"absolute",top:1,right:nUrgent>0?16:1,minWidth:15,height:15,padding:"0 3px",borderRadius:20,background:C.or,border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(196,154,84,.3)",color:"white",fontSize:".55rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+                      {nActions}
+                    </span>
+                  )}
+                </>);
+              }
+              if(n<=0)return null;
+              return(
+                <span style={{position:"absolute",top:1,right:1,minWidth:15,height:15,padding:"0 3px",borderRadius:20,background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)",color:"white",fontSize:".55rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+                  {n>99?"99+":n}
+                </span>
+              );
+            })()}
             {tb.label}
           </button>
         ))}
       </div>
+
+      {/* SOUS-NAV TABLEAU DE BORD */}
+      {tab==="dashboard"&&(
+        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:99,gap:".4rem",padding:".5rem .75rem"}}>
+          {DASHBOARD_SOUS_ONGLETS.map(s=>{
+            const nUrgentPill=s.id==="quotidien"?((objPeriodeRemplis?0:1)+nbNotifDashboard.relances):0;
+            const nActionsPill=s.id==="quotidien"?nbNotifDashboard.actions:0;
+            return(
+            <button key={s.id} onClick={()=>setDashboardSousOnglet(s.id)}
+              style={{flexShrink:0,padding:".4rem .8rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${dashboardSousOnglet===s.id?C.rose:C.pale}`,background:dashboardSousOnglet===s.id?C.rose:C.blanc,color:dashboardSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:".3rem"}}>
+              {s.label}
+              {nUrgentPill>0&&<span style={{background:dashboardSousOnglet===s.id?"white":"#E63946",color:dashboardSousOnglet===s.id?C.rose:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nUrgentPill}</span>}
+              {nActionsPill>0&&<span style={{background:dashboardSousOnglet===s.id?"white":C.or,color:dashboardSousOnglet===s.id?C.or:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nActionsPill}</span>}
+            </button>
+          );})}
+        </div>
+      )}
+
+      {/* SOUS-NAV MA BOÎTE À OUTILS */}
+      {tab==="boiteaoutils"&&(
+        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:99,gap:".4rem",padding:".5rem .75rem"}}>
+          {OUTILS_SOUS_ONGLETS.map(s=>{
+            const nPill=s.id==="diagnostics"?nbDiagNonLus:0;
+            return(
+            <button key={s.id} onClick={()=>setOutilsSousOnglet(s.id)}
+              style={{flexShrink:0,padding:".4rem .8rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${outilsSousOnglet===s.id?C.rose:C.pale}`,background:outilsSousOnglet===s.id?C.rose:C.blanc,color:outilsSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:".3rem"}}>
+              {s.label}
+              {nPill>0&&<span style={{background:outilsSousOnglet===s.id?"white":"#E63946",color:outilsSousOnglet===s.id?C.rose:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nPill}</span>}
+            </button>
+          );})}
+        </div>
+      )}
 
       {/* RETOUR FORMATION (quand un dossier est ouvert) */}
       {tab==="formation"&&formationSubTab&&(
@@ -1958,37 +2039,6 @@ function App(){
             style={{background:"none",border:"none",color:C.rose,fontSize:".75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0}}>
             ← Retour à Formation
           </button>
-        </div>
-      )}
-
-      {/* BANNIÈRE DÉBUT DE PÉRIODE */}
-      {showBanner&&(
-        <div style={{background:"linear-gradient(135deg,#C44B1A,#8B3010)",padding:".85rem 1rem",position:"relative",zIndex:50}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:".75rem"}}>
-            <div style={{flex:1}}>
-              <div style={{fontSize:".65rem",fontWeight:700,letterSpacing:".12em",color:"rgba(255,220,180,.9)",marginBottom:".2rem"}}>🎯 NOUVELLE PÉRIODE MIHI</div>
-              <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",color:"white",fontWeight:300,lineHeight:1.3,marginBottom:".35rem"}}>
-                C'est le moment de définir<br/><em style={{fontStyle:"italic",color:"#FFD9A0"}}>tes objectifs pour cette période</em>
-              </div>
-              <p style={{fontSize:".72rem",color:"rgba(255,220,180,.8)",lineHeight:1.5,margin:"0 0 .6rem"}}>
-                CA visé · Palier à atteindre · Nombre de recrues — note-les maintenant pour suivre ta progression.
-              </p>
-              <div style={{display:"flex",gap:".5rem"}}>
-                <button onClick={()=>{setTab("dashboard");closeBanner();}}
-                  style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.4)",borderRadius:8,padding:".35rem .75rem",fontSize:".72rem",fontWeight:700,color:"white",cursor:"pointer",fontFamily:"inherit"}}>
-                  Définir mes objectifs →
-                </button>
-                <button onClick={closeBanner}
-                  style={{background:"none",border:"1px solid rgba(255,255,255,.2)",borderRadius:8,padding:".35rem .65rem",fontSize:".72rem",color:"rgba(255,255,255,.6)",cursor:"pointer",fontFamily:"inherit"}}>
-                  Plus tard
-                </button>
-              </div>
-            </div>
-            <button onClick={closeBanner}
-              style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",fontSize:".9rem",cursor:"pointer",padding:".2rem",flexShrink:0,fontFamily:"inherit"}}>
-              ✕
-            </button>
-          </div>
         </div>
       )}
 
@@ -2031,7 +2081,10 @@ function App(){
               {id:"sprint",sub:null,icon:"⚡",col:C.rose,label:"Sprint Recrutement 7 jours"},
               {id:"suivi",sub:null,icon:"📋",col:C.lilas,label:"Checklist Nouvelle Recrue"},
             ].map(s=>(
-              <div key={s.label} onClick={()=>{setTab(s.id); if(s.sub) setFormationSubTab(s.sub);}}
+              <div key={s.label} onClick={()=>{
+                  if(s.id==="sprint"){setTab("dashboard");setDashboardSousOnglet("sprint");}
+                  else{setTab(s.id); if(s.sub) setFormationSubTab(s.sub);}
+                }}
                 style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".7rem 1rem",marginBottom:".45rem",display:"flex",alignItems:"center",gap:".65rem",cursor:"pointer"}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:s.col+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".85rem",flexShrink:0}}>{s.icon}</div>
                 <div style={{fontFamily:"Georgia,serif",fontSize:".88rem",fontWeight:600,color:C.brun,flex:1}}>{s.label}</div>
@@ -2057,19 +2110,24 @@ function App(){
               const formationDebloquee = fastStartDone || isChefApp || hasTeamApp;
               // Onglets bloqués si Fast Start non terminé (sauf formationapp et demarrage)
               const bloque = false;
+              const suivie=FORMATION_SUBTABS_SUIVIES.includes(f.id);
+              const termine=formationTerminees[f.id];
               return(
                 <div key={f.id} onClick={()=>!bloque&&setFormationSubTab(f.id)}
-                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:bloque?C.creme:C.blanc,border:`1px solid ${bloque?"#ddd":C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:bloque?"default":"pointer",opacity:bloque?.6:1}}>
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:bloque?C.creme:C.blanc,border:`1px solid ${bloque?"#ddd":(suivie&&!termine?C.rose:C.pale)}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:bloque?"default":"pointer",opacity:bloque?.6:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
-                    <div style={{width:38,height:38,borderRadius:"50%",background:bloque?"#ddd":f.col+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>
+                    <div style={{width:38,height:38,borderRadius:"50%",background:bloque?"#ddd":f.col+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0,position:"relative"}}>
                       {bloque?"🔒":f.icon}
+                      {suivie&&!termine&&!bloque&&(
+                        <span style={{position:"absolute",top:-2,right:-2,width:11,height:11,borderRadius:"50%",background:"#E63946",border:"1.5px solid white"}}/>
+                      )}
                     </div>
                     <div>
                       <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:bloque?C.gris:C.brun}}>{f.label.replace(/^\S+\s/,"")}</div>
                       <div style={{fontSize:".66rem",color:bloque?"#bbb":C.gris}}>{bloque?"Se débloque après le Fast Start":f.desc}</div>
                     </div>
                   </div>
-                  <span style={{color:bloque?"#ccc":C.pale}}>{bloque?"🔒":"›"}</span>
+                  {suivie&&termine?<span style={{color:C.vert,fontSize:".85rem"}}>✅</span>:<span style={{color:bloque?"#ccc":C.pale}}>{bloque?"🔒":"›"}</span>}
                 </div>
               );
             })}
@@ -2921,7 +2979,7 @@ function App(){
         )}
 
         {/* ── SPRINT / ACCÉLÈRE ── */}
-        {tab==="sprint"&&(
+        {tab==="dashboard"&&dashboardSousOnglet==="sprint"&&(
           <div>
             <SecTitle title="Prends" em="de la vitesse" desc="7 actions quotidiennes pour passer à l'action. Chaque jour compte — coche et avance."/>
             <div style={{background:C.brun,borderRadius:10,padding:".7rem 1rem",marginBottom:"1rem",fontSize:".74rem",color:C.pale,lineHeight:1.6}}>
@@ -3010,14 +3068,14 @@ function App(){
         {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp}/>}
-        {tab==="scripts"&&<ScriptsTab/>}
-        {tab==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp}/>}
-        {tab==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name}/>}
-        {tab==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
-        {tab==="ebooks"&&<EbooksTab/>}
+        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard}/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="scripts"&&<ScriptsTab/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp}/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus}/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
-        {tab==="dreamboard"&&<DreamBoardTab uid={userId}/>}
+        {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="espacechef"&&(isChefApp||hasTeamApp)&&<EspaceChefTab uid={userId} isChef={isChefApp}/>}
         {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab adminItems={adminItems}/>}
         {tab==="objectifs"&&<ObjectifsTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")}/>}
@@ -3130,7 +3188,7 @@ function App(){
               </div>
             </div>
           </div>
-          <ObjectifsPopup uid={userId}/>
+          <ObjectifsPopup uid={userId} setTab={setTab} onClose={()=>setShowObjectifs(false)} isMelissa={name.toLowerCase().startsWith("melissa")}/>
         </div>
       )}
     </div>
@@ -5008,10 +5066,8 @@ function PeriodeTimer(){
   );
 }
 
-function ObjectifsPopup({uid}){
+function ObjectifsPopup({uid,setTab,onClose,isMelissa}){
   const[obj,setObj]=useState(null);
-  const[perso,setPerso]=useState(null);
-  const[ptab,setPtab]=useState("perso");
 
   useEffect(()=>{
     (async()=>{
@@ -5019,13 +5075,6 @@ function ObjectifsPopup({uid}){
         const snap=await getDoc(doc(db,"equipe","objectifs"));
         if(snap.exists())setObj(snap.data());
       }catch{}
-      if(uid){
-        try{
-          const snap2=await getDoc(doc(db,"users",uid));
-          if(snap2.exists()&&snap2.data()["db-obj-perso"])
-            setPerso(JSON.parse(snap2.data()["db-obj-perso"]));
-        }catch{}
-      }
     })();
   },[uid]);
 
@@ -5036,84 +5085,43 @@ function ObjectifsPopup({uid}){
       {/* Timer période */}
       <div style={{padding:"1rem 1rem 0"}}><PeriodeTimer/></div>
 
-      {/* Mini tabs */}
-      <div style={{display:"flex",borderBottom:`1px solid ${C.pale}`}}>
-        {[{id:"perso",label:"🎯 Mes objectifs"},{id:"ca",label:"💰 CA Équipe"}].map(t=>(
-          <button key={t.id} onClick={()=>setPtab(t.id)}
-            style={{flex:1,padding:".5rem",fontSize:".65rem",fontWeight:600,border:"none",borderBottom:`2px solid ${ptab===t.id?C.rose:"transparent"}`,background:"none",color:ptab===t.id?C.brun:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       <div style={{padding:"1rem"}}>
-        {/* MES OBJECTIFS */}
-        {ptab==="perso"&&(
-          !perso
-          ? <div style={{textAlign:"center",padding:"1rem",fontSize:".74rem",color:C.gris}}>
-              Définis tes objectifs dans<br/><strong>Tableau de bord → Mes objectifs</strong>
-            </div>
-          : <>
-            {[
-              {label:"💰 Mon CA",val:perso.ca,obj:perso.caObj,unit:"€",color:C.rose},
-            ].map(({label,val,obj,unit,color})=>(
-              <div key={label} style={{marginBottom:".65rem"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".25rem"}}>
-                  <div style={{fontSize:".74rem",fontWeight:600,color:C.brun}}>{label}</div>
-                  <div style={{display:"flex",gap:".3rem",alignItems:"center"}}>
-                    <span style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:pct(val,obj)>=100?C.vert:color}}>{val||"—"}{unit}</span>
-                    <span style={{fontSize:".6rem",color:C.gris}}>/ {obj||"—"}{unit}</span>
-                    <span style={{background:color+"20",color:color,fontSize:".58rem",fontWeight:700,padding:".1rem .35rem",borderRadius:20}}>{pct(val,obj)}%</span>
-                  </div>
-                </div>
-                <div style={{height:5,background:C.pale,borderRadius:10,overflow:"hidden"}}>
-                  <div style={{height:"100%",background:pct(val,obj)>=100?C.vert:color,width:pct(val,obj)+"%",borderRadius:10,transition:"width .5s"}}/>
+        {!obj
+        ? <div style={{textAlign:"center",padding:"1rem",fontSize:".74rem",color:C.gris}}>
+            Objectifs pas encore définis pour l'équipe.
+          </div>
+        : (<>
+          {[
+            {label:"💰 Objectif équipe",val:obj.caReal,o:obj.caObj,unit:"€",color:C.rose},
+            {label:"👥 Recrutement équipe",val:obj.recruesReal,o:obj.recruesObj,unit:"",color:C.lilas},
+          ].map(({label,val,o,unit,color})=>(
+            <div key={label} style={{marginBottom:".8rem"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".25rem"}}>
+                <div style={{fontSize:".76rem",fontWeight:600,color:C.brun}}>{label}</div>
+                <div style={{display:"flex",gap:".3rem",alignItems:"center"}}>
+                  <span style={{fontFamily:"Georgia,serif",fontSize:".95rem",fontWeight:600,color:pct(val,o)>=100?C.vert:color}}>{val||"—"}{unit}</span>
+                  <span style={{fontSize:".62rem",color:C.gris}}>/ {o||"—"}{unit}</span>
+                  <span style={{background:color+"20",color:color,fontSize:".6rem",fontWeight:700,padding:".1rem .35rem",borderRadius:20}}>{pct(val,o)}%</span>
                 </div>
               </div>
-            ))}
-            {perso.recruesObj&&perso.recruesObj!=="0"&&(
-              <div style={{marginBottom:".65rem"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".25rem"}}>
-                  <div style={{fontSize:".74rem",fontWeight:600,color:C.brun}}>👥 Mes recrues</div>
-                  <div style={{display:"flex",gap:".3rem",alignItems:"center"}}>
-                    <span style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:pct(perso.recruesReal,perso.recruesObj)>=100?C.vert:C.lilas}}>{perso.recruesReal||0}</span>
-                    <span style={{fontSize:".6rem",color:C.gris}}>/ {perso.recruesObj}</span>
-                    <span style={{background:C.lilas+"20",color:C.lilas,fontSize:".58rem",fontWeight:700,padding:".1rem .35rem",borderRadius:20}}>{pct(perso.recruesReal,perso.recruesObj)}%</span>
-                  </div>
-                </div>
-                <div style={{height:5,background:C.pale,borderRadius:10,overflow:"hidden"}}>
-                  <div style={{height:"100%",background:pct(perso.recruesReal,perso.recruesObj)>=100?C.vert:C.lilas,width:pct(perso.recruesReal,perso.recruesObj)+"%",borderRadius:10,transition:"width .5s"}}/>
-                </div>
+              <div style={{height:6,background:C.pale,borderRadius:10,overflow:"hidden"}}>
+                <div style={{height:"100%",background:pct(val,o)>=100?C.vert:color,width:pct(val,o)+"%",borderRadius:10,transition:"width .5s"}}/>
               </div>
-            )}
-            <div style={{background:C.creme,borderRadius:8,padding:".5rem .75rem",fontSize:".72rem",color:C.brun,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>🏆 Palier visé</span>
-              <strong style={{color:C.or}}>{perso.palier||"2%"}</strong>
             </div>
-          </>
+          ))}
+          {obj.msg&&(
+            <div style={{background:C.brun,borderRadius:8,padding:".65rem .8rem",marginTop:".3rem"}}>
+              <div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.or,marginBottom:".25rem"}}>👑 Message de Melissa</div>
+              <div style={{fontSize:".72rem",color:C.blanc,lineHeight:1.5}}>{obj.msg}</div>
+            </div>
+          )}
+        </>)}
+        {isMelissa&&setTab&&(
+          <button onClick={()=>{setTab("objectifs");if(onClose)onClose();}}
+            style={{width:"100%",background:"none",border:`1.5px solid ${C.rose}`,color:C.rose,borderRadius:8,padding:".5rem",fontSize:".74rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:".8rem"}}>
+            ✏️ Modifier les objectifs équipe
+          </button>
         )}
-
-        {/* ÉQUIPE */}
-        {ptab==="ca"&&(
-          !perso||!perso.caObj
-          ? <div style={{textAlign:"center",padding:"1rem",fontSize:".74rem",color:C.gris}}>
-              Définis ton objectif CA dans<br/><strong>Tableau de bord → Mes objectifs</strong>
-            </div>
-          : <>
-            <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>💰 CA Total équipe cette période</div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:".5rem"}}>
-              <div style={{fontFamily:"Georgia,serif",fontSize:"2rem",fontWeight:600,color:C.brun}}>{perso.ca||0}€</div>
-              <div style={{fontSize:".78rem",color:C.gris}}>objectif : <strong style={{color:C.brun}}>{perso.caObj}€</strong></div>
-            </div>
-            <div style={{height:10,background:C.pale,borderRadius:10,overflow:"hidden",marginBottom:".4rem"}}>
-              <div style={{height:"100%",background:pct(perso.ca,perso.caObj)>=100?C.vert:C.rose,width:pct(perso.ca,perso.caObj)+"%",borderRadius:10,transition:"width .5s"}}/>
-            </div>
-            <div style={{textAlign:"right",fontSize:".72rem",fontWeight:700,color:pct(perso.ca,perso.caObj)>=100?C.vert:C.rose}}>
-              {pct(perso.ca,perso.caObj)}%{pct(perso.ca,perso.caObj)>=100?" 🎉 Objectif atteint !":""}
-            </div>
-          </>
-        )}
-
       </div>
     </div>
   );
@@ -7789,6 +7797,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   const[showDecouverte,setShowDecouverte]=useState(false);
   const[suiviCATotal,setSuiviCATotal]=useState(0);useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"users",uid));if(snap.exists()&&snap.data()["db-suivi-ca"]){const sc=JSON.parse(snap.data()["db-suivi-ca"]);const total=Object.values(sc).reduce((s,v)=>s+(parseFloat(v)||0),0);setSuiviCATotal(total);}}catch{}})();},[uid]);
   const[graphEnGros,setGraphEnGros]=useState(null);
+  const[recrutementOuvert,setRecrutementOuvert]=useState(()=>!!(obj.recruesObj&&obj.recruesObj!=="0"));
   const raw=getPeriodeInfo();
   const pCourant=getPeriodeActuelle();
 
@@ -7984,7 +7993,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
         {pctCA()>=100&&<div style={{textAlign:"center",fontSize:".75rem",color:C.vert,fontWeight:700,marginTop:".4rem"}}>🎉 Objectif CA atteint !</div>}
 
         {/* Recrues */}
-        {obj.recruesObj&&obj.recruesObj!=="0"&&(
+        {recrutementOuvert&&(
           <div style={{marginTop:".75rem",paddingTop:".6rem",borderTop:`1px solid ${C.pale}`}}>
             <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".4rem"}}>👥 Recrues</div>
             <div style={{display:"flex",gap:".5rem"}}>
@@ -8002,10 +8011,14 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
             <div style={{height:6,background:C.pale,borderRadius:10,overflow:"hidden",marginTop:".4rem"}}>
               <div style={{height:"100%",background:pctR()>=100?C.vert:C.lilas,width:pctR()+"%",borderRadius:10}}/>
             </div>
+            <button onClick={()=>{setRecrutementOuvert(false);save({...obj,recruesObj:"0",recruesReal:""});}}
+              style={{marginTop:".4rem",background:"none",border:"none",color:C.gris,fontSize:".64rem",fontFamily:"inherit",cursor:"pointer",textDecoration:"underline"}}>
+              Retirer cet objectif
+            </button>
           </div>
         )}
-        {(!obj.recruesObj||obj.recruesObj==="0")&&(
-          <button onClick={()=>save({...obj,recruesObj:"1"})} style={{marginTop:".5rem",background:"none",border:`1px dashed ${C.pale}`,borderRadius:8,padding:".35rem .65rem",fontSize:".68rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
+        {!recrutementOuvert&&(
+          <button onClick={()=>{setRecrutementOuvert(true);save({...obj,recruesObj:"1"});}} style={{marginTop:".5rem",background:"none",border:`1px dashed ${C.pale}`,borderRadius:8,padding:".35rem .65rem",fontSize:".68rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",width:"100%"}}>
             + Ajouter un objectif recrutement
           </button>
         )}
@@ -8868,6 +8881,83 @@ export function SuiviFormationTab({uid}){
   );
 }
 
+// Onglet "Maintenance" — actions ponctuelles de correction, reservees a Melissa
+export function MaintenanceTab({uid}){
+  const[loading,setLoading]=useState(false);
+  const[resultat,setResultat]=useState(null);
+  const[confirmation,setConfirmation]=useState(false);
+
+  const nettoyerObjectifsEquipe=async()=>{
+    setLoading(true);
+    setResultat(null);
+    try{
+      const annSnap=await getDoc(doc(db,"equipe","annuaire"));
+      const annuaire = annSnap.exists()?annSnap.data().membres||{}:{};
+      const tousUids = [...new Set([...Object.keys(annuaire), uid])];
+      const periodeCourante=getPeriodeActuelle();
+      let nbCorriges=0;
+      let nbIgnores=0;
+
+      for(const mUid of tousUids){
+        try{
+          const data=await sgAll(mUid);
+          const objRaw=data["db-obj-perso"];
+          if(!objRaw){ nbIgnores++; continue; }
+          const obj=JSON.parse(objRaw);
+          const nextObj={...obj, ca:"", caPerso:"", caEquipe:"", recruesReal:"0", caObj:"", recruesObj:"", palier:"2%", objectifsPosesPeriode:"", nbDirecteurs:0, caDirecteurs:{}, dirSelectionnes:{}};
+          await ss(mUid,"db-obj-perso",JSON.stringify(nextObj));
+          await ss(mUid,"last_periode",periodeCourante);
+          nbCorriges++;
+        }catch(e){ console.error("Erreur pour",mUid,e); nbIgnores++; }
+      }
+      setResultat({nbCorriges, nbIgnores, total:tousUids.length});
+    }catch(e){
+      setResultat({erreur:e.message});
+    }
+    setLoading(false);
+    setConfirmation(false);
+  };
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>🧹 Maintenance</div>
+      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1.2rem",lineHeight:1.6}}>Actions ponctuelles de correction. À utiliser uniquement quand un bug de ce type est confirmé — pas une action à faire régulièrement.</p>
+
+      <div style={{background:"white",border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
+        <div style={{fontSize:".85rem",fontWeight:700,color:C.brun,marginBottom:".4rem"}}>Réinitialiser les objectifs chiffrés de toute l'équipe</div>
+        <p style={{fontSize:".72rem",color:C.gris,marginBottom:".8rem",lineHeight:1.6}}>
+          Vide le CA cible, le palier, l'objectif de recrues <strong>et</strong> le CA/recrues déjà réalisés sur la période, pour chaque membre de l'équipe (sans toucher à l'historique des périodes passées). À utiliser en tout début de nouvelle période si la remise à zéro automatique n'a pas fonctionné.
+        </p>
+        {!confirmation?(
+          <button onClick={()=>setConfirmation(true)} disabled={loading}
+            style={{width:"100%",background:"#C44B1A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".8rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            Réinitialiser les objectifs de toute l'équipe
+          </button>
+        ):(
+          <div>
+            <div style={{fontSize:".76rem",color:"#C44B1A",fontWeight:700,marginBottom:".6rem"}}>⚠️ Cette action est irréversible. Confirmer ?</div>
+            <div style={{display:"flex",gap:".5rem"}}>
+              <button onClick={nettoyerObjectifsEquipe} disabled={loading}
+                style={{flex:1,background:"#C44B1A",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                {loading?"En cours...":"Oui, confirmer"}
+              </button>
+              <button onClick={()=>setConfirmation(false)} disabled={loading}
+                style={{flex:1,background:"white",color:C.gris,border:`1.5px solid ${C.pale}`,borderRadius:10,padding:".65rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+        {resultat&&(
+          <div style={{marginTop:".9rem",padding:".7rem",background:resultat.erreur?"#FFF3F0":"#E8F5E9",borderRadius:8,fontSize:".76rem",color:resultat.erreur?"#C44B1A":"#2D5A3D"}}>
+            {resultat.erreur?("Erreur : "+resultat.erreur):(`✅ ${resultat.nbCorriges} membre(s) corrigé(s) sur ${resultat.total} (${resultat.nbIgnores} sans objectifs à corriger).`)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 export const ESPACE_CHEF_SECTIONS=[
   {id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true},
@@ -8882,6 +8972,7 @@ export const ESPACE_CHEF_SECTIONS=[
   {id:"distributeurs",icon:"👑",label:"Distributeurs",desc:"Voir et naviguer dans l'arborescence de ton équipe",chefOnly:false},
   {id:"nouveaux",icon:"📋",label:"Nouveaux Distri",desc:"Suivi onboarding des filleules récentes",chefOnly:false},
   {id:"admin",icon:"🔧",label:"Administration",desc:"Gérer les contenus, citations, scripts, annonces et produits",melissaOnly:true},
+  {id:"maintenance",icon:"🧹",label:"Maintenance",desc:"Actions ponctuelles de correction (usage exceptionnel)",melissaOnly:true},
 ];
 
 // ── MESSAGERIE ÉQUIPE ────────────────────────────────────────────────────────
@@ -10128,6 +10219,7 @@ function EspaceChefTab({uid, isChef}){
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
         {section==="nouveaux"&&<SuiviRecruTab uid={uid} isChef={isChef}/>}
         {section==="admin"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<AdminTab uid={uid}/>}
+        {section==="maintenance"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<MaintenanceTab uid={uid}/>}
       </div>
     );
   }

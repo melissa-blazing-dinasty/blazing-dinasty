@@ -19,7 +19,7 @@ import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
-function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null}){
+function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}}){
   const[dtab,setDtab]=useState(forceQuizJour?"faststart":"today");
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
@@ -248,6 +248,9 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   const doneCount=allTodayActions.filter(a=>actions[a.id]).length;
   const totalActions=allTodayActions.length;
   const displayedActions = allTodayActions;
+  useEffect(()=>{
+    onCompteurChange({relances:relancesDuJour.length,actions:totalActions-doneCount});
+  },[totalActions,doneCount,relancesDuJour]);
 
   const pctCAGauge = (()=>{
     if(!objPerso.caObj||!objPerso.ca)return 0;

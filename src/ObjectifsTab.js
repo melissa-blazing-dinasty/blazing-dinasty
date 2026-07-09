@@ -35,7 +35,6 @@ function ObjectifsTab({uid,userName,isMelissa}){
   };
 
   const KPIs=[
-    {key:"ventes",icon:"🛍️",label:"Ventes ce mois",color:C.rose},
     {key:"recrues",icon:"👥",label:"Nouvelles recrues",color:C.lilas},
     {key:"ca",icon:"💰",label:"CA équipe (€)",color:C.or},
   ];

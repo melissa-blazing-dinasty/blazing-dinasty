@@ -1565,8 +1565,23 @@ function AssignerDiagClienteBtn({ordonnance, type, nomClient, uid}){
     </>
   );
 }
-function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="", skipContact=false, onComplete=null }) {
+function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="", skipContact=false, onComplete=null, onNonLuChange=()=>{} }) {
   const [mode, setMode] = useState(initialType?"questionnaire":"choix");
+  const [nonLusCount,setNonLusCount]=useState(0);
+  useEffect(()=>{
+    if(!uid||externalMode)return;
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(snap.exists()&&snap.data()["db-diagnostics"]){
+          const arr=JSON.parse(snap.data()["db-diagnostics"]);
+          const n=arr.filter(d=>d.nonLu).length;
+          setNonLusCount(n);
+          onNonLuChange(n);
+        }
+      }catch{}
+    })();
+  },[uid,mode]);
   useEffect(()=>{if(mode==="contact"&&skipContact&&onComplete)onComplete();},[mode,skipContact]);
   const [contactLinksDirect,setContactLinksDirect]=useState(null);
   useEffect(()=>{
@@ -1785,9 +1800,21 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     return <DiagnosticParfumTab uid={uid} externalMode={externalMode} distributeurNom={userName||""}/>;
   }
 
+  if (mode === "resultats") return (
+    <div>
+      <button onClick={()=>setMode("choix")} style={{background:"none",border:"none",color:C.rose,fontSize:".78rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>← Retour aux diagnostics</button>
+      <DiagResultsTab uid={uid}/>
+    </div>
+  );
+
   if (mode === "choix") return (
     <div>
-      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:".5rem",gap:".4rem"}}>
+        <button onClick={()=>setMode("resultats")} style={{background:C.rose,color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>
+          📊 Mes résultats{nonLusCount>0?` (${nonLusCount})`:""}
+        </button>
+        <button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button>
+      </div>
       {showDecouverte&&<DecouverteTour outil="diagnostics" onClose={()=>setShowDecouverte(false)}/>}
       <div style={{ fontFamily: "Georgia,serif", fontSize: "1.35rem", fontWeight: 300, color: C.brun, marginBottom: ".2rem" }}>
         Diagnostics <em style={{ fontStyle: "italic", color: C.rose }}>& Outils</em>
