@@ -2570,6 +2570,52 @@ function App(){
                 ))}
               </Card>
               <DriveBtn href="https://drive.google.com/file/d/1KldVcCgrfLjirxVZjyXtFCpECinKevWs/view" label="Stratégie Liste — Vidéo"/>
+              <Card title="📋 Stratégie Liste" sub="Qualifier avant de proposer" icon="📋" color={C.lilas}>
+                <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".5rem"}}>✅ Étape 1 — La personne a tapé "LISTE" sous un post</div>
+                <div style={{background:C.creme,borderRadius:8,padding:".65rem .8rem",fontSize:".72rem",color:C.brun,lineHeight:1.65,fontStyle:"italic",borderLeft:`2px solid ${C.lilas}`,marginBottom:".6rem"}}>
+                  "Bonjour, afin que je puisse répondre au mieux à tes attentes, peux-tu me dire quelle catégorie de produits t'intéresserait le plus ? Maquillage, produits cheveux, parfums, compléments alimentaires, produits d'entretien"
+                </div>
+                <p style={{fontSize:".72rem",color:C.gris,marginBottom:".7rem",lineHeight:1.5}}>En fonction de la réponse : "Pour mieux te renseigner, j'aimerais pouvoir te poser quelques questions. Es-tu d'accord ?"</p>
+
+                {[
+                  {titre:"🔹 Perte de poids",qs:["Quel est ton objectif actuel (perte de poids, affinement, énergie, digestion, autre) ?","Combien aimerais-tu perdre, et en combien de temps idéalement ?","À quoi ressemblent tes repas sur une journée ?","As-tu tendance à grignoter ? Plutôt sucré, salé ou émotionnel ?","Bois-tu assez d'eau ? Environ combien par jour ?","Comment dors-tu en ce moment ?","Ton niveau de stress sur une échelle de 1 à 10 ?","Ton stress influence-t-il ton alimentation ?","Digères-tu bien ? Ballonnements, transit, lourdeurs ?","Te sens-tu souvent fatiguée dans la journée ?","Fais-tu un peu de sport ou de marche ? Combien de fois par semaine ?","As-tu déjà testé des compléments ou programmes ?","As-tu des allergies, intolérances ou traitements en cours ?"]},
+                  {titre:"🧴 Cosmétiques / Maquillage",qs:["Tu te maquilles tous les jours, de temps en temps ou rarement ?","Tu recherches quelque chose de rapide et naturel, ou un rendu plus travaillé ?"]},
+                  {titre:"✨ Soins visage",qs:["Ta peau est plutôt sèche, mixte, grasse ou sensible ?","Ta priorité : hydratation, anti-âge, imperfections, éclat ou confort ?","Tu as déjà une routine simple ou tu veux quelque chose de facile à suivre ?"]},
+                  {titre:"💇‍♀️ Cheveux",qs:["Tes cheveux sont secs, abîmés, fins, épais, bouclés, colorés ?","Ton objectif : moins de casse, plus de brillance, plus de volume ou meilleure pousse ?"]},
+                  {titre:"🌸 Parfums",qs:["Tu aimes les parfums légers, sucrés, fleuris ou intenses ?","Aimes-tu un parfum en particulier ?"]},
+                  {titre:"🧴 Soins corps",qs:["Tu recherches hydratation, fermeté, détente ou un moment cocooning ?","Ta peau est plutôt sèche, sensible ou sans souci particulier ?"]},
+                  {titre:"🌿 Compléments alimentaires",qs:["Priorité : énergie, sommeil, digestion, perte de poids ou bien-être général ?","Tu préfères une cure simple ou une routine plus complète ?","As-tu déjà testé des compléments ou jamais osé ?"]},
+                  {titre:"🧼 Produits d'entretien",qs:["Tu voudrais simplifier ton placard (moins de produits) ?","Qu'aimerais-tu traiter avec les produits ?"]},
+                ].map((sec,i)=>(
+                  <div key={i} style={{marginBottom:".6rem"}}>
+                    <div style={{fontSize:".71rem",fontWeight:700,color:C.brun,marginBottom:".3rem"}}>{sec.titre}</div>
+                    <div style={{background:C.creme,borderRadius:8,padding:".5rem .7rem"}}>
+                      {sec.qs.map((q,qi)=>(<div key={qi} style={{fontSize:".7rem",color:C.texte,lineHeight:1.6}}>• {q}</div>))}
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{background:C.lilas+"15",borderRadius:8,padding:".6rem .8rem",fontSize:".71rem",color:C.brun,lineHeight:1.6,marginTop:".6rem",marginBottom:".8rem"}}>
+                  "Très bien 😊 Le temps que j'analyse tes réponses pour te faire un diagnostic vraiment adapté, je t'envoie une courte vidéo qui explique le concept."
+                </div>
+
+                <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.lilas,marginBottom:".5rem"}}>✅ Étape 2 — Envoie la vidéo 1</div>
+                <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.6,marginBottom:".5rem"}}><strong>Si la personne veut simplement être cliente</strong> → propose 3 packs :</p>
+                <div style={{background:C.creme,borderRadius:8,padding:".5rem .7rem",marginBottom:".6rem"}}>
+                  <div style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>• Le pack dont le prix se rapproche le plus des 25€ mis en avant</div>
+                  <div style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>• Un pack routine complet</div>
+                  <div style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>• Le même pack que l'intermédiaire, avec un bonus</div>
+                </div>
+                <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.6,marginBottom:".6rem"}}>👋 La personne choisit → création d'un lien client.</p>
+                <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.6,marginBottom:".6rem"}}><strong>Si la personne veut devenir VIP/distributeur</strong> → envoie la vidéo 2, puis : "Alors dis-moi ? Comment te situes-tu ?"</p>
+                <div style={{background:C.creme,borderRadius:8,padding:".5rem .7rem",marginBottom:".6rem"}}>
+                  <div style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>Ce qu'il faut retenir : tu peux démarrer à ton rythme —</div>
+                  <div style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>• Pas besoin de savoir vendre</div>
+                  <div style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>• Pas besoin d'y passer tes journées</div>
+                  <div style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>• On est accompagnées étape par étape</div>
+                </div>
+                <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.6}}>Une mini formation express de 8 vidéos permet de gagner ses premières commissions rapidement. Si la personne est ok, le plus simple est de créer son compte (gratuit), puis lui expliquer comment démarrer selon SON objectif.</p>
+              </Card>
               <Card title={"🔥 Stratégie \"C'est Interdit\""} sub="Créer l'exclusivité et l'urgence" icon="🔥" color={"#C44B1A"}>
                 <p style={{fontSize:".73rem",color:C.gris,marginBottom:".8rem",lineHeight:1.6}}>4 versions de messages pour partager un "replay exclusif" en créant un effet de rareté et de confiance.</p>
                 {[
@@ -2937,7 +2983,31 @@ function App(){
             </Card>
 
             <Card title="Ressources supplémentaires" sub="Documents stratégie contenu" icon="📄" color={C.lilas}>
-              <DocBtn href="https://docs.google.com/document/d/19-pcqclkBvCHcAt6ONAGk_U8uDMmW0xg2UhOnO-l-fY/edit" label="Idées de publications — Document complet"/>
+              <Card title="💡 Idées de publications" sub={"Le hook \"moins de 25€\" — accessible et efficace"} icon="💡" color={C.or}>
+                <p style={{fontSize:".72rem",color:C.gris,marginBottom:".8rem",lineHeight:1.6}}>Publications courtes avec un mot-clé à commenter — génère de l'engagement et ouvre la conversation en DM.</p>
+                {[
+                  {texte:"💭 On parle souvent de skincare hors de prix… Perso, j'ai une routine visage SIMPLE, efficace et à moins de 25€. Rien de compliqué. Rien de gadget. Juste ce qu'il faut pour une peau propre, nette et confortable.",cta:"Tu veux la liste exacte des produits que j'utilise ? Dis-le moi en commentaire 👇"},
+                  {texte:"On m'a encore demandé aujourd'hui : \"C'est quoi ton parfum ?\" Plot twist 👉 moins de 20€ et on me fait des compliments NON-STOP.",cta:"Tu veux savoir lequel c'est ? Écris PARFUM en commentaire et je t'explique."},
+                  {texte:"Makeup du jour : rapide ✔ naturel ✔ pas besoin de 15 produits ✔ J'utilise une mini routine makeup que je recommande souvent aux mamans pressées.",cta:"Tu veux la liste des produits exacts ? Commente MAKEUP 💄"},
+                  {texte:"Non, je ne prends pas 12 compléments par jour. J'ai une routine ultra simple pour l'énergie ✨, le bien-être ✨, me sentir mieux au quotidien ✨",cta:"Tu veux savoir ce que je prends exactement ? Écris ROUTINE en commentaire."},
+                  {texte:"Prendre soin de soi ≠ se ruiner. J'ai construit une routine complète (soin + bien-être) 💸 accessible 🕒 rapide",cta:"Tu veux la liste détaillée ? Dis MOI 👇"},
+                  {texte:"On pense souvent que pour que ça marche, il faut que ce soit cher. Faux. J'utilise des produits beaucoup plus accessibles et les résultats sont là.",cta:"Tu veux voir ce que j'utilise vraiment ? Écris LISTE en commentaire."},
+                  {texte:"Petit jeu 😏 On me fait tester mon parfum et on me donne un prix estimé. Résultat : \"au moins 80€ non ?\" Spoiler : ❌",cta:"Tu veux savoir lequel c'est ? Commente DEVINE 👇"},
+                  {texte:"⏰ 5 minutes. C'est le temps que je mets pour ma routine (vraiment). Skincare + touche de makeup + parfum.",cta:"Tu veux ma routine express et les produits exacts ? Écris 5MIN 💕"},
+                  {texte:"Je partage rarement mes routines en public… Parce que tout le monde pense que c'est compliqué ou cher. Spoiler : ni l'un ni l'autre.",cta:"Tu veux que je t'envoie la liste complète en privé ? Laisse un ❤️ ou écris-moi."},
+                  {texte:"Toi aussi tu adores les rouges à lèvres pigmentés qui tiennent longtemps ?",cta:"Tape PÉPITES, je te réserve une belle surprise ❤️❤️"},
+                  {texte:"Tes cheveux font la tête en ce moment ? Secs, cassants ou carrément ternes ? 😰 Et si avec seulement 25€, tu pouvais leur redonner vie et brillance comme en sortant de chez le coiffeur ? ✨ J'ai débusqué LE soin pépite qui répare sans alourdir.",cta:"Qui veut le nom de ce sauveur à 25€ ? Commente CHEVEUX 👇"},
+                  {texte:"Tes cheveux font la tête ? 😩 Secs, ternes, cassants… et pourtant tu fais \"tout bien\". Le problème, ce n'est pas toi — c'est juste qu'ils n'ont pas la bonne routine. La même personne, les mêmes cheveux : la seule différence, une routine adaptée à 25€. Résultat : plus de brillance ✔️, plus de douceur ✔️, des cheveux qui revivent ✔️",cta:"Tu veux la routine ? Écris CHEVEUX en commentaire, ou clique sur le lien 🔗"},
+                ].map((p,i)=>(
+                  <div key={i} style={{background:C.creme,borderRadius:10,padding:".7rem .85rem",marginBottom:".55rem"}}>
+                    <div style={{fontSize:".74rem",color:C.texte,lineHeight:1.6,marginBottom:".35rem"}}>{p.texte}</div>
+                    <div style={{fontSize:".72rem",color:C.or,fontWeight:700,lineHeight:1.5}}>{p.cta}</div>
+                  </div>
+                ))}
+                <div style={{background:C.or+"15",borderRadius:8,padding:".6rem .8rem",fontSize:".71rem",color:C.brun,lineHeight:1.6,marginTop:".3rem"}}>
+                  💡 Tu peux aussi proposer un petit choix : "Tu préfères Makeup 💄, Parfum 🌸, ou Bien-être/énergie 💊 ?" — réponds en commentaire, j'enverrai la routine adaptée 😉
+                </div>
+              </Card>
               <YTBtn href="https://youtu.be/1m37A50VRN8" label="Formation Produit — Gestion perte de poids"/>
               <YTBtn href="https://youtu.be/r0MFA4bj1SY" label="Formation Produit — Ginkgo Biloba"/>
             </Card>
