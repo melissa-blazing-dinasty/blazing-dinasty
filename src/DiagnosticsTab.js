@@ -2729,11 +2729,11 @@ function LinkBioPublicPage({slug}){
     (async()=>{
       try{
         const s=await getDoc(doc(db,"linkbio",slug));
-        if(s.exists()){setProfil(s.data());try{const cfgSnap=await getDoc(doc(db,"admin","config"));if(cfgSnap.exists()&&cfgSnap.data().catalogueLien)setCatalogueLienPublic(cfgSnap.data().catalogueLien);}catch{}try{const sRef=doc(db,"linkbio_stats",slug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking:",e);}}
+        if(s.exists()){setProfil(s.data());try{const cfgSnap=await getDoc(doc(db,"admin","config"));if(cfgSnap.exists()&&cfgSnap.data().catalogueLien)setCatalogueLienPublic(cfgSnap.data().catalogueLien);}catch{}trackerEvenement(slug,"visites");}
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
-          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);try{const realSlug=qProfil.slug||slug;const sRef=doc(db,"linkbio_stats",realSlug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking query:",e);}}
+          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);const realSlug=qProfil.slug||slug;trackerEvenement(realSlug,"visites");}
           else setProfil("404");
         }
       }catch(e){setProfil("404");}
@@ -2794,13 +2794,13 @@ function LinkBioPublicPage({slug}){
         {(profil.lienBoutique||profil.lienRecrutement)&&(
           <div style={{display:"flex",gap:".5rem",padding:".85rem 1rem",background:theme.bg}}>
             {profil.lienBoutique&&(
-              <a href={profil.lienBoutique} target="_blank" rel="noopener noreferrer"
+              <a href={profil.lienBoutique} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_boutique_externe")}
                 style={{flex:1,background:theme.accent,color:"white",textDecoration:"none",textAlign:"center",padding:".7rem .5rem",borderRadius:12,fontSize:".78rem",fontWeight:700,boxShadow:"0 3px 10px rgba(0,0,0,.15)"}}>
                 {profil.lienBoutiqueLabel||"Boutique Mihi"}
               </a>
             )}
             {profil.lienRecrutement&&(
-              <a href={profil.lienRecrutement} target="_blank" rel="noopener noreferrer"
+              <a href={profil.lienRecrutement} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_recrutement_externe")}
                 style={{flex:1,background:"rgba(255,255,255,.15)",border:"1.5px solid rgba(255,255,255,.4)",color:"white",textDecoration:"none",textAlign:"center",padding:".7rem .5rem",borderRadius:12,fontSize:".78rem",fontWeight:700}}>
                 {profil.lienRecrutementLabel||"Rejoindre l'equipe"}
               </a>
@@ -2808,14 +2808,14 @@ function LinkBioPublicPage({slug}){
           </div>
         )}{profil.catalogueActif&&catalogueLienPublic&&(
           <div style={{padding:"0 1rem .85rem"}}>
-            <a href={catalogueLienPublic} target="_blank" rel="noopener noreferrer"
+            <a href={catalogueLienPublic} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_catalogue")}
               style={{display:"block",background:theme.bg,border:`1.5px solid ${theme.accent}`,color:theme.accent,textDecoration:"none",textAlign:"center",padding:".7rem .5rem",borderRadius:12,fontSize:".78rem",fontWeight:700}}>
               Voir le catalogue produits
             </a>
           </div>
         )}{profil.boutiqueActive&&(
           <div style={{padding:"0 1rem .85rem"}}>
-            <a href={"?boutique="+(profil.slug||slug)}
+            <a href={"?boutique="+(profil.slug||slug)} onClick={()=>trackerEvenement(profil.slug||slug,"clic_boutique")}
               style={{display:"block",background:theme.accent,color:"white",textDecoration:"none",textAlign:"center",padding:".75rem .5rem",borderRadius:12,fontSize:".82rem",fontWeight:700,boxShadow:"0 3px 10px rgba(0,0,0,.15)"}}>
               🛍️ Ma boutique en ligne
             </a>
@@ -2901,7 +2901,7 @@ function LinkBioPublicPage({slug}){
                 {id:"recrutement",icon:"👑",label:"Diagnostic Opportunité",sub:"L'activité Mihi faite pour toi ?"},
               {id:"blocage",icon:"👩‍👧",label:"Diagnostic Maman Entrepreneur",sub:"L'activité Mihi est-elle faite pour toi ?"},
               ].filter(d=>(profil.diagChoisis||["parfum","skincare","silhouette","sante"]).includes(d.id)).map(d=>(
-                <button key={d.id} onClick={()=>setDiagActif(d.id)}
+                <button key={d.id} onClick={()=>{trackerEvenement(profil.slug||slug,"clics_diag");trackerEvenement(profil.slug||slug,"diag_"+d.id);setDiagActif(d.id);}}
                   style={{background:"white",border:"1.5px solid "+theme.accent+"40",borderRadius:12,padding:".75rem .65rem",textAlign:"center",cursor:"pointer",fontFamily:"inherit"}}>
                   <div style={{fontSize:"1.4rem",marginBottom:".3rem"}}>{d.icon}</div>
                   <div style={{fontSize:".72rem",fontWeight:700,color:theme.header,lineHeight:1.3,marginBottom:".2rem"}}>{d.label}</div>
@@ -2914,19 +2914,19 @@ function LinkBioPublicPage({slug}){
 
         {/* Boutons principaux */}
         <div style={{padding:"0 1rem .75rem",display:"flex",flexDirection:"column",gap:".6rem"}}>
-          <button onClick={async()=>{console.log("TRACK slug:",(profil?.slug||slug));try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{tunnel_vente:increment(1)},{merge:true});}catch(e){console.error("track:",e);}await new Promise(r=>setTimeout(r,400));window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=produits_page";}} style={{width:"100%",background:theme.btnPrimary||"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".8rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
-          <button onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{recrutement:increment(1)},{merge:true});}catch(e){console.error("track:",e);}await new Promise(r=>setTimeout(r,400));window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}} style={{width:"100%",background:"transparent",color:theme.accent||"#A89BB5",border:`1.5px solid ${theme.accent||"#A89BB5"}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👑 Rejoindre l'équipe</button>
+          <button onClick={async()=>{await trackerEvenement(profil?.slug||slug,"tunnel_vente");window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=produits_page";}} style={{width:"100%",background:theme.btnPrimary||"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".8rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
+          <button onClick={async()=>{await trackerEvenement(profil?.slug||slug,"recrutement");window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}} style={{width:"100%",background:"transparent",color:theme.accent||"#A89BB5",border:`1.5px solid ${theme.accent||"#A89BB5"}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👑 Rejoindre l'équipe</button>
         </div>
 
         <div style={{padding:"1rem 1rem 2rem",background:theme.bg,display:"flex",flexDirection:"column",gap:".5rem"}}>
-          {(profil.liensBonusLabel||[]).map((_,bi)=>profil.liensBonusUrl?.[bi]?(<a key={bi} href={profil.liensBonusUrl[bi]} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"transparent",color:theme.accent,border:"1.5px solid "+theme.accent,borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:600}}>{profil.liensBonusLabel[bi]||profil.liensBonusUrl[bi]}</a>):null)}
+          {(profil.liensBonusLabel||[]).map((_,bi)=>profil.liensBonusUrl?.[bi]?(<a key={bi} href={profil.liensBonusUrl[bi]} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_lien_bonus")} style={{display:"block",background:"transparent",color:theme.accent,border:"1.5px solid "+theme.accent,borderRadius:12,padding:".7rem 1rem",textAlign:"center",textDecoration:"none",fontSize:".82rem",fontWeight:600}}>{profil.liensBonusLabel[bi]||profil.liensBonusUrl[bi]}</a>):null)}
         </div>
         {(profil.reseauxFacebook||profil.reseauxInstagram||profil.reseauxTiktok||profil.reseauxYoutube)&&(
           <div style={{padding:"0 1rem 1rem",display:"flex",justifyContent:"center",gap:".6rem"}}>
-            {profil.reseauxFacebook&&<a href={profil.reseauxFacebook} target="_blank" rel="noopener noreferrer" style={{width:38,height:38,borderRadius:"50%",background:"#1877F2",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none",fontWeight:700}}>f</a>}
-            {profil.reseauxInstagram&&<a href={profil.reseauxInstagram} target="_blank" rel="noopener noreferrer" style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#F58529,#DD2A7B,#8134AF,#515BD4)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1.1rem",textDecoration:"none"}}>IG</a>}
-            {profil.reseauxTiktok&&<a href={profil.reseauxTiktok} target="_blank" rel="noopener noreferrer" style={{width:38,height:38,borderRadius:"50%",background:"#000000",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none",fontWeight:700}}>TT</a>}
-            {profil.reseauxYoutube&&<a href={profil.reseauxYoutube} target="_blank" rel="noopener noreferrer" style={{width:38,height:38,borderRadius:"50%",background:"#FF0000",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none"}}>YT</a>}
+            {profil.reseauxFacebook&&<a href={profil.reseauxFacebook} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_facebook")} style={{width:38,height:38,borderRadius:"50%",background:"#1877F2",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none",fontWeight:700}}>f</a>}
+            {profil.reseauxInstagram&&<a href={profil.reseauxInstagram} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_instagram")} style={{width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#F58529,#DD2A7B,#8134AF,#515BD4)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1.1rem",textDecoration:"none"}}>IG</a>}
+            {profil.reseauxTiktok&&<a href={profil.reseauxTiktok} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_tiktok")} style={{width:38,height:38,borderRadius:"50%",background:"#000000",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none",fontWeight:700}}>TT</a>}
+            {profil.reseauxYoutube&&<a href={profil.reseauxYoutube} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_youtube")} style={{width:38,height:38,borderRadius:"50%",background:"#FF0000",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none"}}>YT</a>}
           </div>
         )}        <div style={{padding:"1rem",textAlign:"center",fontSize:".6rem",color:theme.accent,opacity:.6}}>Blazing Dynasty × Mihi France</div>
       </div>
@@ -2934,6 +2934,19 @@ function LinkBioPublicPage({slug}){
   );
 }
 
+
+// Suivi generique des clics/visites : incremente le compteur total ET la ventilation par jour
+async function trackerEvenement(slug, champ){
+  if(!slug)return;
+  try{
+    const jour=todayLocalStr();
+    await setDoc(doc(db,"linkbio_stats",slug),{
+      [champ]:increment(1),
+      [`parJour.${jour}.${champ}`]:increment(1),
+      derniereVisite:new Date().toISOString()
+    },{merge:true});
+  }catch(e){console.error("tracking:",e);}
+}
 
 async function conseillerProduitsIA(demande, catalogue){
   const tousProduits=Object.values(catalogue||{}).flat();
@@ -2999,12 +3012,15 @@ function BoutiquePubliquePage({slug}){
       setPaypalCaptureEnCours(true);
       const fn=httpsCallable(fbFunctions,"capturerCommandePaypal");
       fn({orderId:params.get("token")})
-        .then(()=>{setPaypalRetourStatut("succes");})
+        .then(()=>{setPaypalRetourStatut("succes");trackerEvenement(slug,"boutique_achat");})
         .catch(e=>{console.error("capture paypal:",e);setPaypalRetourStatut("erreur");})
         .finally(()=>setPaypalCaptureEnCours(false));
       const url=new URL(window.location.href);
       url.searchParams.delete("token");url.searchParams.delete("PayerID");
       window.history.replaceState({},"",url.toString());
+    }
+    if(params.get("commande")==="succes"){
+      trackerEvenement(slug,"boutique_achat");
     }
   },[]);
 
@@ -3037,6 +3053,10 @@ function BoutiquePubliquePage({slug}){
           if(!qs.empty) profilData=qs.docs[0].data();
         }
         setProfil(profilData||"404");
+        if(profilData){
+          const realSlug=profilData.slug||slug;
+          trackerEvenement(realSlug,"boutique_visites");
+        }
         if(profilData&&profilData.uid){
           try{
             const fnMoyens=httpsCallable(fbFunctions,"verifierMoyensPaiementBoutique");
@@ -3078,6 +3098,7 @@ function BoutiquePubliquePage({slug}){
   const [toast,setToast]=useState(null);
 
   const ajouterPanier=(prod)=>{
+    trackerEvenement(profil?.slug||slug,"boutique_ajout_panier");
     setCart(c=>{
       const existe=c.find(i=>i.ref===prod.ref);
       let nouveauCart;
@@ -3843,7 +3864,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
-          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);if(qProfil.uid){try{const cSnap2=await getDoc(doc(db,"contacts_publics",qProfil.uid));if(cSnap2.exists()){const cd2=cSnap2.data();setContactLinks({whatsapp:cd2.whatsapp||"",messenger:cd2.messenger||"",instagram:cd2.instagram||""});}}catch{}}try{const realSlug=qProfil.slug||slug;const sRef=doc(db,"linkbio_stats",realSlug);const sSnap=await getDoc(sRef);const prev=sSnap.exists()?sSnap.data():{};await setDoc(sRef,{...prev,visites:(prev.visites||0)+1,derniereVisite:new Date().toISOString()},{merge:true});}catch(e){console.error("tracking query:",e);}}
+          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);if(qProfil.uid){try{const cSnap2=await getDoc(doc(db,"contacts_publics",qProfil.uid));if(cSnap2.exists()){const cd2=cSnap2.data();setContactLinks({whatsapp:cd2.whatsapp||"",messenger:cd2.messenger||"",instagram:cd2.instagram||""});}}catch{}}const realSlug=qProfil.slug||slug;trackerEvenement(realSlug,"tunnel_visites");}
         }
       }catch{}
       setLoading(false);

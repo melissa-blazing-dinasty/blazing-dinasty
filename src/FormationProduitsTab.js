@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, storage } from './firebase';
 import { ref as storageRefVideo, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { C } from './constants';
-import { useLang, useTranslatedProduit } from './components';
+import { useLang, useTranslatedProduit, DriveBtn } from './components';
 
 // ── FORMATION PRODUITS ───────────────────────────────────────────────────────
 const CATEGORIES_PRODUITS = [
@@ -158,6 +158,13 @@ function FormationProduitsTab(){
               {o.label}
             </button>
           ))}
+        </div>
+      )}
+      {catActive==="makeup"&&(
+        <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem"}}>
+          <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"#E91E8C",marginBottom:".5rem"}}>🎥 Formations vidéo Maquillage</div>
+          <DriveBtn href="https://drive.google.com/file/d/18pMW1mXZLdMqHdPTF1_n4ezefCZf6eom/view" label="Formation Make-up — Mise en beauté"/>
+          <DriveBtn href="https://drive.google.com/file/d/1R73lC1mlEAgssAzLX-oX58-rG_gwvPms/view" label="Formation Make-up — Glow eyes"/>
         </div>
       )}
 

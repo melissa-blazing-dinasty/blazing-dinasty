@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect, createContext, useContext } from 'react';
+﻿import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -88,6 +88,46 @@ export async function sgAll(uid) {
     return snap.exists() ? snap.data() : {};
   } catch { return {}; }
 }
+
+// --- Suivi Formation principale (consultation, temps passe, completion) ---
+export async function enregistrerConsultationFormation(uid, subTab) {
+  if(!uid||!subTab)return;
+  try{
+    const data=await sgAll(uid);
+    const progress=data["db-formation-progress"]?JSON.parse(data["db-formation-progress"]):{};
+    const p=progress[subTab]||{nbConsultations:0,tempsTotalSecondes:0,termine:false};
+    p.nbConsultations=(p.nbConsultations||0)+1;
+    if(!p.premiereConsultation)p.premiereConsultation=new Date().toISOString();
+    p.derniereConsultation=new Date().toISOString();
+    progress[subTab]=p;
+    await ss(uid,"db-formation-progress",JSON.stringify(progress));
+  }catch(e){console.error("tracking formation:",e);}
+}
+export async function ajouterTempsFormation(uid, subTab, secondes) {
+  if(!uid||!subTab||!secondes||secondes<2)return;
+  try{
+    const data=await sgAll(uid);
+    const progress=data["db-formation-progress"]?JSON.parse(data["db-formation-progress"]):{};
+    const p=progress[subTab]||{nbConsultations:0,tempsTotalSecondes:0,termine:false};
+    p.tempsTotalSecondes=(p.tempsTotalSecondes||0)+secondes;
+    progress[subTab]=p;
+    await ss(uid,"db-formation-progress",JSON.stringify(progress));
+  }catch(e){console.error("tracking temps formation:",e);}
+}
+export async function marquerFormationTerminee(uid, subTab) {
+  if(!uid||!subTab)return;
+  try{
+    const data=await sgAll(uid);
+    const progress=data["db-formation-progress"]?JSON.parse(data["db-formation-progress"]):{};
+    const p=progress[subTab]||{nbConsultations:0,tempsTotalSecondes:0};
+    p.termine=true;
+    p.dateTermine=new Date().toISOString();
+    progress[subTab]=p;
+    await ss(uid,"db-formation-progress",JSON.stringify(progress));
+  }catch(e){console.error("maj completion formation:",e);}
+}
+export const FORMATION_SUBTABS_SUIVIES=["mihibd","demarrage","vente","recrutement","contenu","devperso","outils","formaproduits"];
+export const FORMATION_SUBTABS_LABELS={mihibd:"Mihi & Blazing Dynasty",demarrage:"Démarrage",vente:"Vente & Stratégies",recrutement:"Recrutement",contenu:"Création de contenu",devperso:"Développement personnel",outils:"Outils",formaproduits:"Formation produits"};
 
 // Met à jour la fiche d'un membre dans l'annuaire global (équipe/annuaire)
 export async function syncAnnuaire(uid, displayName, objPerso, marraineUid){
@@ -1290,6 +1330,52 @@ function App(){
     })();
   },[userId,tab]);
   const[formationSubTab,setFormationSubTab]=useState("");
+  const formationTimerRef=useRef({subTab:null,startTime:null});
+  useEffect(()=>{
+    if(tab==="formation"&&formationSubTab&&FORMATION_SUBTABS_SUIVIES.includes(formationSubTab)&&userId){
+      enregistrerConsultationFormation(userId,formationSubTab);
+      formationTimerRef.current={subTab:formationSubTab,startTime:Date.now()};
+    }
+    return ()=>{
+      const{subTab,startTime}=formationTimerRef.current;
+      if(subTab&&startTime&&userId){
+        const secondes=Math.round((Date.now()-startTime)/1000);
+        ajouterTempsFormation(userId,subTab,secondes);
+      }
+      formationTimerRef.current={subTab:null,startTime:null};
+    };
+  },[tab,formationSubTab,userId]);
+  const[formationTerminees,setFormationTerminees]=useState({});
+  useEffect(()=>{
+    if(!userId)return;
+    (async()=>{
+      try{
+        const data=await sgAll(userId);
+        const progress=data["db-formation-progress"]?JSON.parse(data["db-formation-progress"]):{};
+        const termines={};
+        Object.keys(progress).forEach(k=>{if(progress[k]?.termine)termines[k]=true;});
+        setFormationTerminees(termines);
+      }catch{}
+    })();
+  },[userId]);
+  const marquerTermine=async(subTab)=>{
+    await marquerFormationTerminee(userId,subTab);
+    setFormationTerminees(prev=>({...prev,[subTab]:true}));
+  };
+  const BoutonTermineFormation=({subTab})=>(
+    <div style={{marginTop:"1.2rem",marginBottom:"1rem"}}>
+      {formationTerminees[subTab]?(
+        <div style={{background:"#E8F5E9",color:"#2D5A3D",borderRadius:10,padding:".7rem",fontSize:".78rem",fontWeight:700,textAlign:"center"}}>
+          ✅ Formation terminée
+        </div>
+      ):(
+        <button onClick={()=>marquerTermine(subTab)}
+          style={{width:"100%",background:C.vert||"#5C8A60",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".8rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          ✅ J'ai terminé cette formation
+        </button>
+      )}
+    </div>
+  );
   const[showObjectifs,setShowObjectifs]=useState(false);
   const[lang,setLang]=useState("fr");
   const[translations,setTranslations]=useState({});
@@ -1386,13 +1472,17 @@ function App(){
         const totalCaCumul=(parseFloat(obj.totalCaCumul)||0)+(parseFloat(obj.ca)||0);
         const totalRecruesCumul=(parseFloat(obj.totalRecruesCumul)||0)+(parseFloat(obj.recruesReal)||0);
 
-        // Remettre à zéro les compteurs courants, conserver objectifs et palier
+        // Remettre à zéro les compteurs courants ET les objectifs chiffrés (nouvelle période = redéfinition complète)
         const nextObj={
           ...obj,
           ca:"",
           caPerso:"",
           caEquipe:"",
+          caObj:"",
           recruesReal:"0",
+          recruesObj:"",
+          palier:"2%",
+          objectifsPosesPeriode:"",
           // Vider le calcul du reste (directeurs) pour la nouvelle période
           nbDirecteurs:0,
           caDirecteurs:{},
@@ -1853,6 +1943,9 @@ function App(){
             {tb.id==="communaute"&&challengeATraiterApp&&(
               <span style={{position:"absolute",top:2,right:2,width:9,height:9,borderRadius:"50%",background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)"}}/>
             )}
+            {tb.id==="dashboard"&&!objPeriodeRemplis&&(
+              <span style={{position:"absolute",top:2,right:2,width:9,height:9,borderRadius:"50%",background:"#E63946",border:"1.5px solid white",boxShadow:"0 0 0 2px rgba(230,57,70,.3)"}}/>
+            )}
             {tb.label}
           </button>
         ))}
@@ -2162,6 +2255,7 @@ function App(){
                 </div>
               ))}
             </Card>
+            <BoutonTermineFormation subTab="mihibd"/>
           </div>
         </>)}
 
@@ -2251,6 +2345,7 @@ function App(){
                 </Card>
               );
             })}
+            <BoutonTermineFormation subTab="demarrage"/>
           </div>
         )}
 
@@ -2262,21 +2357,160 @@ function App(){
             <AdminContentBlock onglet="vente" items={adminItems}/>
 
             <Card title="Replays Zoom Vente" sub="Les sessions de formation vente" icon="🎥" color={C.or} defaultOpen>
-              <Btn href="https://us06web.zoom.us/rec/share/3i2Txz0KmPwoECQyE7ADbkCr_kDej-QYp_7vW2_YmzpWGSnkipRh5-v7t7oa6r2U.czfOEisyPOYCjYsG" label="Tips de vente + comprendre son pourquoi" icon="▶" color={C.brun}/>
-              <Btn href="https://us06web.zoom.us/rec/share/IFStg6CC8vBngO3HPu9G5fh91zV9W6fuwaR3txBwRc96v7vO0-azbiea2eA-d1Hf.MgYK9kyFy7z2kIHB" label="Comment faire ses Lives + déclencher des ventes" icon="▶" color={C.brun}/>
+              <DriveBtn href="https://drive.google.com/file/d/1LMpnNRpWLAmgO3yTOR5b1-xCRUbTt3vy/view" label="Tips de vente + comprendre son pourquoi"/>
+              <DriveBtn href="https://drive.google.com/file/d/1PFLOi8JNwREegXPnNAzGntKm4Z_a7dkn/view" label="Comment faire ses Lives + déclencher des ventes"/>
               <Btn href="https://us06web.zoom.us/rec/share/RwAb_48QbKt_jrn_91SJbfXZ8Sf8shCOpxzixhX0HdElfb4xDOU9nBEq-OdNms2b.RRxzRJZ53fmbvprr" label="Les réunions à domicile" icon="▶" color={C.brun}/>
-              <Btn href="https://us06web.zoom.us/rec/share/nMz-EPawKi9Iz7vnwqFELpJaK6kJH2aXLaE-evMxN9KiPzBuRIjbmrA77-e41RMv.wpFb79BqNh9yETMe" label="Comment parler des produits (exercice équipe)" icon="▶" color={C.brun}/>
+              <DriveBtn href="https://drive.google.com/file/d/1wSOKykwqsrzkXPkP-alTXLZ2AIc3HyAM/view" label="Comment parler des produits (exercice équipe)"/>
             </Card>
 
             <Card title="Stratégies de vente" sub="Les méthodes qui marchent" icon="💡" color={C.or}>
-              <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginBottom:".5rem"}}>📁 Documents stratégies</div>
-              <DocBtn href="https://docs.google.com/document/d/1BMF1FiXl7HTjQ-kIJYNl_cHh-J-K1Mk5irfunsN6s4c/edit" label="Stratégie Enveloppe Mystère — Document complet"/>
+              <Card title="🎁 Stratégie Enveloppe Mystère" sub="Offrir plutôt que vendre" icon="🎁" color={C.rose}>
+                <p style={{fontSize:".76rem",color:C.texte,lineHeight:1.65,marginBottom:".7rem"}}>
+                  On se met souvent une pression de dingue pour essayer de "vendre" à tout prix, et au final, ça bloque et on ne fait plus rien. Cette méthode est beaucoup plus zen — on ne va rien "vendre", on va juste offrir.
+                </p>
+                <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>📎 L'opération "Enveloppes Mystères"</div>
+                <p style={{fontSize:".75rem",color:C.texte,lineHeight:1.6,marginBottom:".7rem",fontStyle:"italic"}}>
+                  L'idée : passer pour celle qui conseille et qui offre, pas celle qui chasse le client.
+                </p>
+                {[
+                  ["1","Prenez une photo de vous avec 3 ou 5 petites enveloppes (ou petits paquets). On veut voir de l'humain, votre sourire, et que vous préparez des trucs."],
+                  ["2","Postez ça en story ou sur votre mur avec un petit texte type présentation ci-dessous."],
+                ].map(([n,texte])=>(
+                  <div key={n} style={{display:"flex",gap:".6rem",marginBottom:".55rem",alignItems:"flex-start"}}>
+                    <div style={{width:22,height:22,borderRadius:"50%",background:C.rose+"25",color:C.brun,fontSize:".62rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{n}</div>
+                    <div style={{fontSize:".76rem",color:C.texte,lineHeight:1.6}}>{texte}</div>
+                  </div>
+                ))}
+                <div style={{background:C.creme,borderRadius:8,padding:".65rem .8rem",fontSize:".72rem",color:C.brun,lineHeight:1.6,fontStyle:"italic",borderLeft:`2px solid ${C.rose}`,marginBottom:".6rem"}}>
+                  "J'ai décidé de gâter 5 personnes aujourd'hui ! 🥳 J'ai préparé 5 enveloppes découvertes avec ma pépite du moment pour [le sommeil / la peau / l'énergie... choisissez votre domaine]. Qui veut recevoir la sienne ? C'est premier arrivé, premier servi ! Dites-moi MOI en commentaire. 👇"
+                </div>
+                <p style={{fontSize:".75rem",color:C.texte,lineHeight:1.6,marginBottom:".6rem"}}>
+                  Le but : ce sont les gens qui viennent vers vous, vous n'avez plus qu'à cueillir. Et quand quelqu'un répond "Moi" en MP, restez hyper simples :
+                </p>
+                <div style={{background:C.creme,borderRadius:8,padding:".65rem .8rem",fontSize:".72rem",color:C.brun,lineHeight:1.6,fontStyle:"italic",borderLeft:`2px solid ${C.rose}`,marginBottom:".6rem"}}>
+                  "C'est pour toi ! Je te prépare ça. Dis-moi juste, c'est quoi ton souci n°1 avec [le sommeil / ta peau / ta fatigue] en ce moment ? C'est pour être sûre que ça te corresponde bien avant que je te l'envoie."
+                </div>
+                <p style={{fontSize:".75rem",color:C.texte,lineHeight:1.6}}>
+                  C'est tout. On crée de la discussion, on conseille, et la vente se fait toute seule après.
+                </p>
+              </Card>
+              <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginBottom:".5rem",marginTop:".75rem"}}>📁 Documents stratégies</div>
               <DriveBtn href="https://drive.google.com/file/d/1XkJRZMArmWqTy11xCTaJagR4s-vEOdtL/view" label="Stratégie Catalogue — Vidéo"/>
-              <DocBtn href="https://docs.google.com/document/d/19wRJArnlDVpzBd1RFxefJCvNcTStFS_TeMNzBe6SUnc/edit" label="Stratégie Catalogue — Document complet"/>
+              <Card title="📖 Stratégie Catalogue" sub="Demander un avis plutôt que vendre" icon="📖" color={C.or}>
+                <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".5rem"}}>✅ Script en 2 temps</div>
+                <div style={{fontSize:".65rem",fontWeight:700,color:C.brun,marginBottom:".3rem"}}>1. Prendre contact</div>
+                <div style={{background:C.creme,borderRadius:8,padding:".65rem .8rem",fontSize:".72rem",color:C.brun,lineHeight:1.7,fontStyle:"italic",borderLeft:`2px solid ${C.or}`,marginBottom:".5rem"}}>
+                  "Coucou Christelle comment tu vas ? Dis-moi, j'aurais besoin de toi deux minutes, tu me dis quand t'es dispo"<br/><br/>
+                  "Coucou poulette comment vas-tu ? Quand t'as cinq minutes j'ai besoin de toi 😂"
+                </div>
+                <p style={{fontSize:".72rem",color:C.gris,marginBottom:".6rem"}}>👉🏽 Quand elle répond oui, vas-y :</p>
+                <div style={{fontSize:".65rem",fontWeight:700,color:C.brun,marginBottom:".3rem"}}>2. La demande</div>
+                <div style={{background:C.creme,borderRadius:8,padding:".65rem .8rem",fontSize:".72rem",color:C.brun,lineHeight:1.7,fontStyle:"italic",borderLeft:`2px solid ${C.or}`,marginBottom:".5rem"}}>
+                  "Super ! En fait la société pour laquelle je travaille m'a chargé d'une mission, donc j'essaye de trouver des personnes qui ne connaissent pas du tout mon activité. Je vais te mettre le lien du catalogue, t'es pas obligée de tout regarder, mais dis-moi juste ce qui te saute aux yeux en première vue."
+                </div>
+                <p style={{fontSize:".72rem",color:C.gris,marginBottom:".4rem"}}>Pour celles qui connaissent le MLM :</p>
+                <div style={{background:C.creme,borderRadius:8,padding:".65rem .8rem",fontSize:".72rem",color:C.brun,lineHeight:1.7,fontStyle:"italic",borderLeft:`2px solid ${C.or}`,marginBottom:".8rem"}}>
+                  "J'ai besoin d'un œil extérieur par rapport à la société avec laquelle je travaille, pour comprendre pourquoi certaines personnes ne commandent jamais alors que les prix sont vraiment pas chers et de qualité pharmaceutique. J'aimerais te partager le catalogue pour que tu me dises ce qui pourrait faire peur aux gens."
+                </div>
+
+                <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.or,marginBottom:".5rem"}}>✅ Script en 1 temps</div>
+                <div style={{background:C.creme,borderRadius:8,padding:".65rem .8rem",fontSize:".72rem",color:C.brun,lineHeight:1.7,fontStyle:"italic",borderLeft:`2px solid ${C.or}`}}>
+                  "Salut Audrey, j'espère que tu vas bien. Dis-moi, j'ai un petit service à te demander. Je suis mandatée par ma société pour faire une petite expertise de notre catalogue, pour voir les points à changer, les choses qui peuvent choquer, déranger... J'essaye de demander aux personnes qui ne connaissent pas du tout, pour avoir un avis vraiment objectif. Est-ce que tu pourrais jeter un coup d'œil en diagonale et me dire ce que tu en penses ?"
+                </div>
+              </Card>
               <DriveBtn href="https://drive.google.com/file/d/1S7IMHB9xUqY43JQRuqa8mtlqY7kabv8t/view" label="Stratégie Défi Live — Vidéo"/>
-              <DocBtn href="https://docs.google.com/document/d/1B9b2O7W2crNlRSgTub1QQ1h_lSn87kgGf7Q8dng_nwo/edit" label="Stratégie Défi Live — Document complet"/>
+              <Card title="🎯 Stratégie Défi Live" sub="Des dizaines d'idées de défis prêts à l'emploi" icon="🎯" color={C.rose}>
+                <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem"}}>📐 Structure simple pour le live</div>
+                {["Annoncer le défi","Montrer la tâche","Demander aux gens \"ça part ou pas ?\"","Faire le test","Montrer le résultat","Proposer le lien"].map((etape,i)=>(
+                  <div key={i} style={{display:"flex",gap:".6rem",marginBottom:".4rem",alignItems:"flex-start"}}>
+                    <div style={{width:20,height:20,borderRadius:"50%",background:C.rose+"25",color:C.brun,fontSize:".6rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+                    <div style={{fontSize:".75rem",color:C.texte,lineHeight:1.5}}>{etape}</div>
+                  </div>
+                ))}
+
+                {[
+                  {titre:"🧼 Défis Ménage (les plus puissants pour vendre)",note:"Les produits ménage Mihi sont souvent concentrés, multi-surfaces et écologiques — parfaits pour des démonstrations rapides et visuelles.",groupes:[
+                    {sous:"⏱️ Défis \"chrono\" — très efficaces en live",items:["Défi 1 minute cuisine","Défi 30 secondes pour enlever une tache","Défi évier brillant en 2 minutes","Défi plaque de cuisson propre avant la fin du live","Défi miroir sans trace en 30 secondes","Défi plan de travail zéro graisse","Défi nettoyage frigo express","Défi micro-ondes propre en 1 minute","Défi salle de bain complète en 3 minutes","Défi carrelage brillant avant la fin du chrono"]},
+                    {sous:"🔥 Défis \"avant / après\" — les gens adorent",items:["Avant / après vitre","Avant / après évier","Avant / après douche","Avant / après plaque de cuisson","Avant / après semelles de baskets","Avant / après robinetterie","Avant / après table collante","Avant / après planche à découper","Avant / après taches sur mur","Avant / après taches sur canapé"]},
+                    {sous:"💥 Défis \"produit miracle\" — très viral",items:["1 produit = 5 surfaces","1 produit = toute la cuisine","1 produit = toute la salle de bain","1 produit = maison complète","1 produit = sol + meuble + vitre (ex: multi-surface)"]},
+                    {sous:"🧪 Défis \"crash test\" — ultra engageant (demandez \"à votre avis ça part ou pas ?\")",items:["Test tache ketchup","Test tache huile","Test café","Test sauce tomate","Test chocolat fondu","Test feutre enfant","Test graisse cuisson"]},
+                    {sous:"🌸 Défis \"ménage de printemps\" — très saisonnier",items:["Défi cuisine de printemps","Défi frigo propre","Défi placards","Défi vitres maison","Défi balcon propre","Défi terrasse","Défi tapis","Défi matelas"]},
+                  ]},
+                  {titre:"💄 Défis Beauté / Make-up",note:"Parfait pour varier le contenu.",groupes:[
+                    {sous:"Défis maquillage",items:["Make-up complet en 5 minutes","Make-up avec 3 produits","Un seul produit pour tout","Make-up sans miroir","Make-up en live avec vos choix","Make-up \"maman pressée\""]},
+                    {sous:"Défis skincare",items:["Routine visage en 3 minutes","Routine peau parfaite avant dodo","Défi peau glow en direct","Défi routine express matin","Avant / après soin"]},
+                  ]},
+                  {titre:"🎉 Défis Fun (très puissants pour l'algorithme)",note:"",groupes:[
+                    {sous:"Défis vote — \"c'est vous qui décidez\"",items:["Vous choisissez la tache","Vous choisissez le produit","Vous choisissez la surface","Vous choisissez le défi"]},
+                    {sous:"Défis abonnés",items:["Je teste VOS pires taches","Je nettoie ce que vous voulez","Envoyez-moi vos photos catastrophe"]},
+                    {sous:"Défis \"impossible\"",items:["La pire tache de ma cuisine","Le pire coin de ma salle de bain","Le tiroir le plus sale"]},
+                  ]},
+                  {titre:"💰 Défis Économie (très vendeur)",note:"Angle puissant.",groupes:[
+                    {sous:"",items:["Combien coûte ce ménage ?"]},
+                  ]},
+                ].map((section,si)=>(
+                  <div key={si} style={{marginTop:"1rem"}}>
+                    <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".3rem"}}>{section.titre}</div>
+                    {section.note&&<p style={{fontSize:".71rem",color:C.gris,marginBottom:".5rem",lineHeight:1.5}}>{section.note}</p>}
+                    {section.groupes.map((g,gi)=>(
+                      <div key={gi} style={{marginBottom:".6rem"}}>
+                        {g.sous&&<div style={{fontSize:".7rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>{g.sous}</div>}
+                        <div style={{background:C.creme,borderRadius:8,padding:".5rem .7rem"}}>
+                          {g.items.map((it,ii)=>(
+                            <div key={ii} style={{fontSize:".7rem",color:C.texte,lineHeight:1.6}}>• {it}</div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </Card>
               <DriveBtn href="https://drive.google.com/file/d/1KldVcCgrfLjirxVZjyXtFCpECinKevWs/view" label="Stratégie Liste — Vidéo"/>
-              <DocBtn href="https://docs.google.com/document/d/1-GSGmYlH9eyIWn-QjUW8JdGDmN7-ZtA-CfWyMO8AF6s/edit" label="Stratégie C'est Interdit 🔥"/>
+              <Card title={"🔥 Stratégie \"C'est Interdit\""} sub="Créer l'exclusivité et l'urgence" icon="🔥" color={"#C44B1A"}>
+                <p style={{fontSize:".73rem",color:C.gris,marginBottom:".8rem",lineHeight:1.6}}>4 versions de messages pour partager un "replay exclusif" en créant un effet de rareté et de confiance.</p>
+                {[
+                  {titre:"🔴 La version \"Complice\" (très proche)",note:"Le message parfait pour une cliente fidèle ou une amie.",texte:"Coucou [Prénom] ! Écoute, je te partage un truc un peu en 'off'... Normalement, c'est réservé uniquement à l'équipe, mais j'ai tout de suite pensé à toi. Ma directrice vient de nous faire une présentation sur la nouvelle gamme Body Architect et c'est juste une dinguerie. Je t'envoie le replay en douce, regarde ça et dis-moi ce que tu en penses !"},
+                  {titre:"🔴 La version \"Expertise & Résultat\" (plus pro)",note:"Pour une cliente qui fait attention à sa silhouette et cherche de l'efficacité.",texte:"Hello [Prénom], j'espère que tu vas bien. Je sors d'une réunion privée sur les nouveaux produits Corps et franchement, je n'ai pas pu m'empêcher de penser à toi. Je ne devrais pas forcément faire circuler la vidéo, mais les explications sur les actifs de Body Architect sont tellement bluffantes que je voulais que tu aies l'info avant tout le monde. Je te glisse le replay ici !"},
+                  {titre:"🔴 La version \"Curiosité\" (court et percutant)",note:"Idéal pour susciter une réponse rapide.",texte:"Coucou ! Il faut que je te montre un truc... On a eu un Zoom exclusif ce soir sur la nouvelle gamme Architect et j'ai réussi à récupérer l'enregistrement. C'est du lourd, je n'ai pas le droit de le diffuser normalement alors regarde-le vite et dis-moi si ça te parle ! 😉"},
+                  {titre:"🔴 La version \"Testeuse VIP\"",note:"Pour donner l'impression à la cliente qu'elle est une privilégiée.",texte:"Salut [Prénom], j'ai un petit secret pour toi ! On vient de finir une formation interne sur la gamme Body Architect. C'est censé rester entre nous, mais comme tu es une de mes meilleures clientes, je voulais que tu voies les résultats annoncés par la directrice. Regarde ce replay, c'est révolutionnaire !"},
+                ].map((v,i)=>(
+                  <div key={i} style={{marginBottom:".8rem"}}>
+                    <div style={{fontSize:".72rem",fontWeight:700,color:C.brun,marginBottom:".15rem"}}>{v.titre}</div>
+                    <div style={{fontSize:".68rem",color:C.gris,marginBottom:".35rem",fontStyle:"italic"}}>{v.note}</div>
+                    <div style={{background:C.creme,borderRadius:8,padding:".6rem .75rem",fontSize:".71rem",color:C.brun,lineHeight:1.65,fontStyle:"italic",borderLeft:"2px solid #C44B1A"}}>"{v.texte}"</div>
+                  </div>
+                ))}
+
+                <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"#C44B1A",marginBottom:".4rem",marginTop:".9rem"}}>👉🏽 Quelques conseils</div>
+                {[
+                  ["Le timing","Envoyer le message juste après avoir reçu le lien du replay. Plus c'est \"chaud\", plus le côté \"je viens de voir ça\" est crédible."],
+                  ["L'audio","Si elles sont à l'aise, un message vocal fonctionne encore mieux — l'excitation dans la voix rend le côté \"dinguerie\" plus réel."],
+                  ["Le suivi","Ne pas oublier de recontacter la cliente 24h après si elle n'a pas répondu : \"Tu as eu le temps de jeter un œil avant que je doive supprimer le lien ?\" (ça rajoute de l'urgence)."],
+                ].map(([t,d],i)=>(
+                  <div key={i} style={{marginBottom:".5rem"}}>
+                    <div style={{fontSize:".72rem",fontWeight:600,color:C.brun}}>{t}</div>
+                    <div style={{fontSize:".71rem",color:C.texte,lineHeight:1.55}}>{d}</div>
+                  </div>
+                ))}
+
+                <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"#C44B1A",marginBottom:".4rem",marginTop:".9rem"}}>⚠️ Questions ouvertes à poser en fin de message</div>
+                {[
+                  {t:"1. Pour faire analyser ce qu'elle vient de voir",qs:["Qu'est-ce qui t'a le plus impressionnée dans la formation ?","Selon toi, qu'est-ce qui différencie cette gamme de ce que tu as déjà testé ?","Comment est-ce que tu imagines l'évolution de ta peau après 1 mois avec cette technologie ?"]},
+                  {t:"2. Pour identifier un besoin spécifique (le \"pain point\")",qs:["Sur quelle partie de ton corps aimerais-tu voir les effets de la gamme Architect en priorité ?","Qu'est-ce qui te dérange le plus aujourd'hui quand tu te regardes dans le miroir au niveau de ta silhouette ?","Si tu avais une baguette magique pour ta routine corps, quel serait ton objectif principal ?"]},
+                  {t:"3. Pour projeter la cliente dans l'achat",qs:["À partir de quel moment dans l'année aimerais-tu te sentir parfaitement à l'aise dans tes vêtements d'été ?","Quelle sensation recherches-tu le plus dans un soin corps : la fermeté, la texture ou le résultat visuel ?","Dans combien de temps aimerais-tu voir tes premiers résultats de transformation ?"]},
+                  {t:"4. Pour contrer les objections (avec douceur)",qs:["Qu'est-ce qui te fait dire que ce n'est pas le bon moment pour toi ?","Au-delà du prix, quel est l'élément qui te fait encore hésiter ?","Quelles sont les informations qui te manquent pour être totalement convaincue par l'efficacité ?"]},
+                ].map((sec,i)=>(
+                  <div key={i} style={{marginBottom:".65rem"}}>
+                    <div style={{fontSize:".71rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>{sec.t}</div>
+                    <div style={{background:C.creme,borderRadius:8,padding:".5rem .7rem"}}>
+                      {sec.qs.map((q,qi)=>(<div key={qi} style={{fontSize:".7rem",color:C.texte,lineHeight:1.6}}>• {q}</div>))}
+                    </div>
+                  </div>
+                ))}
+                <div style={{background:"#C44B1A15",borderRadius:8,padding:".6rem .8rem",fontSize:".71rem",color:C.brun,lineHeight:1.6,marginTop:".5rem"}}>
+                  💡 Le petit conseil pour ton équipe : une question ouverte commence souvent par <span style={{fontWeight:700}}>Comment, Pourquoi, En quoi, Quel/Quelle, Qu'est-ce que</span>.
+                </div>
+              </Card>
             </Card>
 
             <Card title="Idées pour booster ses ventes" sub="Méthodes créatives et efficaces" icon="🚀" color={C.rose}>
@@ -2345,6 +2579,7 @@ function App(){
                 </div>
               ))}
             </Card>
+            <BoutonTermineFormation subTab="vente"/>
           </div>
         )}
 
@@ -2409,12 +2644,17 @@ function App(){
               <DriveBtn href="https://drive.google.com/file/d/1dLOGuCg-LkiOX-YUsW_Bce5pr3mwYPVN/view" label="Démarcher — Vidéo"/>
               <DocBtn href="https://docs.google.com/document/d/19GWloCMuOPG8Q_7UQTmTph6AyCMnPWNVTywqRIQPaLY/edit" label="Démarcher — Document complet"/>
               <DriveBtn href="https://drive.google.com/file/d/1WutnDp_no7zU-mmGEgWsiVq7cJ6j7LkA/view" label="Démarcher — Vidéo complémentaire"/>
+              <DriveBtn href="https://drive.google.com/file/d/104xn2JE-GYBos2eG9GhPcqI5ZWN78Fkp/view" label="Formation Démarrage + tips recrutement"/>
             </Card>
 
             <Card title="Récap outils de l'équipe" sub="Tout ce que l'équipe utilise au quotidien" icon="📋" color={C.or}>
-              <DocBtn href="https://docs.google.com/document/d/1BU0MH-AcaiWTn1eODBKppavTI8g_77jN833sasmfwU8/edit" label="📋 Récapitulatif complet des outils de l'équipe"/>
-              <Info color={C.or}>Ce document contient la liste de tous les outils, liens et ressources utilisés par l'équipe Blazing Dynasty. Garde-le sous la main.</Info>
+              <Btn href="https://us02web.zoom.us/rec/share/anRmIaRRrGoC8leMrqjeOBH9IsOShB81_A99igN4pwozGtqEQ1oQUIqBSy30wqCn.gPMJZbroGZWrf7Du" label="🎥 Présentation d'opportunités" color={C.brun}/>
+              <Btn href="https://t.me/+2wKWxIROE4c1M2Q0" label="📢 Telegram équipe — Visuels" color={"#0088CC"}/>
+              <Btn href="https://t.me/+pv0RY_JJy4wyYzE8" label="💬 Telegram — Témoignages" color={"#0088CC"}/>
+              <Btn href="https://www.facebook.com/share/g/1BGRQA1pZQ/?mibextid=wwXIfr" label="👥 Groupe Facebook équipe" color={"#1877F2"}/>
+              <Info color={C.or}>Bienvenue, reconnaissance, mini-formations : tout se passe dans ces groupes. Garde ces liens sous la main.</Info>
             </Card>
+            <BoutonTermineFormation subTab="recrutement"/>
           </div>
         )}
 
@@ -2597,16 +2837,16 @@ function App(){
 
             <Card title="Ressources supplémentaires" sub="Documents stratégie contenu" icon="📄" color={C.lilas}>
               <DocBtn href="https://docs.google.com/document/d/19-pcqclkBvCHcAt6ONAGk_U8uDMmW0xg2UhOnO-l-fY/edit" label="Idées de publications — Document complet"/>
-              <DocBtn href="https://docs.google.com/document/d/12tkS-4d0iLgZkpcnIgBZ0K4hIIXWgclC3IwnjkuyJ3s/edit" label="Stratégie contenu avancée"/>
               <YTBtn href="https://youtu.be/1m37A50VRN8" label="Formation Produit — Gestion perte de poids"/>
               <YTBtn href="https://youtu.be/r0MFA4bj1SY" label="Formation Produit — Ginkgo Biloba"/>
             </Card>
+            <BoutonTermineFormation subTab="contenu"/>
           </div>
         )}
 
         {/* ── OUTILS ── */}
         {tab==="formation"&&formationSubTab==="devperso"&&(
-          <DevPersoSection adminItems={adminItems}/>
+          <div><DevPersoSection adminItems={adminItems}/><BoutonTermineFormation subTab="devperso"/></div>
         )}
 
         {tab==="formation"&&formationSubTab==="outils"&&(
@@ -2666,14 +2906,18 @@ function App(){
             </Card>
 
             <Card title="Récap outils de l'équipe" sub="Document officiel Blazing Dynasty" icon="📋" color={C.brun}>
-              <DocBtn href="https://docs.google.com/document/d/1BU0MH-AcaiWTn1eODBKppavTI8g_77jN833sasmfwU8/edit" label="📋 Récapitulatif complet des outils de l'équipe"/>
+              <Btn href="https://us02web.zoom.us/rec/share/anRmIaRRrGoC8leMrqjeOBH9IsOShB81_A99igN4pwozGtqEQ1oQUIqBSy30wqCn.gPMJZbroGZWrf7Du" label="🎥 Présentation d'opportunités" color={C.brun2}/>
+              <Btn href="https://t.me/+2wKWxIROE4c1M2Q0" label="📢 Telegram équipe — Visuels" color={"#0088CC"}/>
+              <Btn href="https://t.me/+pv0RY_JJy4wyYzE8" label="💬 Telegram — Témoignages" color={"#0088CC"}/>
+              <Btn href="https://www.facebook.com/share/g/1BGRQA1pZQ/?mibextid=wwXIfr" label="👥 Groupe Facebook équipe" color={"#1877F2"}/>
             </Card>
+            <BoutonTermineFormation subTab="outils"/>
           </div>
         )}
 
         {/* ── FORMATION PRODUITS ── */}
         {tab==="formation"&&formationSubTab==="formaproduits"&&(
-          <FormationProduitsTab adminItems={adminItems}/>
+          <div><FormationProduitsTab adminItems={adminItems}/><BoutonTermineFormation subTab="formaproduits"/></div>
         )}
 
         {/* ── SPRINT / ACCÉLÈRE ── */}
@@ -8453,13 +8697,184 @@ export function AssiduiteTab({uid}){
   );
 }
 
+// Onglet "Suivi Formation" — visible chefs/Melissa : consultation, completion, temps passe par membre
+function formatDureeFormation(secondes){
+  if(!secondes)return "0 min";
+  const mins=Math.round(secondes/60);
+  if(mins<60)return mins+" min";
+  const h=Math.floor(mins/60);
+  const m=mins%60;
+  return h+"h"+(m>0?String(m).padStart(2,"0"):"");
+}
 
-// Onglet "Espace Chef" — regroupe toutes les fonctions chef d'équipe au même endroit
+export function SuiviFormationTab({uid}){
+  const[loading,setLoading]=useState(true);
+  const[isAuthorized,setIsAuthorized]=useState(false);
+  const[membres,setMembres]=useState([]);
+  const[search,setSearch]=useState("");
+  const[expandedUid,setExpandedUid]=useState(null);
+  const[vue,setVue]=useState("global"); // global | membres
+
+  const fmtUid=(u)=>u.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const isMelissa = uid==="melissa"||uid==="melissa-da-silveira";
+        const accesSnap=await getDoc(doc(db,"acces","membres"));
+        const chefs=accesSnap.exists()?accesSnap.data().chefs||[]:[];
+        const isChef = isMelissa || (Array.isArray(chefs)?chefs:Object.values(chefs||{})).includes(uid.replace(/-/g," "));
+        if(!isChef){ setIsAuthorized(false); setLoading(false); return; }
+        setIsAuthorized(true);
+
+        const annSnap=await getDoc(doc(db,"equipe","annuaire"));
+        const annuaire = annSnap.exists()?annSnap.data().membres||{}:{};
+
+        let targetUids;
+        if(isMelissa){
+          targetUids = Object.keys(annuaire);
+        } else {
+          const visited=new Set();
+          const queue=[uid];
+          while(queue.length){
+            const current=queue.pop();
+            Object.values(annuaire).forEach(m=>{
+              if(m.marraine===current && !visited.has(m.uid)){
+                visited.add(m.uid);
+                queue.push(m.uid);
+              }
+            });
+          }
+          targetUids = [...visited];
+        }
+
+        const results = await Promise.all(targetUids.map(async(mUid)=>{
+          try{
+            const data=await sgAll(mUid);
+            const progress=data["db-formation-progress"]?JSON.parse(data["db-formation-progress"]):{};
+            return {uid:mUid, nom:annuaire[mUid]?.nom||fmtUid(mUid), progress};
+          }catch{return {uid:mUid, nom:fmtUid(mUid), progress:{}};}
+        }));
+        results.sort((a,b)=>a.nom.localeCompare(b.nom));
+        setMembres(results);
+      }catch(e){console.error(e);}
+      setLoading(false);
+    })();
+  },[uid]);
+
+  if(loading)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".78rem"}}>Chargement...</div>;
+  if(!isAuthorized)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".78rem"}}>Accès réservé aux cheffes d'équipe.</div>;
+
+  const membresFiltres=membres.filter(m=>m.nom.toLowerCase().includes(search.toLowerCase()));
+  const totalMembres=membres.length;
+
+  // Agrégats globaux par formation (sur l'ensemble de l'équipe visible)
+  const agregats=FORMATION_SUBTABS_SUIVIES.map(subTab=>{
+    const nbConsultees=membres.filter(m=>m.progress[subTab]?.nbConsultations>0).length;
+    const nbTerminees=membres.filter(m=>m.progress[subTab]?.termine).length;
+    const tempsTotal=membres.reduce((s,m)=>s+(m.progress[subTab]?.tempsTotalSecondes||0),0);
+    const tempsMoyen=nbConsultees>0?Math.round(tempsTotal/nbConsultees):0;
+    return {subTab,nbConsultees,nbTerminees,tempsMoyen};
+  });
+  const nomsNonTermines=(subTab)=>membres.filter(m=>!m.progress[subTab]?.termine).map(m=>m.nom);
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>🎓 Suivi Formation</div>
+      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.6}}>Vue d'ensemble de l'engagement de ton équipe sur les formations ({totalMembres} membre{totalMembres>1?"s":""}).</p>
+
+      <div style={{display:"flex",gap:".4rem",marginBottom:"1.1rem"}}>
+        <button onClick={()=>setVue("global")} style={{flex:1,background:vue==="global"?C.rose:"white",color:vue==="global"?"white":C.brun,border:`1.5px solid ${C.rose}`,borderRadius:10,padding:".55rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>📊 Vue globale équipe</button>
+        <button onClick={()=>setVue("membres")} style={{flex:1,background:vue==="membres"?C.rose:"white",color:vue==="membres"?"white":C.brun,border:`1.5px solid ${C.rose}`,borderRadius:10,padding:".55rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>👤 Par membre</button>
+      </div>
+
+      {vue==="global"&&(
+        <div>
+          {totalMembres===0&&(
+            <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Aucun membre dans l'équipe pour l'instant.</div>
+          )}
+          {agregats.map(a=>{
+            const pctTermine=totalMembres>0?Math.round((a.nbTerminees/totalMembres)*100):0;
+            const pctConsulte=totalMembres>0?Math.round((a.nbConsultees/totalMembres)*100):0;
+            const enRetard=nomsNonTermines(a.subTab);
+            return(
+              <div key={a.subTab} style={{background:"white",border:`1px solid ${C.pale}`,borderRadius:12,padding:".9rem 1rem",marginBottom:".65rem"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".5rem"}}>
+                  <div style={{fontSize:".82rem",fontWeight:700,color:C.brun}}>{FORMATION_SUBTABS_LABELS[a.subTab]}</div>
+                  <div style={{fontSize:".72rem",fontWeight:700,color:pctTermine>=80?C.vert:pctTermine>=40?C.or:"#C0504D"}}>{a.nbTerminees}/{totalMembres} terminé{a.nbTerminees>1?"s":""}</div>
+                </div>
+                <div style={{height:7,background:C.pale,borderRadius:10,overflow:"hidden",marginBottom:".45rem"}}>
+                  <div style={{height:"100%",width:pctTermine+"%",background:pctTermine>=80?C.vert:pctTermine>=40?C.or:"#C0504D",borderRadius:10}}/>
+                </div>
+                <div style={{fontSize:".68rem",color:C.gris,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:".3rem"}}>
+                  <span>{pctConsulte}% ont consulté · {pctTermine}% ont terminé</span>
+                  <span>Temps moyen : {formatDureeFormation(a.tempsMoyen)}</span>
+                </div>
+                {enRetard.length>0&&enRetard.length<=totalMembres&&(
+                  <div style={{marginTop:".5rem",fontSize:".66rem",color:"#B04040",lineHeight:1.5}}>
+                    <span style={{fontWeight:700}}>Pas encore terminé : </span>{enRetard.join(", ")}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {vue==="membres"&&(<>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Rechercher un membre..."
+          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .8rem",fontSize:".8rem",fontFamily:"inherit",marginBottom:"1rem",outline:"none"}}/>
+
+        {membresFiltres.map(m=>{
+          const nbTerminees=FORMATION_SUBTABS_SUIVIES.filter(s=>m.progress[s]?.termine).length;
+          const nbConsultees=FORMATION_SUBTABS_SUIVIES.filter(s=>m.progress[s]?.nbConsultations>0).length;
+          const tempsTotal=FORMATION_SUBTABS_SUIVIES.reduce((s,k)=>s+(m.progress[k]?.tempsTotalSecondes||0),0);
+          const expanded=expandedUid===m.uid;
+          return(
+            <div key={m.uid} style={{background:"white",border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem 1rem",marginBottom:".6rem"}}>
+              <div onClick={()=>setExpandedUid(expanded?null:m.uid)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+                <div>
+                  <div style={{fontSize:".85rem",fontWeight:700,color:C.brun}}>{m.nom}</div>
+                  <div style={{fontSize:".65rem",color:C.gris,marginTop:".15rem"}}>
+                    {nbTerminees}/{FORMATION_SUBTABS_SUIVIES.length} terminées · {nbConsultees}/{FORMATION_SUBTABS_SUIVIES.length} consultées · {formatDureeFormation(tempsTotal)} au total
+                  </div>
+                </div>
+                <span style={{color:C.pale}}>{expanded?"▲":"▼"}</span>
+              </div>
+              {expanded&&(
+                <div style={{marginTop:".75rem",paddingTop:".75rem",borderTop:`1px solid ${C.pale}`,display:"flex",flexDirection:"column",gap:".4rem"}}>
+                  {FORMATION_SUBTABS_SUIVIES.map(subTab=>{
+                    const p=m.progress[subTab]||{};
+                    const statut=p.termine?"✅":p.nbConsultations>0?"🔵":"⚪";
+                    return(
+                      <div key={subTab} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".72rem"}}>
+                        <div style={{color:C.texte}}>{statut} {FORMATION_SUBTABS_LABELS[subTab]}</div>
+                        <div style={{color:C.gris,fontSize:".68rem"}}>
+                          {p.nbConsultations>0?`${p.nbConsultations} vue${p.nbConsultations>1?"s":""} · ${formatDureeFormation(p.tempsTotalSecondes)}`:"Non consultée"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {membresFiltres.length===0&&(
+          <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Aucun membre trouvé.</div>
+        )}
+      </>)}
+    </div>
+  );
+}
+
+
 export const ESPACE_CHEF_SECTIONS=[
   {id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true},
   {id:"challengeapp",icon:"🎮",label:"Challenge Découverte App",desc:"Progression de chaque membre dans le défi 7 jours",chefOnly:true},
   {id:"membres",icon:"⚙️",label:"Accès équipe",desc:"Gérer les membres, chefs, et assigner les marraines",chefOnly:true},
   {id:"assiduite",icon:"📋",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true},
+  {id:"suiviformation",icon:"🎓",label:"Suivi Formation",desc:"Qui a consulté/terminé chaque formation, temps passé",chefOnly:true},
   {id:"suivica",icon:"📈",label:"Suivi CA",desc:"Ton chiffre d'affaires période par période avec historique",chefOnly:false},
   {id:"actionsbiblio",icon:"💡",label:"Actions biblio",desc:"Ajouter des actions à la bibliothèque partagée de toute l'équipe",chefOnly:false},
   {id:"defi",icon:"🚀",label:"Challenge Flash",desc:"Lancer un défi collectif pour toute l'équipe",chefOnly:true},
@@ -9706,6 +10121,7 @@ function EspaceChefTab({uid, isChef}){
         {section==="actionsbiblio"&&<ActionsBiblioChefTab uid={uid}/>}
         {section==="membres"&&<MembresTab uid={uid}/>}
         {section==="assiduite"&&<AssiduiteTab uid={uid}/>}
+        {section==="suiviformation"&&<SuiviFormationTab uid={uid}/>}
         {section==="defi"&&<DefisTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={true} isChef={isChef}/>}
         {section==="powerhour"&&<PowerHourTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={isChef}/>}
         {section==="distributeurs"&&<DistributeursTab distributeurs={distrib} save={saveDistrib} uid={uid}/>}
@@ -10702,7 +11118,8 @@ function DevPersoSection({adminItems}){
         <div>
           <AdminContentBlock onglet="devperso" items={adminItems}/>
           {[
-            {icon:"🧠",title:"Dégommer son plafond de verre",desc:"Identifier les croyances limitantes qui t'empêchent d'avancer et les transformer en force.",video:"https://us06web.zoom.us/rec/share/XzuZHzXLLZdVOz2rQmBb-7nomO9qxTj92_xluvzizpzlSaYfxRdmTARqoDTdatzs.EHObmbNT1mpbo0Ad"},
+            {icon:"🧠",title:"Dégommer son plafond de verre",desc:"Identifier les croyances limitantes qui t'empêchent d'avancer et les transformer en force.",video:"https://drive.google.com/file/d/1VLaGx4hcH5bVc8xBN1_MU8RmDwhWiqk0/view",drive:true},
+            {icon:"🚀",title:"Sortir de sa zone de confort",desc:"Apprendre à avancer malgré la peur et l'inconfort du changement.",video:"https://drive.google.com/file/d/1i4k0waoHx0gqlouN2ksfa919ksuKpdbF/view",drive:true},
             {icon:"🎯",title:"Fixer ses objectifs — méthode complète",desc:"Des objectifs qui fonctionnent vraiment.",video:"https://us06web.zoom.us/rec/share/E1JtWx4furUdNFt4wKKCJYcfD4ScYwhJZ3BfUnHZYOnbUzcRYLzdLq5WuoyJSjw.MsevJMjQXIrzr1rp?startTime=1771357741000"},
             {icon:"👑",title:"Développer son leadership",desc:"Comment inspirer, guider et faire grandir son équipe.",video:"https://us06web.zoom.us/rec/share/hnDWdngAPCK_SGVTYzVhgk70t_nqqfesUvZF7hme8CaEgL-CpszXoantB-d2MSPZ.Yl7wHQ7KV9pZJnCL"},
             {icon:"📱",title:"Personal branding",desc:"Qui tu es en ligne = qui tu attires.",video:"https://youtu.be/j5EUiKmUSgM"},
@@ -10717,7 +11134,7 @@ function DevPersoSection({adminItems}){
                   <div style={{fontSize:".72rem",color:C.gris,lineHeight:1.55}}>{item.desc}</div>
                 </div>
               </div>
-              {item.video&&<YTBtn href={item.video} label="▶ Voir la formation"/>}
+              {item.video&&(item.drive?<DriveBtn href={item.video} label="▶ Voir la formation"/>:<YTBtn href={item.video} label="▶ Voir la formation"/>)}
             </div>
           ))}
         </div>

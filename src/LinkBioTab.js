@@ -534,18 +534,97 @@ function LinkBioTab({uid, userName}){
   );
 }
 
-function StatsLinkBio({uid}){;
-const[stats,setStats]=React.useState(null);
-const[refresh,setRefresh]=React.useState(0);
-  React.useEffect(()=>{if(!uid)return;console.log("STATS slug:",uid);getDoc(doc(db,"linkbio_stats",uid)).then(s=>{if(s.exists())setStats(s.data());else setStats({});});},[uid,refresh]);
+const GROUPES_STATS=[
+  {titre:"Vue d'ensemble",champs:[
+    {k:"visites",label:"Visites LinkBio",icon:"👁️"},
+    {k:"boutique_visites",label:"Visites boutique",icon:"🛍️"},
+  ]},
+  {titre:"Tunnels de vente",champs:[
+    {k:"tunnel_vente",label:"Découvrir les produits",icon:"🛒"},
+    {k:"recrutement",label:"Rejoindre l'équipe",icon:"🤝"},
+    {k:"tunnel_visites",label:"Visites du tunnel",icon:"🚪"},
+  ]},
+  {titre:"Diagnostics",champs:[
+    {k:"clics_diag",label:"Total clics diagnostics",icon:"🔍"},
+    {k:"diag_completes",label:"Diagnostics complétés",icon:"✅"},
+  ]},
+  {titre:"Boutique en ligne",champs:[
+    {k:"boutique_ajout_panier",label:"Ajouts au panier",icon:"➕"},
+    {k:"boutique_achat",label:"Achats confirmés",icon:"💳"},
+  ]},
+  {titre:"Liens & réseaux",champs:[
+    {k:"clic_boutique_externe",label:"Lien boutique externe",icon:"🔗"},
+    {k:"clic_recrutement_externe",label:"Lien recrutement externe",icon:"🔗"},
+    {k:"clic_catalogue",label:"Catalogue produits",icon:"📖"},
+    {k:"clic_boutique",label:"Ma boutique (bouton)",icon:"🛍️"},
+    {k:"clic_lien_bonus",label:"Liens bonus",icon:"⭐"},
+    {k:"clic_facebook",label:"Facebook",icon:"📘"},
+    {k:"clic_instagram",label:"Instagram",icon:"📸"},
+    {k:"clic_tiktok",label:"TikTok",icon:"🎵"},
+    {k:"clic_youtube",label:"YouTube",icon:"▶️"},
+  ]},
+];
+
+function dateKeyLocale(d){
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+function valeurPourPeriode(stats,champ,periode){
+  if(periode==="total") return stats[champ]||0;
+  const nbJours=periode==="jour"?1:periode==="7j"?7:30;
+  const parJour=stats.parJour||{};
+  let total=0;
+  const d=new Date();
+  for(let i=0;i<nbJours;i++){
+    const key=dateKeyLocale(d);
+    total+=(parJour[key]&&parJour[key][champ])||0;
+    d.setDate(d.getDate()-1);
+  }
+  return total;
+}
+
+function StatsLinkBio({uid}){
+  const[stats,setStats]=React.useState(null);
+  const[refresh,setRefresh]=React.useState(0);
+  const[periode,setPeriode]=React.useState("total");
+  React.useEffect(()=>{if(!uid)return;getDoc(doc(db,"linkbio_stats",uid)).then(s=>{if(s.exists())setStats(s.data());else setStats({});});},[uid,refresh]);
   if(!stats)return<div style={{textAlign:"center",padding:"2rem",color:"#888",fontSize:".78rem"}}>Chargement des stats...</div>;
-  return(<div style={{display:"flex",flexDirection:"column",gap:".75rem"}}>
-    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Visites</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.visites||0}</div></div><div>👁️</div></div>
-    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Clics diagnostics</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.clics_diag||0}</div></div><div>🔍</div></div>
-    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Diagnostics completes</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.diag_completes||0}</div></div><div>✅</div></div>
-    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Tunnel vente</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.tunnel_vente||0}</div></div><div>🛒</div></div>
-    <div style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:".65rem",color:"#888"}}>Recrutement</div><div style={{fontSize:"1.4rem",fontWeight:700,color:"#5C3D2E"}}>{stats.recrutement||0}</div></div><div>🤝</div></div>
-  </div>);
+
+  const PERIODES=[{id:"jour",label:"Aujourd'hui"},{id:"7j",label:"7 jours"},{id:"30j",label:"30 jours"},{id:"total",label:"Total"}];
+
+  return(
+    <div>
+      <div style={{display:"flex",gap:".4rem",marginBottom:"1rem",overflowX:"auto"}}>
+        {PERIODES.map(p=>(
+          <button key={p.id} onClick={()=>setPeriode(p.id)}
+            style={{flexShrink:0,background:periode===p.id?C.rose:"white",color:periode===p.id?"white":C.brun,border:`1.5px solid ${C.rose}`,borderRadius:20,padding:".4rem .9rem",fontSize:".7rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {GROUPES_STATS.map(groupe=>{
+        const champsAvecValeur=groupe.champs.filter(c=>valeurPourPeriode(stats,c.k,periode)>0||periode==="total");
+        if(champsAvecValeur.length===0)return null;
+        return(
+          <div key={groupe.titre} style={{marginBottom:"1.1rem"}}>
+            <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,textTransform:"uppercase",letterSpacing:".08em",marginBottom:".4rem"}}>{groupe.titre}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}>
+              {champsAvecValeur.map(c=>(
+                <div key={c.k} style={{background:"white",border:"1px solid #eee",borderRadius:12,padding:".75rem .9rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:".76rem",color:C.brun,fontWeight:600}}>{c.label}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:".5rem"}}>
+                    <div style={{fontSize:"1.15rem",fontWeight:700,color:"#5C3D2E"}}>{valeurPourPeriode(stats,c.k,periode)}</div>
+                    <div>{c.icon}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 function EbooksLinkBioSection({profil,setProfil}){
   const THEMES_EBOOKS=[

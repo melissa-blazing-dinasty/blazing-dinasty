@@ -421,8 +421,46 @@ function Btn({href,label,color=C.brun,icon="🔗"}){
     <span style={{marginLeft:"auto",color:C.pale,fontSize:".65rem",opacity:.7,flexShrink:0}}>→</span>
   </a>;
 }
-function YTBtn({href,label}){return <Btn href={href} label={label} color="#8B1A1A" icon="▶"/>;}
-function DriveBtn({href,label}){return <Btn href={href} label={label} color={C.brun2} icon="📄"/>;}
+
+function extraireIdYoutube(url){
+  const m=url.match(/(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([a-zA-Z0-9_-]{6,})/);
+  return m?m[1]:null;
+}
+function extraireIdDrive(url){
+  const m=url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  return m?m[1]:null;
+}
+
+// Bouton video qui se deplie sur place (YouTube ou Drive) au lieu d'ouvrir un nouvel onglet
+function VideoBtnInline({href,label,color,icon,embedUrl}){
+  const[open,setOpen]=useState(false);
+  return(
+    <div style={{marginBottom:".45rem"}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",alignItems:"center",gap:".55rem",background:color,borderRadius:9,padding:".6rem .9rem",cursor:"pointer"}}>
+        <span style={{fontSize:".85rem",flexShrink:0}}>{icon}</span>
+        <span style={{fontSize:".75rem",fontWeight:600,color:C.blanc,lineHeight:1.3}}>{label}</span>
+        <span style={{marginLeft:"auto",color:C.pale,fontSize:".7rem",opacity:.8,flexShrink:0,transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}>⌄</span>
+      </div>
+      {open&&(
+        <div style={{marginTop:".4rem",borderRadius:9,overflow:"hidden",position:"relative",paddingBottom:"56.25%",height:0,background:"#000"}}>
+          <iframe src={embedUrl} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen title={label}
+            style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function YTBtn({href,label}){
+  const id=extraireIdYoutube(href);
+  if(!id) return <Btn href={href} label={label} color="#8B1A1A" icon="▶"/>;
+  return <VideoBtnInline href={href} label={label} color="#8B1A1A" icon="▶" embedUrl={`https://www.youtube.com/embed/${id}`}/>;
+}
+function DriveBtn({href,label}){
+  const id=extraireIdDrive(href);
+  if(!id) return <Btn href={href} label={label} color={C.brun2} icon="📄"/>;
+  return <VideoBtnInline href={href} label={label} color={C.brun2} icon="📄" embedUrl={`https://drive.google.com/file/d/${id}/preview`}/>;
+}
 function DocBtn({href,label}){return <Btn href={href} label={label} color="#1a4a8b" icon="📝"/>;}
 
 function Card({title,sub,icon,color=C.rose,children,defaultOpen=false}){
