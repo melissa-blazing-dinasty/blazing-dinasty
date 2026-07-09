@@ -2745,9 +2745,6 @@ function App(){
             </Card>
 
             <Card title="Stratégies de recrutement" sub="Les méthodes avec documents complets" icon="📁" color={C.lilas}>
-              <DriveBtn href="https://drive.google.com/file/d/1dLOGuCg-LkiOX-YUsW_Bce5pr3mwYPVN/view" label="Démarcher — Vidéo"/>
-              <DocBtn href="https://docs.google.com/document/d/19GWloCMuOPG8Q_7UQTmTph6AyCMnPWNVTywqRIQPaLY/edit" label="Démarcher — Document complet"/>
-              <DriveBtn href="https://drive.google.com/file/d/1WutnDp_no7zU-mmGEgWsiVq7cJ6j7LkA/view" label="Démarcher — Vidéo complémentaire"/>
               <DriveBtn href="https://drive.google.com/file/d/104xn2JE-GYBos2eG9GhPcqI5ZWN78Fkp/view" label="Formation Démarrage + tips recrutement"/>
             </Card>
 
