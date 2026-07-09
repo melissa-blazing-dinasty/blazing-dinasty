@@ -1565,8 +1565,11 @@ function AssignerDiagClienteBtn({ordonnance, type, nomClient, uid}){
     </>
   );
 }
-function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="", skipContact=false, onComplete=null, onNonLuChange=()=>{} }) {
+function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="", skipContact=false, onComplete=null, onNonLuChange=()=>{}, forceResultsView=0 }) {
   const [mode, setMode] = useState(initialType?"questionnaire":"choix");
+  useEffect(()=>{
+    if(forceResultsView>0)setMode("resultats");
+  },[forceResultsView]);
   const [nonLusCount,setNonLusCount]=useState(0);
   useEffect(()=>{
     if(!uid||externalMode)return;

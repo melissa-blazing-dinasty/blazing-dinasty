@@ -19,7 +19,7 @@ import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
-function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}}){
+function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onVoirDiagResultats=()=>{}}){
   const[dtab,setDtab]=useState(forceQuizJour?"faststart":"today");
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
@@ -443,6 +443,19 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* CARTE DIAGNOSTICS À CONSULTER */}
+          {nbDiagNonLus>0&&(
+            <div onClick={onVoirDiagResultats}
+              style={{background:"#F3EEFB",border:"1.5px solid #8B6FB350",borderRadius:14,marginBottom:"1rem",padding:".75rem 1rem",display:"flex",alignItems:"center",gap:".6rem",cursor:"pointer"}}>
+              <span style={{fontSize:"1.2rem"}}>🩺</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:".82rem",fontWeight:700,color:"#5B3E8C"}}>{nbDiagNonLus} diagnostic{nbDiagNonLus>1?"s":""} complété{nbDiagNonLus>1?"s":""} à consulter</div>
+                <div style={{fontSize:".68rem",color:"#8B6FB3"}}>Des clientes/prospects ont répondu — jette un œil à leurs résultats</div>
+              </div>
+              <span style={{color:"#8B6FB3",fontSize:".85rem"}}>→</span>
             </div>
           )}
 
