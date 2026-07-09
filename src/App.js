@@ -1575,6 +1575,29 @@ function App(){
   const[objPosesLocal,setObjPosesLocal]=useState(false);
   const[nbNotifDashboard,setNbNotifDashboard]=useState({relances:0,actions:0});
   const[nbDiagNonLus,setNbDiagNonLus]=useState(0);
+  const[nbNotifCalendrier,setNbNotifCalendrier]=useState(0);
+  useEffect(()=>{
+    if(!userId)return;
+    (async()=>{
+      try{
+        const snapCal=await getDoc(doc(db,"equipe","calendrier"));
+        const snapUser=await getDoc(doc(db,"users",userId));
+        const lastVuCal=snapUser.exists()?(snapUser.data()["db-calendrier-vue"]||0):0;
+        if(snapCal.exists()){
+          const arrCal=Object.values(snapCal.data());
+          const now=Date.now();
+          const dansUneSemaine=now+7*24*60*60*1000;
+          const idsAConsiderer=new Set();
+          arrCal.forEach(e=>{
+            const estNouveau=e.createdAt&&e.createdAt>lastVuCal;
+            const estProche=e.dateTs>=now&&e.dateTs<=dansUneSemaine;
+            if(estNouveau||estProche)idsAConsiderer.add(e.id);
+          });
+          setNbNotifCalendrier(idsAConsiderer.size);
+        }
+      }catch{}
+    })();
+  },[userId]);
   const[diagResultsTrigger,setDiagResultsTrigger]=useState(0);
   const voirDiagResultats=()=>{
     setTab("boiteaoutils");
@@ -1991,6 +2014,7 @@ function App(){
               if(tb.id==="communaute")n=nbNotifCommunaute;
               if(tb.id==="formation")n=Object.keys(formationNouveautes).length;
               if(tb.id==="boiteaoutils")n=nbDiagNonLus;
+              if(tb.id==="calendrier")n=nbNotifCalendrier;
               if(tb.id==="dashboard"){
                 const nUrgent=(objPeriodeRemplis?0:1)+nbNotifDashboard.relances;
                 const nActions=nbNotifDashboard.actions;

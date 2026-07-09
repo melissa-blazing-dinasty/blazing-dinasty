@@ -459,6 +459,137 @@ exports.creerSessionCheckout = onCall({secrets: [stripeSecretKey]}, async (reque
   return {url: session.url};
 });
 
+const CALENDRIER_MIHI_CA = {
+  2023: [
+    {c:1, debut:"2023-01-07", fin:"2023-01-27"},
+    {c:2, debut:"2023-01-28", fin:"2023-02-17"},
+    {c:3, debut:"2023-02-18", fin:"2023-03-10"},
+    {c:4, debut:"2023-03-11", fin:"2023-03-31"},
+    {c:5, debut:"2023-04-01", fin:"2023-04-21"},
+    {c:6, debut:"2023-04-22", fin:"2023-05-12"},
+    {c:7, debut:"2023-05-13", fin:"2023-06-02"},
+    {c:8, debut:"2023-06-03", fin:"2023-06-23"},
+    {c:9, debut:"2023-06-24", fin:"2023-07-14"},
+    {c:10,debut:"2023-07-15", fin:"2023-08-04"},
+    {c:11,debut:"2023-08-05", fin:"2023-08-25"},
+    {c:12,debut:"2023-08-26", fin:"2023-09-15"},
+    {c:13,debut:"2023-09-16", fin:"2023-10-06"},
+    {c:14,debut:"2023-10-07", fin:"2023-10-27"},
+    {c:15,debut:"2023-10-28", fin:"2023-11-17"},
+    {c:16,debut:"2023-11-18", fin:"2023-12-08"},
+    {c:17,debut:"2023-12-09", fin:"2023-12-29"},
+  ],
+  2024: [
+    {c:1, debut:"2024-01-18", fin:"2024-02-07"},
+    {c:2, debut:"2024-02-08", fin:"2024-02-28"},
+    {c:3, debut:"2024-02-29", fin:"2024-03-20"},
+    {c:4, debut:"2024-03-21", fin:"2024-04-10"},
+    {c:5, debut:"2024-04-11", fin:"2024-05-01"},
+    {c:6, debut:"2024-05-02", fin:"2024-05-22"},
+    {c:7, debut:"2024-05-23", fin:"2024-06-12"},
+    {c:8, debut:"2024-06-13", fin:"2024-07-03"},
+    {c:9, debut:"2024-07-04", fin:"2024-07-24"},
+    {c:10,debut:"2024-07-25", fin:"2024-08-14"},
+    {c:11,debut:"2024-08-15", fin:"2024-09-04"},
+    {c:12,debut:"2024-09-05", fin:"2024-09-25"},
+    {c:13,debut:"2024-09-26", fin:"2024-10-16"},
+    {c:14,debut:"2024-10-17", fin:"2024-11-06"},
+    {c:15,debut:"2024-11-07", fin:"2024-11-27"},
+    {c:16,debut:"2024-11-28", fin:"2024-12-18"},
+    {c:17,debut:"2024-12-19", fin:"2025-01-08"},
+    {c:18,debut:"2023-12-28", fin:"2024-01-17"},
+  ],
+  2025: [
+    {c:1, debut:"2025-01-09", fin:"2025-01-29"},
+    {c:2, debut:"2025-01-30", fin:"2025-02-19"},
+    {c:3, debut:"2025-02-20", fin:"2025-03-12"},
+    {c:4, debut:"2025-03-13", fin:"2025-04-02"},
+    {c:5, debut:"2025-04-03", fin:"2025-04-23"},
+    {c:6, debut:"2025-04-24", fin:"2025-05-14"},
+    {c:7, debut:"2025-05-15", fin:"2025-06-04"},
+    {c:8, debut:"2025-06-05", fin:"2025-06-25"},
+    {c:9, debut:"2025-06-26", fin:"2025-07-16"},
+    {c:10,debut:"2025-07-17", fin:"2025-08-06"},
+    {c:11,debut:"2025-08-07", fin:"2025-08-27"},
+    {c:12,debut:"2025-08-28", fin:"2025-09-17"},
+    {c:13,debut:"2025-09-18", fin:"2025-10-08"},
+    {c:14,debut:"2025-10-09", fin:"2025-10-29"},
+    {c:15,debut:"2025-10-30", fin:"2025-11-19"},
+    {c:16,debut:"2025-11-20", fin:"2025-12-10"},
+    {c:17,debut:"2025-12-11", fin:"2025-12-31"},
+  ],
+  2026: [
+    {c:1, debut:"2026-01-01", fin:"2026-01-21"},
+    {c:2, debut:"2026-01-22", fin:"2026-02-11"},
+    {c:3, debut:"2026-02-12", fin:"2026-03-04"},
+    {c:4, debut:"2026-03-05", fin:"2026-03-25"},
+    {c:5, debut:"2026-03-26", fin:"2026-04-15"},
+    {c:6, debut:"2026-04-16", fin:"2026-05-06"},
+    {c:7, debut:"2026-05-07", fin:"2026-05-27"},
+    {c:8, debut:"2026-05-28", fin:"2026-06-17"},
+    {c:9, debut:"2026-06-18", fin:"2026-07-08"},
+    {c:10,debut:"2026-07-09", fin:"2026-07-29"},
+    {c:11,debut:"2026-07-30", fin:"2026-08-19"},
+    {c:12,debut:"2026-08-20", fin:"2026-09-09"},
+    {c:13,debut:"2026-09-10", fin:"2026-09-30"},
+    {c:14,debut:"2026-10-01", fin:"2026-10-21"},
+    {c:15,debut:"2026-10-22", fin:"2026-11-11"},
+    {c:16,debut:"2026-11-12", fin:"2026-12-02"},
+    {c:17,debut:"2026-12-03", fin:"2026-12-23"},
+  ],
+};
+
+// Trouve la campagne Mihi officielle pour une date donnée
+function getCampagneMihiPourDateCA(dateStr) {
+  const d = new Date(dateStr + "T12:00:00").getTime();
+  for (const [annee, campagnes] of Object.entries(CALENDRIER_MIHI_CA)) {
+    for (const c of campagnes) {
+      const deb = new Date(c.debut + "T00:00:00").getTime();
+      const fin = new Date(c.fin + "T23:59:59").getTime();
+      if (d >= deb && d <= fin) return {annee: parseInt(annee), num: c.c, debut: c.debut, fin: c.fin};
+    }
+  }
+  return null;
+}
+
+function getPeriodeCAInfo() {
+  const today = new Date();
+  const dateStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+  const camp = getCampagneMihiPourDateCA(dateStr);
+  if (!camp) return null;
+  const deb = new Date(camp.debut + "T12:00:00");
+  const now = Date.now();
+  const joursEcoulesRaw = Math.floor((now - deb.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const joursEcoules = Math.min(21, Math.max(1, joursEcoulesRaw));
+  return {periodNum: camp.num, joursEcoules};
+}
+
+// Ajoute le montant d'une commande boutique au Suivi CA (case du jour actuel de la periode en cours)
+async function ajouterCommandeAuSuiviCA(userRef, userData, montant) {
+  try {
+    const infoP = getPeriodeCAInfo();
+    if (!infoP) return;
+    const pKey = "p" + infoP.periodNum;
+    const suiviCA = userData["db-suivi-ca"] ? JSON.parse(userData["db-suivi-ca"]) : {};
+    const cur = suiviCA[pKey] || {obj: 0, jours: {}};
+    const jours = {...(cur.jours || {})};
+    const idx = infoP.joursEcoules;
+    const dejaAujourdhui = parseFloat(jours[idx]) || 0;
+    const joursRemplis = Object.entries(jours).filter(([k, v]) => parseInt(k) < idx && parseFloat(v) > 0);
+    let baseCumul = 0;
+    if (joursRemplis.length > 0) {
+      const dernierIdx = Math.max(...joursRemplis.map(([k]) => parseInt(k)));
+      baseCumul = parseFloat(jours[dernierIdx]) || 0;
+    }
+    const nouveauCumul = (dejaAujourdhui > 0 ? dejaAujourdhui : baseCumul) + montant;
+    jours[idx] = nouveauCumul;
+    suiviCA[pKey] = {...cur, jours, ca: nouveauCumul};
+    await userRef.set({"db-suivi-ca": JSON.stringify(suiviCA)}, {merge: true});
+  } catch (e) {
+    console.error("Erreur ajout suivi CA boutique:", e);
+  }
+}
+
 // Enregistre une commande boutique (Stripe ou PayPal) sur la fiche cliente + fait avancer la fidelite
 async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
   const total = items.reduce((s, i) => s + i.prix * (i.quantite || 1), 0);
@@ -515,6 +646,7 @@ async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
   }
 
   await userRef.set({"db-clients": JSON.stringify(clientsMisAJour)}, {merge: true});
+  await ajouterCommandeAuSuiviCA(userRef, userData, total);
   await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", nomPourNotif + " vient de commander pour " + total.toFixed(2) + " euros !");
 
   const nbCommandesFinal = clientExistantIdx !== -1

@@ -155,8 +155,9 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
         }
       }catch{}
       setLoaded(true);
+      if(uid){try{await setDoc(doc(db,"users",uid),{"db-calendrier-vue":Date.now()},{merge:true});}catch{}}
     })();
-  },[]);
+  },[uid]);
 
   const saveEvents=async(arr)=>{
     const obj={};
@@ -175,6 +176,7 @@ function CalendrierTab({uid,userName,isMelissa,isChef}){
       ...form,
       dateTs:new Date(form.date+(form.time?`T${form.time}`:"")).getTime(),
       createdBy:userName,
+      createdAt:Date.now(),
     };
     const next=[...events,e].sort((a,b)=>a.dateTs-b.dateTs);
     setEvents(next);
