@@ -19,7 +19,7 @@ import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
-function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onVoirDiagResultats=()=>{}}){
+function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onVoirDiagResultats=()=>{}, nbCommandesNonVues=0, onMarquerCommandesVues=()=>{}}){
   const[dtab,setDtab]=useState(forceQuizJour?"faststart":"today");
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
@@ -418,6 +418,17 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
           <Confetti trigger={confettiTrigger}/>
           <MarrainePopup uid={uid} userName={userName}/>
           <AnnonceBanner uid={uid}/>
+          {nbCommandesNonVues>0&&(
+            <div onClick={()=>{onMarquerCommandesVues();setDtab("clients");}}
+              style={{background:"linear-gradient(135deg,#C44B1A,#8B3010)",borderRadius:14,marginBottom:"1rem",padding:".9rem 1.1rem",display:"flex",alignItems:"center",gap:".7rem",cursor:"pointer",boxShadow:"0 4px 16px rgba(196,75,26,.35)"}}>
+              <span style={{fontSize:"1.4rem"}}>🛍️</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:".9rem",fontWeight:700,color:"white"}}>{nbCommandesNonVues} nouvelle{nbCommandesNonVues>1?"s":""} commande{nbCommandesNonVues>1?"s":""} boutique à traiter !</div>
+                <div style={{fontSize:".7rem",color:"rgba(255,255,255,.85)"}}>Clique pour voir les détails et préparer l'envoi</div>
+              </div>
+              <span style={{color:"white",fontSize:"1rem"}}>→</span>
+            </div>
+          )}
           {relancesDuJour.length>0&&(
             <div style={{background:"#FFF3EC",border:"1.5px solid #C44B1A50",borderRadius:14,marginBottom:"1rem",overflow:"hidden"}}>
               <div onClick={()=>setRelanceBannerOuverte(p=>!p)}

@@ -231,7 +231,7 @@ function FormationProduitsTab(){
 
 // Admin Formation Produits
 // Composant upload photo — sélection depuis galerie OU URL
-export function UploadPhoto({value, onChange, label="Photo", folder="produits"}){
+export function UploadPhoto({value, onChange, label="Photo", folder="produits", maxSize=400, quality=0.7}){
   const[uploading,setUploading]=useState(false);
   const[preview,setPreview]=useState(value||"");
 
@@ -250,12 +250,12 @@ export function UploadPhoto({value, onChange, label="Photo", folder="produits"})
       const img=new Image();
       img.onload=()=>{
         const canvas=document.createElement("canvas");
-        const MAX=400;
+        const MAX=maxSize;
         let w=img.width,h=img.height;
         if(w>h){if(w>MAX){h=h*(MAX/w);w=MAX;}}else{if(h>MAX){w=w*(MAX/h);h=MAX;}}
         canvas.width=w;canvas.height=h;
         canvas.getContext("2d").drawImage(img,0,0,w,h);
-        const compressed=canvas.toDataURL("image/jpeg",0.7);
+        const compressed=canvas.toDataURL("image/jpeg",quality);
         onChange(compressed);
       };
       const reader2=new FileReader();reader2.onload=ev=>{img.src=ev.target.result;setUploading(false);};reader2.readAsDataURL(file);return;

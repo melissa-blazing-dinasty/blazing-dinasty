@@ -57,6 +57,18 @@ async function saveFCMToken(uid) {
     if (token) {
       await setDoc(doc(db, "fcm_tokens", uid), { web: token });
     }
+    if (!window.__bdForegroundNotifSetup) {
+      window.__bdForegroundNotifSetup = true;
+      onMessage(messaging, (payload) => {
+        try {
+          const title = payload.notification?.title || "Blazing Dynasty";
+          const body = payload.notification?.body || "";
+          if (Notification.permission === "granted") {
+            new Notification(title, { body, icon: "/logo192.png" });
+          }
+        } catch {}
+      });
+    }
   } catch {}
 }
 
@@ -917,6 +929,41 @@ function App(){
     }catch{}
   };
   useEffect(()=>{if(showMonCompte)chargerPaypal();},[showMonCompte]);
+  const[emailNotifCommandes,setEmailNotifCommandes]=useState("");
+  const[emailNotifSaving,setEmailNotifSaving]=useState(false);
+  const[emailNotifSaved,setEmailNotifSaved]=useState(false);
+  useEffect(()=>{
+    if(!showMonCompte)return;
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",userId));
+        if(snap.exists())setEmailNotifCommandes(snap.data()["db-email-notif-commandes"]||"");
+      }catch{}
+    })();
+  },[showMonCompte]);
+  const sauverEmailNotifCommandes=async()=>{
+    setEmailNotifSaving(true);
+    try{
+      await setDoc(doc(db,"users",userId),{"db-email-notif-commandes":emailNotifCommandes.trim()},{merge:true});
+      setEmailNotifSaved(true);setTimeout(()=>setEmailNotifSaved(false),2000);
+    }catch{}
+    setEmailNotifSaving(false);
+  };
+  const[afficherPrixVIP,setAfficherPrixVIP]=useState(false);
+  useEffect(()=>{
+    if(!showMonCompte)return;
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",userId));
+        if(snap.exists())setAfficherPrixVIP(!!snap.data()["db-afficher-prix-vip"]);
+      }catch{}
+    })();
+  },[showMonCompte]);
+  const toggleAfficherPrixVIP=async()=>{
+    const next=!afficherPrixVIP;
+    setAfficherPrixVIP(next);
+    try{await setDoc(doc(db,"users",userId),{"db-afficher-prix-vip":next},{merge:true});}catch{}
+  };
   const sauverPaypal=async()=>{
     setPaypalSaving(true);
     try{
@@ -1576,6 +1623,32 @@ function App(){
   const[nbNotifDashboard,setNbNotifDashboard]=useState({relances:0,actions:0});
   const[nbDiagNonLus,setNbDiagNonLus]=useState(0);
   const[nbNotifCalendrier,setNbNotifCalendrier]=useState(0);
+  const[nbCommandesNonVues,setNbCommandesNonVues]=useState(0);
+  useEffect(()=>{
+    if(!userId)return;
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",userId));
+        if(!snap.exists())return;
+        const data=snap.data();
+        const clients=data["db-clients"]?JSON.parse(data["db-clients"]):[];
+        const lastVu=data["db-dernier-vu-commandes-boutique"]||0;
+        let n=0;
+        clients.forEach(c=>{
+          (c.commandes||[]).forEach(cmd=>{
+            if(cmd.source==="boutique-en-ligne"&&cmd.id>lastVu)n++;
+          });
+        });
+        setNbCommandesNonVues(n);
+      }catch{}
+    })();
+  },[userId]);
+  const marquerCommandesVues=async()=>{
+    try{
+      await ss(userId,"db-dernier-vu-commandes-boutique",Date.now());
+      setNbCommandesNonVues(0);
+    }catch{}
+  };
   useEffect(()=>{
     if(!userId)return;
     (async()=>{
@@ -1687,14 +1760,14 @@ function App(){
     {id:"dreamboard",label:"✨ Dream Board"},
   ];
   const OUTILS_SOUS_ONGLETS=[
-    {id:"scripts",label:"📝 Scripts"},
-    {id:"banqueimages",label:"🖼️ Images"},
-    {id:"diagnostics",label:"🩺 Diagnostics"},
     {id:"linkbio",label:"🔗 Link-in-Bio"},
+    {id:"diagnostics",label:"🩺 Diagnostics"},
+    {id:"scripts",label:"📝 Scripts"},
+    {id:"banqueimages",label:"💬 Témoignages & Visuels"},
     {id:"ebooks",label:"📚 Ebooks"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
-  const[outilsSousOnglet,setOutilsSousOnglet]=useState("scripts");
+  const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
 
   // Sous-onglets du menu Formation
   const FORMATION_TABS=[
@@ -1852,7 +1925,11 @@ function App(){
       {showWelcome&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:20,maxWidth:420,width:"100%",overflow:"hidden"}}><div style={{background:"#3D1F0E",padding:"1.5rem 1.3rem",textAlign:"center"}}><div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>👑</div><div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",color:"white",fontWeight:300}}>Bienvenue {name&&name.split(" ")[0]} !</div><div style={{fontSize:".78rem",color:"#C49A8A",marginTop:".25rem"}}>Tu fais maintenant partie de Blazing Dynasty ✨</div></div><div style={{padding:"1.25rem 1.3rem"}}><div style={{background:"#FAF7F2",borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",fontSize:".78rem",color:"#3D2B1F",lineHeight:1.7}}>🌸 Nous sommes tellement heureuses de t'accueillir dans notre équipe. Tu as fait le bon choix — maintenant on est là pour t'accompagner à chaque étape. Let's go ! 🔥</div><div style={{fontSize:".6rem",fontWeight:700,color:"#888",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".6rem"}}>✦ TES ACCÈS DU MOMENT</div>{[{icon:"🚀",titre:"Fast Start",desc:"7 modules progressifs pour bien démarrer — commence par là !"},{icon:"📱",titre:"Formation Application",desc:"Apprends à utiliser l'appli pour te faciliter la vie"}].map((item,i)=>(<div key={i} onClick={()=>{setShowWelcome(false);setTab("formation");}} style={{display:"flex",alignItems:"center",gap:".75rem",background:"#3D1F0E",borderRadius:10,padding:".7rem .85rem",marginBottom:".4rem",cursor:"pointer"}}><span style={{fontSize:"1.3rem"}}>{item.icon}</span><div style={{flex:1}}><div style={{fontSize:".82rem",fontWeight:700,color:"white"}}>{item.titre}</div><div style={{fontSize:".68rem",color:"#C49A8A"}}>{item.desc}</div></div><span style={{color:"#C49A8A"}}>→</span></div>))}<button onClick={()=>setShowWelcome(false)} style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:".75rem"}}>Commencer mon aventure → 🚀</button></div></div></div>)}
 
       {showMdpSetup&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem",textAlign:"center"}}>🔐 Crée ton code personnel</div><div style={{fontSize:".75rem",color:"#888",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>Pour sécuriser ton espace, choisis un code personnel que tu saisiras à chaque connexion.</div><input type="password" placeholder="Ton code personnel" value={newMdp} onChange={e=>setNewMdp(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/><input type="password" placeholder="Confirme ton code" value={newMdp2} onChange={e=>setNewMdp2(e.target.value)} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>{newMdp&&newMdp!==newMdp2&&<div style={{fontSize:".7rem",color:"#C44B1A",marginBottom:".5rem"}}>Les codes ne correspondent pas</div>}<button onClick={async()=>{if(!newMdp.trim()||newMdp!==newMdp2)return;try{await definirMotDePasseFn({motDePasse:newMdp.trim()});setShowMdpSetup(false);setNewMdp("");setNewMdp2("");}catch{}}} disabled={!newMdp.trim()||newMdp!==newMdp2} style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>Enregistrer mon code</button><button onClick={()=>setShowMdpSetup(false)} style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>Plus tard</button></div></div>)}
-      {showMonCompte&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%"}}>
+      {showMonCompte&&(<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}><div style={{background:"white",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%",maxHeight:"85vh",overflowY:"auto",position:"relative"}}>
+        <button onClick={()=>{setShowMonCompte(false);setCompteMdp1("");setCompteMdp2("");setCompteError("");}}
+          style={{position:"sticky",top:0,float:"right",marginLeft:"auto",marginBottom:"-1.5rem",background:"#F5EFE8",border:"none",borderRadius:"50%",width:28,height:28,fontSize:"1rem",color:"#888",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}>
+          ✕
+        </button>
         <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".5rem",textAlign:"center"}}>🔐 Mon compte</div>
         <div style={{fontSize:".75rem",color:"#888",marginBottom:"1rem",textAlign:"center",lineHeight:1.5}}>Change ton code personnel de connexion.</div>
         {compteSuccess?(
@@ -1918,6 +1995,29 @@ function App(){
           </div>
         </div>
         )}
+        <div style={{background:"#FFF3EC",borderRadius:12,padding:"1rem",marginBottom:"1rem",border:"1px solid #F0D8C8"}}>
+          <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E",marginBottom:".3rem"}}>🔔 Alerte email nouvelle commande</div>
+          <div style={{fontSize:".68rem",color:"#888",marginBottom:".6rem",lineHeight:1.5}}>
+            Reçois un email à chaque fois qu'une cliente commande dans ta boutique — en plus de la notification dans l'app.
+          </div>
+          <input placeholder="ton-email@exemple.com" type="email" value={emailNotifCommandes} onChange={e=>setEmailNotifCommandes(e.target.value)}
+            style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".55rem .8rem",fontSize:".78rem",fontFamily:"inherit",marginBottom:".6rem",outline:"none"}}/>
+          <button onClick={sauverEmailNotifCommandes} disabled={emailNotifSaving}
+            style={{width:"100%",background:emailNotifSaved?"#2E7D32":"#C44B1A",color:"white",border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            {emailNotifSaving?"...":emailNotifSaved?"✅ Enregistré !":"Enregistrer mon email"}
+          </button>
+        </div>
+        <div style={{background:"#F3EEFB",borderRadius:12,padding:"1rem",marginBottom:"1rem",border:"1px solid #E0D4F5"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".3rem"}}>
+            <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E"}}>💎 Afficher le prix VIP</div>
+            <div onClick={toggleAfficherPrixVIP} style={{width:40,height:22,borderRadius:20,background:afficherPrixVIP?"#8B6FB3":"#DDD",position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}>
+              <div style={{width:18,height:18,borderRadius:"50%",background:"white",position:"absolute",top:2,left:afficherPrixVIP?20:2,transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+            </div>
+          </div>
+          <div style={{fontSize:".68rem",color:"#888",lineHeight:1.5}}>
+            Si activé, tes diagnostics et recommandations IA afficheront aussi un prix VIP à côté du prix normal, en plus de tes clientes.
+          </div>
+        </div>
         <button onClick={()=>{setShowMonCompte(false);setCompteMdp1("");setCompteMdp2("");setCompteError("");}}
             style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>
             Fermer
@@ -2016,7 +2116,7 @@ function App(){
               if(tb.id==="boiteaoutils")n=nbDiagNonLus;
               if(tb.id==="calendrier")n=nbNotifCalendrier;
               if(tb.id==="dashboard"){
-                const nUrgent=(objPeriodeRemplis?0:1)+nbNotifDashboard.relances;
+                const nUrgent=(objPeriodeRemplis?0:1)+nbNotifDashboard.relances+nbCommandesNonVues;
                 const nActions=nbNotifDashboard.actions;
                 return(<>
                   {nUrgent>0&&(
@@ -3181,9 +3281,9 @@ function App(){
         {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onVoirDiagResultats={voirDiagResultats}/>}
+        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="scripts"&&<ScriptsTab/>}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp}/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
@@ -8999,6 +9099,35 @@ export function MaintenanceTab({uid}){
   const[loading,setLoading]=useState(false);
   const[resultat,setResultat]=useState(null);
   const[confirmation,setConfirmation]=useState(false);
+  const[loading2,setLoading2]=useState(false);
+  const[resultat2,setResultat2]=useState(null);
+  const[confirmation2,setConfirmation2]=useState(false);
+
+  const ONGLETS_FORMATION_APP=["formationapp","formationchef","dashboard","outils","fa-dashboard-general","fa-objectifs","fa-clients","fa-distributeurs","fa-prospects"];
+
+  const viderVideosFormationApp=async()=>{
+    setLoading2(true);
+    setResultat2(null);
+    try{
+      const ref=doc(db,"admin","contenus");
+      const snap=await getDoc(ref);
+      const items=snap.exists()?(snap.data().items||[]):[];
+      let nbVides=0;
+      const nextItems=items.map(item=>{
+        if(ONGLETS_FORMATION_APP.includes(item.onglet)&&item.url){
+          nbVides++;
+          return {...item, url:""};
+        }
+        return item;
+      });
+      await setDoc(ref,{items:nextItems},{merge:true});
+      setResultat2({nbVides});
+    }catch(e){
+      setResultat2({erreur:e.message});
+    }
+    setLoading2(false);
+    setConfirmation2(false);
+  };
 
   const nettoyerObjectifsEquipe=async()=>{
     setLoading(true);
@@ -9036,6 +9165,7 @@ export function MaintenanceTab({uid}){
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>🧹 Maintenance</div>
       <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1.2rem",lineHeight:1.6}}>Actions ponctuelles de correction. À utiliser uniquement quand un bug de ce type est confirmé — pas une action à faire régulièrement.</p>
 
+      <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem",paddingLeft:".2rem"}}>🎯 Objectifs & Suivi CA</div>
       <div style={{background:"white",border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
         <div style={{fontSize:".85rem",fontWeight:700,color:C.brun,marginBottom:".4rem"}}>Réinitialiser les objectifs chiffrés de toute l'équipe</div>
         <p style={{fontSize:".72rem",color:C.gris,marginBottom:".8rem",lineHeight:1.6}}>
@@ -9067,25 +9197,59 @@ export function MaintenanceTab({uid}){
           </div>
         )}
       </div>
+
+      <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem",marginTop:"1.3rem",paddingLeft:".2rem"}}>🎬 Formation</div>
+      <div style={{background:"white",border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem"}}>
+        <div style={{fontSize:".85rem",fontWeight:700,color:C.brun,marginBottom:".4rem"}}>Vider les liens vidéo de Formation App</div>
+        <p style={{fontSize:".72rem",color:C.gris,marginBottom:".8rem",lineHeight:1.6}}>
+          Retire tous les liens vidéo (Formation Chef, Tableau de bord et ses sous-sections, Outils généraux), en gardant les titres et descriptions intacts — pratique avant de tout réenregistrer.
+        </p>
+        {!confirmation2?(
+          <button onClick={()=>setConfirmation2(true)} disabled={loading2}
+            style={{width:"100%",background:"#8B1A1A",color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".8rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            Vider les liens vidéo Formation App
+          </button>
+        ):(
+          <div>
+            <div style={{fontSize:".76rem",color:"#8B1A1A",fontWeight:700,marginBottom:".6rem"}}>⚠️ Cette action est irréversible. Confirmer ?</div>
+            <div style={{display:"flex",gap:".5rem"}}>
+              <button onClick={viderVideosFormationApp} disabled={loading2}
+                style={{flex:1,background:"#8B1A1A",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                {loading2?"En cours...":"Oui, confirmer"}
+              </button>
+              <button onClick={()=>setConfirmation2(false)} disabled={loading2}
+                style={{flex:1,background:"white",color:C.gris,border:`1.5px solid ${C.pale}`,borderRadius:10,padding:".65rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+        {resultat2&&(
+          <div style={{marginTop:".9rem",padding:".7rem",background:resultat2.erreur?"#FFF3F0":"#E8F5E9",borderRadius:8,fontSize:".76rem",color:resultat2.erreur?"#C44B1A":"#2D5A3D"}}>
+            {resultat2.erreur?("Erreur : "+resultat2.erreur):(`✅ ${resultat2.nbVides} lien(s) vidéo vidé(s). Les titres restent en place, prêts pour tes nouveaux liens.`)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 
 export const ESPACE_CHEF_SECTIONS=[
-  {id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true},
-  {id:"challengeapp",icon:"🎮",label:"Challenge Découverte App",desc:"Progression de chaque membre dans le défi 7 jours",chefOnly:true},
-  {id:"membres",icon:"⚙️",label:"Accès équipe",desc:"Gérer les membres, chefs, et assigner les marraines",chefOnly:true},
-  {id:"assiduite",icon:"📋",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true},
-  {id:"suiviformation",icon:"🎓",label:"Suivi Formation",desc:"Qui a consulté/terminé chaque formation, temps passé",chefOnly:true},
-  {id:"suivica",icon:"📈",label:"Suivi CA",desc:"Ton chiffre d'affaires période par période avec historique",chefOnly:false},
-  {id:"actionsbiblio",icon:"💡",label:"Actions biblio",desc:"Ajouter des actions à la bibliothèque partagée de toute l'équipe",chefOnly:false},
-  {id:"defi",icon:"🚀",label:"Challenge Flash",desc:"Lancer un défi collectif pour toute l'équipe",chefOnly:true},
-  {id:"powerhour",icon:"⏱️",label:"Power Hour",desc:"Sprint collectif synchrone de 20 minutes",chefOnly:true},
-  {id:"distributeurs",icon:"👑",label:"Distributeurs",desc:"Voir et naviguer dans l'arborescence de ton équipe",chefOnly:false},
-  {id:"nouveaux",icon:"📋",label:"Nouveaux Distri",desc:"Suivi onboarding des filleules récentes",chefOnly:false},
-  {id:"admin",icon:"🔧",label:"Administration",desc:"Gérer les contenus, citations, scripts, annonces et produits",melissaOnly:true},
-  {id:"maintenance",icon:"🧹",label:"Maintenance",desc:"Actions ponctuelles de correction (usage exceptionnel)",melissaOnly:true},
+  {id:"stats",icon:"📊",label:"Statistiques équipe",desc:"Taux d'utilisation, conversion, diagnostics — chiffres pour recruter",chefOnly:true,groupe:"Suivi équipe"},
+  {id:"assiduite",icon:"📋",label:"Assiduité équipe",desc:"Connexions et actions du jour de chaque membre",chefOnly:true,groupe:"Suivi équipe"},
+  {id:"suiviformation",icon:"🎓",label:"Suivi Formation",desc:"Qui a consulté/terminé chaque formation, temps passé",chefOnly:true,groupe:"Suivi équipe"},
+  {id:"suivica",icon:"📈",label:"Suivi CA",desc:"Ton chiffre d'affaires période par période avec historique",chefOnly:false,groupe:"Suivi équipe"},
+  {id:"challengeapp",icon:"🎮",label:"Challenge Découverte App",desc:"Progression de chaque membre dans le défi 7 jours",chefOnly:true,groupe:"Animation & Challenges"},
+  {id:"actionsbiblio",icon:"💡",label:"Actions biblio",desc:"Ajouter des actions à la bibliothèque partagée de toute l'équipe",chefOnly:false,groupe:"Animation & Challenges"},
+  {id:"defi",icon:"🚀",label:"Challenge Flash",desc:"Lancer un défi collectif pour toute l'équipe",chefOnly:true,groupe:"Animation & Challenges"},
+  {id:"powerhour",icon:"⏱️",label:"Power Hour",desc:"Sprint collectif synchrone de 20 minutes",chefOnly:true,groupe:"Animation & Challenges"},
+  {id:"distributeurs",icon:"👑",label:"Distributeurs",desc:"Voir et naviguer dans l'arborescence de ton équipe",chefOnly:false,groupe:"Organisation équipe"},
+  {id:"nouveaux",icon:"📋",label:"Nouveaux Distri",desc:"Suivi onboarding des filleules récentes",chefOnly:false,groupe:"Organisation équipe"},
+  {id:"membres",icon:"⚙️",label:"Accès équipe",desc:"Gérer les membres, chefs, et assigner les marraines",chefOnly:true,groupe:"Organisation équipe"},
+  {id:"admin",icon:"🔧",label:"Administration",desc:"Gérer les contenus, citations, scripts, annonces et produits",melissaOnly:true,groupe:"Administration"},
+  {id:"reclassertemoignages",icon:"📁",label:"Reclasser témoignages",desc:"Classer par thème les témoignages partagés avant l'automatisation",melissaOnly:true,groupe:"Administration"},
+  {id:"maintenance",icon:"🧹",label:"Maintenance",desc:"Actions ponctuelles de correction (usage exceptionnel)",melissaOnly:true,groupe:"Administration"},
 ];
 
 // ── MESSAGERIE ÉQUIPE ────────────────────────────────────────────────────────
@@ -10332,6 +10496,7 @@ function EspaceChefTab({uid, isChef}){
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
         {section==="nouveaux"&&<SuiviRecruTab uid={uid} isChef={isChef}/>}
         {section==="admin"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<AdminTab uid={uid}/>}
+        {section==="reclassertemoignages"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<ReclasserTemoignagesTab/>}
         {section==="maintenance"&&(uid==="melissa"||uid==="melissa-da-silveira")&&<MaintenanceTab uid={uid}/>}
       </div>
     );
@@ -10375,17 +10540,26 @@ function EspaceChefTab({uid, isChef}){
 
       <ResumeSemaineChef annuaire={annuaire}/>
 
-      {sections.map(s=>(
-        <div key={s.id} id={"decouverte-chef-"+s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
-          style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
-          <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
-            <div style={{width:38,height:38,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{s.icon}</div>
-            <div>
-              <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:C.brun}}>{s.label}</div>
-              <div style={{fontSize:".66rem",color:C.gris}}>{s.desc}</div>
+      {Object.entries(sections.reduce((acc,s)=>{
+        const g=s.groupe||"Autre";
+        (acc[g]=acc[g]||[]).push(s);
+        return acc;
+      },{})).map(([groupe,items])=>(
+        <div key={groupe} style={{marginBottom:"1.1rem"}}>
+          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".5rem",paddingLeft:".2rem"}}>{groupe}</div>
+          {items.map(s=>(
+            <div key={s.id} id={"decouverte-chef-"+s.id} onClick={()=>{if(s.id==="distributeurs")loadDistrib();setSection(s.id);}}
+              style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem 1rem",marginBottom:".5rem",cursor:"pointer"}}>
+              <div style={{display:"flex",alignItems:"center",gap:".7rem"}}>
+                <div style={{width:38,height:38,borderRadius:"50%",background:C.rose+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>{s.icon}</div>
+                <div>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:".92rem",fontWeight:600,color:C.brun}}>{s.label}</div>
+                  <div style={{fontSize:".66rem",color:C.gris}}>{s.desc}</div>
+                </div>
+              </div>
+              <span style={{color:C.pale}}>›</span>
             </div>
-          </div>
-          <span style={{color:C.pale}}>›</span>
+          ))}
         </div>
       ))}
     </div>
@@ -10862,6 +11036,8 @@ function AdminImportCatalogue(){
         const priceRaw=String(row['Price']||'').replace('€','').replace(',','.').trim();
         const prix=parseFloat(priceRaw)||0;
         const offerPriceRaw=String(row['Offer price']||'').replace('€','').replace(',','.').trim();
+        const vipKey=Object.keys(row).find(k=>k.trim().toLowerCase()==='prix vip');
+        const vipPriceRaw=String((vipKey?row[vipKey]:'')||'').replace('€','').replace(',','.').trim();
         catalogue[key].push({
           nom:String(row['Name']||''),
           prix,
@@ -10869,6 +11045,7 @@ function AdminImportCatalogue(){
           serie:cat,
           offre:row['Offer']?String(row['Offer']):'',
           prixOffre:offerPriceRaw?parseFloat(offerPriceRaw)||0:'',
+          prixVIP:vipPriceRaw?parseFloat(vipPriceRaw)||0:'',
           image:row['Image']?String(row['Image']).trim():'',
         });
       }
@@ -10890,7 +11067,7 @@ function AdminImportCatalogue(){
     <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
       <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>📦 Import Catalogue Mihi (Excel)</div>
       <p style={{fontSize:".72rem",color:C.gris,marginBottom:".75rem",lineHeight:1.6}}>
-        Sélectionne le fichier Excel du catalogue Mihi pour mettre à jour les produits dans l'application.
+        Sélectionne le fichier Excel du catalogue Mihi pour mettre à jour les produits dans l'application. Colonnes attendues : Art, Category, Name, Price, Offer, Offer price, <strong>Prix VIP</strong> (optionnelle), Image.
       </p>
       <label style={{display:"block",background:importing?C.pale:C.brun,color:"white",borderRadius:9,padding:".55rem",textAlign:"center",fontSize:".78rem",fontWeight:600,cursor:importing?"default":"pointer",fontFamily:"inherit"}}>
         {importing?"⏳ Import en cours...":"📂 Choisir le fichier Excel (.xlsx)"}
@@ -11699,7 +11876,7 @@ function AdminTextesEditor(){
 }
 
 // ── BANQUE D'IMAGES ───────────────────────────────────────────────────────────
-const THEMES_IMAGES=[
+export const THEMES_IMAGES=[
   {id:"skincare",icon:"✨",label:"Skincare"},
   {id:"cheveux",icon:"💇",label:"Soins cheveux"},
   {id:"makeup",icon:"💄",label:"Make-up"},
@@ -11712,14 +11889,27 @@ const THEMES_IMAGES=[
   {id:"outils",icon:"🛠️",label:"Outils équipe"},
 ];
 
-function BanqueImagesTab({isMelissa}){
+function BanqueImagesTab({isMelissa,userName}){
   const[images,setImages]=useState([]);
+  const[dossiersVisuels,setDossiersVisuels]=useState([]);
+  const[vueTab,setVueTab]=useState("temoignages"); // temoignages | visuels | avalider
   const[theme,setTheme]=useState("skincare");
-  const[sousTheme,setSousTheme]=useState("visuels");
+  const[dossierActif,setDossierActif]=useState(null);
   const[showAdd,setShowAdd]=useState(false);
-  const[form,setForm]=useState({titre:"",url:"",theme:"skincare",sousTheme:"visuels",type:"image"});
+  const[form,setForm]=useState({titre:"",url:"",theme:"skincare",dossier:"",type:"image"});
   const[saving,setSaving]=useState(false);
   const[loaded,setLoaded]=useState(false);
+  const[showAddDossier,setShowAddDossier]=useState(false);
+  const[nouveauDossier,setNouveauDossier]=useState({label:"",icon:"📁"});
+  const[copieId,setCopieId]=useState(null);
+
+  const copierTexte=(id,texte)=>{
+    try{
+      navigator.clipboard.writeText(texte);
+      setCopieId(id);
+      setTimeout(()=>setCopieId(null),1800);
+    }catch{}
+  };
 
   useEffect(()=>{
     (async()=>{
@@ -11727,22 +11917,42 @@ function BanqueImagesTab({isMelissa}){
         const snap=await getDoc(doc(db,"banque","images"));
         if(snap.exists()) setImages(snap.data().items||[]);
       }catch{}
+      try{
+        const snapD=await getDoc(doc(db,"banque","dossiers_visuels"));
+        if(snapD.exists()&&snapD.data().folders&&snapD.data().folders.length>0){
+          setDossiersVisuels(snapD.data().folders);
+        }else{
+          // Initialisation : reprend les anciens themes comme dossiers de depart
+          const initiaux=THEMES_IMAGES.map(t=>({id:t.id,label:t.label,icon:t.icon}));
+          setDossiersVisuels(initiaux);
+          await setDoc(doc(db,"banque","dossiers_visuels"),{folders:initiaux});
+        }
+      }catch{}
       setLoaded(true);
     })();
   },[]);
+
+  useEffect(()=>{
+    if(dossiersVisuels.length>0&&!dossierActif)setDossierActif(dossiersVisuels[0].id);
+  },[dossiersVisuels]);
 
   const saveImages=async(items)=>{
     setSaving(true);
     try{await setDoc(doc(db,"banque","images"),{items});}catch{}
     setSaving(false);
   };
+  const saveDossiers=async(folders)=>{
+    try{await setDoc(doc(db,"banque","dossiers_visuels"),{folders});}catch{}
+  };
 
   const add=async()=>{
     if(!form.titre.trim()||!form.url.trim())return;
-    const item={id:`img${Date.now()}`,...form};
+    const item={id:`img${Date.now()}`,titre:form.titre,url:form.url,type:form.type,
+      auteur:userName||"",valide:!!isMelissa,
+      ...(vueTab==="temoignages"?{theme:form.theme,sousTheme:"temoignages",texte:form.texte||""}:{dossier:form.dossier||dossierActif,sousTheme:"visuels"})};
     const next=[...images,item];
     setImages(next);await saveImages(next);
-    setForm({titre:"",url:"",theme:"skincare",sousTheme:"visuels",type:"image"});
+    setForm({titre:"",url:"",theme:"skincare",dossier:"",type:"image",texte:""});
     setShowAdd(false);
   };
 
@@ -11751,7 +11961,25 @@ function BanqueImagesTab({isMelissa}){
     setImages(next);await saveImages(next);
   };
 
-  const filtered=images.filter(i=>i.theme===theme&&i.sousTheme===sousTheme);
+  const validerItem=async(id)=>{
+    const next=images.map(i=>i.id===id?{...i,valide:true}:i);
+    setImages(next);await saveImages(next);
+  };
+
+  const ajouterDossier=async()=>{
+    if(!nouveauDossier.label.trim())return;
+    const nouveau={id:`d${Date.now()}`,label:nouveauDossier.label.trim(),icon:nouveauDossier.icon||"📁"};
+    const next=[...dossiersVisuels,nouveau];
+    setDossiersVisuels(next);
+    await saveDossiers(next);
+    setDossierActif(nouveau.id);
+    setNouveauDossier({label:"",icon:"📁"});
+    setShowAddDossier(false);
+  };
+
+  const filteredTemoignages=images.filter(i=>i.sousTheme==="temoignages"&&i.theme===theme&&i.valide!==false);
+  const filteredVisuels=images.filter(i=>i.sousTheme==="visuels"&&i.dossier===dossierActif&&i.valide!==false);
+  const enAttente=images.filter(i=>i.valide===false);
 
   if(!loaded)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
 
@@ -11761,32 +11989,65 @@ function BanqueImagesTab({isMelissa}){
         Banque <em style={{fontStyle:"italic",color:C.rose}}>d'Images</em>
       </div>
       <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1rem",lineHeight:1.65}}>
-        Télécharge les visuels et témoignages pour tes publications.
+        Retrouve les témoignages et visuels pour tes publications.
       </p>
 
-      {isMelissa&&(
+      {/* Toggle principal Témoignages / Visuels / A valider */}
+      <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
+        <button onClick={()=>setVueTab("temoignages")}
+          style={{flex:1,padding:".55rem",fontSize:".8rem",fontWeight:700,borderRadius:10,border:`1.5px solid ${vueTab==="temoignages"?C.rose:C.pale}`,background:vueTab==="temoignages"?C.rose:C.blanc,color:vueTab==="temoignages"?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+          💬 Témoignages
+        </button>
+        <button onClick={()=>setVueTab("visuels")}
+          style={{flex:1,padding:".55rem",fontSize:".8rem",fontWeight:700,borderRadius:10,border:`1.5px solid ${vueTab==="visuels"?C.rose:C.pale}`,background:vueTab==="visuels"?C.rose:C.blanc,color:vueTab==="visuels"?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+          📸 Visuels
+        </button>
+        {isMelissa&&(
+          <button onClick={()=>setVueTab("avalider")}
+            style={{position:"relative",flex:.8,padding:".55rem",fontSize:".8rem",fontWeight:700,borderRadius:10,border:`1.5px solid ${vueTab==="avalider"?"#C44B1A":C.pale}`,background:vueTab==="avalider"?"#C44B1A":C.blanc,color:vueTab==="avalider"?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+            🕐 À valider
+            {enAttente.length>0&&(
+              <span style={{position:"absolute",top:-6,right:-6,background:"#C44B1A",color:"white",borderRadius:"50%",minWidth:18,height:18,fontSize:".6rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",border:"2px solid white"}}>
+                {enAttente.length}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+
+      {vueTab!=="avalider"&&(
         <button onClick={()=>setShowAdd(p=>!p)}
-          style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:"1rem"}}>
-          ➕ Ajouter image / video
+          style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".4rem"}}>
+          ➕ Ajouter {vueTab==="temoignages"?"un témoignage":"un visuel"}
         </button>
       )}
+      {vueTab!=="avalider"&&!isMelissa&&(
+        <p style={{fontSize:".65rem",color:C.gris,marginBottom:"1rem",fontStyle:"italic",textAlign:"center"}}>
+          Ton ajout sera visible pour toute l'équipe après validation de Melissa.
+        </p>
+      )}
 
-      {showAdd&&isMelissa&&(
+      {showAdd&&(
         <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1rem"}}>
-          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouveau contenu</div><div style={{display:"flex",gap:".4rem",marginBottom:".5rem"}}><button onClick={()=>setForm(p=>({...p,type:"image"}))} style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:"2px solid "+(form.type!=="video"?C.brun:C.pale),background:form.type!=="video"?C.brun:C.blanc,color:form.type!=="video"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>📸 Photo</button><button onClick={()=>setForm(p=>({...p,type:"video"}))} style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:"2px solid "+(form.type==="video"?C.brun:C.pale),background:form.type==="video"?C.brun:C.blanc,color:form.type==="video"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>🎥 Video</button></div>
-          {form.type==="video"?<input placeholder="URL video YouTube TikTok Instagram" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",outline:"none",marginBottom:".45rem"}}/>:<UploadPhoto label="Photo" value={form.url} onChange={v=>setForm(p=>({...p,url:v}))} folder="banque-images"/>}
-          <div style={{display:"flex",gap:".4rem",marginBottom:".45rem",marginTop:".3rem"}}>
+          <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".6rem"}}>Nouveau contenu</div>
+          <input placeholder="Titre" value={form.titre} onChange={e=>setForm(p=>({...p,titre:e.target.value}))}
+            style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",outline:"none",marginBottom:".45rem"}}/>
+          <div style={{display:"flex",gap:".4rem",marginBottom:".5rem"}}><button onClick={()=>setForm(p=>({...p,type:"image"}))} style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:"2px solid "+(form.type!=="video"?C.brun:C.pale),background:form.type!=="video"?C.brun:C.blanc,color:form.type!=="video"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>📸 Photo</button><button onClick={()=>setForm(p=>({...p,type:"video"}))} style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:"2px solid "+(form.type==="video"?C.brun:C.pale),background:form.type==="video"?C.brun:C.blanc,color:form.type==="video"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>🎥 Video</button></div>
+          {form.type==="video"?<input placeholder="URL video YouTube TikTok Instagram" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))} style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:8,padding:".42rem .65rem",fontSize:".8rem",fontFamily:"inherit",outline:"none",marginBottom:".45rem"}}/>:<UploadPhoto label="Photo" value={form.url} onChange={v=>setForm(p=>({...p,url:v}))} folder="banque-images" maxSize={1200} quality={0.88}/>}
+          {vueTab==="temoignages"?(<>
             <select value={form.theme} onChange={e=>setForm(p=>({...p,theme:e.target.value}))}
-              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginTop:".3rem",marginBottom:".45rem"}}>
               {THEMES_IMAGES.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
             </select>
-            <select value={form.sousTheme} onChange={e=>setForm(p=>({...p,sousTheme:e.target.value}))}
-              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
-              <option value="visuels">📸 Visuels</option>
-              <option value="temoignages">💬 Témoignages</option>
+            <textarea placeholder="Texte du témoignage (optionnel, pour pouvoir le copier facilement)" value={form.texte||""} onChange={e=>setForm(p=>({...p,texte:e.target.value}))}
+              style={{width:"100%",minHeight:60,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem",fontFamily:"inherit",fontSize:".76rem",color:C.texte,background:C.creme,resize:"vertical",outline:"none",lineHeight:1.5}}/>
+          </>):(
+            <select value={form.dossier||dossierActif} onChange={e=>setForm(p=>({...p,dossier:e.target.value}))}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginTop:".3rem"}}>
+              {dossiersVisuels.map(d=><option key={d.id} value={d.id}>{d.icon} {d.label}</option>)}
             </select>
-          </div>
-          <div style={{display:"flex",gap:".4rem"}}>
+          )}
+          <div style={{display:"flex",gap:".4rem",marginTop:".5rem"}}>
             <button onClick={add} disabled={saving||!form.titre.trim()||!form.url.trim()}
               style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".52rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
               {saving?"...":"Ajouter"}
@@ -11799,65 +12060,227 @@ function BanqueImagesTab({isMelissa}){
         </div>
       )}
 
-      {/* Filtres thèmes */}
-      <div style={{display:"flex",gap:".3rem",overflowX:"auto",marginBottom:".75rem",paddingBottom:".3rem"}}>
-        {THEMES_IMAGES.map(t=>(
-          <button key={t.id} onClick={()=>setTheme(t.id)}
-            style={{flex:"none",padding:".35rem .7rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1px solid ${theme===t.id?C.rose:C.pale}`,background:theme===t.id?C.rose:C.blanc,color:theme===t.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Sous-thème */}
-      <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
-        {[{id:"visuels",label:"📸 Visuels"},{id:"temoignages",label:"💬 Témoignages"}].map(s=>(
-          <button key={s.id} onClick={()=>setSousTheme(s.id)}
-            style={{flex:1,padding:".4rem",fontSize:".72rem",fontWeight:600,borderRadius:9,border:`1px solid ${sousTheme===s.id?C.brun:C.pale}`,background:sousTheme===s.id?C.brun:C.blanc,color:sousTheme===s.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Grille d'images */}
-      {filtered.length===0&&(
-        <div style={{textAlign:"center",padding:"2.5rem 1rem",color:C.gris}}>
-          <div style={{fontSize:"2rem",marginBottom:".5rem"}}>🖼️</div>
-          <div style={{fontSize:".76rem"}}>
-            {isMelissa?"Aucune image dans cette catégorie. Ajoutes-en une !":"Melissa n'a pas encore ajouté d'images ici."}
-          </div>
+      {vueTab==="temoignages"?(<>
+        {/* Filtres thèmes (fixes) */}
+        <div style={{display:"flex",gap:".3rem",overflowX:"auto",marginBottom:"1rem",paddingBottom:".3rem"}}>
+          {THEMES_IMAGES.map(t=>(
+            <button key={t.id} onClick={()=>setTheme(t.id)}
+              style={{flex:"none",padding:".35rem .7rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1px solid ${theme===t.id?C.rose:C.pale}`,background:theme===t.id?C.rose:C.blanc,color:theme===t.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              {t.icon} {t.label}
+            </button>
+          ))}
         </div>
-      )}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".65rem"}}>
-        {filtered.map(img=>(
-          <div key={img.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,overflow:"hidden",position:"relative"}}>
-            <div style={{aspectRatio:"1",background:C.creme,overflow:"hidden",cursor:"pointer"}}
-              onClick={()=>window.open(img.url,"_blank")}>
-              <img src={img.url} alt={img.titre}
-                style={{width:"100%",height:"100%",objectFit:"cover"}}
-                onError={e=>{e.target.style.display="none";}}/>
-            </div>
-            <div style={{padding:".5rem .65rem"}}>
-              <div style={{fontSize:".72rem",fontWeight:600,color:C.brun,marginBottom:".35rem"}}>{img.titre}</div>
-              <div style={{display:"flex",gap:".3rem"}}>
-                <a href={img.url} download target="_blank" rel="noopener noreferrer"
-                  style={{flex:1,background:C.brun,color:C.blanc,borderRadius:7,padding:".3rem",fontSize:".65rem",fontWeight:600,textDecoration:"none",textAlign:"center",display:"block"}}>
-                  ⬇ Télécharger
-                </a>
-                {isMelissa&&(
-                  <button onClick={()=>del(img.id)}
-                    style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".3rem .5rem",color:"#B04040",cursor:"pointer",fontSize:".65rem",fontFamily:"inherit"}}>✕</button>
-                )}
+        {filteredTemoignages.length===0?(
+          <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Aucun témoignage dans ce thème pour l'instant.</div>
+        ):(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".7rem"}}>
+            {filteredTemoignages.map(i=>(
+              <div key={i.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,overflow:"hidden"}}>
+                {i.type==="video"?(
+                  <a href={i.url} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",height:120,background:C.creme,textDecoration:"none",fontSize:"1.8rem"}}>▶</a>
+                ):(<img src={i.url} alt={i.titre} style={{width:"100%",height:120,objectFit:"cover",display:"block"}}/>)}
+                <div style={{padding:".5rem .6rem"}}>
+                  <div style={{fontSize:".7rem",fontWeight:600,color:C.brun,marginBottom:".4rem"}}>{i.titre}</div>
+                  <div style={{display:"flex",gap:".3rem",marginBottom:isMelissa?".3rem":0}}>
+                    {i.type!=="video"&&(
+                      <a href={i.url} download target="_blank" rel="noopener noreferrer"
+                        style={{flex:1,background:C.brun,color:"white",borderRadius:7,padding:".28rem",fontSize:".62rem",fontWeight:600,textDecoration:"none",textAlign:"center",display:"block"}}>
+                        ⬇ Photo
+                      </a>
+                    )}
+                    {i.texte&&(
+                      <button onClick={()=>copierTexte(i.id,i.texte)}
+                        style={{flex:1,background:copieId===i.id?"#2D5A3D":"none",border:`1px solid ${copieId===i.id?"#2D5A3D":C.pale}`,color:copieId===i.id?"white":C.gris,borderRadius:7,padding:".28rem",fontSize:".62rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                        {copieId===i.id?"✅ Copié !":"📋 Texte"}
+                      </button>
+                    )}
+                  </div>
+                  {isMelissa&&<button onClick={()=>del(i.id)} style={{background:"none",border:"none",color:"#C0504D",fontSize:".62rem",cursor:"pointer",fontFamily:"inherit",padding:0}}>🗑️ Retirer</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>):vueTab==="visuels"?(<>
+        {/* Dossiers personnalises Visuels */}
+        <div style={{display:"flex",gap:".3rem",overflowX:"auto",marginBottom:".6rem",paddingBottom:".3rem"}}>
+          {dossiersVisuels.map(d=>(
+            <button key={d.id} onClick={()=>setDossierActif(d.id)}
+              style={{flex:"none",padding:".35rem .7rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1px solid ${dossierActif===d.id?C.rose:C.pale}`,background:dossierActif===d.id?C.rose:C.blanc,color:dossierActif===d.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              {d.icon} {d.label}
+            </button>
+          ))}
+          {isMelissa&&(
+            <button onClick={()=>setShowAddDossier(p=>!p)}
+              style={{flex:"none",padding:".35rem .7rem",fontSize:".65rem",fontWeight:600,borderRadius:20,border:`1.5px dashed ${C.pale}`,background:C.blanc,color:C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              + Nouveau dossier
+            </button>
+          )}
+        </div>
+        {showAddDossier&&isMelissa&&(
+          <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
+            <input placeholder="Emoji" value={nouveauDossier.icon} onChange={e=>setNouveauDossier(p=>({...p,icon:e.target.value}))}
+              style={{width:50,border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem",fontSize:".85rem",fontFamily:"inherit",outline:"none",textAlign:"center"}}/>
+            <input placeholder="Nom du dossier" value={nouveauDossier.label} onChange={e=>setNouveauDossier(p=>({...p,label:e.target.value}))}
+              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .6rem",fontSize:".78rem",fontFamily:"inherit",outline:"none"}}/>
+            <button onClick={ajouterDossier} disabled={!nouveauDossier.label.trim()}
+              style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".4rem .8rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+              OK
+            </button>
+          </div>
+        )}
+        {filteredVisuels.length===0?(
+          <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Aucun visuel dans ce dossier pour l'instant.</div>
+        ):(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".7rem"}}>
+            {filteredVisuels.map(i=>(
+              <div key={i.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,overflow:"hidden"}}>
+                {i.type==="video"?(
+                  <a href={i.url} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",height:120,background:C.creme,textDecoration:"none",fontSize:"1.8rem"}}>▶</a>
+                ):(<img src={i.url} alt={i.titre} style={{width:"100%",height:120,objectFit:"cover",display:"block"}}/>)}
+                <div style={{padding:".5rem .6rem"}}>
+                  <div style={{fontSize:".7rem",fontWeight:600,color:C.brun,marginBottom:".4rem"}}>{i.titre}</div>
+                  {i.type!=="video"&&(
+                    <a href={i.url} download target="_blank" rel="noopener noreferrer"
+                      style={{display:"block",background:C.brun,color:"white",borderRadius:7,padding:".28rem",fontSize:".62rem",fontWeight:600,textDecoration:"none",textAlign:"center",marginBottom:isMelissa?".3rem":0}}>
+                      ⬇ Télécharger
+                    </a>
+                  )}
+                  {isMelissa&&<button onClick={()=>del(i.id)} style={{background:"none",border:"none",color:"#C0504D",fontSize:".62rem",cursor:"pointer",fontFamily:"inherit",padding:0}}>🗑️ Retirer</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>):vueTab==="avalider"?(
+        enAttente.length===0?(
+          <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>🎉 Rien à valider pour l'instant !</div>
+        ):(
+          enAttente.map(i=>(
+            <div key={i.id} style={{background:"white",border:`1.5px solid #C44B1A`,borderRadius:12,padding:".8rem",marginBottom:".7rem",display:"flex",gap:".7rem"}}>
+              {i.type==="video"?(
+                <a href={i.url} target="_blank" rel="noopener noreferrer" style={{width:70,height:70,borderRadius:8,background:C.creme,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0,textDecoration:"none"}}>▶</a>
+              ):(<img src={i.url} alt="" style={{width:70,height:70,borderRadius:8,objectFit:"cover",flexShrink:0}}/>)}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:".72rem",fontWeight:600,color:C.brun,marginBottom:".15rem"}}>{i.titre}</div>
+                <div style={{fontSize:".65rem",color:C.gris,marginBottom:".5rem"}}>
+                  Ajouté par {i.auteur||"quelqu'un"} · {i.sousTheme==="temoignages"?`Thème : ${THEMES_IMAGES.find(t=>t.id===i.theme)?.label||i.theme}`:`Dossier : ${dossiersVisuels.find(d=>d.id===i.dossier)?.label||i.dossier}`}
+                </div>
+                <div style={{display:"flex",gap:".4rem"}}>
+                  <button onClick={()=>validerItem(i.id)}
+                    style={{flex:1,background:"#2D5A3D",color:"white",border:"none",borderRadius:8,padding:".4rem",fontSize:".68rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                    ✅ Valider
+                  </button>
+                  <button onClick={()=>del(i.id)}
+                    style={{flex:1,background:"none",border:"1px solid #C0504D",color:"#C0504D",borderRadius:8,padding:".4rem",fontSize:".68rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                    ✕ Refuser
+                  </button>
+                </div>
               </div>
             </div>
+          ))
+        )
+      ):null}
+    </div>
+  );
+}
+// Outil pour classer retroactivement les temoignages partages dans Communaute avant l'existence du classement automatique
+function ReclasserTemoignagesTab(){
+  const[posts,setPosts]=useState([]);
+  const[dejaClasses,setDejaClasses]=useState(new Set());
+  const[choix,setChoix]=useState({});
+  const[loaded,setLoaded]=useState(false);
+  const[classement,setClassement]=useState({});
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snapPosts=await getDoc(doc(db,"communaute","posts"));
+        const allPosts=snapPosts.exists()?Object.values(snapPosts.data()):[];
+        const temoignages=allPosts.filter(p=>p.type==="temoignage"&&p.photo).sort((a,b)=>b.ts-a.ts);
+
+        const snapBanque=await getDoc(doc(db,"banque","images"));
+        const items=snapBanque.exists()?(snapBanque.data().items||[]):[];
+        const urlsClassees=new Set(items.filter(i=>i.sousTheme==="temoignages").map(i=>i.url));
+
+        setPosts(temoignages);
+        setDejaClasses(urlsClassees);
+      }catch{}
+      setLoaded(true);
+    })();
+  },[]);
+
+  const classerUn=async(post)=>{
+    const themeChoisi=choix[post.id]||"skincare";
+    setClassement(p=>({...p,[post.id]:"encours"}));
+    try{
+      const snapBanque=await getDoc(doc(db,"banque","images"));
+      const items=snapBanque.exists()?(snapBanque.data().items||[]):[];
+      const item={
+        id:`img${Date.now()}`,
+        titre:`Témoignage de ${post.author}`,
+        url:post.photo,
+        texte:post.text||"",
+        theme:themeChoisi,
+        sousTheme:"temoignages",
+        type:"image",
+        auteur:post.author,
+        valide:true,
+      };
+      await setDoc(doc(db,"banque","images"),{items:[...items,item]});
+      setDejaClasses(p=>new Set([...p,post.photo]));
+      setClassement(p=>({...p,[post.id]:"fait"}));
+    }catch{
+      setClassement(p=>({...p,[post.id]:null}));
+    }
+  };
+
+  const aClasser=posts.filter(p=>!dejaClasses.has(p.photo));
+
+  if(!loaded)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
+
+  return(
+    <div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:600,color:C.brun,marginBottom:".3rem"}}>📁 Reclasser les témoignages</div>
+      <p style={{fontSize:".74rem",color:C.gris,marginBottom:"1.2rem",lineHeight:1.6}}>
+        Témoignages partagés dans Communauté avant la mise en place du classement automatique. Choisis un thème et clique sur "Classer" pour les ajouter à la Banque d'Images.
+      </p>
+
+      {aClasser.length===0?(
+        <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>
+          🎉 Tous les témoignages avec photo sont déjà classés !
+        </div>
+      ):(
+        aClasser.map(post=>(
+          <div key={post.id} style={{background:"white",border:`1px solid ${C.pale}`,borderRadius:12,padding:".9rem",marginBottom:".7rem",display:"flex",gap:".7rem"}}>
+            <img src={post.photo} alt="" style={{width:70,height:70,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:".72rem",fontWeight:600,color:C.brun,marginBottom:".2rem"}}>{post.author}</div>
+              <div style={{fontSize:".7rem",color:C.gris,lineHeight:1.4,marginBottom:".5rem",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{post.text}</div>
+              {classement[post.id]==="fait"?(
+                <div style={{fontSize:".72rem",color:"#2D5A3D",fontWeight:700}}>✅ Classé !</div>
+              ):(
+                <div style={{display:"flex",gap:".3rem"}}>
+                  <select value={choix[post.id]||"skincare"} onChange={e=>setChoix(p=>({...p,[post.id]:e.target.value}))}
+                    style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".3rem .5rem",fontSize:".68rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
+                    {THEMES_IMAGES.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+                  </select>
+                  <button onClick={()=>classerUn(post)} disabled={classement[post.id]==="encours"}
+                    style={{background:C.brun,color:"white",border:"none",borderRadius:8,padding:".3rem .7rem",fontSize:".68rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+                    {classement[post.id]==="encours"?"...":"Classer"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        ))}
-      </div>
+        ))
+      )}
     </div>
   );
 }
 
-// ── DIAGNOSTICS ───────────────────────────────────────────────────────────────
 
+
+// ── DIAGNOSTICS ───────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC BUSINESS (recrutement / ventes / réseaux) ─────────────────────
 export default App;

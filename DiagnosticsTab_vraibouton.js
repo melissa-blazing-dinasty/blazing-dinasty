@@ -89,11 +89,11 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
   // Charger le catalogue réel des produits Mihi selon le type
   let catalogueText = "";
   let complementsText = "";
-  let produits=[];
   try {
     const catSnap = await getDoc(doc(db,"admin","catalogue_mihi"));
     if(catSnap.exists()){
       const cat = catSnap.data();
+      let produits=[];
       Object.values(cat).forEach(val=>{
         if(Array.isArray(val)) produits=[...produits,...val];
         else if(val&&typeof val==="object") produits=[...produits,...Object.values(val).filter(p=>p&&p.nom)];
@@ -130,7 +130,7 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
         if(filtres.length>=4) produitsFiltres = filtres;
       }
       if(produitsFiltres.length>90) produitsFiltres=produitsFiltres.slice(0,90);
-      catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" — "+(p.prix!=null?p.prix:"?")+"€"+(p.prixVIP?" (prix VIP : "+p.prixVIP+"€)":"")).join("\n");
+      catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" — "+(p.prix!=null?p.prix:"?")+"€").join("\n");
 
       if(typeKey==="skincare"||typeKey==="cheveux"){
         const comp = produits.filter(p=>MC.sante.some(m=>p.nom.toLowerCase().includes(m)));
@@ -174,7 +174,6 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
 RÈGLES ABSOLUES SUR LES PRODUITS :
 1. Utilise UNIQUEMENT les produits listés dans le CATALOGUE ci-dessous — recopie le nom EXACT et le prix EXACT du catalogue, n'invente jamais un produit ni un prix
 2. Si le catalogue ne contient pas assez de produits pertinents, utilise ceux qui s'en rapprochent le plus plutôt que d'en inventer
-3. Si un produit du catalogue indique un "prix VIP", recopie-le EXACTEMENT tel quel dans le champ prixVIP ; sinon laisse prixVIP à null
 
 RÈGLES ABSOLUES SUR LES 3 PACKS (BUDGET TOTAL CIBLE — respecte ces fourchettes) :
 - Pack Essentiel ("budget") : total entre 30€ et 50€ — 1 à 2 produits indispensables pour démarrer
@@ -194,7 +193,7 @@ ${complementsText?`COMPLÉMENTS ALIMENTAIRES DISPONIBLES (à utiliser obligatoir
 ${notesAdmin?`NOTES EXPERTES :\n${notesAdmin}`:""}
 
 Réponds UNIQUEMENT avec ce JSON strict, sans markdown :
-{"introduction":"2 phrases analysant le profil","budget":{"total":XX,"produits":[{"nom":"Nom EXACT du catalogue","prix":XX,"prixVIP":XX,"usage":"Matin ou Soir","benefice":"bénéfice concret","comment":"geste application"}],"routine":"routine complète matin → soir"},"bestseller":{"total":XX,"produits":[{"nom":"Nom EXACT","prix":XX,"prixVIP":XX,"usage":"usage","benefice":"bénéfice","comment":"geste"}],"routine":"routine complète"},"premium":{"total":XX,"produits":[{"nom":"Nom EXACT","prix":XX,"prixVIP":XX,"usage":"usage","benefice":"bénéfice","comment":"geste"}],"routine":"routine complète"},"conseil":"conseil personnalisé final"}`;
+{"introduction":"2 phrases analysant le profil","budget":{"total":XX,"produits":[{"nom":"Nom EXACT du catalogue","prix":XX,"usage":"Matin ou Soir","benefice":"bénéfice concret","comment":"geste application"}],"routine":"routine complète matin → soir"},"bestseller":{"total":XX,"produits":[{"nom":"Nom EXACT","prix":XX,"usage":"usage","benefice":"bénéfice","comment":"geste"}],"routine":"routine complète"},"premium":{"total":XX,"produits":[{"nom":"Nom EXACT","prix":XX,"usage":"usage","benefice":"bénéfice","comment":"geste"}],"routine":"routine complète"},"conseil":"conseil personnalisé final"}`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -224,31 +223,9 @@ Réponds UNIQUEMENT avec ce JSON strict, sans markdown :
     console.log("=== LONGUEUR ===", text.length);
     const clean = text.replace(/```json|```/g, "").trim();
 
-    // Injecte le prix VIP directement depuis le vrai catalogue (plus fiable que de compter sur l IA), et calcule le total VIP par pack
-    const injecterPrixVIP=(resultat)=>{
-      if(!resultat)return resultat;
-      ["budget","bestseller","premium"].forEach(k=>{
-        const pack=resultat[k];
-        if(!pack||!pack.produits)return;
-        let totalVIP=0;
-        let tousOntVIP=pack.produits.length>0;
-        pack.produits.forEach(pr=>{
-          const match=produits.find(cp=>cp.nom===pr.nom);
-          if(match&&match.prixVIP){
-            pr.prixVIP=match.prixVIP;
-            totalVIP+=match.prixVIP;
-          } else {
-            tousOntVIP=false;
-          }
-        });
-        if(tousOntVIP&&totalVIP>0)pack.totalVIP=Math.round(totalVIP*100)/100;
-      });
-      return resultat;
-    };
-
     // Parse robuste : extraire les 4 blocs JSON indépendants
     try {
-      return injecterPrixVIP(JSON.parse(clean));
+      return JSON.parse(clean);
     } catch(e) {
       // Si le JSON est tronqué, extraire ce qui est disponible champ par champ
       const extract = (key) => {
@@ -281,15 +258,15 @@ Profil cliente: ${reponsesText}
 CATALOGUE MIHI:
 ${catalogueText}
 
-RÈGLES : total entre 90€ et 115€ (idéalement autour de 100€). Utilise UNIQUEMENT les produits et prix exacts du catalogue ci-dessus. Si un produit indique un prix VIP, recopie-le dans le champ prixVIP.${isSkincareOuCheveux?" Inclus OBLIGATOIREMENT un complément alimentaire de la liste ci-dessus si disponible.":""} 3 à 5 produits. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
-{"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom EXACT du catalogue","prix":"XX.XX€","prixVIP":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;;
+RÈGLES : total entre 90€ et 115€ (idéalement autour de 100€). Utilise UNIQUEMENT les produits et prix exacts du catalogue ci-dessus.${isSkincareOuCheveux?" Inclus OBLIGATOIREMENT un complément alimentaire de la liste ci-dessus si disponible.":""} 3 à 5 produits. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
+{"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom EXACT du catalogue","prix":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;;
           const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
           const d2 = await r2.json();
           const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
           result.premium = JSON.parse(t2);
         } catch(e2) { console.warn("Récupération pack premium échouée:", e2); }
       }
-      return injecterPrixVIP(result);
+      return result;
     }
   } catch (fetchErr) {
     console.error("Erreur réseau / fetch:", fetchErr);
@@ -645,7 +622,6 @@ const QUESTIONS_PARFUM = [
 function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onResultat=null}){
   const [step, setStep] = useState(-1); // -1 = accueil
   const [contactLinksParfum,setContactLinksParfum]=useState(null);
-  const [afficherVIPParfum,setAfficherVIPParfum]=useState(false);
   useEffect(()=>{
     if(!uid)return;
     (async()=>{
@@ -655,10 +631,6 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
           const cd4=cSnap4.data();
           setContactLinksParfum({whatsapp:cd4.whatsapp||"",messenger:cd4.messenger||"",instagram:cd4.instagram||""});
         }
-      }catch{}
-      try{
-        const snapU3=await getDoc(doc(db,"users",uid));
-        if(snapU3.exists())setAfficherVIPParfum(!!snapU3.data()["db-afficher-prix-vip"]);
       }catch{}
     })();
   },[uid]);
@@ -865,9 +837,6 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
               </div>
               <div style={{textAlign:"right"}}>
                 <div style={{fontSize:"1rem",fontWeight:700,color:"#9B59B6"}}>{p.prix}</div>
-                {afficherVIPParfum&&p.prixVIP&&(
-                  <div style={{fontSize:".68rem",fontWeight:700,color:"#8B6FB3"}}>💎 VIP {p.prixVIP}€</div>
-                )}
                 <div style={{fontSize:".6rem",color:"#888"}}>50ml · 18% conc.</div>
               </div>
             </div>
@@ -2265,7 +2234,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           🖨️ Sauvegarder mon ordonnance en PDF
         </button>
 
-        <button onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
+        <button onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:todayLocalStr(),ts:Date.now()});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
 
         {/* DEBUG TEMPORAIRE */}
         <details style={{marginTop:".5rem"}}>
@@ -2292,7 +2261,6 @@ function DiagResultsTab({ uid }) {
   const [genLoading, setGenLoading] = useState(false);
   const [lienProspect, setLienProspect] = useState(null);
   const [showArchives, setShowArchives] = useState(false);
-  const [afficherVIP, setAfficherVIP] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -2302,7 +2270,6 @@ function DiagResultsTab({ uid }) {
           if (snap.data()["db-diagnostics"]) setDiags(JSON.parse(snap.data()["db-diagnostics"]));
           if (snap.data()["db-prospects"]) setProspects(JSON.parse(snap.data()["db-prospects"]));
           if (snap.data()["db-clients"]) setClients(JSON.parse(snap.data()["db-clients"]));
-          setAfficherVIP(!!snap.data()["db-afficher-prix-vip"]);
         }
       } catch {}
       setLoaded(true);
@@ -2561,7 +2528,7 @@ function DiagResultsTab({ uid }) {
               🖨️ Générer PDF / Imprimer
             </button>
 
-            <button onClick={async()=>{const ord=sel?.ordonnance;if(!ord)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ord,nomClient:sel?.nomClient||sel?.contact?.prenom||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;const msg='Voici le lien pour ta cliente :\n\n'+lien+'\n\nCopie ce lien et envoie-le lui !';if(navigator.share){await navigator.share({title:'Ordonnance Mihi',text:'Ton ordonnance personnalisée Mihi',url:lien});}else{prompt('Copie ce lien et envoie-le à ta cliente :',lien);}}catch(e){alert('Erreur : '+e.message);}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Envoyer le lien a la cliente</button>
+            <button onClick={async()=>{const ord=sel?.ordonnance;if(!ord)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ord,nomClient:sel?.nomClient||sel?.contact?.prenom||'Cliente',date:todayLocalStr(),ts:Date.now()});const lien=window.location.origin+'?ordonnance='+id;const msg='Voici le lien pour ta cliente :\n\n'+lien+'\n\nCopie ce lien et envoie-le lui !';if(navigator.share){await navigator.share({title:'Ordonnance Mihi',text:'Ton ordonnance personnalisée Mihi',url:lien});}else{prompt('Copie ce lien et envoie-le à ta cliente :',lien);}}catch(e){alert('Erreur : '+e.message);}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Envoyer le lien a la cliente</button>
           </div>
         )}
 
@@ -2592,16 +2559,11 @@ function DiagResultsTab({ uid }) {
                 <div key={pack.key} style={{ background:C.blanc, border:`1px solid ${pack.color}30`, borderRadius:12, padding:".85rem 1rem", marginBottom:".6rem" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:".5rem" }}>
                     <div style={{ fontSize:".76rem", fontWeight:700, color:pack.color }}>{pack.label}</div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{ fontSize:".76rem", fontWeight:700, color:C.brun }}>{p.total}</div>
-                      {afficherVIP&&p.totalVIP&&(
-                        <div style={{ fontSize:".65rem", fontWeight:700, color:"#8B6FB3" }}>💎 Total VIP : {p.totalVIP}€</div>
-                      )}
-                    </div>
+                    <div style={{ fontSize:".76rem", fontWeight:700, color:C.brun }}>{p.total}</div>
                   </div>
                   {p.produits?.map((pr,i) => (
                     <div key={i} style={{ paddingBottom:".4rem", marginBottom:".4rem", borderBottom:`1px solid ${C.pale}` }}>
-                      <div style={{ fontSize:".76rem", fontWeight:600, color:C.brun }}>{pr.nom} <span style={{ color:C.rose, fontWeight:700 }}>{pr.prix}</span>{afficherVIP&&pr.prixVIP&&<span style={{ color:"#8B6FB3", fontWeight:700, fontSize:".68rem", marginLeft:".3rem" }}>💎 VIP {pr.prixVIP}€</span>}</div>
+                      <div style={{ fontSize:".76rem", fontWeight:600, color:C.brun }}>{pr.nom} <span style={{ color:C.rose, fontWeight:700 }}>{pr.prix}</span></div>
                       <div style={{ fontSize:".68rem", color:C.gris, marginBottom:".1rem" }}>{pr.usage} · {pr.benefice}</div>
                       {pr.comment&&<div style={{ fontSize:".65rem", color:C.brun, background:C.creme, borderRadius:6, padding:".2rem .45rem", fontStyle:"italic" }}>💡 {pr.comment}</div>}
                     </div>
@@ -3056,7 +3018,6 @@ Choisis entre 2 et 4 produits maximum, uniquement parmi les references reelles d
 function BoutiquePubliquePage({slug}){
   const [profil,setProfil]=useState(null);
   const [catalogue,setCatalogue]=useState(null);
-  const [afficherVIPBoutique,setAfficherVIPBoutique]=useState(false);
   const [loading,setLoading]=useState(true);
   const [activeCat,setActiveCat]=useState("");
   const [cart,setCart]=useState([]);
@@ -3109,16 +3070,6 @@ function BoutiquePubliquePage({slug}){
   const [reponseIA,setReponseIA]=useState(null);
   const [chargementIA,setChargementIA]=useState(false);
   const [erreurIA,setErreurIA]=useState("");
-
-  useEffect(()=>{
-    if(!profil||profil==="404"||!profil.uid)return;
-    (async()=>{
-      try{
-        const snapU=await getDoc(doc(db,"users",profil.uid));
-        if(snapU.exists())setAfficherVIPBoutique(!!snapU.data()["db-afficher-prix-vip"]);
-      }catch{}
-    })();
-  },[profil]);
 
   useEffect(()=>{
     (async()=>{
@@ -3635,10 +3586,7 @@ function BoutiquePubliquePage({slug}){
                     <div key={prod.ref} style={{background:"white",border:"1px solid #E8DDD4",borderRadius:12,padding:".6rem"}}>
                       {prod.image?<img src={prod.image} alt={prod.nom} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,marginBottom:".4rem"}}/>:<div style={{width:"100%",aspectRatio:"1",borderRadius:8,background:theme.bgPage,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem",marginBottom:".4rem"}}>🧴</div>}
                       <div style={{fontSize:".68rem",fontWeight:700,color:"#3D1F0E",marginBottom:".25rem",lineHeight:1.3}}>{prod.nom}</div>
-                      <div style={{fontSize:".75rem",fontWeight:700,color:theme.accent,marginBottom:afficherVIPBoutique&&prod.prixVIP?0:".4rem"}}>{prixAffiche.toFixed(2)}€</div>
-                      {afficherVIPBoutique&&prod.prixVIP&&(
-                        <div style={{fontSize:".64rem",fontWeight:700,color:"#8B6FB3",marginBottom:".4rem"}}>💎 VIP {prod.prixVIP}€</div>
-                      )}
+                      <div style={{fontSize:".75rem",fontWeight:700,color:theme.accent,marginBottom:".4rem"}}>{prixAffiche.toFixed(2)}€</div>
                       <button className="boutique-btn" onClick={()=>ajouterPanier(prod)} disabled={!!enPanier}
                         style={{width:"100%",background:enPanier?"#ccc":theme.btn,color:"white",border:"none",borderRadius:7,padding:".35rem",fontSize:".62rem",fontWeight:700,fontFamily:"inherit",cursor:enPanier?"default":"pointer"}}>
                         {enPanier?"✓ Ajouté":"+ Ajouter"}
@@ -3752,21 +3700,11 @@ function OrdonnancePubliquePage({ordId}){
   const [data,setData]=useState(null);
   const [loading,setLoading]=useState(true);
   const [notFound,setNotFound]=useState(false);
-  const [afficherVIP,setAfficherVIP]=useState(false);
   useEffect(()=>{
     (async()=>{
       try{
         const snap=await getDoc(doc(db,'ordonnances_publiques',ordId));
-        if(snap.exists()){
-          setData(snap.data());
-          const distribUid=snap.data().distribUid;
-          if(distribUid){
-            try{
-              const snapU=await getDoc(doc(db,'users',distribUid));
-              if(snapU.exists())setAfficherVIP(!!snapU.data()['db-afficher-prix-vip']);
-            }catch{}
-          }
-        }
+        if(snap.exists()) setData(snap.data());
         else setNotFound(true);
       }catch{setNotFound(true);}
       setLoading(false);
@@ -3792,23 +3730,13 @@ function OrdonnancePubliquePage({ordId}){
             <div key={pack.key} style={{background:'white',border:'1.5px solid #E8DDD4',borderRadius:14,padding:'1rem',marginBottom:'.75rem'}}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.65rem'}}>
                 <div style={{fontSize:'.82rem',fontWeight:700,color:pack.color}}>{pack.label}</div>
-                <div style={{textAlign:'right'}}>
-                  <div style={{fontSize:'.82rem',fontWeight:700,color:'#3D1F0E'}}>{p.total}</div>
-                  {afficherVIP&&p.totalVIP&&(
-                    <div style={{fontSize:'.68rem',fontWeight:700,color:'#8B6FB3'}}>💎 Total VIP : {p.totalVIP}€</div>
-                  )}
-                </div>
+                <div style={{fontSize:'.82rem',fontWeight:700,color:'#3D1F0E'}}>{p.total}</div>
               </div>
               {(p.produits||[]).map((pr,i)=>(
                 <div key={i} style={{paddingBottom:'.5rem',marginBottom:'.5rem',borderBottom:i<p.produits.length-1?'1px solid #FAF7F2':'none'}}>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:'.1rem'}}>
                     <div style={{fontSize:'.8rem',fontWeight:700,color:'#3D1F0E'}}>{pr.nom}</div>
-                    <div style={{textAlign:'right'}}>
-                      <div style={{fontSize:'.75rem',fontWeight:600,color:pack.color}}>{pr.prix}</div>
-                      {afficherVIP&&pr.prixVIP&&(
-                        <div style={{fontSize:'.65rem',fontWeight:700,color:'#8B6FB3'}}>💎 VIP : {pr.prixVIP}€</div>
-                      )}
-                    </div>
+                    <div style={{fontSize:'.75rem',fontWeight:600,color:pack.color}}>{pr.prix}</div>
                   </div>
                   {pr.usage&&<div style={{fontSize:'.7rem',color:pack.color,fontWeight:600}}>{pr.usage}</div>}
                   {pr.benefice&&<div style={{fontSize:'.74rem',color:'#555'}}>{pr.benefice}</div>}

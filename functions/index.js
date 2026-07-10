@@ -9,11 +9,17 @@ const messaging = admin.messaging();
 async function sendNotifToUid(uid, title, body) {
   try {
     const tokensSnap = await db.collection("fcm_tokens").doc(uid).get();
-    if (!tokensSnap.exists) return;
+    if (!tokensSnap.exists) { console.log("[sendNotifToUid] Aucun document fcm_tokens pour", uid); return; }
     const tokens = Object.values(tokensSnap.data() || {}).filter(Boolean);
-    if (!tokens.length) return;
-    await messaging.sendEachForMulticast({ tokens, notification: { title, body } });
-  } catch(e) { console.error("sendNotifToUid error", uid, e); }
+    if (!tokens.length) { console.log("[sendNotifToUid] Document fcm_tokens vide pour", uid); return; }
+    const result = await messaging.sendEachForMulticast({ tokens, notification: { title, body } });
+    console.log("[sendNotifToUid] Resultat pour", uid, ": successCount=", result.successCount, "failureCount=", result.failureCount);
+    result.responses.forEach((r, i) => {
+      if (!r.success) {
+        console.error("[sendNotifToUid] Token", i, "echoue:", tokens[i], "erreur:", r.error && r.error.code, r.error && r.error.message);
+      }
+    });
+  } catch(e) { console.error("[sendNotifToUid] error", uid, e); }
 }
 
 async function sendNotifToAll(title, body) {
@@ -331,6 +337,15 @@ exports.creerCompteStripeConnect = onCall({secrets: [stripeSecretKey]}, async (r
   const userData = userSnap.exists ? userSnap.data() : {};
   let stripeAccountId = userData["db-stripe-account-id"];
 
+  if (stripeAccountId) {
+    try {
+      await stripe.accounts.retrieve(stripeAccountId);
+    } catch (e) {
+      console.log("[creerCompteStripeConnect] Compte stocke invalide pour ce mode (probablement cree en mode test), creation d'un nouveau compte. Erreur:", e.message);
+      stripeAccountId = null;
+    }
+  }
+
   if (!stripeAccountId) {
     const account = await stripe.accounts.create({
       type: "express",
@@ -341,7 +356,7 @@ exports.creerCompteStripeConnect = onCall({secrets: [stripeSecretKey]}, async (r
       }
     });
     stripeAccountId = account.id;
-    await userRef.set({"db-stripe-account-id": stripeAccountId}, {merge: true});
+    await userRef.set({"db-stripe-account-id": stripeAccountId, "db-stripe-pret": false}, {merge: true});
   }
 
   const accountLink = await stripe.accountLinks.create({
@@ -367,7 +382,13 @@ exports.verifierStatutStripe = onCall({secrets: [stripeSecretKey]}, async (reque
 
   if (!stripeAccountId) return {connecte: false};
 
-  const account = await stripe.accounts.retrieve(stripeAccountId);
+  let account;
+  try {
+    account = await stripe.accounts.retrieve(stripeAccountId);
+  } catch (e) {
+    console.log("[verifierStatutStripe] Compte introuvable dans ce mode:", e.message);
+    return {connecte: false};
+  }
   const pret = account.charges_enabled && account.details_submitted;
 
   if (pret) {
@@ -558,10 +579,11 @@ function getPeriodeCAInfo() {
   const dateStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
   const camp = getCampagneMihiPourDateCA(dateStr);
   if (!camp) return null;
-  const deb = new Date(camp.debut + "T12:00:00");
+  const fin = new Date(camp.fin + "T23:59:59");
   const now = Date.now();
-  const joursEcoulesRaw = Math.floor((now - deb.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-  const joursEcoules = Math.min(21, Math.max(1, joursEcoulesRaw));
+  const msLeft = fin.getTime() - now;
+  const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
+  const joursEcoules = Math.min(21, Math.max(1, 21 - daysLeft));
   return {periodNum: camp.num, joursEcoules};
 }
 
@@ -569,7 +591,8 @@ function getPeriodeCAInfo() {
 async function ajouterCommandeAuSuiviCA(userRef, userData, montant) {
   try {
     const infoP = getPeriodeCAInfo();
-    if (!infoP) return;
+    if (!infoP) { console.log("[ajouterCommandeAuSuiviCA] Pas de campagne trouvee pour aujourd'hui, rien fait."); return; }
+    console.log("[ajouterCommandeAuSuiviCA] periode:", infoP.periodNum, "jour:", infoP.joursEcoules, "montant:", montant);
     const pKey = "p" + infoP.periodNum;
     const suiviCA = userData["db-suivi-ca"] ? JSON.parse(userData["db-suivi-ca"]) : {};
     const cur = suiviCA[pKey] || {obj: 0, jours: {}};
@@ -586,8 +609,9 @@ async function ajouterCommandeAuSuiviCA(userRef, userData, montant) {
     jours[idx] = nouveauCumul;
     suiviCA[pKey] = {...cur, jours, ca: nouveauCumul};
     await userRef.set({"db-suivi-ca": JSON.stringify(suiviCA)}, {merge: true});
+    console.log("[ajouterCommandeAuSuiviCA] Ecrit avec succes: jour", idx, "= ", nouveauCumul, "pour periode", pKey);
   } catch (e) {
-    console.error("Erreur ajout suivi CA boutique:", e);
+    console.error("[ajouterCommandeAuSuiviCA] Erreur ajout suivi CA boutique:", e);
   }
 }
 
@@ -650,6 +674,33 @@ async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
   await ajouterCommandeAuSuiviCA(userRef, userData, total);
   await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", nomPourNotif + " vient de commander pour " + total.toFixed(2) + " euros !");
 
+  const emailNotif = userData["db-email-notif-commandes"];
+  if (emailNotif) {
+    try {
+      const listeProduits = items.map(i => "• " + i.nom + (i.quantite > 1 ? " x" + i.quantite : "") + " — " + i.prix.toFixed(2) + " €").join("<br>");
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + resendApiKey.value(),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: "Blazing Dynasty <boutique@blazingdinasty.com>",
+          to: [emailNotif],
+          subject: "🛍️ Nouvelle commande — " + total.toFixed(2) + " €",
+          html: `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:2rem 1rem;color:#3D1F0E;">
+            <div style="font-size:1.3rem;font-weight:600;margin-bottom:1rem;">🛍️ Nouvelle commande !</div>
+            <p style="font-size:.95rem;line-height:1.6;"><strong>${nomPourNotif}</strong> vient de commander pour <strong>${total.toFixed(2)} €</strong> :</p>
+            <div style="background:#FFF3EC;border-radius:10px;padding:1rem;font-size:.85rem;line-height:1.8;margin:1rem 0;">${listeProduits}</div>
+            <p style="font-size:.85rem;color:#888;">Connecte-toi à ton app pour voir les coordonnées complètes et préparer l'envoi.</p>
+          </div>`
+        })
+      });
+    } catch (e) {
+      console.error("[enregistrerCommandeClient] Erreur envoi email notif commande:", e);
+    }
+  }
+
   const nbCommandesFinal = clientExistantIdx !== -1
     ? (clientsExistants[clientExistantIdx].commandes || []).length + 1
     : 1;
@@ -659,20 +710,24 @@ async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
   return total;
 }
 
-exports.stripeWebhook = onRequest({secrets: [stripeSecretKey]}, async (req, res) => {
+exports.stripeWebhook = onRequest({secrets: [stripeSecretKey, resendApiKey]}, async (req, res) => {
   const stripe = require("stripe")(stripeSecretKey.value());
   let event;
   try {
     event = req.body;
   } catch (e) {
+    console.error("[stripeWebhook] Erreur lecture body:", e);
     res.status(400).send("Webhook error");
     return;
   }
+
+  console.log("[stripeWebhook] Evenement recu, type:", event && event.type);
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     const meta = session.metadata || {};
     const distributeurUid = meta.distributeurUid;
+    console.log("[stripeWebhook] checkout.session.completed, distributeurUid:", distributeurUid, "metadata complete:", JSON.stringify(meta));
     if (distributeurUid) {
       try {
         const items = meta.items ? JSON.parse(meta.items) : [];
@@ -681,10 +736,15 @@ exports.stripeWebhook = onRequest({secrets: [stripeSecretKey]}, async (req, res)
           email: meta.clientEmail || "",
           tel: meta.clientTel || ""
         });
+        console.log("[stripeWebhook] enregistrerCommandeClient termine avec succes pour", distributeurUid);
       } catch (e) {
-        console.error("Erreur creation client depuis webhook Stripe:", e);
+        console.error("[stripeWebhook] Erreur creation client depuis webhook Stripe:", e);
       }
+    } else {
+      console.log("[stripeWebhook] Pas de distributeurUid dans les metadata, rien fait.");
     }
+  } else {
+    console.log("[stripeWebhook] Type d'evenement ignore:", event && event.type);
   }
 
   res.status(200).send("ok");
@@ -796,7 +856,7 @@ exports.creerCommandePaypal = onCall(async (request) => {
   }
 });
 
-exports.capturerCommandePaypal = onCall(async (request) => {
+exports.capturerCommandePaypal = onCall({secrets: [resendApiKey]}, async (request) => {
   const {orderId} = request.data || {};
   if (!orderId) throw new HttpsError("invalid-argument", "orderId manquant");
 

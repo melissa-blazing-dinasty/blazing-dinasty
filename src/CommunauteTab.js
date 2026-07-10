@@ -4,7 +4,7 @@ import { db } from './firebase';
 import { C } from './constants';
 import { MELISSA } from './ClientsTab';
 import { UploadPhoto } from './FormationProduitsTab';
-import { WallOfFameTab, DefisTab, PowerHourTab } from './App';
+import { WallOfFameTab, DefisTab, PowerHourTab, THEMES_IMAGES } from './App';
 import { MessagerieTab, getUnreadMessagesCount } from './MessagerieTab';
 import { CopyBtn } from './components';
 
@@ -20,6 +20,7 @@ function CommunauteTab({uid, userName, isChef}){
   const[showAddInfo,setShowAddInfo]=useState(false);
   const[posting,setPosting]=useState(false);
   const[newPhoto,setNewPhoto]=useState("");
+  const[newTemoignageTheme,setNewTemoignageTheme]=useState("skincare");
   const[bulleOuverte,setBulleOuverte]=useState(null);
   const[challengeATraiter,setChallengeATraiter]=useState(false);
   const[nouvelleInfo,setNouvelleInfo]=useState(false);
@@ -105,6 +106,28 @@ function CommunauteTab({uid, userName, isChef}){
     const next=[p,...posts];
     setPosts(next);
     await savePosts(next);
+
+    // Classement automatique dans la Banque d'Images si c'est un témoignage avec photo
+    if(newType==="temoignage"&&newPhoto){
+      try{
+        const refBanque=doc(db,"banque","images");
+        const snapBanque=await getDoc(refBanque);
+        const items=snapBanque.exists()?(snapBanque.data().items||[]):[];
+        const item={
+          id:`img${Date.now()}`,
+          titre:`Témoignage de ${userName}`,
+          url:newPhoto,
+          texte:newText.trim(),
+          theme:newTemoignageTheme,
+          sousTheme:"temoignages",
+          type:"image",
+          auteur:userName,
+          valide:!!(isMelissa||isChef),
+        };
+        await setDoc(refBanque,{items:[...items,item]});
+      }catch{}
+    }
+
     setNewText("");
     setNewPhoto("");
     setPosting(false);
@@ -267,7 +290,16 @@ function CommunauteTab({uid, userName, isChef}){
           ))}
         </div>
 
-        <UploadPhoto label="Photo (optionnel)" value={newPhoto} onChange={v=>setNewPhoto(v)} folder="communaute"/>
+        <UploadPhoto label="Photo (optionnel)" value={newPhoto} onChange={v=>setNewPhoto(v)} folder="communaute" maxSize={1200} quality={0.88}/>
+        {newType==="temoignage"&&newPhoto&&(
+          <div style={{marginBottom:".6rem"}}>
+            <div style={{fontSize:".62rem",color:C.gris,marginBottom:".3rem"}}>📁 Thème (pour le classement automatique dans la Banque d'Images)</div>
+            <select value={newTemoignageTheme} onChange={e=>setNewTemoignageTheme(e.target.value)}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}>
+              {THEMES_IMAGES.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+            </select>
+          </div>
+        )}
         <textarea
           placeholder={
             newType==="victoire"?"🏆 Partage ta victoire du moment...":
@@ -280,6 +312,11 @@ function CommunauteTab({uid, userName, isChef}){
           onChange={e=>setNewText(e.target.value)}
           style={{width:"100%",minHeight:80,border:`1px solid ${C.pale}`,borderRadius:8,padding:".6rem",fontFamily:"inherit",fontSize:".78rem",color:C.texte,background:C.creme,resize:"vertical",outline:"none",lineHeight:1.6,marginBottom:".6rem"}}
         />
+        {newType==="temoignage"&&newPhoto&&(
+          <div style={{fontSize:".65rem",color:C.rose,marginBottom:".5rem",fontStyle:"italic"}}>
+            ✨ Sera aussi {isMelissa||isChef?"rangé automatiquement":"proposé"} dans la Banque d'Images{!(isMelissa||isChef)&&" (après validation de Melissa)"}
+          </div>
+        )}
         <button onClick={addPost} disabled={!newText.trim()||posting}
           style={{width:"100%",background:newText.trim()?C.brun:C.pale,color:newText.trim()?C.blanc:C.gris,border:"none",borderRadius:8,padding:".55rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:newText.trim()?"pointer":"default",transition:"all .2s"}}>
           {posting?"Publication...":"Publier →"}

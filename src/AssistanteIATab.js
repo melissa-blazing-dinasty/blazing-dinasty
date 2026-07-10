@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
@@ -10,6 +10,17 @@ export function AssistanteIATab({uid, userName, goToTab=()=>{}}){
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(false);
   const[ordonnanceEnvoyee,setOrdonnanceEnvoyee]=useState({});
+  const[afficherVIPAssistante,setAfficherVIPAssistante]=useState(false);
+
+  useEffect(()=>{
+    if(!uid)return;
+    (async()=>{
+      try{
+        const snapU=await getDoc(doc(db,"users",uid));
+        if(snapU.exists())setAfficherVIPAssistante(!!snapU.data()["db-afficher-prix-vip"]);
+      }catch{}
+    })();
+  },[uid]);
 
   const ouvrirChat=()=>{
     setOuvert(true);
@@ -29,11 +40,12 @@ export function AssistanteIATab({uid, userName, goToTab=()=>{}}){
     try{
       // Charger le catalogue produits
       let catalogueText="";
+      let allProduits=[];
       try{
         const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
         if(catSnap.exists()){
           const cat=catSnap.data();
-          const allProduits=[...(cat.face||[]),...(cat.hair||[]),...(cat.health||[]),...(cat.corps||[]),...(cat.makeup||[]),...(cat.parfums||[])].slice(0,60);
+          allProduits=[...(cat.face||[]),...(cat.hair||[]),...(cat.health||[]),...(cat.corps||[]),...(cat.makeup||[]),...(cat.parfums||[])].slice(0,60);
           catalogueText=allProduits.map(p=>`- ${p.nom} (${p.serie}) — ${p.prix}€`).join("\n");
         }
       }catch{}
@@ -123,6 +135,25 @@ FORMAT JSON SI AIDE APPLICATION (type="app") :
       const match=raw.match(/\{[\s\S]*\}/);
       const parsed=match?JSON.parse(match[0]):{type:"texte",reponse:"Désolée, je n'ai pas pu traiter ta demande. Réessaie."};
 
+      // Injecte le prix VIP directement depuis le vrai catalogue (plus fiable que de compter sur l IA), calcule le total VIP par pack
+      if(parsed.type==="produits"&&Array.isArray(parsed.packs)){
+        parsed.packs.forEach(pack=>{
+          if(!Array.isArray(pack.produits))return;
+          let totalVIP=0;
+          let tousOntVIP=pack.produits.length>0;
+          pack.produits.forEach(pr=>{
+            const trouve=allProduits.find(cp=>cp.nom===pr.nom);
+            if(trouve&&trouve.prixVIP){
+              pr.prixVIP=trouve.prixVIP;
+              totalVIP+=trouve.prixVIP;
+            }else{
+              tousOntVIP=false;
+            }
+          });
+          if(tousOntVIP&&totalVIP>0)pack.totalVIP=Math.round(totalVIP*100)/100;
+        });
+      }
+
       setMessages(m=>[...m,{role:"assistant",...parsed}]);
     }catch(e){
       setMessages(m=>[...m,{role:"assistant",type:"texte",reponse:"Oups, petit souci technique 😅 Réessaie dans quelques secondes."}]);
@@ -194,12 +225,22 @@ FORMAT JSON SI AIDE APPLICATION (type="app") :
                   <div key={pi} style={{background:C.blanc,border:`1.5px solid ${C.pale}`,borderRadius:11,padding:".6rem .75rem",marginBottom:".4rem"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".35rem"}}>
                       <div style={{fontSize:".78rem",fontWeight:700,color:C.brun}}>{pack.emoji} {pack.nom}</div>
-                      <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",fontWeight:700,color:C.rose}}>{pack.total}€</div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",fontWeight:700,color:C.rose}}>{pack.total}€</div>
+                        {afficherVIPAssistante&&pack.totalVIP&&(
+                          <div style={{fontSize:".62rem",fontWeight:700,color:"#8B6FB3"}}>💎 VIP {pack.totalVIP}€</div>
+                        )}
+                      </div>
                     </div>
                     {(pack.produits||[]).map((pr,pri)=>(
                       <div key={pri} style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.gris,padding:".15rem 0"}}>
                         <span>• {pr.nom}</span>
-                        <span style={{fontWeight:600,color:C.brun,flexShrink:0,marginLeft:".5rem"}}>{pr.prix}€</span>
+                        <span style={{textAlign:"right",flexShrink:0,marginLeft:".5rem"}}>
+                          <span style={{fontWeight:600,color:C.brun}}>{pr.prix}€</span>
+                          {afficherVIPAssistante&&pr.prixVIP&&(
+                            <span style={{display:"block",fontSize:".6rem",fontWeight:700,color:"#8B6FB3"}}>💎 {pr.prixVIP}€</span>
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>
