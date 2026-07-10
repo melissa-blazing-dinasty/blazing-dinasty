@@ -32,7 +32,7 @@ function LinkBioTab({uid, userName}){
     bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,ebooksIds:[],
     parcoursPhotos:[],parcoursTexte1:"",parcoursTexte2:"",parcoursTexte3:"",parcoursProduits:[],
     reseauxFacebook:"",reseauxInstagram:"",reseauxTiktok:"",reseauxYoutube:"",
-    boutiqueActive:false,boutiquePresentation:"",bestSellers:[],livraisonGratuite:false,
+    boutiqueActive:false,boutiquePresentation:"",bestSellers:[],packsPersonnalises:[],livraisonGratuite:false,
   });
   const[banniereGlobale,setBanniereGlobale]=useState(null);
   const[saving,setSaving]=useState(false);
@@ -48,6 +48,11 @@ function LinkBioTab({uid, userName}){
   const boutiqueUrl=`https://blazing-dinasty-1fad9.web.app?boutique=${slug}`;
   const [catalogueProduits,setCatalogueProduits]=useState(null);
   const [filtreBestSellers,setFiltreBestSellers]=useState("");
+  const [creationPack,setCreationPack]=useState(false);
+  const [packNom,setPackNom]=useState("");
+  const [packPrix,setPackPrix]=useState("");
+  const [packProduits,setPackProduits]=useState([]);
+  const [filtrePack,setFiltrePack]=useState("");
   const [copiedBoutique,setCopiedBoutique]=useState(false);
   const copyBoutiqueUrl=()=>{navigator.clipboard?.writeText(boutiqueUrl);setCopiedBoutique(true);setTimeout(()=>setCopiedBoutique(false),2000);};
   useEffect(()=>{
@@ -518,6 +523,77 @@ function LinkBioTab({uid, userName}){
                   <div style={{fontSize:".65rem",color:C.gris,marginTop:".3rem"}}>Affinage la recherche pour voir plus de résultats (60 max affichés à la fois).</div>
                 )}
               </>)}
+            </div>
+
+            <div style={{marginBottom:".6rem"}}>
+              <div style={{fontSize:".6rem",color:C.gris,marginBottom:".4rem",fontWeight:600,textTransform:"uppercase",letterSpacing:".08em"}}>🎁 Mes packs personnalisés</div>
+              <div style={{fontSize:".65rem",color:C.gris,marginBottom:".5rem",lineHeight:1.5}}>
+                Crée tes propres bundles de produits à un prix spécial — ils apparaîtront dans un onglet dédié "Mes Packs" sur ta boutique.
+              </div>
+              {(profil.packsPersonnalises||[]).length>0&&(
+                <div style={{marginBottom:".7rem"}}>
+                  {(profil.packsPersonnalises||[]).map(pack=>(
+                    <div key={pack.id} style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .75rem",marginBottom:".4rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontSize:".78rem",fontWeight:700,color:C.brun}}>{pack.nom}</div>
+                        <div style={{fontSize:".65rem",color:C.gris}}>{pack.produitsRefs.length} produit{pack.produitsRefs.length>1?"s":""} · {pack.prix.toFixed(2)}€</div>
+                      </div>
+                      <button onClick={()=>setProfil(p=>({...p,packsPersonnalises:(p.packsPersonnalises||[]).filter(pk=>pk.id!==pack.id)}))}
+                        style={{background:"none",border:"none",color:"#C0504D",fontSize:".8rem",cursor:"pointer"}}>🗑️</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!creationPack?(
+                <button onClick={()=>setCreationPack(true)}
+                  style={{width:"100%",background:C.rose+"20",color:C.rose,border:`1.5px dashed ${C.rose}`,borderRadius:9,padding:".55rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                  + Créer un nouveau pack
+                </button>
+              ):(
+                <div style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem"}}>
+                  <input value={packNom} onChange={e=>setPackNom(e.target.value)} placeholder="Nom du pack (ex: Pack Détox Cheveux)"
+                    style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".45rem"}}/>
+                  <input value={packPrix} onChange={e=>setPackPrix(e.target.value)} placeholder="Prix du pack en € (ex: 29.90)" type="number" step="0.01"
+                    style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".45rem"}}/>
+                  {!catalogueProduits?(
+                    <div style={{fontSize:".72rem",color:C.gris,padding:".5rem"}}>Chargement du catalogue...</div>
+                  ):(<>
+                    <input value={filtrePack} onChange={e=>setFiltrePack(e.target.value)} placeholder="🔍 Rechercher un produit..."
+                      style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .65rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.blanc,outline:"none",marginBottom:".4rem"}}/>
+                    <div style={{fontSize:".66rem",color:C.rose,fontWeight:700,marginBottom:".3rem"}}>{packProduits.length} produit{packProduits.length>1?"s":""} sélectionné{packProduits.length>1?"s":""}</div>
+                    <div style={{maxHeight:220,overflowY:"auto",border:`1px solid ${C.pale}`,borderRadius:9,marginBottom:".5rem"}}>
+                      {catalogueProduits.filter(p=>!filtrePack||p.nom.toLowerCase().includes(filtrePack.toLowerCase())).slice(0,60).map(p=>{
+                        const selectionne=packProduits.includes(p.ref);
+                        return(
+                          <label key={p.ref} style={{display:"flex",alignItems:"center",gap:".6rem",padding:".45rem .6rem",borderBottom:`1px solid ${C.pale}`,cursor:"pointer",background:selectionne?C.rose+"12":"transparent"}}>
+                            <input type="checkbox" checked={selectionne} onChange={()=>{
+                              setPackProduits(arr=>selectionne?arr.filter(r=>r!==p.ref):[...arr,p.ref]);
+                            }}/>
+                            <span style={{fontSize:".72rem",color:C.texte,flex:1}}>{p.nom}</span>
+                            <span style={{fontSize:".66rem",color:C.gris,fontWeight:600}}>{p.prix?.toFixed?.(2)}€</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>)}
+                  <div style={{display:"flex",gap:".4rem"}}>
+                    <button onClick={()=>{
+                        if(!packNom.trim()||!packPrix||packProduits.length===0)return;
+                        const nouveauPack={id:"pack"+Date.now(),nom:packNom.trim(),prix:parseFloat(packPrix)||0,produitsRefs:[...packProduits]};
+                        setProfil(p=>({...p,packsPersonnalises:[...(p.packsPersonnalises||[]),nouveauPack]}));
+                        setPackNom("");setPackPrix("");setPackProduits([]);setFiltrePack("");setCreationPack(false);
+                      }}
+                      disabled={!packNom.trim()||!packPrix||packProduits.length===0}
+                      style={{flex:1,background:(packNom.trim()&&packPrix&&packProduits.length>0)?C.brun:C.pale,color:(packNom.trim()&&packPrix&&packProduits.length>0)?C.blanc:C.gris,border:"none",borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                      Créer ce pack
+                    </button>
+                    <button onClick={()=>{setCreationPack(false);setPackNom("");setPackPrix("");setPackProduits([]);setFiltrePack("");}}
+                      style={{flex:1,background:C.blanc,color:C.gris,border:`1.5px solid ${C.pale}`,borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>)}
         </div>

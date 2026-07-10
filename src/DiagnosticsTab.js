@@ -778,7 +778,7 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
     <div style={{paddingBottom:"2rem"}}>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.brun,marginBottom:".3rem"}}>Presque terminé <em style={{fontStyle:"italic",color:C.rose}}>✨</em></div>
       <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>Laisse tes coordonnées pour recevoir tes recommandations parfum personnalisées 🌸</p>
-      {contactLinksParfum&&(contactLinksParfum.whatsapp||contactLinksParfum.messenger||contactLinksParfum.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:C.gris,marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinksParfum.whatsapp&&<a href={"https://wa.me/"+contactLinksParfum.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour, je viens de faire le diagnostic parfum et j'aimerais recevoir mes resultats !")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>💬 WhatsApp</a>}{contactLinksParfum.messenger&&<a href={"https://m.me/"+contactLinksParfum.messenger.replace(/^@/,"")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>💬 Messenger</a>}{contactLinksParfum.instagram&&<a href={"https://instagram.com/"+contactLinksParfum.instagram.replace(/^@/,"")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>📸 Instagram</a>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}
+      {contactLinksParfum&&(contactLinksParfum.whatsapp||contactLinksParfum.messenger||contactLinksParfum.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:C.gris,marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinksParfum.whatsapp&&<button type="button" onClick={async()=>{const c={...contactParfum,prenom:contactParfum.prenom.trim()||"Cliente",reseau:contactParfum.reseau||"Contact via WhatsApp"};try{const fn=httpsCallable(fbFunctions,"soumettreDiagnostic");await fn({uid,type:"parfum",nomClient:c.prenom,contact:c,reponses});}catch(e){console.error("soumettreDiagnostic parfum:",e);}calculerResultat(reponses);setShowContactParfum(false);window.open("https://wa.me/"+contactLinksParfum.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour, je viens de faire le diagnostic parfum et j'aimerais recevoir mes resultats !"),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 WhatsApp</button>}{contactLinksParfum.messenger&&<button type="button" onClick={async()=>{const c={...contactParfum,prenom:contactParfum.prenom.trim()||"Cliente",reseau:contactParfum.reseau||"Contact via Messenger"};try{const fn=httpsCallable(fbFunctions,"soumettreDiagnostic");await fn({uid,type:"parfum",nomClient:c.prenom,contact:c,reponses});}catch(e){console.error("soumettreDiagnostic parfum:",e);}calculerResultat(reponses);setShowContactParfum(false);window.open("https://m.me/"+contactLinksParfum.messenger.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 Messenger</button>}{contactLinksParfum.instagram&&<button type="button" onClick={async()=>{const c={...contactParfum,prenom:contactParfum.prenom.trim()||"Cliente",reseau:contactParfum.reseau||"Contact via Instagram"};try{const fn=httpsCallable(fbFunctions,"soumettreDiagnostic");await fn({uid,type:"parfum",nomClient:c.prenom,contact:c,reponses});}catch(e){console.error("soumettreDiagnostic parfum:",e);}calculerResultat(reponses);setShowContactParfum(false);window.open("https://instagram.com/"+contactLinksParfum.instagram.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>📸 Instagram</button>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
         <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Prénom *</div>
         <input value={contactParfum.prenom} onChange={e=>setContactParfum(p=>({...p,prenom:e.target.value}))} placeholder="Ton prénom"
@@ -793,8 +793,11 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
         <input value={contactParfum.reseau} onChange={e=>setContactParfum(p=>({...p,reseau:e.target.value}))} placeholder="@tonpseudo"
           style={{width:"100%",border:`1.5px solid ${contactParfum.reseau.trim()?C.vert:C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
       </div>
-      <button onClick={async()=>{
-        try{await setDoc(doc(db,"diag_externes",`${uid}_parfum_${Date.now()}`),{type:"parfum",uid,contact:contactParfum,reponses,date:new Date().toISOString()},{merge:true});}catch{}
+      <button type="button" onClick={async()=>{
+        try{
+          const soumettreDiagnosticFn = httpsCallable(fbFunctions, "soumettreDiagnostic");
+          await soumettreDiagnosticFn({uid, type:"parfum", nomClient:contactParfum.prenom.trim(), contact:contactParfum, reponses});
+        }catch(e){console.error("soumettreDiagnostic parfum:",e);}
         calculerResultat(reponses);setShowContactParfum(false);
       }} disabled={contactParfum.prenom.trim().length<2||(!contactParfum.tel.trim()&&!contactParfum.mail.trim()&&!contactParfum.reseau.trim())}
         style={{width:"100%",background:(contactParfum.prenom.trim().length>=2&&(contactParfum.tel.trim()||contactParfum.mail.trim()||contactParfum.reseau.trim()))?C.brun:C.pale,color:(contactParfum.prenom.trim().length>=2&&(contactParfum.tel.trim()||contactParfum.mail.trim()||contactParfum.reseau.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
@@ -899,7 +902,7 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
             style={{width:"100%",border:"none",borderRadius:8,padding:".5rem .75rem",fontSize:".82rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
           <input placeholder="Ton Instagram, WhatsApp ou email" value={captureContact} onChange={e=>setCaptureContact(e.target.value)}
             style={{width:"100%",border:"none",borderRadius:8,padding:".5rem .75rem",fontSize:".82rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>
-          <button onClick={async()=>{
+          <button type="button" onClick={async()=>{
             if(!capturePrenom.trim()||!captureContact.trim()) return;
             try{
               await setDoc(doc(db,"tunnel_prospects","diag"+Date.now()),{
@@ -1598,6 +1601,7 @@ function AssignerDiagClienteBtn({ordonnance, type, nomClient, uid}){
 }
 function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="", skipContact=false, onComplete=null, onNonLuChange=()=>{}, forceResultsView=0 }) {
   const [mode, setMode] = useState(initialType?"questionnaire":"choix");
+  const [remplirMaintenant,setRemplirMaintenant]=useState(false);
   useEffect(()=>{
     if(forceResultsView>0)setMode("resultats");
   },[forceResultsView]);
@@ -1888,7 +1892,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
             </div>
           </div>
           <div style={{ display: "flex", gap: ".4rem" }}>
-            <button onClick={() => { setType(t.id); setMode("questionnaire"); setStep(0); setReponses({}); }}
+            <button onClick={() => { setType(t.id); setMode("questionnaire"); setStep(0); setReponses({}); setRemplirMaintenant(true); }}
               style={{ flex: 1, background: C.brun, color: C.blanc, border: "none", borderRadius: 9, padding: ".5rem", fontSize: ".75rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
               📋 Remplir maintenant
             </button>
@@ -1921,7 +1925,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     </div>
   );
 
-  if (mode === "contact" && !skipContact) return (
+  if (mode === "contact" && !skipContact && !remplirMaintenant) return (
     <div style={{padding:"1rem 0"}}>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.brun,marginBottom:".3rem"}}>
         Presque terminé <em style={{fontStyle:"italic",color:C.rose}}>✨</em>
@@ -1929,7 +1933,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>
         Laisse tes coordonnées pour que ta conseillère puisse te recontacter avec tes recommandations personnalisées 💛
       </p>
-      {contactLinksDirect&&(contactLinksDirect.whatsapp||contactLinksDirect.messenger||contactLinksDirect.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:C.gris,marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinksDirect.whatsapp&&<a href={"https://wa.me/"+contactLinksDirect.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour "+(userName||"")+", je viens de faire le diagnostic et j'aimerais recevoir mes resultats !")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>💬 WhatsApp</a>}{contactLinksDirect.messenger&&<a href={"https://m.me/"+contactLinksDirect.messenger.replace(/^@/,"")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>💬 Messenger</a>}{contactLinksDirect.instagram&&<a href={"https://instagram.com/"+contactLinksDirect.instagram.replace(/^@/,"")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>📸 Instagram</a>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}
+      {contactLinksDirect&&(contactLinksDirect.whatsapp||contactLinksDirect.messenger||contactLinksDirect.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:C.gris,marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinksDirect.whatsapp&&<button type="button" onClick={async()=>{const contact={prenom:prenomContact.trim()||nomClient||"Cliente",nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact||"Contact via WhatsApp"};await genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});window.open("https://wa.me/"+contactLinksDirect.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour "+(userName||"")+", je viens de faire le diagnostic et j'aimerais recevoir mes resultats !"),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 WhatsApp</button>}{contactLinksDirect.messenger&&<button type="button" onClick={async()=>{const contact={prenom:prenomContact.trim()||nomClient||"Cliente",nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact||"Contact via Messenger"};await genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});window.open("https://m.me/"+contactLinksDirect.messenger.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 Messenger</button>}{contactLinksDirect.instagram&&<button type="button" onClick={async()=>{const contact={prenom:prenomContact.trim()||nomClient||"Cliente",nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact||"Contact via Instagram"};await genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});window.open("https://instagram.com/"+contactLinksDirect.instagram.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>📸 Instagram</button>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}
 
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
         <div style={{display:"flex",gap:".5rem",marginBottom:".6rem"}}>
@@ -2265,7 +2269,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           🖨️ Sauvegarder mon ordonnance en PDF
         </button>
 
-        <button onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
+        <button type="button" onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
 
         {/* DEBUG TEMPORAIRE */}
         <details style={{marginTop:".5rem"}}>
@@ -2466,7 +2470,7 @@ function DiagResultsTab({ uid }) {
                 {/* Création automatique depuis le nom/contact du diag */}
                 {(sel.nomClient||sel.contact?.prenom)&&(
                   <div style={{ marginBottom:".4rem" }}>
-                    <button onClick={async()=>{
+                    <button type="button" onClick={async()=>{
                       const nom=sel.nomClient||((sel.contact?.prenom||"")+" "+(sel.contact?.nom||"")).trim()||"Inconnue";
                       const newP={
                         id:Date.now(),
@@ -2561,7 +2565,7 @@ function DiagResultsTab({ uid }) {
               🖨️ Générer PDF / Imprimer
             </button>
 
-            <button onClick={async()=>{const ord=sel?.ordonnance;if(!ord)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ord,nomClient:sel?.nomClient||sel?.contact?.prenom||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;const msg='Voici le lien pour ta cliente :\n\n'+lien+'\n\nCopie ce lien et envoie-le lui !';if(navigator.share){await navigator.share({title:'Ordonnance Mihi',text:'Ton ordonnance personnalisée Mihi',url:lien});}else{prompt('Copie ce lien et envoie-le à ta cliente :',lien);}}catch(e){alert('Erreur : '+e.message);}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Envoyer le lien a la cliente</button>
+            <button type="button" onClick={async()=>{const ord=sel?.ordonnance;if(!ord)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ord,nomClient:sel?.nomClient||sel?.contact?.prenom||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;const msg='Voici le lien pour ta cliente :\n\n'+lien+'\n\nCopie ce lien et envoie-le lui !';if(navigator.share){await navigator.share({title:'Ordonnance Mihi',text:'Ton ordonnance personnalisée Mihi',url:lien});}else{prompt('Copie ce lien et envoie-le à ta cliente :',lien);}}catch(e){alert('Erreur : '+e.message);}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Envoyer le lien a la cliente</button>
           </div>
         )}
 
@@ -2982,8 +2986,8 @@ function LinkBioPublicPage({slug}){
 
         {/* Boutons principaux */}
         <div style={{padding:"0 1rem .75rem",display:"flex",flexDirection:"column",gap:".6rem"}}>
-          <button onClick={async()=>{await trackerEvenement(profil?.slug||slug,"tunnel_vente");window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=produits_page";}} style={{width:"100%",background:theme.btnPrimary||"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".8rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
-          <button onClick={async()=>{await trackerEvenement(profil?.slug||slug,"recrutement");window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}} style={{width:"100%",background:"transparent",color:theme.accent||"#A89BB5",border:`1.5px solid ${theme.accent||"#A89BB5"}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>✨ Et si cette activité était faite pour toi ?</button>
+          <button type="button" onClick={async()=>{await trackerEvenement(profil?.slug||slug,"tunnel_vente");window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=produits_page";}} style={{width:"100%",background:theme.btnPrimary||"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".8rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>🛍️ Découvrir les produits Mihi</button>
+          <button type="button" onClick={async()=>{await trackerEvenement(profil?.slug||slug,"recrutement");window.location.href=window.location.origin+"?bio="+(profil?.slug||slug)+"&tunnel=recrutement_page";}} style={{width:"100%",background:"transparent",color:theme.accent||"#A89BB5",border:`1.5px solid ${theme.accent||"#A89BB5"}`,borderRadius:12,padding:".75rem",textAlign:"center",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>✨ Et si cette activité était faite pour toi ?</button>
         </div>
 
         <div style={{padding:"1rem 1rem 2rem",background:theme.bg,display:"flex",flexDirection:"column",gap:".5rem"}}>
@@ -3184,7 +3188,7 @@ function BoutiquePubliquePage({slug}){
       if(existe)nouveauCart=c.map(i=>i.ref===prod.ref?{...i,quantite:i.quantite+1}:i);
       else{
         const prixFinal=(prod.offre&&prod.prixOffre)?prod.prixOffre:prod.prix;
-        nouveauCart=[...c,{ref:prod.ref,nom:prod.nom,prix:prixFinal,quantite:1}];
+        nouveauCart=[...c,{ref:prod.ref,nom:prod.nom,prix:prixFinal,prixVIP:prod.prixVIP||null,quantite:1}];
       }
       if(profil&&profil.livraisonGratuite){
         const nouveauTotal=nouveauCart.reduce((s,i)=>s+i.prix*i.quantite,0);
@@ -3292,6 +3296,8 @@ function BoutiquePubliquePage({slug}){
   };
 
   const totalPanier=cart.reduce((s,i)=>s+i.prix*i.quantite,0);
+  const economieVIP=cart.reduce((s,i)=>s+(i.prixVIP?(i.prix-i.prixVIP)*i.quantite:0),0);
+  const tousOntPrixVIP=cart.length>0&&cart.every(i=>i.prixVIP);
   const nbArticles=cart.reduce((s,i)=>s+i.quantite,0);
   const FRAIS_PORT=5.90;
   const SEUIL_GRATUIT=60;
@@ -3368,8 +3374,9 @@ function BoutiquePubliquePage({slug}){
   const categories=Object.keys(CAT_LABELS).filter(k=>catalogue&&catalogue[k]&&catalogue[k].length);
   const hasBestSellers=profil&&profil.bestSellers&&profil.bestSellers.length>0;
   const hasFavoris=clientUser&&favoris.length>0;
-  const allCategoriesTabs=[...(hasBestSellers?["bestsellers"]:[]),...(hasFavoris?["favoris"]:[]),...categories];
-  const CAT_LABELS_FULL={...CAT_LABELS,bestsellers:"✨ Best-sellers",favoris:"❤️ Mes favoris"};
+  const hasPacks=profil&&profil.packsPersonnalises&&profil.packsPersonnalises.length>0;
+  const allCategoriesTabs=[...(hasPacks?["mespacks"]:[]),...(hasBestSellers?["bestsellers"]:[]),...(hasFavoris?["favoris"]:[]),...categories];
+  const CAT_LABELS_FULL={...CAT_LABELS,bestsellers:"✨ Best-sellers",favoris:"❤️ Mes favoris",mespacks:"🎁 Mes Packs"};
   let produits=[];
   if(activeCat==="bestsellers"&&catalogue){
     const tousProduits=Object.values(catalogue).flat();
@@ -3380,7 +3387,15 @@ function BoutiquePubliquePage({slug}){
   }else{
     produits=(catalogue&&catalogue[activeCat])||[];
   }
-
+  const tousProduitsCatalogue=catalogue?Object.values(catalogue).flat():[];
+  const ajouterPackAuPanier=(pack)=>{
+    trackerEvenement(profil?.slug||slug,"boutique_ajout_panier");
+    setCart(c=>{
+      const existe=c.find(i=>i.ref===pack.id);
+      if(existe)return c.map(i=>i.ref===pack.id?{...i,quantite:i.quantite+1}:i);
+      return [...c,{ref:pack.id,nom:"🎁 "+pack.nom,prix:pack.prix,prixVIP:null,quantite:1}];
+    });
+  };
   return(
     <div style={{minHeight:"100vh",background:theme.bgPage,fontFamily:"'Trebuchet MS',sans-serif",paddingBottom:nbArticles?90:0,transition:"background .3s"}}>
       <style>{`
@@ -3469,6 +3484,39 @@ function BoutiquePubliquePage({slug}){
           ))}
         </div>
 
+        {activeCat==="mespacks"?(
+          <div style={{padding:"0 1rem 1rem"}}>
+            {(profil.packsPersonnalises||[]).map(pack=>{
+              const produitsInclus=pack.produitsRefs.map(ref=>tousProduitsCatalogue.find(p=>p.ref===ref)).filter(Boolean);
+              const enPanier=cart.find(i=>i.ref===pack.id);
+              return(
+                <div key={pack.id} style={{background:"white",borderRadius:14,border:`1.5px solid ${theme.accent}`,padding:"1rem",marginBottom:".75rem"}}>
+                  <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".4rem"}}>🎁 {pack.nom}</div>
+                  <div style={{marginBottom:".6rem"}}>
+                    {produitsInclus.map(p=>(
+                      <div key={p.ref} style={{fontSize:".72rem",color:"#666",padding:".15rem 0"}}>• {p.nom}</div>
+                    ))}
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:"1.1rem",fontWeight:700,color:theme.accent}}>{pack.prix.toFixed(2)}€</div>
+                    {enPanier?(
+                      <div style={{display:"flex",alignItems:"center",gap:".5rem",background:theme.bgPage,borderRadius:8,padding:".2rem .5rem"}}>
+                        <button className="boutique-btn" onClick={()=>changerQuantite(pack.id,-1)} style={{background:"none",border:"none",fontSize:"1rem",fontWeight:700,color:theme.accent,cursor:"pointer"}}>−</button>
+                        <span style={{fontSize:".8rem",fontWeight:700,color:"#3D1F0E"}}>{enPanier.quantite}</span>
+                        <button className="boutique-btn" onClick={()=>changerQuantite(pack.id,1)} style={{background:"none",border:"none",fontSize:"1rem",fontWeight:700,color:theme.accent,cursor:"pointer"}}>+</button>
+                      </div>
+                    ):(
+                      <button className="boutique-btn" onClick={()=>ajouterPackAuPanier(pack)}
+                        style={{background:theme.btn,color:"white",border:"none",borderRadius:8,padding:".5rem 1rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                        + Ajouter le pack
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ):(
         <div style={{padding:"0 1rem 1rem",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:".5rem"}}>
           {produits.map(prod=>{
             const enPanier=cart.find(i=>i.ref===prod.ref);
@@ -3485,10 +3533,13 @@ function BoutiquePubliquePage({slug}){
                 <div style={{width:"100%",aspectRatio:"1",borderRadius:8,marginBottom:".4rem",background:theme.bgPage,display:(prod.image&&!prod._imgFailed)?"none":"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem"}}>🧴</div>
                 <div style={{fontSize:".64rem",fontWeight:700,color:"#3D1F0E",marginBottom:".25rem",lineHeight:1.3,flex:1}}>{prod.nom}</div>
                 {prod.offre&&<div style={{fontSize:".54rem",color:"#C44B1A",fontWeight:700,marginBottom:".15rem"}}>{prod.offre}</div>}
-                <div style={{display:"flex",alignItems:"baseline",gap:".3rem",marginBottom:".4rem",flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"baseline",gap:".3rem",marginBottom:".2rem",flexWrap:"wrap"}}>
                   <div style={{fontSize:".78rem",fontWeight:700,color:theme.accent}}>{prixAffiche.toFixed(2)}€</div>
                   {prod.offre&&prod.prixOffre&&prod.prix!==prod.prixOffre&&<div style={{fontSize:".58rem",color:"#AAA",textDecoration:"line-through"}}>{prod.prix.toFixed(2)}€</div>}
                 </div>
+                {prod.prixVIP&&profil&&profil.lienRecrutement&&(
+                  <div style={{fontSize:".54rem",fontWeight:700,color:"#8B6FB3",marginBottom:".35rem"}}>💎 Économie VIP possible</div>
+                )}
                 {enPanier?(
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:theme.bgPage,borderRadius:8,padding:".2rem .3rem"}}>
                     <button className="boutique-btn" onClick={()=>changerQuantite(prod.ref,-1)} style={{background:"none",border:"none",fontSize:".9rem",fontWeight:700,color:theme.accent,cursor:"pointer",padding:"0 .3rem"}}>−</button>
@@ -3506,6 +3557,7 @@ function BoutiquePubliquePage({slug}){
           })}
           {produits.length===0&&<div style={{gridColumn:"1 / -1",textAlign:"center",padding:"2rem 0",fontSize:".78rem",color:"#888"}}>Aucun produit dans cette catégorie pour le moment.</div>}
         </div>
+        )}
 
       </div>
 
@@ -3554,6 +3606,18 @@ function BoutiquePubliquePage({slug}){
               <div style={{display:"flex",justifyContent:"space-between",padding:"1rem 0",fontSize:".9rem",fontWeight:700,color:"#3D1F0E",borderTop:"1px solid #F0EBE3",marginTop:".3rem"}}>
                 <span>Total</span><span>{totalAvecPort.toFixed(2)}€</span>
               </div>
+              {economieVIP>0.5&&profil&&profil.lienRecrutement&&(
+                <div style={{background:"linear-gradient(135deg,#F3EEFB,#EDE3F7)",border:"1.5px solid #C9A8E8",borderRadius:12,padding:"1rem",marginBottom:".85rem",textAlign:"center"}}>
+                  <div style={{fontSize:".8rem",fontWeight:700,color:"#6B4C93",marginBottom:".3rem"}}>💎 Tu économiserais {economieVIP.toFixed(2)}€ sur ce panier !</div>
+                  <div style={{fontSize:".7rem",color:"#8B6FB3",lineHeight:1.5,marginBottom:".65rem"}}>
+                    En devenant cliente VIP gratuitement, tu débloques {tousOntPrixVIP?"le prix VIP sur tous ces produits":"le prix VIP sur une partie de ces produits"} — dès maintenant.
+                  </div>
+                  <a href={profil.lienRecrutement} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_vip_panier")}
+                    style={{display:"block",background:"linear-gradient(135deg,#8B6FB3,#6B4C93)",color:"white",textDecoration:"none",borderRadius:9,padding:".6rem",fontSize:".78rem",fontWeight:700}}>
+                    ✨ Je deviens VIP gratuitement
+                  </a>
+                </div>
+              )}
               <button className="boutique-btn" onClick={()=>setShowCheckout(true)}
                 style={{width:"100%",background:theme.btn,color:"white",border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
                 Passer commande →
@@ -4063,7 +4127,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
           ))}
         </div>
 
-        <button onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{tunnel_vente:increment(1)},{merge:true});}catch{}setParcours("produits");setEtape("diag_besoins");}}
+        <button type="button" onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{tunnel_vente:increment(1)},{merge:true});}catch{}setParcours("produits");setEtape("diag_besoins");}}
           style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
           ✨ Trouver mes produits idéaux →
         </button>
@@ -4131,7 +4195,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
           ))}
         </div>
 
-        <button onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{recrutement:increment(1)},{merge:true});}catch{}setParcours("recrutement");setEtape("diag_recrutement");}}
+        <button type="button" onClick={async()=>{try{await setDoc(doc(db,"linkbio_stats",profil?.slug||slug),{recrutement:increment(1)},{merge:true});}catch{}setParcours("recrutement");setEtape("diag_recrutement");}}
           style={{width:"100%",background:"#3D1F0E",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
           👑 Est-ce fait pour moi ? →
         </button>
@@ -4184,7 +4248,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   if(etape==="accueil") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/>{profil&&profil.histoire&&<div style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".82rem",color:"#3D2B1F",lineHeight:1.75,fontStyle:"italic"}}>"{profil.histoire}"</div>}<div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"white",fontWeight:300}}>Qu'est-ce qui t'amene aujourd'hui ? </div></div><div style={{display:"flex",flexDirection:"column",gap:".6rem"}}><div onClick={()=>{setParcours("produits");setEtape("produits_page");}} style={{background:"white",border:"2px solid #C49A8A",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#C49A8A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>P</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je veux decouvrir les produits</div><div style={{fontSize:".72rem",color:"#888"}}>Recois tes recommandations personnalisees + un cadeau offert</div></div><span style={{color:"#C49A8A",fontSize:"1.1rem",flexShrink:0}}>→</span></div><div onClick={()=>{setParcours("recrutement");setEtape("recrutement_page");}} style={{background:"white",border:"2px solid #A89BB5",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#A89BB530",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>O</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je cherche une opportunite</div><div style={{fontSize:".72rem",color:"#888"}}>Decouvre si cette aventure est faite pour toi + un cadeau offert</div></div><span style={{color:"#A89BB5",fontSize:"1.1rem",flexShrink:0}}>→</span></div></div></div></div>);
   if(etape==="diag_produit") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={{maxWidth:480,margin:"0 auto"}}><DiagnosticsTab uid={profil&&profil.uid||slug} userName={profil&&profil.prenom||slug} externalMode={true} initialType={diagType} skipContact={true} onComplete={()=>setEtape("produits_ebook")}/></div></div>);
   if(etape==="produits_ebook") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#2D5A3D",borderRadius:16,padding:"1.5rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>🎁</div><div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".15em",color:"#A8D4A8",marginBottom:".3rem"}}>CADEAU OFFERT</div><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"white",fontWeight:300,marginBottom:".4rem"}}>Ton bilan produits est pret !</div><div style={{fontSize:".78rem",color:"rgba(255,255,255,.8)",lineHeight:1.65}}>Recouvre ton guide gratuit + tes recommandations personnalisees par email ou WhatsApp</div></div><div style={{background:"white",border:"1.5px solid #E8DDD4",borderRadius:12,padding:".75rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:"1rem"}}><img src="/carnet_silhouette.png" alt="Carnet Silhouette" style={{width:48,height:68,objectFit:"cover",borderRadius:6,flexShrink:0}}/><div><div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Carnet Silhouette</div><div style={{fontSize:".72rem",color:"#888"}}>7 jours de recettes gourmandes - offert !</div></div></div><button onClick={()=>{setEbookChoisi("silhouette");setEtape("coordonnees");}} style={{width:"100%",background:"#2D5A3D",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>Recevoir mon guide + mon bilan →</button></div></div>);
-  if(etape==="coordonnees") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Ou est-ce que je t'envoie ton guide ?</div></div>{contactLinks&&(contactLinks.whatsapp||contactLinks.messenger||contactLinks.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:"#888",marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinks.whatsapp&&<a href={"https://wa.me/"+contactLinks.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour "+nomDistrib+", je viens de faire le questionnaire et j'aimerais recevoir mes resultats !")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>💬 WhatsApp</a>}{contactLinks.messenger&&<a href={"https://m.me/"+contactLinks.messenger.replace(/^@/,"")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>💬 Messenger</a>}{contactLinks.instagram&&<a href={"https://instagram.com/"+contactLinks.instagram.replace(/^@/,"")} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,textDecoration:"none",marginBottom:".5rem"}}>📸 Instagram</a>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}{[["prenom","Prenom *","Ton prenom"],["email","Email","ton@email.com"],["tel","Tel / WhatsApp","06 XX XX XX XX"],["reseau","Messenger / Instagram","@tonpseudo"]].map(([k,l,ph])=>(<div key={k} style={{marginBottom:".4rem"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".2rem",fontWeight:600}}>{l}</div><input value={coords[k]||""} onChange={e=>setCoords(c=>({...c,[k]:e.target.value}))} placeholder={ph} style={{width:"100%",border:"1.5px solid "+(coords[k]?"#7FAF8A":"#E8DDD4"),borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none"}}/></div>))}<button onClick={enregistrerCoords} disabled={!coordsOk||saving} style={{width:"100%",background:coordsOk?"#3D1F0E":"#E8DDD4",color:coordsOk?"white":"#888",border:"none",borderRadius:10,padding:".75rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:coordsOk?"pointer":"default",marginTop:".5rem"}}>{saving?"Envoi...":"Recevoir mon guide gratuit →"}</button></div></div>);
+  if(etape==="coordonnees") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Ou est-ce que je t'envoie ton guide ?</div></div>{contactLinks&&(contactLinks.whatsapp||contactLinks.messenger||contactLinks.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:"#888",marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinks.whatsapp&&<button type="button" onClick={async()=>{try{await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:{...coords,prenom:coords.prenom||"Cliente",reseau:coords.reseau||"Contact via WhatsApp"},date:todayLocalStr(),ts:Date.now()});}catch(e){console.error(e);}setEtape("ebook_affiche");window.open("https://wa.me/"+contactLinks.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour "+nomDistrib+", je viens de faire le questionnaire et j'aimerais recevoir mes resultats !"),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 WhatsApp</button>}{contactLinks.messenger&&<button type="button" onClick={async()=>{try{await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:{...coords,prenom:coords.prenom||"Cliente",reseau:coords.reseau||"Contact via Messenger"},date:todayLocalStr(),ts:Date.now()});}catch(e){console.error(e);}setEtape("ebook_affiche");window.open("https://m.me/"+contactLinks.messenger.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 Messenger</button>}{contactLinks.instagram&&<button type="button" onClick={async()=>{try{await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:{...coords,prenom:coords.prenom||"Cliente",reseau:coords.reseau||"Contact via Instagram"},date:todayLocalStr(),ts:Date.now()});}catch(e){console.error(e);}setEtape("ebook_affiche");window.open("https://instagram.com/"+contactLinks.instagram.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>📸 Instagram</button>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}{[["prenom","Prenom *","Ton prenom"],["email","Email","ton@email.com"],["tel","Tel / WhatsApp","06 XX XX XX XX"],["reseau","Messenger / Instagram","@tonpseudo"]].map(([k,l,ph])=>(<div key={k} style={{marginBottom:".4rem"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".2rem",fontWeight:600}}>{l}</div><input value={coords[k]||""} onChange={e=>setCoords(c=>({...c,[k]:e.target.value}))} placeholder={ph} style={{width:"100%",border:"1.5px solid "+(coords[k]?"#7FAF8A":"#E8DDD4"),borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none"}}/></div>))}<button onClick={enregistrerCoords} disabled={!coordsOk||saving} style={{width:"100%",background:coordsOk?"#3D1F0E":"#E8DDD4",color:coordsOk?"white":"#888",border:"none",borderRadius:10,padding:".75rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:coordsOk?"pointer":"default",marginTop:".5rem"}}>{saving?"Envoi...":"Recevoir mon guide gratuit →"}</button></div></div>);
   if(etape==="diagnostic") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={{maxWidth:480,margin:"0 auto"}}><DiagnosticsTab uid={profil&&profil.uid||slug} userName={nomDistrib} externalMode={true} initialClient={coords.prenom}/></div></div>);
   if(etape==="recrutement"){window.location.href="?recrutement=true&uid="+(profil&&profil.uid||slug);return null;}
   return null;
