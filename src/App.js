@@ -7867,11 +7867,23 @@ function ResteCalculateur({obj, save, distributeurs=[]}){
   useEffect(()=>{
     (async()=>{
       try{
+        const fmtUid=(u)=>u.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
+        const accesSnap=await getDoc(doc(db,"acces","membres"));
+        const liste=accesSnap.exists()?(Array.isArray(accesSnap.data().liste)?accesSnap.data().liste:Object.values(accesSnap.data().liste||{})):[];
+        const uidsAcces=liste.map(m=>m.uid).filter(Boolean);
+
         const snap=await getDoc(doc(db,"equipe","annuaire"));
-        if(snap.exists()){
-          const m=snap.data().membres||{};
-          setAnnuaire(Object.entries(m).map(([uid,d])=>({id:uid,prenom:d.prenom||"",nom:d.nom||"",ca:d.ca||""})).filter(d=>d.prenom||d.nom).sort((a,b)=>(a.prenom+a.nom).localeCompare(b.prenom+b.nom)));
-        }
+        const m=snap.exists()?(snap.data().membres||{}):{};
+
+        // Fusionne : tout le monde present dans acces/membres, avec prenom/nom de l annuaire si disponibles, sinon formate depuis l uid
+        const tousUids=[...new Set([...uidsAcces, ...Object.keys(m)])];
+        const complet=tousUids.map(uid=>{
+          const d=m[uid]||{};
+          const nomComplet=(d.prenom||d.nom)?`${d.prenom||""} ${d.nom||""}`.trim():fmtUid(uid);
+          return {id:uid, prenom:d.prenom||nomComplet, nom:d.nom||"", ca:d.ca||""};
+        }).sort((a,b)=>(a.prenom+a.nom).localeCompare(b.prenom+b.nom));
+
+        setAnnuaire(complet);
       }catch{}
     })();
   },[]);
