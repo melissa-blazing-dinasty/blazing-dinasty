@@ -346,8 +346,32 @@ function AdminFormationProduits(){
   const[catActive,setCatActive]=useState("parfum");
   const[showForm,setShowForm]=useState(false);
   const[editId,setEditId]=useState(null);
-  const[form,setForm]=useState({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:""});
+  const[form,setForm]=useState({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:"",refCatalogue:""});
   const[saving,setSaving]=useState(false);
+  const[catalogueProduits,setCatalogueProduits]=useState(null);
+  const[filtreCatalogue,setFiltreCatalogue]=useState("");
+  const[liageOuvertPour,setLiageOuvertPour]=useState(null);
+  const[filtreLiageRapide,setFiltreLiageRapide]=useState("");
+
+  const[liageEnCours,setLiageEnCours]=useState(false);
+  const lierRapide=async(prodFormation,refCatalogue)=>{
+    if(liageEnCours)return;
+    setLiageEnCours(true);
+    const next={...produits};
+    const cat=Object.keys(next).find(c=>(next[c]||[]).some(p=>p.id===prodFormation.id));
+    if(cat){
+      next[cat]=next[cat].map(p=>{
+        if(p.id!==prodFormation.id)return p;
+        const actuels=p.refsCatalogue||(p.refCatalogue?[p.refCatalogue]:[]);
+        const dejaLie=actuels.includes(refCatalogue);
+        const nouveaux=dejaLie?actuels.filter(r=>r!==refCatalogue):[...actuels,refCatalogue];
+        const {refCatalogue:_omis, ...pSansAncienChamp}=p;
+        return {...pSansAncienChamp,refsCatalogue:nouveaux};
+      });
+      await save(next);
+    }
+    setLiageEnCours(false);
+  };
 
   useEffect(()=>{
     (async()=>{
@@ -355,13 +379,17 @@ function AdminFormationProduits(){
         const snap=await getDoc(doc(db,"admin","formation_produits"));
         if(snap.exists()) setProduits(snap.data().produits||{});
       }catch{}
+      try{
+        const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
+        if(catSnap.exists()) setCatalogueProduits(Object.values(catSnap.data()).flat());
+      }catch{}
       setLoading(false);
     })();
   },[]);
 
   const save=async(nextProduits)=>{
     setSaving(true);
-    try{await setDoc(doc(db,"admin","formation_produits"),{produits:nextProduits});setProduits(nextProduits);}catch{}
+    try{await setDoc(doc(db,"admin","formation_produits"),{produits:nextProduits});setProduits(nextProduits);}catch(e){console.error("Erreur sauvegarde formation produits:",e);alert("Erreur lors de l'enregistrement : "+e.message);}
     setSaving(false);
   };
 
@@ -376,8 +404,8 @@ function AdminFormationProduits(){
       next={...produits,[cat]:[...listeCat,{id:`p${Date.now()}`,...form}]};
     }
     await save(next);
-    setForm({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:""});
-    setShowForm(false);setEditId(null);
+    setForm({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:"",refCatalogue:""});
+    setShowForm(false);setEditId(null);setFiltreCatalogue("");
   };
 
   const supprimer=async(cat,id)=>{
@@ -405,9 +433,12 @@ function AdminFormationProduits(){
 
       {/* Formulaire */}
       {showForm&&(
-        <div style={{background:C.creme,borderRadius:10,padding:".85rem",marginBottom:".75rem",border:`1px solid ${C.pale}`}}>
+        <div id="formation-produits-formulaire" style={{background:C.creme,borderRadius:10,padding:".85rem",marginBottom:".75rem",border:`1px solid ${C.pale}`}}>
           <div style={{fontSize:".65rem",fontWeight:700,color:C.brun,marginBottom:".6rem"}}>{editId?"✏️ Modifier":"+ Nouveau produit"} — {CATEGORIES_PRODUITS.find(c=>c.id===catActive)?.label}</div>
           <FormField label="Titre du produit *" value={form.titre} onChange={v=>setForm(p=>({...p,titre:v}))} placeholder="Ex: Eau de parfum Rose Dorée"/>
+          <div style={{fontSize:".68rem",color:C.gris,background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .7rem",marginBottom:".5rem",lineHeight:1.5}}>
+            💡 Pour lier ce contenu à un ou plusieurs produits de la boutique, ferme ce formulaire et utilise le bouton "🔗 Gérer les produits liés" directement sur la fiche dans la liste.
+          </div>
           <UploadPhoto label="Image du produit" value={form.image} onChange={v=>setForm(p=>({...p,image:v}))} folder="produits"/>
           {catActive==="problematiques"&&(
             <div style={{marginBottom:".5rem"}}>
@@ -427,7 +458,7 @@ function AdminFormationProduits(){
               style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".48rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
               {saving?"Sauvegarde...":editId?"✓ Modifier":"✓ Ajouter"}
             </button>
-            <button onClick={()=>{setShowForm(false);setEditId(null);setForm({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:""}); }}
+            <button onClick={()=>{setShowForm(false);setEditId(null);setForm({titre:"",image:"",description:"",videoUrl:"",titreVideo:"",theme:"",refCatalogue:""});setFiltreCatalogue(""); }}
               style={{flex:1,background:C.pale,color:C.gris,border:"none",borderRadius:8,padding:".48rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
               Annuler
             </button>
@@ -442,16 +473,63 @@ function AdminFormationProduits(){
 
       {/* Liste existante */}
       {listeCat.map(p=>(
-        <div key={p.id} style={{display:"flex",alignItems:"center",gap:".5rem",background:C.creme,borderRadius:9,padding:".5rem .75rem",marginBottom:".35rem",border:`1px solid ${C.pale}`}}>
-          {p.image&&<img src={p.image} alt="" style={{width:40,height:40,borderRadius:7,objectFit:"cover",flexShrink:0}}/>}
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.titre}</div>
-            <div style={{fontSize:".6rem",color:C.gris}}>{p.videoUrl?"▶ Vidéo · ":""}{p.theme?`🎯 ${PROBLEMATIQUES_THEMES.find(t=>t.id===p.theme)?.label||p.theme} · `:""}{p.description?.slice(0,40)||"Pas de texte"}{p.description?.length>40?"...":""}</div>
+        <div key={p.id} style={{marginBottom:".35rem"}}>
+          <div style={{display:"flex",alignItems:"center",gap:".5rem",background:C.creme,borderRadius:9,padding:".5rem .75rem",border:`1px solid ${C.pale}`}}>
+            {p.image&&<img src={p.image} alt="" style={{width:40,height:40,borderRadius:7,objectFit:"cover",flexShrink:0}}/>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:".78rem",fontWeight:600,color:C.brun,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.titre}</div>
+              <div style={{fontSize:".6rem",color:C.gris}}>{p.videoUrl?"▶ Vidéo · ":""}{p.theme?`🎯 ${PROBLEMATIQUES_THEMES.find(t=>t.id===p.theme)?.label||p.theme} · `:""}{p.description?.slice(0,40)||"Pas de texte"}{p.description?.length>40?"...":""}</div>
+              {(()=>{
+                const refsLies=p.refsCatalogue||(p.refCatalogue?[p.refCatalogue]:[]);
+                return refsLies.length>0&&catalogueProduits?(
+                  <div style={{fontSize:".6rem",color:"#2D5A3D",fontWeight:600,marginTop:".2rem"}}>
+                    ✅ Lié à {refsLies.length} produit{refsLies.length>1?"s":""} : {refsLies.map(r=>catalogueProduits.find(cp=>cp.ref===r)?.nom||r).join(", ")}
+                  </div>
+                ):null;
+              })()}
+              <button onClick={()=>{setLiageOuvertPour(liageOuvertPour===p.id?null:p.id);setFiltreLiageRapide("");}}
+                style={{marginTop:".2rem",background:"none",border:"none",padding:0,fontSize:".62rem",color:"#C44B1A",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                {(p.refsCatalogue||(p.refCatalogue?[p.refCatalogue]:[])).length>0?"🔗 Gérer les produits liés":"⚠️ Pas encore lié à la boutique — cliquer pour lier"}
+              </button>
+            </div>
+            <button onClick={()=>{setEditId(p.id);setForm({titre:p.titre||"",image:p.image||"",description:p.description||"",videoUrl:p.videoUrl||"",titreVideo:p.titreVideo||"",theme:p.theme||"",refCatalogue:p.refCatalogue||""});setShowForm(true);setTimeout(()=>{document.getElementById("formation-produits-formulaire")?.scrollIntoView({behavior:"smooth",block:"start"});},100);}}
+              style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .4rem",fontSize:".62rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>✏️</button>
+            <button onClick={()=>supprimer(catActive,p.id)}
+              style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .4rem",fontSize:".62rem",color:"#B04040",cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>✕</button>
           </div>
-          <button onClick={()=>{setEditId(p.id);setForm({titre:p.titre||"",image:p.image||"",description:p.description||"",videoUrl:p.videoUrl||"",titreVideo:p.titreVideo||"",theme:p.theme||""});setShowForm(true);}}
-            style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .4rem",fontSize:".62rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>✏️</button>
-          <button onClick={()=>supprimer(catActive,p.id)}
-            style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:6,padding:".2rem .4rem",fontSize:".62rem",color:"#B04040",cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>✕</button>
+          {liageOuvertPour===p.id&&(
+            <div style={{background:"white",border:`1.5px solid #C44B1A`,borderRadius:9,padding:".6rem",marginTop:".3rem"}}>
+              {!catalogueProduits?(
+                <div style={{fontSize:".7rem",color:C.gris}}>Chargement du catalogue...</div>
+              ):(<>
+                <div style={{fontSize:".62rem",color:C.gris,marginBottom:".4rem",fontStyle:"italic"}}>Coche tous les produits qui utilisent cette même formation (ex : les différents coloris d'un fond de teint).</div>
+                <input value={filtreLiageRapide} onChange={e=>setFiltreLiageRapide(e.target.value)} placeholder="🔍 Rechercher un produit..." autoFocus
+                  style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .6rem",fontSize:".74rem",fontFamily:"inherit",outline:"none",marginBottom:".4rem"}}/>
+                {filtreLiageRapide.trim()&&(
+                  <div style={{maxHeight:200,overflowY:"auto",border:`1px solid ${C.pale}`,borderRadius:8,marginBottom:".5rem",opacity:liageEnCours?.6:1,pointerEvents:liageEnCours?"none":"auto"}}>
+                    {catalogueProduits.filter(cp=>cp.nom.toLowerCase().includes(filtreLiageRapide.toLowerCase())).slice(0,30).map(cp=>{
+                      const refsLies=p.refsCatalogue||(p.refCatalogue?[p.refCatalogue]:[]);
+                      const coche=refsLies.includes(cp.ref);
+                      return(
+                        <div key={cp.ref} onClick={()=>lierRapide(p,cp.ref)}
+                          style={{display:"flex",alignItems:"center",gap:".5rem",padding:".4rem .6rem",fontSize:".72rem",cursor:"pointer",borderBottom:`1px solid ${C.pale}`,background:coche?"#E8F5E9":"transparent"}}>
+                          <div style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${coche?"#2D5A3D":C.pale}`,background:coche?"#2D5A3D":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            {coche&&<span style={{color:"white",fontSize:".6rem",fontWeight:700}}>✓</span>}
+                          </div>
+                          <span style={{flex:1}}>{cp.nom}</span>
+                          <span style={{color:C.gris}}>{cp.prix?.toFixed?.(2)}€</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <button onClick={()=>{setLiageOuvertPour(null);setFiltreLiageRapide("");}}
+                  style={{width:"100%",background:C.brun,color:"white",border:"none",borderRadius:8,padding:".4rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+                  Terminé
+                </button>
+              </>)}
+            </div>
+          )}
         </div>
       ))}
       {listeCat.length===0&&<div style={{textAlign:"center",fontSize:".72rem",color:C.gris,padding:".5rem",fontStyle:"italic"}}>Aucun produit — ajoute le premier !</div>}

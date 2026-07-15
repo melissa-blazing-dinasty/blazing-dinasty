@@ -12,7 +12,6 @@ import { ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { FastStartTab } from './FastStartTab';
 import { AssistanteIATab } from './AssistanteIATab';
 import { DreamBoardWidget } from './DreamBoardTab';
-import { EditorialTab } from './EditorialTab';
 import { ClientsTab, ClientsRelanceTab, DistributeursTab, RelancesTab } from './ClientsTab';
 import { SuiviRecruTab } from './App';
 import { DecouverteTour } from './App';
@@ -348,8 +347,8 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
     {id:"prospects",    label:"👥 Prospects"},
     // Suivi CA — visible seulement pour les chefs
     {id:"relances",label:"🔔 Relances"},
-    {id:"editorial",label:"✍️ Éditorial"},{id:"business",label:"📊 Business"},
     {id:"diagnostics",  label:"🩺 Diagnostics"},
+    {id:"business",label:"📊 Business"},
     
     
   ];
@@ -852,7 +851,6 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
           {equipeFunTab==="powerhour"&&<PowerHourTab uid={uid} userName={userName} canCreate={isChefDash||uid===MELISSA||uid==="melissa-da-silveira"}/>}
         </div>
       )}
-      {dtab==="editorial"&&<EditorialTab uid={uid} userName={userName}/>}
       {dtab==="relances"&&<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowDecouverteRelances(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)",display:"flex",alignItems:"center",gap:".35rem"}}>🧭 Découverte</button></div>{showDecouverteRelances&&<DecouverteTour outil="relances" onClose={()=>setShowDecouverteRelances(false)}/>}<RelancesTab prospects={prospects} clients={clients} saveProspects={saveProspects} saveClients={saveClients}/></div>}
       {dtab==="business"&&(<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowDecouverteBusiness(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>{showDecouverteBusiness&&<DecouverteTour outil="business" onClose={()=>setShowDecouverteBusiness(false)}/>}<div id="decouverte-business-tabs" style={{display:"flex",gap:".3rem",marginBottom:"1rem",overflowX:"auto"}}>{[{id:"suivica",label:"CA"},{id:"entonnoir",label:"Entonnoir"},{id:"historique",label:"Historique"}].map(t=>(<button key={t.id} onClick={()=>setBtab(t.id)} style={{flex:"none",padding:".4rem .85rem",fontSize:".7rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(btab===t.id?"#C49A8A":"#E8DDD4"),background:btab===t.id?"#C49A8A":"white",color:btab===t.id?"white":"#888",cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>))}</div>{btab==="suivica"&&<SuiviCATab uid={uid}/>}
           {btab==="entonnoir"&&<div><div style={{background:"#FAF7F2",borderRadius:10,padding:".65rem .85rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".7rem",color:"#3D1F0E",lineHeight:1.6}}><strong>Comment lire l entonnoir ?</strong><br/>Les barres montrent combien de personnes passent d une etape a l autre. P vers C = % de prospects devenus clientes. C vers D = % de clientes qui ont rejoint l equipe. Plus ces taux sont eleves, meilleure est ta conversion.</div><EntonnoirTab prospects={prospects} clients={clients} distributeurs={distributeurs}/></div>}

@@ -4,7 +4,6 @@ import { db } from './firebase';
 import { C } from './constants';
 import { UploadPhoto, UploadVideo } from './FormationProduitsTab';
 import { DecouverteTour } from './App';
-import { TokensCadeauxTab } from './TokensCadeauxTab';
 
 export const THEMES_LINKBIO=[
   {id:"elegance",label:"Élégance",bg:"linear-gradient(135deg,#3D1F0E,#5C3020)",header:"linear-gradient(135deg,#3D1F0E,#5C3020)",accent:"#C4A882",text:"white",btnPrimary:"#C49A8A",btnSecondary:"white",btnTertiary:"#3D1F0E",cardBg:"white",preview:"🤎"},
@@ -47,7 +46,6 @@ function LinkBioTab({uid, userName, initialSection="theme"}){
   const bioUrl=`https://blazing-dinasty-1fad9.web.app?bio=${slug}`;
   const tunnelUrl=`https://blazing-dinasty-1fad9.web.app?tunnel=${slug}`;
   const boutiqueUrl=`https://blazing-dinasty-1fad9.web.app?boutique=${slug}`;
-  const[tokensOuvert,setTokensOuvert]=useState(false);
   const [catalogueProduits,setCatalogueProduits]=useState(null);
   const [filtreBestSellers,setFiltreBestSellers]=useState("");
   const [creationPack,setCreationPack]=useState(false);
@@ -688,28 +686,6 @@ function LinkBioTab({uid, userName, initialSection="theme"}){
                       Annuler
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* ── SECTION TOKENS CADEAUX (depliable) ────────────────── */}
-            <div style={{marginTop:".8rem",marginBottom:".6rem"}}>
-              <button onClick={()=>setTokensOuvert(o=>!o)}
-                style={{width:"100%",background:tokensOuvert?"linear-gradient(135deg,#C4A962,#9E6B6B)":C.creme,border:`1.5px solid ${tokensOuvert?"transparent":C.or}`,borderRadius:12,padding:".7rem .85rem",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}}>
-                <span style={{display:"flex",alignItems:"center",gap:".5rem"}}>
-                  <span style={{fontSize:"1.1rem"}}>🎁</span>
-                  <span style={{fontSize:".78rem",fontWeight:700,color:tokensOuvert?"white":C.brun}}>Mes tokens cadeaux</span>
-                </span>
-                <span style={{fontSize:"1rem",color:tokensOuvert?"white":C.or,transform:tokensOuvert?"rotate(180deg)":"none",transition:"transform .2s"}}>⌄</span>
-              </button>
-              {!tokensOuvert&&(
-                <div style={{fontSize:".65rem",color:C.gris,marginTop:".4rem",lineHeight:1.5,paddingLeft:".2rem"}}>
-                  Offre des reductions exclusives a tes clientes. Chaque lien ne peut etre utilise qu'une seule fois — la popup s'affiche automatiquement sur ta boutique.
-                </div>
-              )}
-              {tokensOuvert&&(
-                <div style={{marginTop:".7rem",background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".8rem"}}>
-                  <TokensCadeauxTab uid={uid} db={db} prenom={userName}/>
                 </div>
               )}
             </div>

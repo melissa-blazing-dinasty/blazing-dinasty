@@ -22,6 +22,7 @@ import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { FastStartTab } from './FastStartTab';
 import { ObjectifsTab } from './ObjectifsTab';
 import { AssistanteIATab } from './AssistanteIATab';
+import { TokensCadeauxTab } from './TokensCadeauxTab';
 import { buildEquipeTree, countEquipe, getLigneeChefs, countEquipeSafe, SearchSelect, todayLocalDate, todayLocalStr, BoutonMiseAJour, useLang, useTranslation, useTranslatedContent, useTranslatedProduit, T, Btn, YTBtn, DriveBtn, DocBtn, Card, Info, Tag, SecTitle, LangContext, UI_TEXTS, UI_TEXTS_PT, domOriginals, translateDOM, translateBatch, seedAnnuaireFromMembres, APP_VERSION, C } from './components';
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -1834,6 +1835,7 @@ function App(){
   const OUTILS_SOUS_ONGLETS=[
     {id:"linkbio",label:"🔗 Link-in-Bio"},
     {id:"boutique",label:"🛍️ Boutique"},
+    {id:"tokens",label:"🎁 Tokens cadeaux"},
     {id:"diagnostics",label:"🩺 Diagnostics"},
     {id:"scripts",label:"📝 Scripts"},
     {id:"banqueimages",label:"💬 Témoignages & Visuels"},
@@ -3421,6 +3423,7 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="boutique"&&<LinkBioTab uid={userId} userName={name} initialSection="boutique"/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="tokens"&&<TokensCadeauxTab uid={userId} db={db} prenom={name}/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}

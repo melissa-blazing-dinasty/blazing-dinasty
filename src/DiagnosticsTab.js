@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
 import { isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -11,9 +11,10 @@ import { todayLocalStr } from './utils';
 
 let ANTHROPIC_API_KEY = '';
 async function chargerCleAPI(){try{const snap=await getDoc(doc(db,'admin','config'));if(snap.exists()&&snap.data().anthropicKey)ANTHROPIC_API_KEY=snap.data().anthropicKey;}catch{}}
-chargerCleAPI();
+const chargementCleAPIPromise = chargerCleAPI();
 
 async function genererDiagBusiness(type, reponses, nomClient) {
+  if(!ANTHROPIC_API_KEY) await chargementCleAPIPromise;
   const typeLabels = {
     pasrecruiter: "blocage en recrutement MLM/VDI",
     pasvendre: "blocage en ventes de produits Mihi",
@@ -73,6 +74,7 @@ Génère un plan d'action personnalisé en JSON avec cette structure exacte (ne 
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 async function genererOrdonnanceIA(type, reponses, nomClient) {
+  if(!ANTHROPIC_API_KEY) await chargementCleAPIPromise;
   // Types business (pas de catalogue produits)
   const typesBusiness = ["pasrecruiter","pasvendre","reseaux","chargementale","valeurmarche","entrepreneuriat","complementrevenu","maman","reconversion","confianceensoi","reseauxsociaux2"];
   if(typesBusiness.includes(type)){
@@ -646,6 +648,8 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
   const [step, setStep] = useState(-1); // -1 = accueil
   const [contactLinksParfum,setContactLinksParfum]=useState(null);
   const [afficherVIPParfum,setAfficherVIPParfum]=useState(false);
+  const [lienInscriptionParfum,setLienInscriptionParfum]=useState("");
+  const [showPopupInscriptionParfum,setShowPopupInscriptionParfum]=useState(false);
   useEffect(()=>{
     if(!uid)return;
     (async()=>{
@@ -658,7 +662,10 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
       }catch{}
       try{
         const snapU3=await getDoc(doc(db,"users",uid));
-        if(snapU3.exists())setAfficherVIPParfum(!!snapU3.data()["db-afficher-prix-vip"]);
+        if(snapU3.exists()){
+          setAfficherVIPParfum(!!snapU3.data()["db-afficher-prix-vip"]);
+          setLienInscriptionParfum(snapU3.data()["db-lien-inscription-mihi"]||"");
+        }
       }catch{}
     })();
   },[uid]);
@@ -718,6 +725,7 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
     const top3 = scored.sort((a,b) => b.score - a.score).slice(0, 3);
     setResultat(top3);
     setLoading(false);
+    if(afficherVIPParfum&&lienInscriptionParfum)setTimeout(()=>setShowPopupInscriptionParfum(true),1500);
   };
 
   const repondre = (val) => {
@@ -778,7 +786,9 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
     <div style={{paddingBottom:"2rem"}}>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.brun,marginBottom:".3rem"}}>Presque terminé <em style={{fontStyle:"italic",color:C.rose}}>✨</em></div>
       <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>Laisse tes coordonnées pour recevoir tes recommandations parfum personnalisées 🌸</p>
-      {contactLinksParfum&&(contactLinksParfum.whatsapp||contactLinksParfum.messenger||contactLinksParfum.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:C.gris,marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinksParfum.whatsapp&&<button type="button" onClick={async()=>{const c={...contactParfum,prenom:contactParfum.prenom.trim()||"Cliente",reseau:contactParfum.reseau||"Contact via WhatsApp"};try{const fn=httpsCallable(fbFunctions,"soumettreDiagnostic");await fn({uid,type:"parfum",nomClient:c.prenom,contact:c,reponses});}catch(e){console.error("soumettreDiagnostic parfum:",e);}calculerResultat(reponses);setShowContactParfum(false);window.open("https://wa.me/"+contactLinksParfum.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour, je viens de faire le diagnostic parfum et j'aimerais recevoir mes resultats !"),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 WhatsApp</button>}{contactLinksParfum.messenger&&<button type="button" onClick={async()=>{const c={...contactParfum,prenom:contactParfum.prenom.trim()||"Cliente",reseau:contactParfum.reseau||"Contact via Messenger"};try{const fn=httpsCallable(fbFunctions,"soumettreDiagnostic");await fn({uid,type:"parfum",nomClient:c.prenom,contact:c,reponses});}catch(e){console.error("soumettreDiagnostic parfum:",e);}calculerResultat(reponses);setShowContactParfum(false);window.open("https://m.me/"+contactLinksParfum.messenger.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 Messenger</button>}{contactLinksParfum.instagram&&<button type="button" onClick={async()=>{const c={...contactParfum,prenom:contactParfum.prenom.trim()||"Cliente",reseau:contactParfum.reseau||"Contact via Instagram"};try{const fn=httpsCallable(fbFunctions,"soumettreDiagnostic");await fn({uid,type:"parfum",nomClient:c.prenom,contact:c,reponses});}catch(e){console.error("soumettreDiagnostic parfum:",e);}calculerResultat(reponses);setShowContactParfum(false);window.open("https://instagram.com/"+contactLinksParfum.instagram.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>📸 Instagram</button>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}
+      <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".6rem .75rem",marginBottom:"1rem",fontSize:".72rem",color:"#B04040",lineHeight:1.55}}>
+        ℹ️ Merci d'indiquer <strong>au moins un moyen de te contacter</strong> (téléphone, email ou pseudo réseau social) — sans ça, on ne peut tout simplement pas t'envoyer ni traiter tes recommandations.
+      </div>
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
         <div style={{fontSize:".6rem",color:C.gris,marginBottom:".2rem"}}>Prénom *</div>
         <input value={contactParfum.prenom} onChange={e=>setContactParfum(p=>({...p,prenom:e.target.value}))} placeholder="Ton prénom"
@@ -793,6 +803,11 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
         <input value={contactParfum.reseau} onChange={e=>setContactParfum(p=>({...p,reseau:e.target.value}))} placeholder="@tonpseudo"
           style={{width:"100%",border:`1.5px solid ${contactParfum.reseau.trim()?C.vert:C.pale}`,borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
       </div>
+      {contactParfum.prenom.trim() && !contactParfum.tel.trim() && !contactParfum.mail.trim() && !contactParfum.reseau.trim() && (
+        <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".55rem .75rem",marginBottom:".6rem",fontSize:".72rem",color:"#B04040",lineHeight:1.5}}>
+          ⚠️ Ton téléphone, ton email ou ton pseudo réseau social est obligatoire — sans ça, ta conseillère ne peut tout simplement pas t'envoyer ni traiter tes recommandations.
+        </div>
+      )}
       <button type="button" onClick={async()=>{
         try{
           const soumettreDiagnosticFn = httpsCallable(fbFunctions, "soumettreDiagnostic");
@@ -803,7 +818,7 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
         style={{width:"100%",background:(contactParfum.prenom.trim().length>=2&&(contactParfum.tel.trim()||contactParfum.mail.trim()||contactParfum.reseau.trim()))?C.brun:C.pale,color:(contactParfum.prenom.trim().length>=2&&(contactParfum.tel.trim()||contactParfum.mail.trim()||contactParfum.reseau.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
         Voir mes recommandations parfum →
       </button>
-      <div style={{fontSize:".65rem",color:C.gris,textAlign:"center",marginTop:".5rem"}}>* Prénom + au moins un moyen de contact obligatoires</div>
+      <div style={{fontSize:".65rem",color:C.gris,textAlign:"center",marginTop:".5rem"}}>* Prénom + au moins un moyen de contact obligatoires (téléphone, email ou réseau social)</div>
     </div>
   );
 
@@ -942,6 +957,25 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
         style={{width:"100%",background:"none",border:"1.5px solid #E8DDD4",borderRadius:10,padding:".55rem",fontSize:".78rem",color:"#888",cursor:"pointer",fontFamily:"inherit"}}>
         🔄 Recommencer le diagnostic
       </button>
+      {showPopupInscriptionParfum&&(
+        <div onClick={()=>setShowPopupInscriptionParfum(false)} style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:500,background:'rgba(0,0,0,.65)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:18,padding:'1.5rem',maxWidth:380,width:'100%',textAlign:'center',position:'relative'}}>
+            <button onClick={()=>setShowPopupInscriptionParfum(false)} style={{position:'absolute',top:10,right:14,background:'none',border:'none',fontSize:'1.2rem',color:'#AAA',cursor:'pointer'}}>✕</button>
+            <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>💎</div>
+            <div style={{fontFamily:'Georgia,serif',fontSize:'1.15rem',fontWeight:600,color:'#3D1F0E',marginBottom:'.6rem'}}>Débloque le prix VIP</div>
+            <p style={{fontSize:'.8rem',color:'#666',lineHeight:1.65,marginBottom:'1.1rem'}}>
+              En t'inscrivant gratuitement chez Mihi, tu débloques le prix VIP sur ces parfums — et bien plus encore.
+            </p>
+            <a href={lienInscriptionParfum} target="_blank" rel="noopener noreferrer" onClick={()=>setShowPopupInscriptionParfum(false)}
+              style={{display:'block',background:'linear-gradient(135deg,#9B59B6,#6B4C93)',color:'white',textDecoration:'none',borderRadius:10,padding:'.75rem',fontSize:'.85rem',fontWeight:700,marginBottom:'.6rem'}}>
+              ✨ Je m'inscris gratuitement
+            </a>
+            <button onClick={()=>setShowPopupInscriptionParfum(false)} style={{background:'none',border:'none',color:'#999',fontSize:'.72rem',cursor:'pointer',fontFamily:'inherit'}}>
+              Non merci, plus tard
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1621,7 +1655,16 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     })();
   },[uid,mode]);
   useEffect(()=>{if(mode==="contact"&&skipContact&&onComplete)onComplete();},[mode,skipContact]);
+  useEffect(()=>{
+    if(mode==="contact"&&remplirMaintenant&&reponsesFinales){
+      genererOrdonnance(reponsesFinales);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[mode,remplirMaintenant]);
   const [contactLinksDirect,setContactLinksDirect]=useState(null);
+  const [afficherVIPDiag,setAfficherVIPDiag]=useState(false);
+  const [lienInscriptionDiag,setLienInscriptionDiag]=useState("");
+  const [showPopupInscriptionDiag,setShowPopupInscriptionDiag]=useState(false);
   useEffect(()=>{
     if(!uid)return;
     (async()=>{
@@ -1630,6 +1673,13 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         if(cSnap3.exists()){
           const cd3=cSnap3.data();
           setContactLinksDirect({whatsapp:cd3.whatsapp||"",messenger:cd3.messenger||"",instagram:cd3.instagram||""});
+        }
+      }catch{}
+      try{
+        const snapUV=await getDoc(doc(db,"users",uid));
+        if(snapUV.exists()){
+          setAfficherVIPDiag(!!snapUV.data()["db-afficher-prix-vip"]);
+          setLienInscriptionDiag(snapUV.data()["db-lien-inscription-mihi"]||"");
         }
       }catch{}
     })();
@@ -1653,11 +1703,11 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
   const questions = type ? (QUESTIONS[type]||[]) : [];
   const q = questions[step];
+  const TYPES_SCORING = ["recrutement","blocage"];
   // Si type sélectionné mais pas de questions définies => générer directement
   if(mode==="questionnaire" && type && questions.length===0 && !TYPES_SCORING.includes(type)){
     // Pour les types equipe sans questions, afficher un message simple
   }
-  const TYPES_SCORING = ["recrutement","blocage"];
 
   const repondre = (val) => {
     const newRep = { ...reponses, [q.id]: val };
@@ -1714,7 +1764,19 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
         const soumettreDiagnosticFn = httpsCallable(fbFunctions, "soumettreDiagnostic");
         await soumettreDiagnosticFn({uid, type, nomClient:nomFinal, contact, reponses:repSansContact});
-        setMode("attente");
+
+        // Générer le résultat directement pour la cliente (au lieu de juste attendre)
+        let result = null;
+        try{
+          result = await genererOrdonnanceIA(type, repSansContact, nomFinal);
+        }catch{}
+        if(result){
+          setOrdonnance(result);
+          setMode("resultat");
+          if(afficherVIPDiag&&lienInscriptionDiag)setTimeout(()=>setShowPopupInscriptionDiag(true),1500);
+        }else{
+          setMode("attente");
+        }
       }catch{
         setErreur("Erreur lors de l'envoi. Merci de contacter ta conseillère directement.");
         setMode("questionnaire");
@@ -1841,7 +1903,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   if (mode === "resultats") return (
     <div>
       <button onClick={()=>setMode("choix")} style={{background:"none",border:"none",color:C.rose,fontSize:".78rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".75rem"}}>← Retour aux diagnostics</button>
-      <DiagResultsTab uid={uid}/>
+      <DiagResultsTab uid={uid} onNonLuChange={(n)=>{setNonLusCount(n);onNonLuChange(n);}}/>
     </div>
   );
 
@@ -1918,10 +1980,16 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   }
   if (mode === "loading") return (
     <div style={{textAlign:"center",padding:"3rem 1rem"}}>
+      <div style={{fontSize:"2rem",marginBottom:"1rem"}}>✨</div>
       <div style={{ fontFamily: "Georgia,serif", fontSize: "1.1rem", color: C.brun, marginBottom: ".5rem" }}>Génération en cours...</div>
       <p style={{ fontSize: ".76rem", color: C.gris, lineHeight: 1.6 }}>
         L'IA analyse les réponses et sélectionne les meilleurs produits Mihi pour {nomClient||"ta cliente"} 🖤
       </p>
+      <div style={{background:C.creme,borderRadius:10,padding:".6rem .9rem",marginTop:"1.2rem",display:"inline-block"}}>
+        <p style={{fontSize:".68rem",color:C.gris,lineHeight:1.5,margin:0}}>
+          ⏳ Ça peut prendre jusqu'à 30 secondes, merci de patienter sans quitter la page.
+        </p>
+      </div>
     </div>
   );
 
@@ -1933,7 +2001,10 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>
         Laisse tes coordonnées pour que ta conseillère puisse te recontacter avec tes recommandations personnalisées 💛
       </p>
-      {contactLinksDirect&&(contactLinksDirect.whatsapp||contactLinksDirect.messenger||contactLinksDirect.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:C.gris,marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinksDirect.whatsapp&&<button type="button" onClick={async()=>{const contact={prenom:prenomContact.trim()||nomClient||"Cliente",nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact||"Contact via WhatsApp"};await genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});window.open("https://wa.me/"+contactLinksDirect.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour "+(userName||"")+", je viens de faire le diagnostic et j'aimerais recevoir mes resultats !"),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 WhatsApp</button>}{contactLinksDirect.messenger&&<button type="button" onClick={async()=>{const contact={prenom:prenomContact.trim()||nomClient||"Cliente",nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact||"Contact via Messenger"};await genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});window.open("https://m.me/"+contactLinksDirect.messenger.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 Messenger</button>}{contactLinksDirect.instagram&&<button type="button" onClick={async()=>{const contact={prenom:prenomContact.trim()||nomClient||"Cliente",nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact||"Contact via Instagram"};await genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});window.open("https://instagram.com/"+contactLinksDirect.instagram.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>📸 Instagram</button>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}
+
+      <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".6rem .75rem",marginBottom:"1rem",fontSize:".72rem",color:"#B04040",lineHeight:1.55}}>
+        ℹ️ Merci d'indiquer <strong>au moins un moyen de te contacter</strong> (téléphone, email ou pseudo réseau social) — sans ça, on ne peut tout simplement pas t'envoyer ni traiter tes recommandations.
+      </div>
 
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,padding:"1.1rem",marginBottom:"1rem"}}>
         <div style={{display:"flex",gap:".5rem",marginBottom:".6rem"}}>
@@ -1969,8 +2040,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
       {/* Message d'alerte si contact manquant */}
       {prenomContact.trim() && !telContact.trim() && !mailContact.trim() && !reseauContact.trim() && (
-        <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".55rem .75rem",marginBottom:".6rem",fontSize:".72rem",color:"#B04040",display:"flex",gap:".4rem",alignItems:"center"}}>
-          ⚠️ Ajoute ton téléphone, email ou réseau social pour recevoir tes recommandations
+        <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".55rem .75rem",marginBottom:".6rem",fontSize:".72rem",color:"#B04040",lineHeight:1.5}}>
+          ⚠️ Ton téléphone, ton email ou ton pseudo réseau social est obligatoire — sans ça, ta conseillère ne peut tout simplement pas t'envoyer ni traiter tes recommandations.
         </div>
       )}
 
@@ -1979,12 +2050,12 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           const contact={prenom:prenomContact,nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact};
           genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});
         }}
-        disabled={prenomContact.trim().length<2||nomContact.trim().length<2||(!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailContact.trim()))&&!(/^[\d\+\-\s\(\)]{10,}$/.test(telContact.trim())))}
-        style={{width:"100%",background:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.brun:C.pale,color:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:(prenomContact.trim()&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
+        disabled={prenomContact.trim().length<2||!(telContact.trim()||mailContact.trim()||reseauContact.trim())}
+        style={{width:"100%",background:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.brun:C.pale,color:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
         Envoyer mes réponses →
       </button>
       <div style={{fontSize:".65rem",color:C.gris,textAlign:"center"}}>
-        * Prénom + au moins un moyen de contact obligatoires
+        * Prénom + au moins un moyen de contact obligatoires (téléphone, email ou réseau social)
       </div>
     </div>
   );
@@ -2207,18 +2278,26 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         {packs.map(pack => {
           const p = ordonnance[pack.key];
           if (!p) return null;
+          const totalVIPPack=(p.produits||[]).reduce((s,pr)=>s+(pr.prixVIP?parseFloat(pr.prixVIP):parseFloat(pr.prix)||0),0);
+          const auMoinsUnVIP=(p.produits||[]).some(pr=>pr.prixVIP);
           return (
             <div key={pack.key} style={{ background: pack.bg, border: `2px solid ${pack.color}30`, borderRadius: 14, padding: "1rem 1.1rem", marginBottom: ".75rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: ".65rem" }}>
                 <div style={{ fontSize: ".82rem", fontWeight: 700, color: pack.color }}>{pack.label}</div>
-                <div style={{ background: pack.color, color: "white", fontSize: ".7rem", fontWeight: 700, padding: ".2rem .6rem", borderRadius: 20 }}>{p.total}€</div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{ background: pack.color, color: "white", fontSize: ".7rem", fontWeight: 700, padding: ".2rem .6rem", borderRadius: 20 }}>{p.total}€</div>
+                  {afficherVIPDiag&&auMoinsUnVIP&&<div style={{fontSize:".6rem",fontWeight:700,color:"#8B6FB3",marginTop:".2rem"}}>💎 Total VIP : {totalVIPPack.toFixed(2)}€</div>}
+                </div>
               </div>
 
               {p.produits && p.produits.map((prod, i) => (
                 <div key={i} style={{ background: "rgba(255,255,255,.7)", borderRadius: 9, padding: ".55rem .75rem", marginBottom: ".35rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: ".15rem" }}>
                     <div style={{ fontSize: ".78rem", fontWeight: 600, color: C.brun, flex: 1, paddingRight: ".5rem" }}>{prod.nom}</div>
-                    <div style={{ fontSize: ".75rem", fontWeight: 700, color: pack.color, flexShrink: 0 }}>{prod.prix}</div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{ fontSize: ".75rem", fontWeight: 700, color: pack.color }}>{prod.prix}</div>
+                      {afficherVIPDiag&&prod.prixVIP&&<div style={{fontSize:".62rem",fontWeight:700,color:"#8B6FB3"}}>💎 VIP {prod.prixVIP}€</div>}
+                    </div>
                   </div>
                   <div style={{ fontSize: ".65rem", color: C.gris }}>
                     <span style={{ background: pack.color+"20", color: pack.color, padding: ".1rem .35rem", borderRadius: 20, marginRight: ".35rem", fontWeight: 600 }}>{prod.usage}</span>
@@ -2232,13 +2311,14 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
               </div>
 
               <button onClick={() => copierPack(pack.key)}
-                style={{ width: "100%", background: pack.color, color: "white", border: "none", borderRadius: 8, padding: ".42rem", fontSize: ".72rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+                style={{ width: "100%", background: pack.color, color: "white", border: "none", borderRadius: 8, padding: ".42rem", fontSize: ".72rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer", display:externalMode?"none":"block" }}>
                 📋 Copier ce pack
               </button>
             </div>
           );
         })}
 
+        {!externalMode&&(<>
         <button onClick={copierTout}
           style={{ width: "100%", background: C.brun, color: C.blanc, border: "none", borderRadius: 10, padding: ".65rem", fontSize: ".82rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer", marginBottom: ".5rem" }}>
           📋 Copier l'ordonnance complète
@@ -2279,7 +2359,27 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           </pre>
         </details>
         <p style={{ fontSize: ".65rem", color: C.gris, textAlign: "center" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
+        </>)}
         {onComplete&&<button onClick={onComplete} style={{width:"100%",background:"#2D5A3D",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:"1rem"}}>Recevoir mon guide gratuit 🎁</button>}
+        {showPopupInscriptionDiag&&(
+          <div onClick={()=>setShowPopupInscriptionDiag(false)} style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:500,background:'rgba(0,0,0,.65)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:18,padding:'1.5rem',maxWidth:380,width:'100%',textAlign:'center',position:'relative'}}>
+              <button onClick={()=>setShowPopupInscriptionDiag(false)} style={{position:'absolute',top:10,right:14,background:'none',border:'none',fontSize:'1.2rem',color:'#AAA',cursor:'pointer'}}>✕</button>
+              <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>💎</div>
+              <div style={{fontFamily:'Georgia,serif',fontSize:'1.15rem',fontWeight:600,color:'#3D1F0E',marginBottom:'.6rem'}}>Débloque le prix VIP</div>
+              <p style={{fontSize:'.8rem',color:'#666',lineHeight:1.65,marginBottom:'1.1rem'}}>
+                En t'inscrivant gratuitement chez Mihi, tu débloques le prix VIP sur les produits recommandés — et bien plus encore.
+              </p>
+              <a href={lienInscriptionDiag} target="_blank" rel="noopener noreferrer" onClick={()=>setShowPopupInscriptionDiag(false)}
+                style={{display:'block',background:'linear-gradient(135deg,#8B6FB3,#6B4C93)',color:'white',textDecoration:'none',borderRadius:10,padding:'.75rem',fontSize:'.85rem',fontWeight:700,marginBottom:'.6rem'}}>
+                ✨ Je m'inscris gratuitement
+              </a>
+              <button onClick={()=>setShowPopupInscriptionDiag(false)} style={{background:'none',border:'none',color:'#999',fontSize:'.72rem',cursor:'pointer',fontFamily:'inherit'}}>
+                Non merci, plus tard
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2287,8 +2387,13 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 }
 
 // ── RESULTATS DIAGNOSTICS (Dashboard) ────────────────────────────────────────
-function DiagResultsTab({ uid }) {
+function DiagResultsTab({ uid, onNonLuChange=()=>{} }) {
   const [diags, setDiags] = useState([]);
+  useEffect(()=>{
+    const n=diags.filter(d=>d.nonLu).length;
+    onNonLuChange(n);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[diags]);
   const [loaded, setLoaded] = useState(false);
   const [sel, setSel] = useState(null);
   const [prospects, setProspects] = useState([]);
@@ -2297,6 +2402,7 @@ function DiagResultsTab({ uid }) {
   const [lienProspect, setLienProspect] = useState(null);
   const [showArchives, setShowArchives] = useState(false);
   const [afficherVIP, setAfficherVIP] = useState(false);
+  const [catalogueRes, setCatalogueRes] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -2309,6 +2415,10 @@ function DiagResultsTab({ uid }) {
           setAfficherVIP(!!snap.data()["db-afficher-prix-vip"]);
         }
       } catch {}
+      try{
+        const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
+        if(catSnap.exists())setCatalogueRes(Object.values(catSnap.data()).flat());
+      }catch{}
       setLoaded(true);
     })();
   }, [uid]);
@@ -3000,7 +3110,7 @@ function LinkBioPublicPage({slug}){
             {profil.reseauxTiktok&&<a href={profil.reseauxTiktok} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_tiktok")} style={{width:38,height:38,borderRadius:"50%",background:"#000000",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none",fontWeight:700}}>TT</a>}
             {profil.reseauxYoutube&&<a href={profil.reseauxYoutube} target="_blank" rel="noopener noreferrer" onClick={()=>trackerEvenement(profil.slug||slug,"clic_youtube")} style={{width:38,height:38,borderRadius:"50%",background:"#FF0000",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:"1rem",textDecoration:"none"}}>YT</a>}
           </div>
-        )}        <div style={{padding:"1rem",textAlign:"center",fontSize:".6rem",color:theme.accent,opacity:.6}}>Blazing Dynasty × Mihi France</div>
+        )}        <div style={{padding:"1rem",textAlign:"center",fontSize:".6rem",color:theme.accent,opacity:.6}}>`Blazing Dynasty × Mihi France</div>
       </div>
     </div>
   );
@@ -3021,6 +3131,7 @@ async function trackerEvenement(slug, champ){
 }
 
 async function conseillerProduitsIA(demande, catalogue){
+  if(!ANTHROPIC_API_KEY) await chargementCleAPIPromise;
   const tousProduits=Object.values(catalogue||{}).flat();
   const listeProduits=tousProduits.map(p=>`${p.ref} | ${p.nom} | ${p.prix?.toFixed?.(2)||p.prix}€`).join("\n");
 
@@ -3060,6 +3171,8 @@ Choisis entre 2 et 4 produits maximum, uniquement parmi les references reelles d
 function BoutiquePubliquePage({slug}){
   const [profil,setProfil]=useState(null);
   const [catalogue,setCatalogue]=useState(null);
+  const [formationProduits,setFormationProduits]=useState([]);
+  const [produitDetailOuvert,setProduitDetailOuvert]=useState(null);
   const [afficherVIPBoutique,setAfficherVIPBoutique]=useState(false);
   const [loading,setLoading]=useState(true);
   const [activeCat,setActiveCat]=useState("");
@@ -3070,11 +3183,16 @@ function BoutiquePubliquePage({slug}){
   const [clientEmail,setClientEmail]=useState("");
   const [clientTel,setClientTel]=useState("");
   const [checkoutLoading,setCheckoutLoading]=useState(false);
-  const [moyensPaiement,setMoyensPaiement]=useState({stripePret:false,paypalPret:false});
+  const [moyensPaiement,setMoyensPaiement]=useState({lienPaypalMe:"",lienStripePerso:""});
+  const [moyensPaiementCharges,setMoyensPaiementCharges]=useState(false);
+  const [diagPaiement,setDiagPaiement]=useState(null);
   const [paypalCaptureEnCours,setPaypalCaptureEnCours]=useState(false);
   const [checkoutError,setCheckoutError]=useState("");
   const [retourCommande]=useState(()=>new URLSearchParams(window.location.search).get("commande"));
   const [retourFidelite]=useState(()=>new URLSearchParams(window.location.search).get("fidelite")==="milestone");
+  const [produitPartage]=useState(()=>new URLSearchParams(window.location.search).get("produit"));
+  const [packPartage]=useState(()=>new URLSearchParams(window.location.search).get("pack"));
+  const [itemSurligne,setItemSurligne]=useState(null);
   const [showSuccessBanner,setShowSuccessBanner]=useState(true);
   const [paypalRetourStatut,setPaypalRetourStatut]=useState(null); // null|"loading"|"succes"|"erreur"
 
@@ -3140,14 +3258,72 @@ function BoutiquePubliquePage({slug}){
           const realSlug=profilData.slug||slug;
           trackerEvenement(realSlug,"boutique_visites");
         }
-        if(profilData&&profilData.uid){
+        if(profilData){
           try{
-            const fnMoyens=httpsCallable(fbFunctions,"verifierMoyensPaiementBoutique");
-            const resMoyens=await fnMoyens({distributeurUid:profilData.uid});
-            setMoyensPaiement(resMoyens.data);
-          }catch(e){console.error("moyens paiement:",e);}
+            let dU={};
+            let uidReellementUtilise=profilData.uid;
+            // On lit en priorite depuis contacts_publics (collection a lecture publique, accessible aux visiteuses anonymes de la boutique)
+            if(profilData.uid){
+              try{
+                const snapPub=await getDoc(doc(db,"contacts_publics",profilData.uid));
+                if(snapPub.exists())dU=snapPub.data();
+              }catch{}
+            }
+            // Repli sur users/{uid} pour compatibilite avec d'anciennes sauvegardes (fonctionne seulement si la visiteuse est authentifiee)
+            if(!dU["db-lien-paypalme"]&&!dU["db-lien-stripe-perso"]&&profilData.uid){
+              try{
+                const snapU=await getDoc(doc(db,"users",profilData.uid));
+                if(snapU.exists())dU={...snapU.data(),...dU};
+              }catch{}
+            }
+            // Si rien trouve avec profilData.uid (champ potentiellement incorrect/desynchronise), on retente avec le slug de l'URL directement
+            if(!dU["db-lien-paypalme"]&&!dU["db-lien-stripe-perso"]&&profilData.uid!==slug){
+              try{
+                const snapPub2=await getDoc(doc(db,"contacts_publics",slug));
+                if(snapPub2.exists()){
+                  dU=snapPub2.data();
+                  uidReellementUtilise=slug;
+                  setProfil(p=>(p&&p!=="404")?{...p,uid:slug}:p);
+                }
+              }catch{}
+            }
+            // Cas particulier melissa / melissa-da-silveira (deux identifiants possibles pour le meme compte)
+            if(!dU["db-lien-paypalme"]&&!dU["db-lien-stripe-perso"]){
+              const alias=(profilData.uid==="melissa"||slug==="melissa")?"melissa-da-silveira":((profilData.uid==="melissa-da-silveira"||slug==="melissa-da-silveira")?"melissa":null);
+              if(alias){
+                try{
+                  const snapPub3=await getDoc(doc(db,"contacts_publics",alias));
+                  if(snapPub3.exists()&&(snapPub3.data()["db-lien-paypalme"]||snapPub3.data()["db-lien-stripe-perso"])){
+                    dU=snapPub3.data();
+                    uidReellementUtilise=alias;
+                    setProfil(p=>(p&&p!=="404")?{...p,uid:alias}:p);
+                  }
+                }catch{}
+              }
+            }
+            setMoyensPaiement({
+              lienPaypalMe:dU["db-lien-paypalme"]||"",
+              lienStripePerso:dU["db-lien-stripe-perso"]||""
+            });
+            setDiagPaiement({
+              slug,
+              profilDataUid:profilData.uid||"(vide)",
+              uidUtilise:uidReellementUtilise||"(vide)",
+              trouvePaypal:!!dU["db-lien-paypalme"],
+              trouveStripe:!!dU["db-lien-stripe-perso"],
+              clesDisponibles:Object.keys(dU).join(", ")||"(aucune)"
+            });
+          }catch(e){console.error("moyens paiement:",e);setDiagPaiement({erreur:e.message});}
+          setMoyensPaiementCharges(true);
         }
       }catch(e){console.error("boutique profil:",e);setProfil("404");}
+      try{
+        const formSnap=await getDoc(doc(db,"admin","formation_produits"));
+        if(formSnap.exists()){
+          const fd=formSnap.data().produits||{};
+          setFormationProduits(Object.values(fd).flat());
+        }
+      }catch{}
       try{
         const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
         if(catSnap.exists()){
@@ -3155,8 +3331,34 @@ function BoutiquePubliquePage({slug}){
           setCatalogue(catData);
           const CAT_ORDER=["face","corps","hair","makeup","parfums","health","hommes","enfants","home","sets"];
           const premiereCat=CAT_ORDER.find(k=>catData[k]&&catData[k].length);
-          if(profilData&&profilData.bestSellers&&profilData.bestSellers.length) setActiveCat("bestsellers");
+          if(produitPartage){
+            const catTrouvee=CAT_ORDER.find(k=>(catData[k]||[]).some(p=>p.ref===produitPartage));
+            if(catTrouvee){setActiveCat(catTrouvee);setItemSurligne(produitPartage);}
+            else if(profilData&&profilData.bestSellers&&profilData.bestSellers.length)setActiveCat("bestsellers");
+            else if(premiereCat)setActiveCat(premiereCat);
+          }else if(packPartage){
+            setActiveCat("mespacks");
+            setItemSurligne(packPartage);
+          }else if(profilData&&profilData.bestSellers&&profilData.bestSellers.length) setActiveCat("bestsellers");
           else if(premiereCat)setActiveCat(premiereCat);
+
+          // Panier pre-rempli depuis un lien partage (ex: apres un diagnostic)
+          const params=new URLSearchParams(window.location.search);
+          const panierParam=params.get("panier");
+          if(panierParam){
+            const refsDemandes=panierParam.split(",").filter(Boolean);
+            const tousProduits=Object.values(catData).flat();
+            const nouveauCart=refsDemandes.map(ref=>{
+              const prod=tousProduits.find(p=>p.ref===ref);
+              if(!prod)return null;
+              const prixFinal=(prod.offre&&prod.prixOffre)?prod.prixOffre:prod.prix;
+              return {ref:prod.ref,nom:prod.nom,prix:prixFinal,prixVIP:prod.prixVIP||null,quantite:1};
+            }).filter(Boolean);
+            if(nouveauCart.length>0){
+              setCart(nouveauCart);
+              setToast({type:"success",text:"🛍️ Ton panier a été préparé pour toi !"});
+            }
+          }
         }
       }catch(e){console.error("boutique catalogue:",e);}
       setLoading(false);
@@ -3164,6 +3366,16 @@ function BoutiquePubliquePage({slug}){
   },[slug]);
 
   const CAT_LABELS={face:"Visage",corps:"Corps",hair:"Cheveux",makeup:"Make Up",parfums:"Parfums",health:"Santé",hommes:"Hommes",enfants:"Enfants",home:"Home",sets:"Sets"};
+
+  useEffect(()=>{
+    if(!itemSurligne)return;
+    const t1=setTimeout(()=>{
+      const el=document.getElementById("item-"+itemSurligne);
+      if(el)el.scrollIntoView({behavior:"smooth",block:"center"});
+    },350);
+    const t2=setTimeout(()=>setItemSurligne(null),4000);
+    return()=>{clearTimeout(t1);clearTimeout(t2);};
+  },[itemSurligne,activeCat,catalogue]);
 
   const THEMES_BOUTIQUE={
     elegance:{header:"linear-gradient(135deg,#3D1F0E,#5C3020)",accent:"#C4A882",btn:"#3D1F0E",bgPage:"#FAF7F2"},
@@ -3180,7 +3392,23 @@ function BoutiquePubliquePage({slug}){
   const theme=THEMES_BOUTIQUE[profil?.theme]||THEMES_BOUTIQUE.elegance;
   const [toast,setToast]=useState(null);
 
+  const partagerLien=async(titre,texte,url)=>{
+    try{
+      if(navigator.share){
+        await navigator.share({title:titre,text:texte,url});
+      }else{
+        await navigator.clipboard.writeText(url);
+        setToast({type:"success",text:"🔗 Lien copié !"});
+      }
+    }catch(e){
+      if(e.name!=="AbortError"){
+        try{await navigator.clipboard.writeText(url);setToast({type:"success",text:"🔗 Lien copié !"});}catch{}
+      }
+    }
+  };
+
   const ajouterPanier=(prod)=>{
+    if(prod.rupture)return;
     trackerEvenement(profil?.slug||slug,"boutique_ajout_panier");
     setCart(c=>{
       const existe=c.find(i=>i.ref===prod.ref);
@@ -3306,48 +3534,44 @@ function BoutiquePubliquePage({slug}){
   const fraisPort=portOffert?0:FRAIS_PORT;
   const totalAvecPort=totalPanier+fraisPort;
 
-  const lancerCheckout=async()=>{
+  const lancerCheckoutStripePerso=async()=>{
     if(!clientNom.trim()){setCheckoutError("Merci d'indiquer ton prénom.");return;}
     setCheckoutLoading(true);setCheckoutError("");
     try{
-      const fn=httpsCallable(fbFunctions,"creerSessionCheckout");
-      const res=await fn({
+      const fn=httpsCallable(fbFunctions,"enregistrerCommandeLienPerso");
+      await fn({
         distributeurUid:profil.uid,
-        slug:profil.slug||slug,
         items:cart.map(i=>({nom:i.nom,prix:i.prix,quantite:i.quantite})),
-        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim()}
+        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim()},
+        methode:"stripe"
       });
-      if(res.data&&res.data.url)window.location.href=res.data.url;
-      else setCheckoutError("Une erreur est survenue, réessaie.");
+      alert("Merci ! Tu vas être redirigée vers la page de paiement. Le montant à indiquer est bien de "+totalAvecPort.toFixed(2)+"€.");
+      window.location.href=moyensPaiement.lienStripePerso;
+      setShowCheckout(false);setCart([]);
     }catch(e){
-      if((e.code||"").includes("failed-precondition")||(e.message||"").toLowerCase().includes("active")){
-        setCheckoutError("Cette boutique n'est pas encore prête à recevoir des paiements. Contacte directement "+((profil&&profil.prenom)||"la distributrice")+" pour passer commande.");
-      }else{
-        setCheckoutError("Erreur : "+e.message);
-      }
+      setCheckoutError("Erreur : "+e.message);
     }
     setCheckoutLoading(false);
   };
 
-  const lancerCheckoutPaypal=async()=>{
+  const lancerCheckoutPaypalMe=async()=>{
     if(!clientNom.trim()){setCheckoutError("Merci d'indiquer ton prénom.");return;}
     setCheckoutLoading(true);setCheckoutError("");
     try{
-      const fn=httpsCallable(fbFunctions,"creerCommandePaypal");
-      const res=await fn({
+      const fn=httpsCallable(fbFunctions,"enregistrerCommandeLienPerso");
+      await fn({
         distributeurUid:profil.uid,
-        slug:profil.slug||slug,
         items:cart.map(i=>({nom:i.nom,prix:i.prix,quantite:i.quantite})),
-        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim()}
+        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim()},
+        methode:"paypal"
       });
-      if(res.data&&res.data.url)window.location.href=res.data.url;
-      else setCheckoutError("Une erreur est survenue, réessaie.");
+      let lien=moyensPaiement.lienPaypalMe.trim();
+      if(!lien.startsWith("http"))lien="https://"+lien;
+      lien=lien.replace(/\/$/,"")+"/"+totalAvecPort.toFixed(2)+"EUR";
+      window.location.href=lien;
+      setShowCheckout(false);setCart([]);
     }catch(e){
-      if((e.code||"").includes("failed-precondition")){
-        setCheckoutError("Le paiement PayPal n'est pas encore actif sur cette boutique. Contacte directement "+((profil&&profil.prenom)||"la distributrice")+" pour passer commande.");
-      }else{
-        setCheckoutError("Erreur : "+e.message);
-      }
+      setCheckoutError("Erreur : "+e.message);
     }
     setCheckoutLoading(false);
   };
@@ -3393,7 +3617,7 @@ function BoutiquePubliquePage({slug}){
     setCart(c=>{
       const existe=c.find(i=>i.ref===pack.id);
       if(existe)return c.map(i=>i.ref===pack.id?{...i,quantite:i.quantite+1}:i);
-      return [...c,{ref:pack.id,nom:"🎁 "+pack.nom,prix:pack.prix,prixVIP:null,quantite:1}];
+      return [...c,{ref:pack.id,nom:"🎁 "+pack.nom,prix:pack.prixPromo||pack.prix,prixVIP:null,quantite:1}];
     });
   };
   return(
@@ -3430,6 +3654,7 @@ function BoutiquePubliquePage({slug}){
           <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:"#fff"}}>{profil.prenom} {profil.nom||""}</div>
           <a href={"?bio="+(profil.slug||slug)} style={{fontSize:".68rem",color:"rgba(255,255,255,.7)",textDecoration:"underline"}}>← Retour à mon profil</a>
           {profil.boutiquePresentation&&<div style={{fontSize:".75rem",color:"rgba(255,255,255,.9)",lineHeight:1.6,marginTop:".7rem",padding:"0 .5rem",fontStyle:"italic"}}>{profil.boutiquePresentation}</div>}
+          {!profil.boutiquePresentation&&profil.histoire&&<div style={{fontSize:".75rem",color:"rgba(255,255,255,.9)",lineHeight:1.6,marginTop:".7rem",padding:"0 .5rem",fontStyle:"italic"}}>{profil.histoire}</div>}
         </div>
 
         {retourCommande==="succes"&&showSuccessBanner&&(
@@ -3490,7 +3715,19 @@ function BoutiquePubliquePage({slug}){
               const produitsInclus=pack.produitsRefs.map(ref=>tousProduitsCatalogue.find(p=>p.ref===ref)).filter(Boolean);
               const enPanier=cart.find(i=>i.ref===pack.id);
               return(
-                <div key={pack.id} style={{background:"white",borderRadius:14,border:`1.5px solid ${theme.accent}`,padding:"1rem",marginBottom:".75rem"}}>
+                <div key={pack.id} id={"item-"+pack.id} style={{background:"white",borderRadius:14,border:itemSurligne===pack.id?`3px solid ${theme.accent}`:`1.5px solid ${theme.accent}`,boxShadow:itemSurligne===pack.id?`0 0 0 4px ${theme.accent}30`:"none",overflow:"hidden",marginBottom:".75rem",transition:"box-shadow .3s"}}>
+                  {pack.photos&&pack.photos.length>0&&(
+                    pack.photos.length===1?(
+                      <img src={pack.photos[0]} alt={pack.nom} style={{width:"100%",height:140,objectFit:"cover",display:"block"}}/>
+                    ):(
+                      <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(pack.photos.length,4)},1fr)`,gap:"2px"}}>
+                        {pack.photos.slice(0,4).map((img,i)=>(
+                          <img key={i} src={img} alt="" style={{width:"100%",height:100,objectFit:"cover",display:"block"}}/>
+                        ))}
+                      </div>
+                    )
+                  )}
+                  <div style={{padding:"1rem"}}>
                   <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".4rem"}}>🎁 {pack.nom}</div>
                   <div style={{marginBottom:".6rem"}}>
                     {produitsInclus.map(p=>(
@@ -3498,7 +3735,14 @@ function BoutiquePubliquePage({slug}){
                     ))}
                   </div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{fontSize:"1.1rem",fontWeight:700,color:theme.accent}}>{pack.prix.toFixed(2)}€</div>
+                    <div>
+                      {pack.prixPromo?(<>
+                        <span style={{fontSize:".78rem",color:"#AAA",textDecoration:"line-through",marginRight:".4rem"}}>{pack.prix.toFixed(2)}€</span>
+                        <span style={{fontSize:"1.1rem",fontWeight:700,color:"#C44B1A"}}>🏷️ {pack.prixPromo.toFixed(2)}€</span>
+                      </>):(
+                        <span style={{fontSize:"1.1rem",fontWeight:700,color:theme.accent}}>{pack.prix.toFixed(2)}€</span>
+                      )}
+                    </div>
                     {enPanier?(
                       <div style={{display:"flex",alignItems:"center",gap:".5rem",background:theme.bgPage,borderRadius:8,padding:".2rem .5rem"}}>
                         <button className="boutique-btn" onClick={()=>changerQuantite(pack.id,-1)} style={{background:"none",border:"none",fontSize:"1rem",fontWeight:700,color:theme.accent,cursor:"pointer"}}>−</button>
@@ -3512,6 +3756,11 @@ function BoutiquePubliquePage({slug}){
                       </button>
                     )}
                   </div>
+                  <button className="boutique-btn" onClick={()=>partagerLien(pack.nom,"Découvre ce pack !",window.location.origin+"?boutique="+(profil.slug||slug)+"&pack="+encodeURIComponent(pack.id))}
+                    style={{width:"100%",background:"none",border:"none",color:theme.accent,fontSize:".64rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginTop:".5rem",padding:".2rem"}}>
+                    🔗 Partager ce pack
+                  </button>
+                  </div>
                 </div>
               );
             })}
@@ -3522,15 +3771,15 @@ function BoutiquePubliquePage({slug}){
             const enPanier=cart.find(i=>i.ref===prod.ref);
             const prixAffiche=(prod.offre&&prod.prixOffre)?prod.prixOffre:prod.prix;
             return(
-              <div key={prod.ref} className="boutique-card" style={{background:"white",borderRadius:12,padding:".55rem .45rem",border:"1px solid #E8DDD4",display:"flex",flexDirection:"column",position:"relative"}}>
+              <div key={prod.ref} id={"item-"+prod.ref} className="boutique-card" style={{background:"white",borderRadius:12,padding:".55rem .45rem",border:itemSurligne===prod.ref?`2px solid ${theme.accent}`:"1px solid #E8DDD4",boxShadow:itemSurligne===prod.ref?`0 0 0 4px ${theme.accent}30`:"none",display:"flex",flexDirection:"column",position:"relative",transition:"box-shadow .3s, border-color .3s",opacity:prod.rupture?.75:1}}>
                 <button onClick={()=>toggleFavori(prod.ref)}
                   style={{position:"absolute",top:6,right:6,zIndex:2,background:"rgba(255,255,255,.9)",border:"none",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:".8rem",boxShadow:"0 1px 4px rgba(0,0,0,.15)"}}>
                   {favoris.includes(prod.ref)?"❤️":"🤍"}
                 </button>
                 {prod.image&&!prod._imgFailed
-                  ?<img src={prod.image} alt={prod.nom} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,marginBottom:".4rem",background:theme.bgPage}} onError={e=>{prod._imgFailed=true;e.target.style.display="none";e.target.nextSibling.style.display="flex";}}/>
+                  ?<img src={prod.image} alt={prod.nom} onClick={()=>setProduitDetailOuvert(prod)} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,marginBottom:".4rem",background:theme.bgPage,cursor:"pointer"}} onError={e=>{prod._imgFailed=true;e.target.style.display="none";e.target.nextSibling.style.display="flex";}}/>
                   :null}
-                <div style={{width:"100%",aspectRatio:"1",borderRadius:8,marginBottom:".4rem",background:theme.bgPage,display:(prod.image&&!prod._imgFailed)?"none":"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem"}}>🧴</div>
+                <div onClick={()=>setProduitDetailOuvert(prod)} style={{width:"100%",aspectRatio:"1",borderRadius:8,marginBottom:".4rem",background:theme.bgPage,display:(prod.image&&!prod._imgFailed)?"none":"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem",cursor:"pointer"}}>🧴</div>
                 <div style={{fontSize:".64rem",fontWeight:700,color:"#3D1F0E",marginBottom:".25rem",lineHeight:1.3,flex:1}}>{prod.nom}</div>
                 {prod.offre&&<div style={{fontSize:".54rem",color:"#C44B1A",fontWeight:700,marginBottom:".15rem"}}>{prod.offre}</div>}
                 <div style={{display:"flex",alignItems:"baseline",gap:".3rem",marginBottom:".2rem",flexWrap:"wrap"}}>
@@ -3540,7 +3789,12 @@ function BoutiquePubliquePage({slug}){
                 {prod.prixVIP&&profil&&profil.lienRecrutement&&(
                   <div style={{fontSize:".54rem",fontWeight:700,color:"#8B6FB3",marginBottom:".35rem"}}>💎 Économie VIP possible</div>
                 )}
-                {enPanier?(
+                {prod.rupture?(
+                  <div style={{width:"100%",background:"#F5EFE8",border:"1px solid #E0D0BC",borderRadius:7,padding:".4rem .3rem",textAlign:"center"}}>
+                    <div style={{fontSize:".6rem",fontWeight:700,color:"#8B6F47"}}>✨ Victime de son succès</div>
+                    <div style={{fontSize:".54rem",color:"#A08860"}}>Bientôt de retour</div>
+                  </div>
+                ):enPanier?(
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:theme.bgPage,borderRadius:8,padding:".2rem .3rem"}}>
                     <button className="boutique-btn" onClick={()=>changerQuantite(prod.ref,-1)} style={{background:"none",border:"none",fontSize:".9rem",fontWeight:700,color:theme.accent,cursor:"pointer",padding:"0 .3rem"}}>−</button>
                     <span style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E"}}>{enPanier.quantite}</span>
@@ -3552,6 +3806,10 @@ function BoutiquePubliquePage({slug}){
                     + Ajouter
                   </button>
                 )}
+                <button className="boutique-btn" onClick={()=>partagerLien(prod.nom,"Regarde ce produit !",window.location.origin+"?boutique="+(profil.slug||slug)+"&produit="+encodeURIComponent(prod.ref))}
+                  style={{width:"100%",background:"none",border:"none",color:theme.accent,fontSize:".6rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginTop:".3rem",padding:".2rem"}}>
+                  🔗 Partager
+                </button>
               </div>
             );
           })}
@@ -3568,6 +3826,54 @@ function BoutiquePubliquePage({slug}){
           <div style={{color:theme.accent,fontSize:".85rem",fontWeight:700}}>{totalPanier.toFixed(2)}€ →</div>
         </div>
       )}
+
+      {produitDetailOuvert&&(()=>{
+        const p=produitDetailOuvert;
+        const formationMatch=formationProduits.find(f=>(f.refsCatalogue&&f.refsCatalogue.includes(p.ref))||(f.refCatalogue&&f.refCatalogue===p.ref));
+        const prixAff=(p.offre&&p.prixOffre)?p.prixOffre:p.prix;
+        return(
+          <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:400,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}} onClick={()=>setProduitDetailOuvert(null)}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"white",borderRadius:16,maxWidth:420,width:"100%",maxHeight:"85vh",overflowY:"auto",position:"relative"}}>
+              <button onClick={()=>setProduitDetailOuvert(null)}
+                style={{position:"sticky",top:8,float:"right",marginRight:8,background:"rgba(255,255,255,.9)",border:"none",borderRadius:"50%",width:30,height:30,fontSize:"1rem",cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.2)",zIndex:2}}>✕</button>
+              {p.image&&<img src={p.image} alt={p.nom} style={{width:"100%",height:220,objectFit:"cover",display:"block"}}/>}
+              <div style={{padding:"1.2rem"}}>
+                <div style={{fontFamily:"Georgia,serif",fontSize:"1.15rem",fontWeight:600,color:"#3D1F0E",marginBottom:".3rem"}}>{p.nom}</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:".5rem",marginBottom:"1rem"}}>
+                  <div style={{fontSize:"1.1rem",fontWeight:700,color:theme.accent}}>{prixAff.toFixed(2)}€</div>
+                  {p.offre&&p.prixOffre&&p.prix!==p.prixOffre&&<div style={{fontSize:".8rem",color:"#AAA",textDecoration:"line-through"}}>{p.prix.toFixed(2)}€</div>}
+                </div>
+                {formationMatch?(<>
+                  {formationMatch.description&&(
+                    <div style={{background:"#FAF7F2",borderRadius:10,padding:"1rem",marginBottom:"1rem"}}>
+                      <div style={{fontSize:".68rem",fontWeight:700,color:theme.accent,marginBottom:".4rem",textTransform:"uppercase",letterSpacing:".05em"}}>💡 À quoi ça sert</div>
+                      <div style={{fontSize:".82rem",color:"#333",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{formationMatch.description}</div>
+                    </div>
+                  )}
+                  {formationMatch.videoUrl&&(
+                    <a href={formationMatch.videoUrl} target="_blank" rel="noopener noreferrer"
+                      style={{display:"flex",alignItems:"center",gap:".75rem",background:theme.header,borderRadius:10,padding:".85rem 1rem",textDecoration:"none",marginBottom:"1rem"}}>
+                      <div style={{width:40,height:40,borderRadius:"50%",background:"rgba(255,255,255,.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",flexShrink:0}}>▶</div>
+                      <div>
+                        <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",fontWeight:600,color:"white"}}>{formationMatch.titreVideo||"Voir la vidéo"}</div>
+                        <div style={{fontSize:".62rem",color:"rgba(255,255,255,.75)"}}>Cliquer pour regarder</div>
+                      </div>
+                    </a>
+                  )}
+                </>):(
+                  <div style={{textAlign:"center",padding:"1rem",color:"#999",fontSize:".78rem",fontStyle:"italic",marginBottom:"1rem"}}>
+                    Plus d'infos à venir sur ce produit — contacte {(profil&&profil.prenom)||"ta conseillère"} pour en savoir plus !
+                  </div>
+                )}
+                <button className="boutique-btn" onClick={()=>{ajouterPanier(p);setProduitDetailOuvert(null);}}
+                  style={{width:"100%",background:theme.btn,color:"white",border:"none",borderRadius:10,padding:".7rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                  + Ajouter au panier
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {showCart&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:200,display:"flex",alignItems:"flex-end"}}>
@@ -3631,19 +3937,31 @@ function BoutiquePubliquePage({slug}){
               <input placeholder="Téléphone" value={clientTel} onChange={e=>setClientTel(e.target.value)}
                 style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>
               {checkoutError&&<div style={{fontSize:".72rem",color:"#C44B1A",marginBottom:".6rem",lineHeight:1.5}}>{checkoutError}</div>}
-              {!moyensPaiement.stripePret&&!moyensPaiement.paypalPret?(
+              {!moyensPaiementCharges?(
+                <div style={{fontSize:".75rem",color:"#888",padding:".6rem",background:"#F5EFE8",borderRadius:8,marginBottom:".5rem",textAlign:"center"}}>
+                  Vérification du moyen de paiement...
+                </div>
+              ):!moyensPaiement.lienPaypalMe&&!moyensPaiement.lienStripePerso?(
                 <div style={{fontSize:".75rem",color:"#C44B1A",padding:".6rem",background:"#FFF3F0",borderRadius:8,marginBottom:".5rem",lineHeight:1.5}}>
                   Cette boutique n'a pas encore de moyen de paiement actif. Contacte directement {(profil&&profil.prenom)||"la distributrice"} pour passer commande.
+                  {diagPaiement&&(
+                    <div style={{marginTop:".5rem",fontSize:".62rem",color:"#888",background:"white",borderRadius:6,padding:".4rem .5rem",lineHeight:1.6}}>
+                      🔍 slug: {diagPaiement.slug} | uid profil: {diagPaiement.profilDataUid} | uid utilisé: {diagPaiement.uidUtilise}<br/>
+                      paypal trouvé: {String(diagPaiement.trouvePaypal)} | stripe trouvé: {String(diagPaiement.trouveStripe)}<br/>
+                      clés dispo: {diagPaiement.clesDisponibles}
+                      {diagPaiement.erreur&&<><br/>erreur: {diagPaiement.erreur}</>}
+                    </div>
+                  )}
                 </div>
               ):(<>
-                {moyensPaiement.stripePret&&(
-                  <button className="boutique-btn" onClick={lancerCheckout} disabled={checkoutLoading}
+                {moyensPaiement.lienStripePerso&&(
+                  <button className="boutique-btn" onClick={lancerCheckoutStripePerso} disabled={checkoutLoading}
                     style={{width:"100%",background:"#635BFF",color:"white",border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
                     {checkoutLoading?"...":"💳 Payer "+totalAvecPort.toFixed(2)+"€ par carte"}
                   </button>
                 )}
-                {moyensPaiement.paypalPret&&(
-                  <button className="boutique-btn" onClick={lancerCheckoutPaypal} disabled={checkoutLoading}
+                {moyensPaiement.lienPaypalMe&&(
+                  <button className="boutique-btn" onClick={lancerCheckoutPaypalMe} disabled={checkoutLoading}
                     style={{width:"100%",background:"#0070BA",color:"white",border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>
                     {checkoutLoading?"...":"🅿️ Payer "+totalAvecPort.toFixed(2)+"€ avec PayPal"}
                   </button>
@@ -3703,10 +4021,16 @@ function BoutiquePubliquePage({slug}){
                       {afficherVIPBoutique&&prod.prixVIP&&(
                         <div style={{fontSize:".64rem",fontWeight:700,color:"#8B6FB3",marginBottom:".4rem"}}>💎 VIP {prod.prixVIP}€</div>
                       )}
-                      <button className="boutique-btn" onClick={()=>ajouterPanier(prod)} disabled={!!enPanier}
-                        style={{width:"100%",background:enPanier?"#ccc":theme.btn,color:"white",border:"none",borderRadius:7,padding:".35rem",fontSize:".62rem",fontWeight:700,fontFamily:"inherit",cursor:enPanier?"default":"pointer"}}>
-                        {enPanier?"✓ Ajouté":"+ Ajouter"}
-                      </button>
+                      {prod.rupture?(
+                        <div style={{width:"100%",background:"#F5EFE8",border:"1px solid #E0D0BC",borderRadius:7,padding:".35rem",textAlign:"center",fontSize:".58rem",fontWeight:700,color:"#8B6F47"}}>
+                          ✨ Victime de son succès
+                        </div>
+                      ):(
+                        <button className="boutique-btn" onClick={()=>ajouterPanier(prod)} disabled={!!enPanier}
+                          style={{width:"100%",background:enPanier?"#ccc":theme.btn,color:"white",border:"none",borderRadius:7,padding:".35rem",fontSize:".62rem",fontWeight:700,fontFamily:"inherit",cursor:enPanier?"default":"pointer"}}>
+                          {enPanier?"✓ Ajouté":"+ Ajouter"}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -3817,6 +4141,9 @@ function OrdonnancePubliquePage({ordId}){
   const [loading,setLoading]=useState(true);
   const [notFound,setNotFound]=useState(false);
   const [afficherVIP,setAfficherVIP]=useState(false);
+  const [lienInscriptionMihi,setLienInscriptionMihi]=useState("");
+  const [showPopupInscription,setShowPopupInscription]=useState(false);
+  const [catalogueOrd,setCatalogueOrd]=useState(null);
   useEffect(()=>{
     (async()=>{
       try{
@@ -3827,9 +4154,19 @@ function OrdonnancePubliquePage({ordId}){
           if(distribUid){
             try{
               const snapU=await getDoc(doc(db,'users',distribUid));
-              if(snapU.exists())setAfficherVIP(!!snapU.data()['db-afficher-prix-vip']);
+              if(snapU.exists()){
+                const vip=!!snapU.data()['db-afficher-prix-vip'];
+                const lien=snapU.data()['db-lien-inscription-mihi']||"";
+                setAfficherVIP(vip);
+                setLienInscriptionMihi(lien);
+                if(vip&&lien)setTimeout(()=>setShowPopupInscription(true),1500);
+              }
             }catch{}
           }
+          try{
+            const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
+            if(catSnap.exists())setCatalogueOrd(Object.values(catSnap.data()).flat());
+          }catch{}
         }
         else setNotFound(true);
       }catch{setNotFound(true);}
@@ -3880,6 +4217,18 @@ function OrdonnancePubliquePage({ordId}){
                 </div>
               ))}
               {p.routine&&<div style={{background:'#FAF7F2',borderRadius:8,padding:'.6rem',marginTop:'.5rem',fontSize:'.72rem',color:'#3D2B1F',lineHeight:1.6}}>{p.routine}</div>}
+              {catalogueOrd&&data.distribUid&&(
+                <button onClick={()=>{
+                  const refs=(p.produits||[]).map(pr=>{
+                    const trouve=catalogueOrd.find(cp=>cp.nom===pr.nom||cp.nom.toLowerCase()===pr.nom.toLowerCase());
+                    return trouve?trouve.ref:null;
+                  }).filter(Boolean);
+                  if(refs.length===0)return;
+                  window.location.href=window.location.origin+"?boutique="+data.distribUid+"&panier="+refs.map(encodeURIComponent).join(",");
+                }} style={{width:'100%',background:pack.color,color:'white',border:'none',borderRadius:8,padding:'.55rem',fontSize:'.74rem',fontWeight:700,fontFamily:'inherit',cursor:'pointer',marginTop:'.6rem'}}>
+                  🛍️ Commander ce pack directement
+                </button>
+              )}
             </div>
           );
         })}
@@ -3887,6 +4236,25 @@ function OrdonnancePubliquePage({ordId}){
         <button onClick={()=>window.print()} style={{width:'100%',background:'#C49A8A',color:'white',border:'none',borderRadius:10,padding:'.7rem',fontSize:'.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Imprimer / Sauvegarder en PDF</button>
         <div style={{textAlign:'center',fontSize:'.62rem',color:'#888',marginTop:'1rem'}}>Blazing Dynasty x Mihi France</div>
       </div>
+      {showPopupInscription&&(
+        <div onClick={()=>setShowPopupInscription(false)} style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:500,background:'rgba(0,0,0,.65)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:18,padding:'1.5rem',maxWidth:380,width:'100%',textAlign:'center',position:'relative'}}>
+            <button onClick={()=>setShowPopupInscription(false)} style={{position:'absolute',top:10,right:14,background:'none',border:'none',fontSize:'1.2rem',color:'#AAA',cursor:'pointer'}}>✕</button>
+            <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>💎</div>
+            <div style={{fontFamily:'Georgia,serif',fontSize:'1.15rem',fontWeight:600,color:'#3D1F0E',marginBottom:'.6rem'}}>Débloque le prix VIP</div>
+            <p style={{fontSize:'.8rem',color:'#666',lineHeight:1.65,marginBottom:'1.1rem'}}>
+              En t'inscrivant gratuitement chez Mihi, tu débloques le prix VIP sur tous les produits recommandés ci-dessus — et bien plus encore.
+            </p>
+            <a href={lienInscriptionMihi} target="_blank" rel="noopener noreferrer" onClick={()=>setShowPopupInscription(false)}
+              style={{display:'block',background:'linear-gradient(135deg,#8B6FB3,#6B4C93)',color:'white',textDecoration:'none',borderRadius:10,padding:'.75rem',fontSize:'.85rem',fontWeight:700,marginBottom:'.6rem'}}>
+              ✨ Je m'inscris gratuitement
+            </a>
+            <button onClick={()=>setShowPopupInscription(false)} style={{background:'none',border:'none',color:'#999',fontSize:'.72rem',cursor:'pointer',fontFamily:'inherit'}}>
+              Non merci, plus tard
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4007,6 +4375,9 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   const [ebookChoisi,setEbookChoisi]=useState("");const [diagType,setDiagType]=useState("");
   const [coords,setCoords]=useState({prenom:"",email:"",tel:"",reseau:""});
   const [contactLinks,setContactLinks]=useState(null);
+  const [afficherVIPTunnel,setAfficherVIPTunnel]=useState(false);
+  const [lienInscriptionTunnel,setLienInscriptionTunnel]=useState("");
+  const [showPopupInscriptionTunnel,setShowPopupInscriptionTunnel]=useState(false);
   const [saving,setSaving]=useState(false);
   const [qIdx,setQIdx]=useState(0);
   const [repsDiagRec,setRepsDiagRec]=useState([]);
@@ -4026,13 +4397,18 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
         if(snap.exists()){
           const pData=snap.data();
           setProfil(pData);
-          if(pData.uid){try{const cSnap=await getDoc(doc(db,"contacts_publics",pData.uid));if(cSnap.exists()){const cd=cSnap.data();setContactLinks({whatsapp:cd.whatsapp||"",messenger:cd.messenger||"",instagram:cd.instagram||""});}}catch{}}
+          if(pData.uid){try{const cSnap=await getDoc(doc(db,"contacts_publics",pData.uid));if(cSnap.exists()){const cd=cSnap.data();setContactLinks({whatsapp:cd.whatsapp||"",messenger:cd.messenger||"",instagram:cd.instagram||""});}}catch{}
+            try{const snapU=await getDoc(doc(db,"users",pData.uid));if(snapU.exists()){setAfficherVIPTunnel(!!snapU.data()["db-afficher-prix-vip"]);setLienInscriptionTunnel(snapU.data()["db-lien-inscription-mihi"]||"");}}catch{}
+          }
         }
         else{
           const q=query(collection(db,"linkbio"),where("slug","==",slug));
           const qs=await getDocs(q);
-          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);if(qProfil.uid){try{const cSnap2=await getDoc(doc(db,"contacts_publics",qProfil.uid));if(cSnap2.exists()){const cd2=cSnap2.data();setContactLinks({whatsapp:cd2.whatsapp||"",messenger:cd2.messenger||"",instagram:cd2.instagram||""});}}catch{}}const realSlug=qProfil.slug||slug;trackerEvenement(realSlug,"tunnel_visites");}
+          if(!qs.empty){const qProfil=qs.docs[0].data();setProfil(qProfil);if(qProfil.uid){try{const cSnap2=await getDoc(doc(db,"contacts_publics",qProfil.uid));if(cSnap2.exists()){const cd2=cSnap2.data();setContactLinks({whatsapp:cd2.whatsapp||"",messenger:cd2.messenger||"",instagram:cd2.instagram||""});}}catch{}
+            try{const snapU2=await getDoc(doc(db,"users",qProfil.uid));if(snapU2.exists()){setAfficherVIPTunnel(!!snapU2.data()["db-afficher-prix-vip"]);setLienInscriptionTunnel(snapU2.data()["db-lien-inscription-mihi"]||"");}}catch{}
+            const realSlug=qProfil.slug||slug;trackerEvenement(realSlug,"tunnel_visites");}
         }
+      }
       }catch{}
       setLoading(false);
     })();
@@ -4046,6 +4422,7 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
     }catch(e){console.error(e);}
     setSaving(false);
     setEtape("ebook_affiche");
+    if(afficherVIPTunnel&&lienInscriptionTunnel)setTimeout(()=>setShowPopupInscriptionTunnel(true),1500);
   };
   if(loading) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#FAF7F2"}}><div style={{textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.5rem",color:"#3D1F0E"}}>Chargement...</div></div></div>;
   // Appliquer forceEtape après chargement
@@ -4079,7 +4456,27 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
           {parcours==="produits"?"Mes recommandations produits →":"Découvrir l'opportunité →"}
         </button>
       </div>
-    </div></div>);
+    </div>
+    {showPopupInscriptionTunnel&&(
+      <div onClick={()=>setShowPopupInscriptionTunnel(false)} style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:500,background:'rgba(0,0,0,.65)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:18,padding:'1.5rem',maxWidth:380,width:'100%',textAlign:'center',position:'relative'}}>
+          <button onClick={()=>setShowPopupInscriptionTunnel(false)} style={{position:'absolute',top:10,right:14,background:'none',border:'none',fontSize:'1.2rem',color:'#AAA',cursor:'pointer'}}>✕</button>
+          <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>💎</div>
+          <div style={{fontFamily:'Georgia,serif',fontSize:'1.15rem',fontWeight:600,color:'#3D1F0E',marginBottom:'.6rem'}}>Débloque le prix VIP</div>
+          <p style={{fontSize:'.8rem',color:'#666',lineHeight:1.65,marginBottom:'1.1rem'}}>
+            En t'inscrivant gratuitement chez Mihi, tu débloques le prix VIP sur les produits recommandés — et bien plus encore.
+          </p>
+          <a href={lienInscriptionTunnel} target="_blank" rel="noopener noreferrer" onClick={()=>setShowPopupInscriptionTunnel(false)}
+            style={{display:'block',background:'linear-gradient(135deg,#8B6FB3,#6B4C93)',color:'white',textDecoration:'none',borderRadius:10,padding:'.75rem',fontSize:'.85rem',fontWeight:700,marginBottom:'.6rem'}}>
+            ✨ Je m'inscris gratuitement
+          </a>
+          <button onClick={()=>setShowPopupInscriptionTunnel(false)} style={{background:'none',border:'none',color:'#999',fontSize:'.72rem',cursor:'pointer',fontFamily:'inherit'}}>
+            Non merci, plus tard
+          </button>
+        </div>
+      </div>
+    )}
+    </div>);
   }
   if(etape==="produits_page") return(
     <div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}>
@@ -4248,7 +4645,16 @@ function TunnelHybridePage({slug, forceEtape="", forceParcours=""}){
   if(etape==="accueil") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/>{profil&&profil.histoire&&<div style={{background:"white",borderRadius:14,padding:"1rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".82rem",color:"#3D2B1F",lineHeight:1.75,fontStyle:"italic"}}>"{profil.histoire}"</div>}<div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:"white",fontWeight:300}}>Qu'est-ce qui t'amene aujourd'hui ? </div></div><div style={{display:"flex",flexDirection:"column",gap:".6rem"}}><div onClick={()=>{setParcours("produits");setEtape("produits_page");}} style={{background:"white",border:"2px solid #C49A8A",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#C49A8A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>P</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je veux decouvrir les produits</div><div style={{fontSize:".72rem",color:"#888"}}>Recois tes recommandations personnalisees + un cadeau offert</div></div><span style={{color:"#C49A8A",fontSize:"1.1rem",flexShrink:0}}>→</span></div><div onClick={()=>{setParcours("recrutement");setEtape("recrutement_page");}} style={{background:"white",border:"2px solid #A89BB5",borderRadius:14,padding:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".85rem"}}><div style={{width:50,height:50,borderRadius:12,background:"#A89BB530",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem",flexShrink:0}}>O</div><div style={{flex:1}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Je cherche une opportunite</div><div style={{fontSize:".72rem",color:"#888"}}>Decouvre si cette aventure est faite pour toi + un cadeau offert</div></div><span style={{color:"#A89BB5",fontSize:"1.1rem",flexShrink:0}}>→</span></div></div></div></div>);
   if(etape==="diag_produit") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={{maxWidth:480,margin:"0 auto"}}><DiagnosticsTab uid={profil&&profil.uid||slug} userName={profil&&profil.prenom||slug} externalMode={true} initialType={diagType} skipContact={true} onComplete={()=>setEtape("produits_ebook")}/></div></div>);
   if(etape==="produits_ebook") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#2D5A3D",borderRadius:16,padding:"1.5rem",marginBottom:"1.25rem",textAlign:"center"}}><div style={{fontSize:"2.5rem",marginBottom:".5rem"}}>🎁</div><div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".15em",color:"#A8D4A8",marginBottom:".3rem"}}>CADEAU OFFERT</div><div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"white",fontWeight:300,marginBottom:".4rem"}}>Ton bilan produits est pret !</div><div style={{fontSize:".78rem",color:"rgba(255,255,255,.8)",lineHeight:1.65}}>Recouvre ton guide gratuit + tes recommandations personnalisees par email ou WhatsApp</div></div><div style={{background:"white",border:"1.5px solid #E8DDD4",borderRadius:12,padding:".75rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:"1rem"}}><img src="/carnet_silhouette.png" alt="Carnet Silhouette" style={{width:48,height:68,objectFit:"cover",borderRadius:6,flexShrink:0}}/><div><div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:"#3D1F0E",marginBottom:".2rem"}}>Carnet Silhouette</div><div style={{fontSize:".72rem",color:"#888"}}>7 jours de recettes gourmandes - offert !</div></div></div><button onClick={()=>{setEbookChoisi("silhouette");setEtape("coordonnees");}} style={{width:"100%",background:"#2D5A3D",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>Recevoir mon guide + mon bilan →</button></div></div>);
-  if(etape==="coordonnees") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Ou est-ce que je t'envoie ton guide ?</div></div>{contactLinks&&(contactLinks.whatsapp||contactLinks.messenger||contactLinks.instagram)&&(<div style={{marginBottom:"1rem"}}><div style={{fontSize:".72rem",color:"#888",marginBottom:".6rem",textAlign:"center"}}>Le plus rapide : contacte-moi directement en 1 clic</div>{contactLinks.whatsapp&&<button type="button" onClick={async()=>{try{await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:{...coords,prenom:coords.prenom||"Cliente",reseau:coords.reseau||"Contact via WhatsApp"},date:todayLocalStr(),ts:Date.now()});}catch(e){console.error(e);}setEtape("ebook_affiche");window.open("https://wa.me/"+contactLinks.whatsapp.replace(/\D/g,"")+"?text="+encodeURIComponent("Bonjour "+nomDistrib+", je viens de faire le questionnaire et j'aimerais recevoir mes resultats !"),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#25D366",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 WhatsApp</button>}{contactLinks.messenger&&<button type="button" onClick={async()=>{try{await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:{...coords,prenom:coords.prenom||"Cliente",reseau:coords.reseau||"Contact via Messenger"},date:todayLocalStr(),ts:Date.now()});}catch(e){console.error(e);}setEtape("ebook_affiche");window.open("https://m.me/"+contactLinks.messenger.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"#0084FF",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>💬 Messenger</button>}{contactLinks.instagram&&<button type="button" onClick={async()=>{try{await setDoc(doc(db,"tunnel_prospects","t"+Date.now()),{slug,parcours,ebook:ebookChoisi,coordonnees:{...coords,prenom:coords.prenom||"Cliente",reseau:coords.reseau||"Contact via Instagram"},date:todayLocalStr(),ts:Date.now()});}catch(e){console.error(e);}setEtape("ebook_affiche");window.open("https://instagram.com/"+contactLinks.instagram.replace(/^@/,""),"_blank");}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem",width:"100%",background:"linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)",color:"white",border:"none",borderRadius:10,padding:".65rem",fontSize:".85rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem"}}>📸 Instagram</button>}<div style={{textAlign:"center",fontSize:".68rem",color:"#B8905F",margin:".7rem 0"}}>— ou remplis tes coordonnees —</div></div>)}{[["prenom","Prenom *","Ton prenom"],["email","Email","ton@email.com"],["tel","Tel / WhatsApp","06 XX XX XX XX"],["reseau","Messenger / Instagram","@tonpseudo"]].map(([k,l,ph])=>(<div key={k} style={{marginBottom:".4rem"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".2rem",fontWeight:600}}>{l}</div><input value={coords[k]||""} onChange={e=>setCoords(c=>({...c,[k]:e.target.value}))} placeholder={ph} style={{width:"100%",border:"1.5px solid "+(coords[k]?"#7FAF8A":"#E8DDD4"),borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none"}}/></div>))}<button onClick={enregistrerCoords} disabled={!coordsOk||saving} style={{width:"100%",background:coordsOk?"#3D1F0E":"#E8DDD4",color:coordsOk?"white":"#888",border:"none",borderRadius:10,padding:".75rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:coordsOk?"pointer":"default",marginTop:".5rem"}}>{saving?"Envoi...":"Recevoir mon guide gratuit →"}</button></div></div>);
+  if(etape==="coordonnees") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={W}><Hdr/><div style={{background:"#3D1F0E",borderRadius:14,padding:"1rem",marginBottom:"1rem",textAlign:"center"}}><div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:"white",fontWeight:300}}>Ou est-ce que je t'envoie ton guide ?</div></div><div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".6rem .75rem",marginBottom:"1rem",fontSize:".72rem",color:"#B04040",lineHeight:1.55}}>
+  ℹ️ Merci d'indiquer au moins un moyen de te contacter (telephone, email ou pseudo reseau social) — sans ca, on ne peut pas t'envoyer ton guide.
+</div>
+{[["prenom","Prenom *","Ton prenom"],["email","Email","ton@email.com"],["tel","Tel / WhatsApp","06 XX XX XX XX"],["reseau","Messenger / Instagram","@tonpseudo"]].map(([k,l,ph])=>(<div key={k} style={{marginBottom:".4rem"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".2rem",fontWeight:600}}>{l}</div><input value={coords[k]||""} onChange={e=>setCoords(c=>({...c,[k]:e.target.value}))} placeholder={ph} style={{width:"100%",border:"1.5px solid "+(coords[k]?"#7FAF8A":"#E8DDD4"),borderRadius:8,padding:".45rem .65rem",fontSize:".82rem",fontFamily:"inherit",color:"#3D2B1F",background:"white",outline:"none"}}/></div>))}
+{coords.prenom.trim() && !coords.email.trim() && !coords.tel.trim() && !coords.reseau.trim() && (
+  <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".55rem .75rem",marginTop:".4rem",marginBottom:".2rem",fontSize:".72rem",color:"#B04040",lineHeight:1.5}}>
+    ⚠️ Ton téléphone, ton email ou ton pseudo réseau social est obligatoire — sans ça, ta conseillère ne peut tout simplement pas t'envoyer ni traiter tes recommandations.
+  </div>
+)}
+<button onClick={enregistrerCoords} disabled={!coordsOk||saving} style={{width:"100%",background:coordsOk?"#3D1F0E":"#E8DDD4",color:coordsOk?"white":"#888",border:"none",borderRadius:10,padding:".75rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:coordsOk?"pointer":"default",marginTop:".5rem"}}>{saving?"Envoi...":"Recevoir mon guide gratuit →"}</button></div></div>);
   if(etape==="diagnostic") return(<div style={{minHeight:"100vh",background:"#FAF7F2",fontFamily:"Trebuchet MS,sans-serif"}}><div style={{maxWidth:480,margin:"0 auto"}}><DiagnosticsTab uid={profil&&profil.uid||slug} userName={nomDistrib} externalMode={true} initialClient={coords.prenom}/></div></div>);
   if(etape==="recrutement"){window.location.href="?recrutement=true&uid="+(profil&&profil.uid||slug);return null;}
   return null;

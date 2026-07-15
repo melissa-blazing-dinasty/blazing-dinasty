@@ -330,6 +330,8 @@ exports.creerCompteStripeConnect = onCall({secrets: [stripeSecretKey]}, async (r
   const auth = request.auth;
   if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "Non connecte");
   const uid = auth.uid;
+  const accountToken = request.data && request.data.accountToken;
+  if (!accountToken) throw new HttpsError("invalid-argument", "Token de compte manquant (obligatoire pour les plateformes francaises)");
   const stripe = require("stripe")(stripeSecretKey.value());
 
   const userRef = db.collection("users").doc(uid);
@@ -348,6 +350,7 @@ exports.creerCompteStripeConnect = onCall({secrets: [stripeSecretKey]}, async (r
 
   if (!stripeAccountId) {
     const account = await stripe.accounts.create({
+      account_token: accountToken,
       type: "express",
       country: "FR",
       capabilities: {
@@ -892,6 +895,26 @@ exports.capturerCommandePaypal = onCall({secrets: [resendApiKey]}, async (reques
 });
 
 // --- CONNEXION CLIENTE BOUTIQUE : lien magique envoye via Resend (meilleure delivrabilite que Firebase par defaut) ---
+// Enregistre une commande avant redirection vers un lien de paiement personnel (PayPal.me / Stripe perso de la distributrice)
+exports.enregistrerCommandeLienPerso = onCall({secrets: [resendApiKey]}, async (request) => {
+  const {distributeurUid, items, clientInfo, methode} = request.data || {};
+  if (!distributeurUid || !items || !items.length) {
+    throw new HttpsError("invalid-argument", "Donnees manquantes");
+  }
+  try {
+    await enregistrerCommandeClient(distributeurUid, items, {
+      nom: (clientInfo && clientInfo.nom) || "",
+      email: (clientInfo && clientInfo.email) || "",
+      tel: (clientInfo && clientInfo.tel) || "",
+      notePaiement: "Paiement via " + (methode === "stripe" ? "lien Stripe personnel" : "PayPal.me") + " - a verifier manuellement"
+    });
+    return {ok: true};
+  } catch (e) {
+    console.error("[enregistrerCommandeLienPerso] Erreur:", e);
+    throw new HttpsError("internal", "Erreur lors de l'enregistrement : " + e.message);
+  }
+});
+
 exports.envoyerLienConnexionClient = onCall({secrets: [resendApiKey]}, async (request) => {
   const {email, redirectUrl} = request.data || {};
   if (!email || !redirectUrl) {
