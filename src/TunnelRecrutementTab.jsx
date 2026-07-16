@@ -67,7 +67,7 @@ const TEMOIGNAGES_QUALI_DEFAULT = [
 // ─────────────────────────────────────────────────────────────────────────────
 export function TunnelRecrutementTab({ uid, userName, db }) {
   const [cfg, setCfg] = useState({
-    titreAccroche: 'Rejoins l\'équipe de Melissa !',
+    titreAccroche: '',
     sousTitreAccroche: 'Crée ta propre boutique en ligne gratuite\net développe ton business beauté depuis chez toi',
     afficherBoutique: true,
     lienBoutique: '',
@@ -408,7 +408,7 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
       <div style={{ background: bgHero, padding: '2.5rem 1.5rem 2rem', textAlign: 'center' }}>
         {photo && <img src={photo} alt={prenom} style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '3px solid white', marginBottom: '1rem', boxShadow: '0 4px 16px rgba(0,0,0,.2)' }} />}
         <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '1.6rem', fontWeight: 700, color: CR.brun, marginBottom: '.5rem', lineHeight: 1.2 }}>
-          {cfg.titreAccroche || `Rejoins l'équipe de ${prenom || 'Melissa'} !`} 🌿
+          {cfg.titreAccroche || ('Rejoins l\'equipe de ' + (prenom || 'notre equipe') + ' !')} 🌿
         </h1>
         <p style={{ fontSize: '.9rem', color: CR.brun, opacity: .8, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{cfg.sousTitreAccroche}</p>
       </div>
