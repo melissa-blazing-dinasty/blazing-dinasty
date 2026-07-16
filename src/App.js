@@ -23,6 +23,7 @@ import { FastStartTab } from './FastStartTab';
 import { ObjectifsTab } from './ObjectifsTab';
 import { AssistanteIATab } from './AssistanteIATab';
 import { TunnelRecrutementTab } from './TunnelRecrutementTab';
+import { TokensCadeauxTab } from './TokensCadeauxTab';
 import { TunnelStatsEquipeRecap } from './TunnelStatsTab';
 import { buildEquipeTree, countEquipe, getLigneeChefs, countEquipeSafe, SearchSelect, todayLocalDate, todayLocalStr, BoutonMiseAJour, useLang, useTranslation, useTranslatedContent, useTranslatedProduit, T, Btn, YTBtn, DriveBtn, DocBtn, Card, Info, Tag, SecTitle, LangContext, UI_TEXTS, UI_TEXTS_PT, domOriginals, translateDOM, translateBatch, seedAnnuaireFromMembres, APP_VERSION, C } from './components';
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
@@ -2066,6 +2067,14 @@ function App(){
             style={{width:"100%",background:paiementSaved?"#2E7D32":"#3D1F0E",color:"white",border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
             {paiementSaving?"...":paiementSaved?"✅ Enregistré !":"Enregistrer mes liens de paiement"}
           </button>
+        </div>
+        {/* TOKENS-COMPTE */}
+        <div style={{background:"#FDF8EC",borderRadius:12,padding:"1rem",marginBottom:"1rem",border:"1px solid #C4A962"}}>
+          <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E",marginBottom:".3rem"}}>🎁 Tokens cadeaux — offres exclusives</div>
+          <div style={{fontSize:".68rem",color:"#888",marginBottom:".7rem",lineHeight:1.5}}>
+            Ajoute des liens tokens Mihi pour offrir des cadeaux a tes nouvelles clientes ou recrues. Chaque lien ne peut etre utilise qu'une seule fois.
+          </div>
+          <TokensCadeauxTab uid={userId} db={db} prenom={name}/>
         </div>
         <div id="decouverte-compte-email" style={{background:"#FFF3EC",borderRadius:12,padding:"1rem",marginBottom:"1rem",border:"1px solid #F0D8C8"}}>
           <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E",marginBottom:".3rem"}}>🔔 Alerte email nouvelle commande</div>
