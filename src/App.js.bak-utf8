@@ -22,7 +22,6 @@ import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { FastStartTab } from './FastStartTab';
 import { ObjectifsTab } from './ObjectifsTab';
 import { AssistanteIATab } from './AssistanteIATab';
-import { TunnelRecrutementTab } from './TunnelRecrutementTab';
 import { buildEquipeTree, countEquipe, getLigneeChefs, countEquipeSafe, SearchSelect, todayLocalDate, todayLocalStr, BoutonMiseAJour, useLang, useTranslation, useTranslatedContent, useTranslatedProduit, T, Btn, YTBtn, DriveBtn, DocBtn, Card, Info, Tag, SecTitle, LangContext, UI_TEXTS, UI_TEXTS_PT, domOriginals, translateDOM, translateBatch, seedAnnuaireFromMembres, APP_VERSION, C } from './components';
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -1839,7 +1838,6 @@ function App(){
     {id:"scripts",label:"📝 Scripts"},
     {id:"banqueimages",label:"💬 Témoignages & Visuels"},
     {id:"ebooks",label:"📚 Ebooks"},
-    {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
@@ -3422,7 +3420,6 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="boutique"&&<LinkBioTab uid={userId} userName={name} initialSection="boutique"/>}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="tunnel-recrutement"&&<TunnelRecrutementTab uid={userId} userName={name} db={db}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}

@@ -1,5 +1,4 @@
 ﻿import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
-import { TunnelRecrutementPublic } from './TunnelRecrutementTab';
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
 import { isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -4683,8 +4682,6 @@ function Root(){
   const tunnelParam=p.get("tunnel");
   // Si bio + tunnel => ouvrir tunnel avec parcours pré-sélectionné
   if(bioSlug && tunnelParam) return <TunnelHybridePage slug={bioSlug} forceEtape={tunnelParam}/>;
-  const recrutementSlug=p.get('recrutement');
-  if(recrutementSlug) return <TunnelRecrutementPublic slug={recrutementSlug} db={db}/>;
   if(bioSlug) return <LinkBioPublicPage slug={bioSlug}/>;
   const boutiqueSlug=p.get("boutique");
   if(boutiqueSlug) return <BoutiquePubliquePage slug={boutiqueSlug}/>;

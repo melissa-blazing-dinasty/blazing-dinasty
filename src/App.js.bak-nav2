@@ -1839,7 +1839,6 @@ function App(){
     {id:"scripts",label:"📝 Scripts"},
     {id:"banqueimages",label:"💬 Témoignages & Visuels"},
     {id:"ebooks",label:"📚 Ebooks"},
-    {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
@@ -3422,7 +3421,6 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="boutique"&&<LinkBioTab uid={userId} userName={name} initialSection="boutique"/>}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="tunnel-recrutement"&&<TunnelRecrutementTab uid={userId} userName={name} db={db}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}

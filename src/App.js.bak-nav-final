@@ -1839,7 +1839,6 @@ function App(){
     {id:"scripts",label:"📝 Scripts"},
     {id:"banqueimages",label:"💬 Témoignages & Visuels"},
     {id:"ebooks",label:"📚 Ebooks"},
-    {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
