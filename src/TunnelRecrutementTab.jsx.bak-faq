@@ -50,16 +50,16 @@ const AVANTAGES = [
 
 // ── TÉMOIGNAGES REVENUS ───────────────────────────────────────────────────────
 const TEMOIGNAGES_REVENUS_DEFAULT = [
-  {prenom:'Fanny', metier:'Coiffeuse', heures:'6h/semaine', clientes:'12 clientes régulières', montant:'957'},
-  {prenom:'Melissa', metier:'Maman au foyer - a temps plein chez Mihi', heures:'4h/semaine', clientes:'8 clientes', montant:'3000'},
-  {prenom:'Sarah', metier:'Garde d enfants salariee', heures:'8h/semaine', clientes:'20 clientes', montant:'790'},
+  {prenom:'Marie', metier:'Coiffeuse', heures:'6h/semaine', clientes:'12 clientes régulières', montant:'420'},
+  {prenom:'Julie', metier:'Maman au foyer', heures:'4h/semaine', clientes:'8 clientes', montant:'320'},
+  {prenom:'Sarah', metier:'Salariée', heures:'8h/semaine', clientes:'20 clientes', montant:'790'},
 ];
 
 // ── TÉMOIGNAGES QUALITATIFS ───────────────────────────────────────────────────
 const TEMOIGNAGES_QUALI_DEFAULT = [
-  {texte:"Depuis que j'ai rejoint l'equipe, j'ai retrouve une vraie confiance en moi. Grace a l'application et aux formations, j'ai progresse bien plus vite.", auteur:"Eva, dans l'equipe Blazing Dynasty"},
-  {texte:"L'application, l'equipe, l'accompagnement - tout est la pour avancer. Je me sens vraiment professionnelle dans ma facon de travailler.", auteur:"Christelle, dans l'equipe Blazing Dynasty"},
-  {texte:"Ce qui m'a le plus surprise c'est l'esprit d'equipe. On avance ensemble, on se soutient - ca fait toute la difference.", auteur:"Oceane, dans l'equipe Blazing Dynasty"},
+  {texte:"Je n'aurais jamais pensé pouvoir avoir ma propre boutique en ligne. Aujourd'hui mes clientes commandent directement et je reçois une notification à chaque vente !", auteur:'Sarah, 3 mois dans l\'équipe'},
+  {texte:"L'académie m'a tout appris. Les formations, les outils, l'accompagnement — je me sens vraiment professionnelle dans ma façon de travailler.", auteur:'Léa, 6 mois dans l\'équipe'},
+  {texte:"Ce qui m'a convaincue c'est la boutique gratuite. Chez Mihi elle est payante, ici elle est offerte et en plus elle est magnifique !", auteur:'Marine, 1 an dans l\'équipe'},
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,37 +199,6 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
         )}
       </div>
 
-      {/* Chiffres Ce mois-ci */}
-      <div style={{ background: 'white', border: '1px solid ' + CR.pale, borderRadius: 12, padding: '1rem', marginBottom: '1rem' }}>
-        <div style={{ fontSize: '.72rem', fontWeight: 700, color: CR.or, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: '.7rem' }}>📊 Bloc "Ce mois-ci"</div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '.7rem', color: CR.gris, marginBottom: '.3rem' }}>Personnes ont rejoint</div>
-            <input type="number" value={cfg.nbPersonnesRejointes||2} onChange={e => setCfg(c => ({ ...c, nbPersonnesRejointes: parseInt(e.target.value)||0 }))}
-              style={{ width: '100%', border: '1px solid ' + CR.pale, borderRadius: 8, padding: '.5rem .7rem', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '.7rem', color: CR.gris, marginBottom: '.3rem' }}>Places restantes</div>
-            <input type="number" value={cfg.nbPlacesRestantes||3} onChange={e => setCfg(c => ({ ...c, nbPlacesRestantes: parseInt(e.target.value)||0 }))}
-              style={{ width: '100%', border: '1px solid ' + CR.pale, borderRadius: 8, padding: '.5rem .7rem', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-          </div>
-        </div>
-      </div>
-
-      {/* Temoignages qualitatifs */}
-      <div style={{ background: 'white', border: '1px solid ' + CR.pale, borderRadius: 12, padding: '1rem', marginBottom: '1rem' }}>
-        <div style={{ fontSize: '.72rem', fontWeight: 700, color: CR.or, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: '.7rem' }}>Elles ont saute le pas</div>
-        {(cfg.temoignagesQuali || TEMOIGNAGES_QUALI_DEFAULT).map((t, i) => (
-          <div key={i} style={{ background: CR.creme, borderRadius: 10, padding: '.7rem', marginBottom: '.6rem' }}>
-            <div style={{ fontSize: '.7rem', fontWeight: 700, color: CR.or, marginBottom: '.4rem' }}>Temoignage {i + 1}</div>
-            <textarea value={t.texte} onChange={e => { const arr = [...(cfg.temoignagesQuali || TEMOIGNAGES_QUALI_DEFAULT)]; arr[i] = { ...arr[i], texte: e.target.value }; setCfg(c => ({ ...c, temoignagesQuali: arr })); }} rows={3} placeholder="Le temoignage..."
-              style={{ width: '100%', border: '1px solid ' + CR.pale, borderRadius: 8, padding: '.5rem .7rem', fontSize: '.78rem', fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: '.4rem' }} />
-            <input value={t.auteur} onChange={e => { const arr = [...(cfg.temoignagesQuali || TEMOIGNAGES_QUALI_DEFAULT)]; arr[i] = { ...arr[i], auteur: e.target.value }; setCfg(c => ({ ...c, temoignagesQuali: arr })); }} placeholder="Auteur..."
-              style={{ width: '100%', border: '1px solid ' + CR.pale, borderRadius: 8, padding: '.5rem .7rem', fontSize: '.78rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-          </div>
-        ))}
-      </div>
-
       {/* Lien inscription */}
       <div style={{ background: 'white', border: `1px solid ${CR.pale}`, borderRadius: 12, padding: '1rem', marginBottom: '1rem' }}>
         <div style={{ fontSize: '.72rem', fontWeight: 700, color: CR.or, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: '.7rem' }}>Lien d'inscription Mihi</div>
@@ -244,18 +213,6 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
         <div style={{ fontSize: '.7rem', color: CR.gris, marginBottom: '.3rem' }}>Tu recevras un email quand quelqu'un remplit le formulaire</div>
         <input type="email" value={cfg.emailNotifFormulaire} onChange={e => setCfg(c => ({ ...c, emailNotifFormulaire: e.target.value }))} placeholder="ton-email@exemple.com"
           style={{ width: '100%', border: `1px solid ${CR.pale}`, borderRadius: 8, padding: '.5rem .7rem', fontSize: '.78rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
-      </div>
-
-      <div style={{background:'white',border:'1px solid '+CR.pale,borderRadius:12,padding:'1rem',marginBottom:'1rem'}}>
-        <div style={{fontSize:'.72rem',fontWeight:700,color:CR.or,textTransform:'uppercase',letterSpacing:1.5,marginBottom:'.7rem'}}>Revenus de l equipe</div>
-        {(cfg.temoignagesRevenus||TEMOIGNAGES_REVENUS_DEFAULT).map((t,i)=>(
-          <div key={i} style={{background:CR.creme,borderRadius:10,padding:'.7rem',marginBottom:'.6rem'}}>
-            <div style={{fontSize:'.7rem',fontWeight:700,color:CR.or,marginBottom:'.4rem'}}>Personne {i+1}</div>
-            <input value={t.prenom||''} onChange={e=>{const a=[...(cfg.temoignagesRevenus||TEMOIGNAGES_REVENUS_DEFAULT)];a[i]={...a[i],prenom:e.target.value};setCfg(c=>({...c,temoignagesRevenus:a}));}} placeholder="Prenom" style={{width:'100%',border:'1px solid '+CR.pale,borderRadius:8,padding:'.5rem .7rem',fontSize:'.78rem',fontFamily:'inherit',outline:'none',boxSizing:'border-box',marginBottom:'.4rem'}}/>
-            <input value={t.metier||''} onChange={e=>{const a=[...(cfg.temoignagesRevenus||TEMOIGNAGES_REVENUS_DEFAULT)];a[i]={...a[i],metier:e.target.value};setCfg(c=>({...c,temoignagesRevenus:a}));}} placeholder="Metier" style={{width:'100%',border:'1px solid '+CR.pale,borderRadius:8,padding:'.5rem .7rem',fontSize:'.78rem',fontFamily:'inherit',outline:'none',boxSizing:'border-box',marginBottom:'.4rem'}}/>
-            <input value={t.montant||''} onChange={e=>{const a=[...(cfg.temoignagesRevenus||TEMOIGNAGES_REVENUS_DEFAULT)];a[i]={...a[i],montant:e.target.value};setCfg(c=>({...c,temoignagesRevenus:a}));}} placeholder="Montant euros/mois" style={{width:'100%',border:'1px solid '+CR.pale,borderRadius:8,padding:'.5rem .7rem',fontSize:'.78rem',fontFamily:'inherit',outline:'none',boxSizing:'border-box'}}/>
-          </div>
-        ))}
       </div>
 
       {/* Bouton sauver */}
@@ -279,8 +236,6 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
   const [faqOuverte, setFaqOuverte] = useState(null);
   const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 });
   const [form, setForm] = useState({ prenom: '', nom: '', email: '', tel: '', motivation: '' });
-  const [tokenChoisi, setTokenChoisi] = useState(null);
-  const [tokenConfirm, setTokenConfirm] = useState(false);
   const [formSending, setFormSending] = useState(false);
   const [formSent, setFormSent] = useState(false);
   const [formError, setFormError] = useState('');
@@ -288,25 +243,14 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
 
   // Compte à rebours psychologique
   useEffect(() => {
-    const key = 'bd_recru_timer_' + slug;
+    const key = `bd_recru_timer_${slug}`;
+    const stored = sessionStorage.getItem(key);
     let endTime;
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        endTime = parseInt(stored);
-        if (endTime < Date.now()) {
-          const h = 18 + Math.floor(Math.random() * 30);
-          endTime = Date.now() + h * 3600000;
-          localStorage.setItem(key, endTime.toString());
-        }
-      } else {
-        const h = 18 + Math.floor(Math.random() * 30);
-        endTime = Date.now() + h * 3600000;
-        localStorage.setItem(key, endTime.toString());
-      }
-    } catch {
-      const h = 18 + Math.floor(Math.random() * 30);
+    if (stored) { endTime = parseInt(stored); }
+    else {
+      const h = 3 + Math.floor(Math.random() * 8);
       endTime = Date.now() + h * 3600000;
+      sessionStorage.setItem(key, endTime.toString());
     }
     const tick = () => {
       const diff = Math.max(0, endTime - Date.now());
@@ -389,58 +333,22 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
 
       {/* OFFRE LIMITÉE (tokens) */}
       {tokens.length > 0 && (
-        <div style={{ margin: '0 1rem 1rem', borderRadius: 16, padding: 3, background: 'linear-gradient(135deg,' + accentColor + ',#fff,' + accentColor + ')', boxShadow: '0 0 24px ' + accentColor + '66' }}>
-          <div style={{ background: 'linear-gradient(135deg,#1A0800,#2D1400)', borderRadius: 14, padding: '1.2rem', color: 'white' }}>
-            <div style={{ textAlign: 'center', marginBottom: '.8rem' }}>
-              <div style={{ fontSize: '.68rem', fontWeight: 700, letterSpacing: 2.5, textTransform: 'uppercase', color: accentColor, marginBottom: '.3rem' }}>OFFRE LIMITEE</div>
-              {!tokenChoisi && !tokenConfirm && <div style={{ fontFamily: 'Georgia,serif', fontSize: '1.15rem', fontWeight: 700, marginBottom: '.2rem' }}>Choisis ton cadeau</div>}
-              {!tokenChoisi && !tokenConfirm && <div style={{ fontSize: '.72rem', opacity: .8 }}>Pour toute inscription — offre a usage unique</div>}
-            </div>
-            {!tokenChoisi && !tokenConfirm && (<>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '.5rem', marginBottom: '.7rem' }}>
-                {[{v:countdown.h,l:'h'},{v:countdown.m,l:'min'},{v:countdown.s,l:'sec'}].map(({v,l}) => (
-                  <div key={l} style={{ background: 'rgba(255,255,255,.1)', border: '1px solid ' + accentColor + '44', borderRadius: 8, padding: '.4rem .6rem', minWidth: 42, textAlign: 'center' }}>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 700, fontFamily: 'monospace', color: accentColor }}>{pad(v)}</div>
-                    <div style={{ fontSize: '.55rem', opacity: .7 }}>{l}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: '.7rem', textAlign: 'center', color: accentColor, marginBottom: '.8rem' }}>Plus que <strong>{tokens.length}</strong> offre{tokens.length > 1 ? 's' : ''} disponible{tokens.length > 1 ? 's' : ''}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
-                {[...new Map(tokens.map(t => [t.type, t])).values()].map(tok => (
-                  <button key={tok.id} onClick={() => setTokenChoisi(tok)}
-                    style={{ background: 'rgba(255,255,255,.08)', border: '1.5px solid ' + accentColor + '66', borderRadius: 10, padding: '.75rem 1rem', color: 'white', fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '.7rem', textAlign: 'left' }}>
-                    <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>{tok.emoji || '🎁'}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '.82rem', fontWeight: 700, color: accentColor }}>{tok.labelPerso || tok.label}</div>
-                      <div style={{ fontSize: '.7rem', opacity: .75 }}>{tok.description}</div>
-                    </div>
-                    <span style={{ color: accentColor }}>→</span>
-                  </button>
-                ))}
-              </div>
-            </>)}
-            {tokenChoisi && !tokenConfirm && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '.5rem' }}>{tokenChoisi.emoji || '🎁'}</div>
-                <div style={{ fontFamily: 'Georgia,serif', fontSize: '1.1rem', fontWeight: 700, color: accentColor, marginBottom: '.4rem' }}>{tokenChoisi.labelPerso || tokenChoisi.label}</div>
-                <div style={{ fontSize: '.75rem', opacity: .85, marginBottom: '.8rem' }}>Tu vas etre redirigee vers la boutique Mihi pour activer ton offre.</div>
-                <div style={{ background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '.6rem', fontSize: '.72rem', marginBottom: '.9rem' }}>Ce lien est a usage unique.</div>
-                <button onClick={() => { setTokenConfirm(true); setTimeout(() => { window.location.href = tokenChoisi.lien; }, 1500); }}
-                  style={{ width: '100%', background: accentColor, color: 'white', border: 'none', borderRadius: 10, padding: '.75rem', fontSize: '.85rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', marginBottom: '.5rem' }}>
-                  Activer mon offre →
-                </button>
-                <button onClick={() => setTokenChoisi(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.6)', fontFamily: 'inherit', cursor: 'pointer', fontSize: '.75rem' }}>← Revenir</button>
-              </div>
-            )}
-            {tokenConfirm && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '3rem', marginBottom: '.5rem' }}>🎉</div>
-                <div style={{ fontFamily: 'Georgia,serif', fontSize: '1.1rem', fontWeight: 700, color: accentColor }}>Offre activee !</div>
-                <div style={{ fontSize: '.78rem', opacity: .8, marginTop: '.4rem' }}>Redirection en cours...</div>
-              </div>
-            )}
+        <div style={{ margin: '0 1rem 1rem', background: 'linear-gradient(135deg, #C0392B, #E74C3C)', borderRadius: 14, padding: '1.2rem', textAlign: 'center', color: 'white' }}>
+          <div style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', marginBottom: '.4rem', opacity: .9 }}>🎁 OFFRE LIMITÉE</div>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: '1.2rem', fontWeight: 700, marginBottom: '.3rem' }}>
+            {tokens[0].labelPerso || tokens[0].label}
           </div>
+          <div style={{ fontSize: '.75rem', opacity: .9, marginBottom: '.8rem' }}>{tokens[0].description} — Pour toute inscription</div>
+          {/* Compte à rebours */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '.5rem', marginBottom: '.5rem' }}>
+            {[{v:countdown.h,l:'heures'},{v:countdown.m,l:'min'},{v:countdown.s,l:'sec'}].map(({v,l}) => (
+              <div key={l} style={{ background: 'rgba(0,0,0,.3)', borderRadius: 8, padding: '.4rem .7rem', minWidth: 44 }}>
+                <div style={{ fontSize: '1.3rem', fontWeight: 700, fontFamily: 'monospace' }}>{pad(v)}</div>
+                <div style={{ fontSize: '.58rem', opacity: .8 }}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: '.72rem', opacity: .85 }}>🔥 Plus que <strong>{tokens.length}</strong> offre{tokens.length > 1 ? 's' : ''} disponible{tokens.length > 1 ? 's' : ''}</div>
         </div>
       )}
 
@@ -504,22 +412,6 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
       {/* TÉMOIGNAGES QUALITATIFS */}
       <div style={{ margin: '0 1rem 1rem', background: 'white', border: `1px solid ${CR.pale}`, borderRadius: 14, padding: '1.2rem' }}>
         <div style={{ fontSize: '.85rem', fontWeight: 700, color: CR.brun, marginBottom: '1rem' }}>💬 Elles ont sauté le pas</div>
-        {/* CE MOIS-CI */}
-        <div style={{ margin: '0 1rem 1rem', background: 'linear-gradient(135deg,' + CR.brun + ',#3D2020)', borderRadius: 14, padding: '1.4rem', color: 'white', textAlign: 'center' }}>
-          <div style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', marginBottom: '.8rem', opacity: .8 }}>🔥 CE MOIS-CI</div>
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '.8rem' }}>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '1rem .5rem' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 700, color: accentColor }}>{cfg.nbPersonnesRejointes||2}</div>
-              <div style={{ fontSize: '.72rem', opacity: .85 }}>Personnes ont rejoint l'equipe</div>
-            </div>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '1rem .5rem' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 700, color: '#FF8A80' }}>{cfg.nbPlacesRestantes||3}</div>
-              <div style={{ fontSize: '.72rem', opacity: .85 }}>Places restantes ce mois</div>
-            </div>
-          </div>
-          <div style={{ fontSize: '.72rem', opacity: .7, fontStyle: 'italic' }}>{prenom||'Melissa'} accompagne personnellement chaque nouvelle recrue</div>
-        </div>
-
         {(cfg.temoignagesQuali || TEMOIGNAGES_QUALI_DEFAULT).map((t, i) => (
           <div key={i} style={{ background: CR.creme, borderLeft: `3px solid ${CR.or}`, borderRadius: '0 10px 10px 0', padding: '.8rem 1rem', marginBottom: '.7rem' }}>
             <p style={{ fontSize: '.78rem', color: CR.texte, lineHeight: 1.6, fontStyle: 'italic', marginBottom: '.4rem' }}>"{t.texte}"</p>
