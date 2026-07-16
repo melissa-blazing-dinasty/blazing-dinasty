@@ -41,7 +41,7 @@ const STATUTS = [
 
 // ── AVANTAGES ────────────────────────────────────────────────────────────────
 const AVANTAGES = [
-  {icon:'🛍️', titre:'Boutique en ligne gratuite', desc:'Personnalisée, avec diagnostics IA, carte de fidélité, paniers partagés...'},
+  {icon:'📱', titre:'Application gratuite', desc:'Personnalisée, avec diagnostics IA, carte de fidélité, paniers partagés...'},
   {icon:'📚', titre:'Académie Blazing Dynasty', desc:'Formations, outils, quiz, badges, suivi de ton activité — tout dans une app'},
   {icon:'💰', titre:'20% à 30% de commission', desc:'Sur tes propres ventes + jusqu\'à 17% sur les ventes de ton équipe'},
   {icon:'🎯', titre:'Accompagnement personnalisé', desc:'Tu n\'es jamais seule — je t\'accompagne à chaque étape de ton développement'},
@@ -124,7 +124,26 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
 
   const copyLink = () => { navigator.clipboard.writeText(lienPublic); showNotif('Lien copié !'); };
 
+
+  const tabsNav = (
+    <div style={{display:'flex',gap:'.5rem',marginBottom:'1rem'}}>
+      {[{id:'reglages',label:'Reglages'},{id:'stats',label:'Stats'}].map(t=>(
+        <button key={t.id} onClick={()=>setSousOnglet(t.id)}
+          style={{flex:1,background:sousOnglet===t.id?CR.brun:'white',color:sousOnglet===t.id?'white':CR.gris,border:'1px solid '+CR.pale,borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:sousOnglet===t.id?700:400,fontFamily:'inherit',cursor:'pointer'}}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+
   if (loading) return <div style={{ textAlign: 'center', padding: '3rem', color: CR.gris }}>Chargement...</div>;
+  if (sousOnglet === 'stats') return (
+    <div style={{fontFamily:'inherit',maxWidth:480,margin:'0 auto',padding:'0 0 3rem'}}>
+      {tabsNav}
+      <TunnelStatsTab uid={uid} db={db}/>
+    </div>
+  );
+
 
   if (preview) return (
     <div>
@@ -165,6 +184,7 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
 
   return (
     <div style={{ fontFamily: 'inherit', maxWidth: 480, margin: '0 auto', padding: '0 0 3rem' }}>
+      {tabsNav}
       {notif && <div style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', background: CR.vert, color: 'white', borderRadius: 12, padding: '.7rem 1.2rem', fontSize: '.8rem', fontWeight: 600, zIndex: 9999 }}>{notif}</div>}
 
       {/* Header */}

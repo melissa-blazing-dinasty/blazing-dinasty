@@ -3,7 +3,8 @@
 // Placer dans src/
 
 import { useState, useEffect, useRef } from 'react';
-import { doc, getDoc, setDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, getDoc, setDoc, addDoc, collection, getDocs } from 'firebase/firestore';
+import { TunnelStatsTab, trackTunnelView, trackTunnelLead } from './TunnelStatsTab';
 
 // ── COULEURS ─────────────────────────────────────────────────────────────────
 const THEMES_TUNNEL = [
@@ -82,6 +83,7 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
   const [saved, setSaved] = useState(false);
   const [tokens, setTokens] = useState([]);
   const [preview, setPreview] = useState(false);
+  const [sousOnglet, setSousOnglet] = useState('reglages');
   const [notif, setNotif] = useState(null);
   const [showDecouverte, setShowDecouverte] = useState(false);
 
