@@ -237,12 +237,12 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
         <div style={{ display: 'flex', gap: '1rem' }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '.7rem', color: CR.gris, marginBottom: '.3rem' }}>Personnes ont rejoint</div>
-            <input type="number" value={cfg.nbPersonnesRejointes||2} onChange={e => setCfg(c => ({ ...c, nbPersonnesRejointes: parseInt(e.target.value)||0 }))}
+            <input type="number" value={cfg.nbPersonnesRejointes||0} onChange={e => setCfg(c => ({ ...c, nbPersonnesRejointes: parseInt(e.target.value)||0 }))}
               style={{ width: '100%', border: '1px solid ' + CR.pale, borderRadius: 8, padding: '.5rem .7rem', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '.7rem', color: CR.gris, marginBottom: '.3rem' }}>Places restantes</div>
-            <input type="number" value={cfg.nbPlacesRestantes||3} onChange={e => setCfg(c => ({ ...c, nbPlacesRestantes: parseInt(e.target.value)||0 }))}
+            <input type="number" value={cfg.nbPlacesRestantes||0} onChange={e => setCfg(c => ({ ...c, nbPlacesRestantes: parseInt(e.target.value)||0 }))}
               style={{ width: '100%', border: '1px solid ' + CR.pale, borderRadius: 8, padding: '.5rem .7rem', fontSize: '.82rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
           </div>
         </div>
@@ -541,11 +541,11 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
           <div style={{ fontSize: '.7rem', fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', marginBottom: '.8rem', opacity: .8 }}>🔥 CE MOIS-CI</div>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '.8rem' }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '1rem .5rem' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 700, color: accentColor }}>{cfg.nbPersonnesRejointes||2}</div>
+              <div style={{ fontSize: '2rem', fontWeight: 700, color: accentColor }}>{cfg.nbPersonnesRejointes||0}</div>
               <div style={{ fontSize: '.72rem', opacity: .85 }}>Personnes ont rejoint l'equipe</div>
             </div>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '1rem .5rem' }}>
-              <div style={{ fontSize: '2rem', fontWeight: 700, color: '#FF8A80' }}>{cfg.nbPlacesRestantes||3}</div>
+              <div style={{ fontSize: '2rem', fontWeight: 700, color: '#FF8A80' }}>{cfg.nbPlacesRestantes||0}</div>
               <div style={{ fontSize: '.72rem', opacity: .85 }}>Places restantes ce mois</div>
             </div>
           </div>
