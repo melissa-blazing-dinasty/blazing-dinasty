@@ -83,6 +83,7 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
   const [tokens, setTokens] = useState([]);
   const [preview, setPreview] = useState(false);
   const [notif, setNotif] = useState(null);
+  const [showDecouverte, setShowDecouverte] = useState(false);
 
   const slug = (userName || uid).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-');
   const lienPublic = `${window.location.origin}?recrutement=${slug}`;
@@ -130,6 +131,36 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
     </div>
   );
 
+  const ETAPES_DECOUVERTE = [
+    {titre:"Bienvenue dans ton Tunnel !", texte:"Ce tunnel est une page publique que tu partages a des prospects. Elle leur presente l'opportunite Mihi et les incite a te contacter.", icon:"🎯"},
+    {titre:"Configure ton accroche", texte:"Personnalise le titre et le sous-titre qui apparaissent en haut de ta page. Parle directement aux femmes qui cherchent un complement de revenus.", icon:"✍️"},
+    {titre:"Ajoute des offres cadeaux", texte:"Si tu as des tokens actifs (Boutique → Tokens cadeaux), ils s'affichent avec un compte a rebours pour creer l'urgence.", icon:"🎁"},
+    {titre:"Ta boutique en ligne", texte:"Si tu as cree ta boutique Blazing Dynasty, active ce bouton pour que tes prospects voient tes produits avant de rejoindre l'equipe.", icon:"🛍️"},
+    {titre:"Les temoignages revenus", texte:"Remplace les prenoms et montants par des vraies personnes de ton equipe. Des chiffres reels convainquent bien mieux.", icon:"💰"},
+    {titre:"Ton lien d inscription Mihi", texte:"Colle ton lien de parrainage Mihi. Il apparaitra pour les prospects deja convaincus qui veulent s'inscrire directement.", icon:"🔗"},
+    {titre:"Partage ton lien partout !", texte:"Copie ton lien tunnel et partage-le en story, en post, en DM, dans ta bio. Plus tu le partages, plus tu attires de recrues.", icon:"🚀"},
+  ];
+  if (showDecouverte) return (
+    <div style={{ fontFamily: 'inherit', maxWidth: 480, margin: '0 auto', padding: '0 0 3rem' }}>
+      <div style={{ background: 'linear-gradient(135deg,' + CR.brun + ',#3D2020)', borderRadius: 16, padding: '1.2rem', marginBottom: '1rem', color: 'white', textAlign: 'center' }}>
+        <div style={{ fontFamily: 'Georgia,serif', fontSize: '1.2rem', fontWeight: 600, marginBottom: '.3rem' }}>🧭 Découverte — Tunnel Recrutement</div>
+        <div style={{ fontSize: '.78rem', opacity: .8 }}>Comment configurer et utiliser ton tunnel</div>
+      </div>
+      {ETAPES_DECOUVERTE.map((e, i) => (
+        <div key={i} style={{ background: 'white', border: '1px solid ' + CR.pale, borderRadius: 12, padding: '1rem', marginBottom: '.8rem', display: 'flex', gap: '.8rem', alignItems: 'flex-start' }}>
+          <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>{e.icon}</span>
+          <div>
+            <div style={{ fontSize: '.82rem', fontWeight: 700, color: CR.brun, marginBottom: '.3rem' }}>{e.titre}</div>
+            <div style={{ fontSize: '.76rem', color: CR.gris, lineHeight: 1.6 }}>{e.texte}</div>
+          </div>
+        </div>
+      ))}
+      <button onClick={() => setShowDecouverte(false)} style={{ width: '100%', background: CR.brun, color: 'white', border: 'none', borderRadius: 12, padding: '.85rem', fontSize: '.88rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
+        ✓ J'ai compris, je configure mon tunnel !
+      </button>
+    </div>
+  );
+
   return (
     <div style={{ fontFamily: 'inherit', maxWidth: 480, margin: '0 auto', padding: '0 0 3rem' }}>
       {notif && <div style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', background: CR.vert, color: 'white', borderRadius: 12, padding: '.7rem 1.2rem', fontSize: '.8rem', fontWeight: 600, zIndex: 9999 }}>{notif}</div>}
@@ -141,6 +172,7 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
         <div style={{ background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '.6rem .8rem', fontSize: '.68rem', wordBreak: 'break-all', marginBottom: '.6rem' }}>{lienPublic}</div>
         <div style={{ display: 'flex', gap: '.5rem' }}>
           <button onClick={copyLink} style={{ flex: 1, background: CR.or, color: 'white', border: 'none', borderRadius: 8, padding: '.5rem', fontSize: '.75rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>📋 Copier le lien</button>
+          <button onClick={() => setShowDecouverte(true)} style={{ flex: 1, background: 'rgba(255,255,255,.1)', color: 'white', border: '1px solid rgba(255,255,255,.3)', borderRadius: 8, padding: '.5rem', fontSize: '.75rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>🧭 Découverte</button>
           <button onClick={() => setPreview(true)} style={{ flex: 1, background: 'rgba(255,255,255,.15)', color: 'white', border: '1px solid rgba(255,255,255,.3)', borderRadius: 8, padding: '.5rem', fontSize: '.75rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>👁️ Prévisualiser</button>
         </div>
       </div>
