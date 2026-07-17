@@ -130,6 +130,14 @@ export function TunnelStatsTab({ uid, db }) {
         ))}
       </div>
 
+      {/* Explications */}
+      <div style={{background:'#FDF8EC',border:'1px solid '+CR.or,borderRadius:12,padding:'.8rem 1rem',marginBottom:'1rem',fontSize:'.75rem',color:CR.gris,lineHeight:1.7}}>
+        <strong style={{color:CR.brun,display:'block',marginBottom:'.3rem'}}>📖 Comprendre tes stats</strong>
+        👁️ <strong>Vues</strong> : nombre de personnes ayant ouvert ta page tunnel<br/>
+        📋 <strong>Leads</strong> : personnes ayant rempli ton formulaire de contact (prospects chauds à recontacter !)<br/>
+        📊 <strong>Taux de conversion</strong> : % de visiteurs qui ont rempli le formulaire<br/>
+        🎁 <strong>Tokens utilisés</strong> : offres cadeaux activées par tes prospects
+      </div>
       {/* KPIs */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.6rem',marginBottom:'1rem'}}>
         {[

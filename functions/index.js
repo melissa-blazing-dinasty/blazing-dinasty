@@ -969,7 +969,13 @@ exports.metaTags = onRequest(async (req, res) => {
 
   let titre = 'Blazing Dynasty × Mihi France';
   let description = 'Decouvre une opportunite beaute unique en France.';
-  let image = 'https://blazing-dinasty-1fad9.web.app/logo192.png';
+  const diagType = params.get('diag') || '';
+  let image = 'https://blazing-dinasty-1fad9.web.app/meta-linkbio.png';
+  if (diagType === 'parfum') image = 'https://blazing-dinasty-1fad9.web.app/meta-parfum.png';
+  else if (diagType === 'skincare' || diagType === 'peauvisage') image = 'https://blazing-dinasty-1fad9.web.app/meta-skincare.png';
+  else if (diagType === 'silhouette' || diagType === 'peaucorps') image = 'https://blazing-dinasty-1fad9.web.app/meta-silhouette.png';
+  else if (diagType === 'sante') image = 'https://blazing-dinasty-1fad9.web.app/meta-sante.png';
+  else if (params.get('recrutement')) image = 'https://blazing-dinasty-1fad9.web.app/meta-recrutement.png';
 
   try {
     // Extraire le slug et le type

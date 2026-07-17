@@ -7,6 +7,27 @@ import { doc, getDoc, setDoc, addDoc, collection, getDocs } from 'firebase/fires
 import { TunnelStatsTab, trackTunnelView, trackTunnelLead } from './TunnelStatsTab';
 
 // ── COULEURS ─────────────────────────────────────────────────────────────────
+// ── TRACKING ─────────────────────────────────────────────────────────────────
+async function trackVue(db, uid) {
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const ref = doc(db, 'tunnel_stats', uid, 'jours', today);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : {vues:0, leads:0};
+    await setDoc(ref, {...data, vues:(data.vues||0)+1, lastVue:Date.now()}, {merge:true});
+  } catch {}
+}
+
+async function trackLead(db, uid) {
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const ref = doc(db, 'tunnel_stats', uid, 'jours', today);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : {vues:0, leads:0};
+    await setDoc(ref, {...data, leads:(data.leads||0)+1}, {merge:true});
+  } catch {}
+}
+
 const THEMES_TUNNEL = [
   {id:"elegance",header:"linear-gradient(135deg,#3D1F0E,#5C3020)",accent:"#C4A882",faqBg:"#FDF5EE"},
   {id:"rose_gold",header:"linear-gradient(135deg,#C49A8A,#A0716A)",accent:"#C49A8A",faqBg:"#FFF5F3"},
@@ -330,6 +351,7 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
   const [prenom, setPrenom] = useState('');
   const [loading, setLoading] = useState(true);
   const [themeId, setThemeId] = useState('rose_gold');
+  const [uidResolu, setUidResolu] = useState('');
   const [faqOuverte, setFaqOuverte] = useState(null);
   const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0 });
   const [form, setForm] = useState({ prenom: '', nom: '', email: '', tel: '', motivation: '' });
@@ -388,9 +410,11 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
         else setCfg({ titreAccroche: 'Rejoins mon équipe !', actif: true });
         const snapTok = await getDoc(doc(db, 'tokens_cadeaux', uid));
         if (snapTok.exists()) setTokens((snapTok.data().tokens || []).filter(t => !t.utilise));
+        setUidResolu(uid);
         const snapLink = await getDoc(doc(db, 'linkbio', uid));
         if (snapLink.exists()) { setPhoto(snapLink.data().photo || ''); setPrenom(snapLink.data().prenom || ''); }
       } catch {}
+      if (!preview) await trackVue(db, uidResolu || slug).catch(()=>{});
       setLoading(false);
     })();
   }, [slug, preview]);
@@ -410,7 +434,7 @@ export function TunnelRecrutementPublic({ slug, db, preview, previewCfg, preview
           email: form.email, tel: form.tel, ts: Date.now(), lu: false,
         }, { merge: true });
       }
-      setFormSent(true);
+      await trackLead(db, uidResolu || slug).catch(()=>{}); setFormSent(true);
     } catch { setFormError('Une erreur est survenue. Réessaie.'); }
     setFormSending(false);
   };
