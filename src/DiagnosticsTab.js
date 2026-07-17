@@ -1813,10 +1813,14 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     } catch {}
   };
 
-  const copierLien = () => {
-    const lien = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${type}&client=${encodeURIComponent(nomClient||"")}`;
-    navigator.clipboard.writeText(lien).catch(()=>{});
-  };
+   const copierLien = () => {
+     const lien = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${type}&client=${encodeURIComponent(nomClient||"")}`;
+     const emoji = {parfum:'🌸',skincare:'✨',silhouette:'💎',sante:'🌿',peauvisage:'✨',peaucorps:'💆',cheveux:'💇',maquillage:'💄'}[type]||'🌟';
+     const typeLabel = {parfum:'parfum',skincare:'soin visage',silhouette:'silhouette',sante:'bien-être',peauvisage:'soin visage',peaucorps:'soin corps',cheveux:'cheveux',maquillage:'maquillage'}[type]||'beauté';
+     const msg = `${emoji}✨ ${nomClient||'Chère cliente'}, ton diagnostic ${typeLabel} est prêt ! ✨${emoji}\n\n💆‍♀️ J'ai préparé tes recommandations personnalisées rien que pour toi !\n\n👇👇 CLIQUE ICI 👇👇\n➡️ ${lien}\n\n⚠️ Clique bien sur le lien ci-dessus\n(pas sur le premier aperçu qui apparaît)\n\n🔥 Blazing Dynasty × Mihi France`;
+     navigator.clipboard.writeText(msg).catch(()=>{});
+     alert('✅ Message copié ! Colle-le dans Messenger ou WhatsApp 💬');
+   };
 
   const reset = () => { setMode("choix"); setType(""); setStep(0); setReponses({}); setNomClient(""); setOrdonnance(null); setErreur(""); };
 
