@@ -664,8 +664,8 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
       try{
         const snapU3=await getDoc(doc(db,"users",uid));
         if(snapU3.exists()){
-          setAfficherVIPParfum(!!(snapU3.data().boutiqueActive && snapU3.data()["db-afficher-prix-vip"]));
-          setLienInscriptionParfum(snapU3.data().boutiqueActive?(snapU3.data()["db-lien-inscription-mihi"]||""):"");
+          setAfficherVIPParfum(!!snapU3.data()["db-afficher-prix-vip"]);
+          setLienInscriptionParfum(snapU3.data()["db-lien-inscription-mihi"]||"");
         }
       }catch{}
     })();
@@ -1680,7 +1680,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         const snapUV=await getDoc(doc(db,"users",uid));
         if(snapUV.exists()){
           setAfficherVIPDiag(!!snapUV.data()["db-afficher-prix-vip"]);
-          setLienInscriptionDiag(snapUV.data().boutiqueActive?(snapUV.data()["db-lien-inscription-mihi"]||""):"");
+          setLienInscriptionDiag(snapUV.data()["db-lien-inscription-mihi"]||"");
         }
       }catch{}
     })();
@@ -4156,8 +4156,8 @@ function OrdonnancePubliquePage({ordId}){
             try{
               const snapU=await getDoc(doc(db,'users',distribUid));
               if(snapU.exists()){
-                const boutiqueOk=!!snapU.data().boutiqueActive; const vip=boutiqueOk&&!!snapU.data()['db-afficher-prix-vip'];
-                const lien=snapU.data().boutiqueActive?(snapU.data()['db-lien-inscription-mihi']||""):"";
+                const vip=!!snapU.data()['db-afficher-prix-vip'];
+                const lien=snapU.data()['db-lien-inscription-mihi']||"";
                 setAfficherVIP(vip);
                 setLienInscriptionMihi(lien);
                 if(vip&&lien)setTimeout(()=>setShowPopupInscription(true),1500);
