@@ -1814,7 +1814,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   };
 
   const copierLien = () => {
-    const lien = `https://blazing-dinasty-1fad9.web.app?diag=${type}&uid=${uid}&client=${encodeURIComponent(nomClient||"")}`;
+    const lien = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${type}&client=${encodeURIComponent(nomClient||"")}`;
     navigator.clipboard.writeText(lien).catch(()=>{});
   };
 
@@ -1972,7 +1972,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     </div>
   );
   function copierLienDirect(diagType, labelCustom) {
-    const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
+    const lien = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${diagType}&client=${encodeURIComponent(nomClient||"")}`;
 
 
     const msg = (labelCustom ? labelCustom+" " : "Coucou "+(nomClient||"")+"! Diagnostic gratuit 2 min ! ")  + lien;
