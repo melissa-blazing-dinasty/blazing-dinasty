@@ -143,28 +143,11 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
 
   const showNotif = msg => { setNotif(msg); setTimeout(() => setNotif(null), 3000); };
 
-  const copyLink = async () => {
-    let bitlyToken = '';
-    try {
-      const snap = await getDoc(doc(db, 'admin', 'config'));
-      if (snap.exists()) bitlyToken = snap.data().bitlyToken || '';
-    } catch {}
-    let lienCourt = lienPublic;
-    if (bitlyToken) {
-      try {
-        const resp = await fetch('https://api-ssl.bitly.com/v4/shorten', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + bitlyToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ long_url: lienPublic, domain: 'bit.ly' })
-        });
-        const data = await resp.json();
-        if (data.link) lienCourt = data.link;
-      } catch {}
-    }
+  const copyLink = () => {
     const msg = "🔥✨ Une opportunite business rien que pour toi ! ✨🔥\n\n"
       + "💰 Boutique gratuite · 20-30% commission · 100% flexible\n\n"
       + "👇👇 DECOUVRE ICI 👇👇\n"
-      + "➡️ " + lienCourt + "\n\n"
+      + "➡️ " + lienPublic + "\n\n"
       + "⚠️ Clique bien sur le lien ci-dessus\n"
       + "(pas sur le premier apercu qui apparait)\n\n"
       + "🌿 Blazing Dynasty x Mihi France";

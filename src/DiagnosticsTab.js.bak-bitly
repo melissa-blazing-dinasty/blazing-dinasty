@@ -13,21 +13,6 @@ let ANTHROPIC_API_KEY = '';
 async function chargerCleAPI(){try{const snap=await getDoc(doc(db,'admin','config'));if(snap.exists()&&snap.data().anthropicKey)ANTHROPIC_API_KEY=snap.data().anthropicKey;}catch{}}
 const chargementCleAPIPromise = chargerCleAPI();
 
-
-// ── BITLY ────────────────────────────────────────────────────────────────────
-async function raccourcirLien(lien, bitlyToken) {
-  if (!bitlyToken) return lien;
-  try {
-    const resp = await fetch('https://api-ssl.bitly.com/v4/shorten', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + bitlyToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ long_url: lien, domain: 'bit.ly' })
-    });
-    const data = await resp.json();
-    return data.link || lien;
-  } catch { return lien; }
-}
-
 async function genererDiagBusiness(type, reponses, nomClient) {
   if(!ANTHROPIC_API_KEY) await chargementCleAPIPromise;
   const typeLabels = {
@@ -1985,12 +1970,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
     </div>
   );
-  async function copierLienDirect(diagType, labelCustom) {
-    let bitlyToken = '';
-    try {
-      const snap = await getDoc(doc(db, 'admin', 'config'));
-      if (snap.exists()) bitlyToken = snap.data().bitlyToken || '';
-    } catch {}
+  function copierLienDirect(diagType, labelCustom) {
     const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
 
 
