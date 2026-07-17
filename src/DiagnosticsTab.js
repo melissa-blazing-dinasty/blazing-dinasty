@@ -1,5 +1,4 @@
 ﻿import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
-import { TunnelRecrutementPublic } from './TunnelRecrutementTab';
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
 import { isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -1813,14 +1812,10 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     } catch {}
   };
 
-   const copierLien = () => {
-     const lien = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${type}&client=${encodeURIComponent(nomClient||"")}`;
-     const emoji = {parfum:'🌸',skincare:'✨',silhouette:'💎',sante:'🌿',peauvisage:'✨',peaucorps:'💆',cheveux:'💇',maquillage:'💄'}[type]||'🌟';
-     const typeLabel = {parfum:'parfum',skincare:'soin visage',silhouette:'silhouette',sante:'bien-être',peauvisage:'soin visage',peaucorps:'soin corps',cheveux:'cheveux',maquillage:'maquillage'}[type]||'beauté';
-     const msg = `${emoji}✨ ${nomClient||'Chère cliente'}, ton diagnostic ${typeLabel} est prêt ! ✨${emoji}\n\n💆‍♀️ J'ai préparé tes recommandations personnalisées rien que pour toi !\n\n👇👇 CLIQUE ICI 👇👇\n➡️ ${lien}\n\n⚠️ Clique bien sur le lien ci-dessus\n(pas sur le premier aperçu qui apparaît)\n\n🔥 Blazing Dynasty × Mihi France`;
-     navigator.clipboard.writeText(msg).catch(()=>{});
-     alert('✅ Message copié ! Colle-le dans Messenger ou WhatsApp 💬');
-   };
+  const copierLien = () => {
+    const lien = `https://blazing-dinasty-1fad9.web.app?diag=${type}&uid=${uid}&client=${encodeURIComponent(nomClient||"")}`;
+    navigator.clipboard.writeText(lien).catch(()=>{});
+  };
 
   const reset = () => { setMode("choix"); setType(""); setStep(0); setReponses({}); setNomClient(""); setOrdonnance(null); setErreur(""); };
 
@@ -1976,10 +1971,16 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     </div>
   );
   function copierLienDirect(diagType, labelCustom) {
-    const lien = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${diagType}&client=${encodeURIComponent(nomClient||"")}`;
+    const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
 
 
-    const msg = (labelCustom ? labelCustom+" " : "Coucou "+(nomClient||"")+"! Diagnostic gratuit 2 min ! ")  + lien;
+    const emojis = {parfum:'🌸',skincare:'✨',silhouette:'💎',sante:'🌿',peauvisage:'✨',peaucorps:'💆',cheveux:'💇',maquillage:'💄'};
+    const labels = {parfum:'parfum',skincare:'soin visage',silhouette:'silhouette',sante:'bien-etre',peauvisage:'soin visage',peaucorps:'soin corps',cheveux:'cheveux',maquillage:'maquillage'};
+    const e = emojis[diagType]||'🌟';
+    const tl = labels[diagType]||'beaute';
+    const msg = labelCustom
+      ? labelCustom + "\n\n" + lien
+      : e+"✨ "+(nomClient?nomClient+", ton":"Ton")+" diagnostic "+tl+" est pret ! ✨"+e+"\n\n💆 J'ai prepare tes recommandations personnalisees rien que pour toi !\n\n👇👇 CLIQUE ICI 👇👇\n➡️ "+lien+"\n\n⚠️ Clique bien sur le lien ci-dessus\n(pas sur le premier apercu qui apparait)\n\n🔥 Blazing Dynasty x Mihi France";
     navigator.clipboard && navigator.clipboard.writeText(msg);
     alert("Message copie ! Colle-le dans ta conversation.");
   }
@@ -4683,26 +4684,10 @@ function RecommandationPubliquePage({slug, clienteNom}){
 
 function Root(){
   const p=new URLSearchParams(window.location.search);
-  // URLs courtes
-  const shortPathname = window.location.pathname;
-  const parts = shortPathname.split('/').filter(Boolean);
-  if (parts.length === 2) {
-    const type = parts[0];
-    const slug = parts[1];
-    if (type === 'r' || type === 't') return <TunnelRecrutementPublic slug={slug} db={db}/>;
-    if (type === 'b') return <LinkBioPublicPage slug={slug}/>;
-    if (type === 'd') {
-      const newUrl = '/?diag=' + p.get('diag') + '&uid=' + slug + (p.get('client') ? '&client=' + p.get('client') : '');
-      window.location.replace(newUrl);
-      return null;
-    }
-  }
-    const bioSlug=p.get("bio");
+  const bioSlug=p.get("bio");
   const tunnelParam=p.get("tunnel");
   // Si bio + tunnel => ouvrir tunnel avec parcours pré-sélectionné
   if(bioSlug && tunnelParam) return <TunnelHybridePage slug={bioSlug} forceEtape={tunnelParam}/>;
-  const recrutementSlug=p.get('recrutement');
-  if(recrutementSlug) return <TunnelRecrutementPublic slug={recrutementSlug} db={db}/>;
   if(bioSlug) return <LinkBioPublicPage slug={bioSlug}/>;
   const boutiqueSlug=p.get("boutique");
   if(boutiqueSlug) return <BoutiquePubliquePage slug={boutiqueSlug}/>;
