@@ -664,8 +664,8 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
       try{
         const snapU3=await getDoc(doc(db,"users",uid));
         if(snapU3.exists()){
-          setAfficherVIPParfum(!!(snapU3.data().boutiqueActive && snapU3.data()["db-afficher-prix-vip"]));
-          setLienInscriptionParfum(snapU3.data().boutiqueActive?(snapU3.data()["db-lien-inscription-mihi"]||""):"");
+          setAfficherVIPParfum(!!snapU3.data()["db-afficher-prix-vip"]);
+          setLienInscriptionParfum(snapU3.data()["db-lien-inscription-mihi"]||"");
         }
       }catch{}
     })();
@@ -1680,7 +1680,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         const snapUV=await getDoc(doc(db,"users",uid));
         if(snapUV.exists()){
           setAfficherVIPDiag(!!snapUV.data()["db-afficher-prix-vip"]);
-          setLienInscriptionDiag(snapUV.data().boutiqueActive?(snapUV.data()["db-lien-inscription-mihi"]||""):"");
+          setLienInscriptionDiag(snapUV.data()["db-lien-inscription-mihi"]||"");
         }
       }catch{}
     })();
@@ -4156,8 +4156,8 @@ function OrdonnancePubliquePage({ordId}){
             try{
               const snapU=await getDoc(doc(db,'users',distribUid));
               if(snapU.exists()){
-                const boutiqueOk=!!snapU.data().boutiqueActive; const vip=boutiqueOk&&!!snapU.data()['db-afficher-prix-vip'];
-                const lien=snapU.data().boutiqueActive?(snapU.data()['db-lien-inscription-mihi']||""):"";
+                const vip=!!snapU.data()['db-afficher-prix-vip'];
+                const lien=snapU.data()['db-lien-inscription-mihi']||"";
                 setAfficherVIP(vip);
                 setLienInscriptionMihi(lien);
                 if(vip&&lien)setTimeout(()=>setShowPopupInscription(true),1500);
@@ -4679,18 +4679,7 @@ function RecommandationPubliquePage({slug, clienteNom}){
 
 function Root(){
   const p=new URLSearchParams(window.location.search);
-  // URLs courtes /r/ /b/ /d/
-  const path = window.location.pathname;
-  const shortMatch = path.match(/^\/(r|b|d|t)\/(.+)$/);
-  if (shortMatch) {
-    const type = shortMatch[1];
-    const slug = shortMatch[2];
-    if (type === 'r') return <TunnelRecrutementPublic slug={slug} db={db}/>;
-    if (type === 'b') return <LinkBioPublicPage slug={slug}/>;
-    if (type === 'd') { window.location.href = '/?bio=' + slug; return null; }
-    if (type === 't') return <TunnelRecrutementPublic slug={slug} db={db}/>;
-  }
-    const bioSlug=p.get("bio");
+  const bioSlug=p.get("bio");
   const tunnelParam=p.get("tunnel");
   // Si bio + tunnel => ouvrir tunnel avec parcours pré-sélectionné
   if(bioSlug && tunnelParam) return <TunnelHybridePage slug={bioSlug} forceEtape={tunnelParam}/>;

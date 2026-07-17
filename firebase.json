@@ -8,22 +8,6 @@
     ],
     "rewrites": [
       {
-        "source": "/r/**",
-        "destination": "/index.html"
-      },
-      {
-        "source": "/b/**",
-        "destination": "/index.html"
-      },
-      {
-        "source": "/d/**",
-        "destination": "/index.html"
-      },
-      {
-        "source": "/t/**",
-        "destination": "/index.html"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }
