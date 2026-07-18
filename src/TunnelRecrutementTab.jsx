@@ -164,7 +164,7 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
     const msg = "🔥✨ Une opportunite business rien que pour toi ! ✨🔥\n\n"
       + "💰 Boutique gratuite · 20-30% commission · 100% flexible\n\n"
       + "👇 Rejoins-nous ici 👇\n"
-      + "➡️ " + lienCourt + "\n\n"
+      + lienCourt + "\n\n"
       + "🌿 Blazing Dynasty x Mihi France";
     navigator.clipboard.writeText(msg);
     showNotif('Message copie ! Colle-le dans Messenger 💬');
