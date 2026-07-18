@@ -1991,7 +1991,10 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       const snap = await getDoc(doc(db, 'admin', 'config'));
       if (snap.exists()) bitlyToken = snap.data().bitlyToken || '';
     } catch {}
-    const lien = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${diagType}&client=${encodeURIComponent(nomClient||"")}`;
+    const lienBase = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${diagType}&client=${encodeURIComponent(nomClient||"")}`;
+    let bitlyToken2 = '';
+    try { const snap = await getDoc(doc(db,'admin','config')); if(snap.exists()) bitlyToken2 = snap.data().bitlyToken||''; } catch {}
+    const lien = await raccourcirLien(lienBase, bitlyToken2);
 
 
     const emojis = {parfum:'🌸',skincare:'✨',silhouette:'💎',sante:'🌿',peauvisage:'✨',peaucorps:'💆',cheveux:'💇',maquillage:'💄'};
