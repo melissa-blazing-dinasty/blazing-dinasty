@@ -1991,7 +1991,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       const snap = await getDoc(doc(db, 'admin', 'config'));
       if (snap.exists()) bitlyToken = snap.data().bitlyToken || '';
     } catch {}
-    const lien = `https://blazing-dinasty-1fad9.web.app?diag=${diagType}&uid=${uid}&distributrice=${encodeURIComponent(userName)}&client=${encodeURIComponent(nomClient||"")}`;
+    const lien = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${diagType}&client=${encodeURIComponent(nomClient||"")}`;
 
 
     const emojis = {parfum:'🌸',skincare:'✨',silhouette:'💎',sante:'🌿',peauvisage:'✨',peaucorps:'💆',cheveux:'💇',maquillage:'💄'};
