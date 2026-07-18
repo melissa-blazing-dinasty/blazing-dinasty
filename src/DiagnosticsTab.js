@@ -1973,12 +1973,12 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
               style={{ flex: 1, background: C.brun, color: C.blanc, border: "none", borderRadius: 9, padding: ".5rem", fontSize: ".75rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
               📋 Remplir maintenant
             </button>
-            <button onClick={() => setShowLabelInput(p=>({...p,[t.id]:!p[t.id]}))}
+            <button onClick={()=>copierLienDirect(t.id, "")}
               style={{ flex: 1, background: C.rose+"20", color: C.rose, border: `1px solid ${C.rose}`, borderRadius: 9, padding: ".5rem", fontSize: ".75rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
               🔗 Envoyer le lien
             </button>
           </div>
-          {showLabelInput[t.id]&&(<div style={{marginTop:".5rem",background:"#FAF7F2",borderRadius:9,padding:".6rem .75rem",border:"1px solid #E8DDD4"}}><div style={{fontSize:".6rem",color:"#888",marginBottom:".3rem",fontWeight:600}}>Intitule du lien (optionnel)</div><input value={labelPerso[t.id]||""} onChange={e=>setLabelPerso(p=>({...p,[t.id]:e.target.value}))} placeholder="Ex: Mon diagnostic Skincare gratuit" style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:7,padding:".38rem .55rem",fontSize:".78rem",fontFamily:"inherit",outline:"none",marginBottom:".4rem"}}/><button onClick={()=>{copierLienDirect(t.id,labelPerso[t.id]);setShowLabelInput(p=>({...p,[t.id]:false}));}} style={{width:"100%",background:"#C49A8A",color:"white",border:"none",borderRadius:8,padding:".42rem",fontSize:".75rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Copier le message</button></div>)}
+          }
         </div>
       ))}
       </div>
