@@ -1830,8 +1830,7 @@ function App(){
     {id:"quotidien",label:"📊 Quotidien"},
     {id:"sprint",label:"⚡ Sprint"},
     {id:"dreamboard",label:"✨ Dream Board"},
-    {id:"reseaux",label:"📱 Réseaux"},
-    {id:"liensimportants",label:"🔗 Liens importants"},
+    {id:"reseaux",label:"📱 Réseaux"},
     {id:"editorial",label:"✍️ Éditorial"},
   ];
   const OUTILS_SOUS_ONGLETS=[
@@ -1841,6 +1840,7 @@ function App(){
     {id:"scripts",label:"📝 Scripts"},
     {id:"banqueimages",label:"💬 Témoignages & Visuels"},
     {id:"ebooks",label:"📚 Ebooks"},
+    {id:"liensimportants",label:"🔗 Liens importants"},
     {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
@@ -3434,10 +3434,11 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="boutique"&&<LinkBioTab uid={userId} userName={name} initialSection="boutique"/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="tunnel-recrutement"&&<TunnelRecrutementTab uid={userId} userName={name} db={db}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
-        {tab==="dashboard"&&dashboardSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
+        
         {tab==="dashboard"&&dashboardSousOnglet==="editorial"&&<EditorialTab uid={userId} userName={name}/>}
         {tab==="espacechef"&&(isChefApp||hasTeamApp)&&<EspaceChefTab uid={userId} isChef={isChefApp}/>}
         {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab adminItems={adminItems}/>}
