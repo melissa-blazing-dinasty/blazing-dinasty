@@ -109,7 +109,7 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
   const [showDecouverte, setShowDecouverte] = useState(false);
 
   const slug = (userName || uid).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-');
-  const lienPublic = `${window.location.origin}?recrutement=${slug}`;
+  const lienPublic = `${window.location.origin}/r/${slug}`;
 
   useEffect(() => {
     (async () => {
@@ -163,10 +163,8 @@ export function TunnelRecrutementTab({ uid, userName, db }) {
     }
     const msg = "🔥✨ Une opportunite business rien que pour toi ! ✨🔥\n\n"
       + "💰 Boutique gratuite · 20-30% commission · 100% flexible\n\n"
-      + "👇👇 DECOUVRE ICI 👇👇\n"
+      + "👇 Rejoins-nous ici 👇\n"
       + "➡️ " + lienCourt + "\n\n"
-      + "⚠️ Clique bien sur le lien ci-dessus\n"
-      + "(pas sur le premier apercu qui apparait)\n\n"
       + "🌿 Blazing Dynasty x Mihi France";
     navigator.clipboard.writeText(msg);
     showNotif('Message copie ! Colle-le dans Messenger 💬');
