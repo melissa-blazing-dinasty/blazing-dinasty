@@ -1838,7 +1838,7 @@ function App(){
     {id:"boutique",label:"🛍️ Boutique"},
     {id:"diagnostics",label:"🩺 Diagnostics"},
     {id:"scripts",label:"📝 Scripts"},
-    {id:"banqueimages",label:"💬 Témoignages & Visuels"},
+    {id:"banqueimages",label:"📸 Témoignages & Visuels"},
     {id:"ebooks",label:"📚 Ebooks"},
     {id:"liensimportants",label:"🔗 Liens importants"},
     {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
