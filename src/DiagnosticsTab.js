@@ -1649,6 +1649,36 @@ function AssignerDiagClienteBtn({ordonnance, type, nomClient, uid}){
     </>
   );
 }
+function LoadingOrdonnance({nomClient}) {
+  const [msgIdx, setMsgIdx] = useState(0);
+  const msgs = [
+    {emoji:"✨", txt:"L'IA analyse tes reponses..."},
+    {emoji:"🌿", txt:"Selection des meilleurs produits Mihi pour toi..."},
+    {emoji:"💫", txt:"Creation de ton ordonnance personnalisee..."},
+    {emoji:"🎯", txt:"Identification de tes besoins specifiques..."},
+    {emoji:"🔬", txt:"Recherche dans le catalogue Mihi..."},
+    {emoji:"✨", txt:"Finalisation de tes recommandations..."},
+  ];
+  useEffect(() => {
+    const t = setInterval(() => setMsgIdx(function(i){ return (i+1)%6; }), 2500);
+    return function(){ clearInterval(t); };
+  }, []);
+  const m = msgs[msgIdx];
+  return (
+    <div style={{textAlign:"center",padding:"3rem 1rem"}}>
+      <div style={{fontSize:"3rem",marginBottom:"1rem"}}>{m.emoji}</div>
+      <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",color:"#5A3829",marginBottom:".5rem"}}>{m.txt}</div>
+      <p style={{fontSize:".76rem",color:"#9A8C8C",lineHeight:1.6}}>Ordonnance en cours pour {nomClient||"ta cliente"}</p>
+      <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:"1.5rem"}}>
+        {msgs.map(function(_,i){ return <div key={i} style={{width:6,height:6,borderRadius:"50%",background:i===msgIdx?"#C4A962":"#EDE8E0",transition:"background .3s"}}/>; })}
+      </div>
+      <div style={{background:"#FAF7F2",borderRadius:10,padding:".6rem .9rem",marginTop:"1.2rem",display:"inline-block"}}>
+        <p style={{fontSize:".68rem",color:"#9A8C8C",lineHeight:1.5,margin:0}}>Cela peut prendre jusqu'a 30 secondes...</p>
+      </div>
+    </div>
+  );
+}
+
 function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", initialClient="", skipContact=false, onComplete=null, onNonLuChange=()=>{}, forceResultsView=0 }) {
   const [mode, setMode] = useState(initialType?"questionnaire":"choix");
   const [remplirMaintenant,setRemplirMaintenant]=useState(false);
@@ -1782,6 +1812,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         await soumettreDiagnosticFn({uid, type, nomClient:nomFinal, contact, reponses:repSansContact});
 
         // Générer le résultat directement pour la cliente (au lieu de juste attendre)
+        setMode("loading");
         let result = null;
         try{
           result = await genererOrdonnanceIA(type, repSansContact, nomFinal);
@@ -1801,6 +1832,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     }
     setMode("loading");
     setErreur("");
+    setMode("loading");
     let result = null;
     let errDetail = "";
     try {
@@ -2009,18 +2041,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     alert("Message copie ! Colle-le dans ta conversation.");
   }
   if (mode === "loading") return (
-    <div style={{textAlign:"center",padding:"3rem 1rem"}}>
-      <div style={{fontSize:"2rem",marginBottom:"1rem"}}>✨</div>
-      <div style={{ fontFamily: "Georgia,serif", fontSize: "1.1rem", color: C.brun, marginBottom: ".5rem" }}>Génération en cours...</div>
-      <p style={{ fontSize: ".76rem", color: C.gris, lineHeight: 1.6 }}>
-        L'IA analyse les réponses et sélectionne les meilleurs produits Mihi pour {nomClient||"ta cliente"} 🖤
-      </p>
-      <div style={{background:C.creme,borderRadius:10,padding:".6rem .9rem",marginTop:"1.2rem",display:"inline-block"}}>
-        <p style={{fontSize:".68rem",color:C.gris,lineHeight:1.5,margin:0}}>
-          ⏳ Ça peut prendre jusqu'à 30 secondes, merci de patienter sans quitter la page.
-        </p>
-      </div>
-    </div>
+    <LoadingOrdonnance nomClient={nomClient}/>
   );
 
   if (mode === "contact" && !skipContact && !remplirMaintenant) return (
@@ -2388,6 +2409,19 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
             {JSON.stringify({budget:!!ordonnance?.budget, bestseller:!!ordonnance?.bestseller, premium:!!ordonnance?.premium, conseil:!!ordonnance?.conseil, keys:Object.keys(ordonnance||{}), premiumData:ordonnance?.premium||"ABSENT"},null,2)}
           </pre>
         </details>
+        <div style={{display:"flex",flexDirection:"column",gap:".6rem",margin:"1rem 0 .5rem"}}>
+          <button onClick={()=>window.open("?boutique="+uid, "_blank")}
+            style={{width:"100%",background:C.creme,border:"1.5px solid "+C.pale,borderRadius:12,padding:".75rem 1rem",fontSize:".82rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
+            <span style={{fontSize:"1.2rem"}}>🛍️</span>
+            <div><div style={{fontWeight:700}}>Découvrir tous les produits Mihi</div><div style={{fontSize:".7rem",opacity:.7,fontWeight:400}}>Qui correspondent à ton profil</div></div>
+          </button>
+          {(afficherVIPDiag&&lienInscriptionDiag)&&<button onClick={()=>window.open(lienInscriptionDiag,"_blank")}
+            style={{width:"100%",background:"linear-gradient(135deg,#5A3829,#3D2020)",color:"white",border:"none",borderRadius:12,padding:".75rem 1rem",fontSize:".82rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
+            <span style={{fontSize:"1.2rem"}}>👑</span>
+            <div><div style={{fontWeight:700}}>Créer un revenu avec ces produits</div><div style={{fontSize:".7rem",opacity:.85,fontWeight:400}}>Découvrir l'opportunité Mihi</div></div>
+          </button>}
+        </div>
+        {/* BOUTONS_FIN_DIAG */}
         <p style={{ fontSize: ".65rem", color: C.gris, textAlign: "center" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
         </>)}
         {onComplete&&<button onClick={onComplete} style={{width:"100%",background:"#2D5A3D",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:"1rem"}}>Recevoir mon guide gratuit 🎁</button>}
