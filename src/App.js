@@ -6397,7 +6397,7 @@ export function ClassementEquipe({uid}){
 }
 export function CitationDuJour({uid}){
   const[citations,setCitations]=useState(null);
-  const[revealed,setRevealed]=useState(true); // toujours visible
+  const[revealed,setRevealed]=useState(false);
   const[isFirstToday,setIsFirstToday]=useState(false);
   const[flipping,setFlipping]=useState(false);
 
