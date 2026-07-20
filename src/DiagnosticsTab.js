@@ -1703,7 +1703,11 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   useEffect(()=>{if(mode==="contact"&&skipContact&&onComplete)onComplete();},[mode,skipContact]);
   useEffect(()=>{
     if(mode==="contact"&&remplirMaintenant&&reponsesFinales){
-      genererOrdonnance(reponsesFinales);
+      if(TYPES_SCORING.includes(type)){
+        genererResultatScoring(reponsesFinales);
+      } else {
+        genererOrdonnance(reponsesFinales);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[mode,remplirMaintenant]);
@@ -1793,6 +1797,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     setOrdonnance(result);
     setMode("resultat");
     saveResult(result, rep);
+    if(externalMode&&afficherVIPDiag&&lienInscriptionDiag)setTimeout(()=>setShowPopupInscriptionDiag(true),1500);
   };
 
   const genererOrdonnance = async (rep) => {
@@ -1813,6 +1818,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
         // Générer le résultat directement pour la cliente (au lieu de juste attendre)
         setMode("loading");
+        setMode("loading");
         let result = null;
         try{
           result = await genererOrdonnanceIA(type, repSansContact, nomFinal);
@@ -1832,6 +1838,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     }
     setMode("loading");
     setErreur("");
+    setMode("loading");
     setMode("loading");
     let result = null;
     let errDetail = "";
@@ -2002,7 +2009,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
             </div>
           </div>
           <div style={{ display: "flex", gap: ".4rem" }}>
-            <button onClick={() => { setType(t.id); setMode("questionnaire"); setStep(0); setReponses({}); setRemplirMaintenant(true); }}
+            <button onClick={() => { setType(t.id); setMode("questionnaire"); setStep(0); setReponses({}); setOrdonnance(null); setErreur(""); setReponsesFinales(null); setRemplirMaintenant(true); }}
               style={{ flex: 1, background: C.brun, color: C.blanc, border: "none", borderRadius: 9, padding: ".5rem", fontSize: ".75rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
               📋 Remplir maintenant
             </button>
@@ -2030,10 +2037,9 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     const lien = await raccourcirLien(lienBase, bitlyToken2);
 
 
-    const emojis = {parfum:'🌸',skincare:'✨',silhouette:'💎',sante:'🌿',peauvisage:'✨',peaucorps:'💆',cheveux:'💇',maquillage:'💄'};
-    const labels = {parfum:'parfum',skincare:'soin visage',silhouette:'silhouette',sante:'bien-etre',peauvisage:'soin visage',peaucorps:'soin corps',cheveux:'cheveux',maquillage:'maquillage'};
-    const e = emojis[diagType]||'🌟';
-    const tl = labels[diagType]||'beaute';
+    const diagInfo = TYPES_DIAG.find(t=>t.id===diagType);
+    const e = diagInfo && diagInfo.icon ? diagInfo.icon : "⭐";
+    const tl = (diagInfo && diagInfo.label ? diagInfo.label : "beaute").replace(/^Diagnostic /i,"").replace(/^Test /i,"").replace(/^Quiz /i,"").replace(/^Profil /i,"").replace(/^Audit /i,"").toLowerCase();
     const msg = labelCustom
       ? labelCustom + "\n\n" + lien
       : e+"✨ "+(nomClient?nomClient+", ton":"Ton")+" diagnostic "+tl+" est pret ! ✨"+e+"\n\n💆 J'ai prepare tes recommandations personnalisees rien que pour toi !\n\n👇👇 CLIQUE ICI 👇👇\n➡️ "+lien+"\n\n⚠️ Clique bien sur le lien ci-dessus\n(pas sur le premier apercu qui apparait)\n\n🔥 Blazing Dynasty x Mihi France";
@@ -2099,7 +2105,11 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       <button
         onClick={()=>{
           const contact={prenom:prenomContact,nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact};
-          genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});
+          if(TYPES_SCORING.includes(type)){
+            genererResultatScoring({...reponsesFinales, _contact:JSON.stringify(contact)});
+          } else {
+            genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});
+          }
         }}
         disabled={prenomContact.trim().length<2||!(telContact.trim()||mailContact.trim()||reseauContact.trim())}
         style={{width:"100%",background:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.brun:C.pale,color:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
@@ -2211,6 +2221,18 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         </div>
 
         <p style={{ fontSize:".65rem", color:C.gris, textAlign:"center", marginTop:"1rem" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
+        {externalMode&&(<div style={{display:"flex",flexDirection:"column",gap:".6rem",margin:"1rem 0 .5rem"}}>
+          <button onClick={()=>window.open("?boutique="+uid, "_blank")}
+            style={{width:"100%",background:C.creme,border:"1.5px solid "+C.pale,borderRadius:12,padding:".75rem 1rem",fontSize:".82rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
+            <span style={{fontSize:"1.2rem"}}>*</span>
+            <div><div style={{fontWeight:700}}>Decouvrir tous les produits Mihi</div><div style={{fontSize:".7rem",opacity:.7,fontWeight:400}}>Qui correspondent a ton profil</div></div>
+          </button>
+          {(afficherVIPDiag&&lienInscriptionDiag)&&<button onClick={()=>window.open(lienInscriptionDiag,"_blank")}
+            style={{width:"100%",background:"linear-gradient(135deg,#5A3829,#3D2020)",color:"white",border:"none",borderRadius:12,padding:".75rem 1rem",fontSize:".82rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
+            <span style={{fontSize:"1.2rem"}}>*</span>
+            <div><div style={{fontWeight:700}}>Creer un revenu avec ces produits</div><div style={{fontSize:".7rem",opacity:.85,fontWeight:400}}>Decouvrir l opportunite Mihi</div></div>
+          </button>}
+        </div>)}
       </div>
     );
   }
@@ -2245,6 +2267,18 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         ))}
 
         <p style={{ fontSize:".65rem", color:C.gris, textAlign:"center", marginTop:"1rem" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
+        {externalMode&&(<div style={{display:"flex",flexDirection:"column",gap:".6rem",margin:"1rem 0 .5rem"}}>
+          <button onClick={()=>window.open("?boutique="+uid, "_blank")}
+            style={{width:"100%",background:C.creme,border:"1.5px solid "+C.pale,borderRadius:12,padding:".75rem 1rem",fontSize:".82rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
+            <span style={{fontSize:"1.2rem"}}>*</span>
+            <div><div style={{fontWeight:700}}>Decouvrir tous les produits Mihi</div><div style={{fontSize:".7rem",opacity:.7,fontWeight:400}}>Qui correspondent a ton profil</div></div>
+          </button>
+          {(afficherVIPDiag&&lienInscriptionDiag)&&<button onClick={()=>window.open(lienInscriptionDiag,"_blank")}
+            style={{width:"100%",background:"linear-gradient(135deg,#5A3829,#3D2020)",color:"white",border:"none",borderRadius:12,padding:".75rem 1rem",fontSize:".82rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
+            <span style={{fontSize:"1.2rem"}}>*</span>
+            <div><div style={{fontWeight:700}}>Creer un revenu avec ces produits</div><div style={{fontSize:".7rem",opacity:.85,fontWeight:400}}>Decouvrir l opportunite Mihi</div></div>
+          </button>}
+        </div>)}
       </div>
     );
   }

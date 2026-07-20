@@ -1863,6 +1863,20 @@ function App(){
   const urlParams = new URLSearchParams(window.location.search);
   const diagMode = urlParams.has("diag");
   const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||"";
+  useEffect(()=>{
+    if(!diagMode) return;
+    (async()=>{
+      try{
+        const cfg = await getDoc(doc(db,"admin","config"));
+        const fr = cfg.exists() ? cfg.data().forceReload : 0;
+        const last = +localStorage.getItem("bd-public-last-reload") || 0;
+        if(fr && fr > last){
+          localStorage.setItem("bd-public-last-reload", String(fr));
+          window.location.reload();
+        }
+      }catch{}
+    })();
+  },[]);
   if(diagMode){
     return(
       <div style={{minHeight:"100vh",background:C.creme,fontFamily:"'Trebuchet MS',sans-serif"}}>
