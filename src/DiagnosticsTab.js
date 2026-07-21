@@ -414,7 +414,7 @@ function getRecrutementLevel(score, max){
     level:4, label:"Profil idéal",
     desc:"Profil très prometteur : motivation forte, aisance sociale, résilience face au rejet, et appétence pour les réseaux ET le bouche-à-oreille. Tu as un fort potentiel de leadership et tu pourrais toi-même devenir une recruteuse efficace rapidement.",
     advice:[
-      {h:"Accélération",t:"Mets-toi rapidement sur le programme START & CASH ET sur MOCHA pour développer ta présence sur les réseaux dès le début."},
+      {h:"Accélération",t:"Mets-toi rapidement sur le programme START & CASH ET sur l’application Blazing Dynasty pour développer ta présence sur les réseaux dès le début."},
       {h:"Vision leadership",t:"Pense assez vite à la dimension équipe/leadership — ton profil suggère que tu peux viser le développement d'une équipe rapidement."},
       {h:"Mise en lumière",t:"N'hésite pas à partager ton expérience tôt — ton énergie sera un atout pour attirer d'autres profils similaires."},
     ]
@@ -438,7 +438,7 @@ function getRecrutementInternalNote(reponses, level){
     action = "Propose un démarrage sur les deux fronts : entourage proche en premier (conversion plus rapide), réseaux sociaux en parallèle pour construire sa visibilité.";
   } else if(scoreReseaux>=3){
     levier = "Réseaux sociaux — c'est le canal le plus naturel pour cette personne.";
-    action = "Oriente-la vers le programme MOCHA pour structurer sa présence sur les réseaux dès le départ.";
+    action = "Oriente-la vers l’application Blazing Dynasty pour structurer sa présence sur les réseaux dès le départ.";
   } else if(scoreBouche>=3){
     levier = "Bouche-à-oreille / entourage — c'est le canal le plus naturel pour cette personne.";
     action = "Aide-la à construire sa liste de contacts proches et donne-lui des scripts de conversation simples pour parler naturellement de son activité.";
@@ -533,7 +533,7 @@ function getBlocageOrientation(score, max, reponses){
       title:"Orientation : Réseaux sociaux",
       desc:"Tu as une appétence naturelle pour les réseaux sociaux. C'est ce levier qu'il faut renforcer en priorité.",
       actions:[
-        {h:"Programme MOCHA",t:"Inscris-toi (ou refais) le programme MOCHA pour structurer ta présence sur les réseaux : régularité de publication, formats qui convertissent, CTA par mots-clés."},
+        {h:"Application Blazing Dynasty",t:"Utilise (ou reutilise) l’application Blazing Dynasty pour structurer ta présence sur les réseaux : régularité de publication, formats qui convertissent, CTA par mots-clés."},
         {h:"Objectif simple",t:"Fixe-toi un objectif minimal mais tenable : 1 story par jour + 1 post fort par semaine, plutôt qu'une cadence intenable."},
         {h:"Visage et présence",t:"Si tu es mal à l'aise face caméra, commence par des formats sans visage (texte sur fond, voix off) avant d'introduire progressivement la vidéo."},
       ]
