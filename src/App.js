@@ -13031,6 +13031,7 @@ export function MonUniversTab({uid}) {
     {id:'disc', label:'DISC'},
     {id:'valeurs', label:'Valeurs'},
     {id:'style', label:'Style'},
+    {id:'dream', label:'Dream Board'},
   ];
   return (
     <div style={{fontFamily:'inherit',padding:'0 0 2rem'}}>
@@ -13046,6 +13047,7 @@ export function MonUniversTab({uid}) {
       {onglet==='disc'&&<TestDISC/>}
       {onglet==='valeurs'&&<TestValeurs/>}
       {onglet==='style'&&<TestStyleEntrepreneur/>}
+      {onglet==='dream'&&<DreamBoardWidget uid={uid}/>}
     </div>
   );
 }
