@@ -23,6 +23,10 @@ import { FastStartTab } from './FastStartTab';
 import { ObjectifsTab } from './ObjectifsTab';
 import { AssistanteIATab } from './AssistanteIATab';
 import { TunnelRecrutementTab } from './TunnelRecrutementTab';
+import RoueEquilibre from './RoueEquilibre';
+import TestDISC from './TestDISC';
+import TestValeurs from './TestValeurs';
+import TestStyleEntrepreneur from './TestStyleEntrepreneur';
 import { TokensCadeauxTab } from './TokensCadeauxTab';
 import { TunnelStatsEquipeRecap } from './TunnelStatsTab';
 import { buildEquipeTree, countEquipe, getLigneeChefs, countEquipeSafe, SearchSelect, todayLocalDate, todayLocalStr, BoutonMiseAJour, useLang, useTranslation, useTranslatedContent, useTranslatedProduit, T, Btn, YTBtn, DriveBtn, DocBtn, Card, Info, Tag, SecTitle, LangContext, UI_TEXTS, UI_TEXTS_PT, domOriginals, translateDOM, translateBatch, seedAnnuaireFromMembres, APP_VERSION, C } from './components';
@@ -1842,6 +1846,7 @@ function App(){
     {id:"ebooks",label:"📚 Ebooks"},
     {id:"liensimportants",label:"🔗 Liens importants"},
     {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
+    {id:"monunivers",label:"🌟 Mon Univers"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
@@ -3449,6 +3454,7 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="tunnel-recrutement"&&<TunnelRecrutementTab uid={userId} userName={name} db={db}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="monunivers"&&<MonUniversTab uid={userId}/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
@@ -13015,4 +13021,33 @@ function ReclasserTemoignagesTab(){
 
 // ── DIAGNOSTICS ───────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC BUSINESS (recrutement / ventes / réseaux) ─────────────────────
+
+
+// ── MON UNIVERS TAB ──────────────────────────────────────────────────────────
+export function MonUniversTab({uid}) {
+  const [onglet, setOnglet] = useState('roue');
+  const onglets = [
+    {id:'roue', label:'Equilibre'},
+    {id:'disc', label:'DISC'},
+    {id:'valeurs', label:'Valeurs'},
+    {id:'style', label:'Style'},
+  ];
+  return (
+    <div style={{fontFamily:'inherit',padding:'0 0 2rem'}}>
+      <div style={{display:'flex',gap:'.4rem',overflowX:'auto',padding:'.7rem 1rem',background:'white',borderBottom:'1px solid #EDE8E0',position:'sticky',top:0,zIndex:10}}>
+        {onglets.map(function(o){ return (
+          <button key={o.id} onClick={function(){setOnglet(o.id);}}
+            style={{flexShrink:0,padding:'.4rem .85rem',borderRadius:20,border:'none',background:onglet===o.id?'#5A3829':'#EDE8E0',color:onglet===o.id?'white':'#9A8C8C',fontFamily:'inherit',fontSize:'.72rem',fontWeight:onglet===o.id?700:400,cursor:'pointer'}}>
+            {o.label}
+          </button>
+        );})}
+      </div>
+      {onglet==='roue'&&<RoueEquilibre/>}
+      {onglet==='disc'&&<TestDISC/>}
+      {onglet==='valeurs'&&<TestValeurs/>}
+      {onglet==='style'&&<TestStyleEntrepreneur/>}
+    </div>
+  );
+}
+
 export default App;
