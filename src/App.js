@@ -2330,7 +2330,7 @@ function App(){
           {OUTILS_SOUS_ONGLETS.map(s=>{
             const nPill=s.id==="diagnostics"?nbDiagNonLus:0;
             return(
-            <button key={s.id} onClick={()=>setOutilsSousOnglet(s.id)}
+            <button key={s.id} onClick={()=>{setOutilsSousOnglet(s.id);if(s.id==="diagnostics")setNbDiagNonLus(0);}}
               style={{flexShrink:0,padding:".4rem .8rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${outilsSousOnglet===s.id?C.rose:C.pale}`,background:outilsSousOnglet===s.id?C.rose:C.blanc,color:outilsSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:".3rem"}}>
               {s.label}
               {nPill>0&&<span style={{background:outilsSousOnglet===s.id?"white":"#E63946",color:outilsSousOnglet===s.id?C.rose:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nPill}</span>}
