@@ -1811,6 +1811,21 @@ function App(){
       }catch{}
     })();
   },[userId]);
+  const[nbMsgsNonLusApp,setNbMsgsNonLusApp]=useState(0);
+  useEffect(()=>{
+    if(!userId)return;
+    const checkMsgsEspaceChef=async()=>{
+      try{
+        const snap=await getDoc(doc(db,"messages",userId));
+        if(!snap.exists()){setNbMsgsNonLusApp(0);return;}
+        const msgs=snap.data().msgs||[];
+        setNbMsgsNonLusApp(msgs.filter(m=>!m.lu).length);
+      }catch{}
+    };
+    checkMsgsEspaceChef();
+    const t=setInterval(checkMsgsEspaceChef,30000);
+    return()=>clearInterval(t);
+  },[userId]);
   const[diagResultsTrigger,setDiagResultsTrigger]=useState(0);
   const voirDiagResultats=()=>{
     setTab("boiteaoutils");
@@ -2343,6 +2358,7 @@ function App(){
               if(tb.id==="formation")n=Object.keys(formationNouveautes).length;
               if(tb.id==="boiteaoutils")n=nbDiagNonLus;
               if(tb.id==="calendrier")n=nbNotifCalendrier;
+              if(tb.id==="espacechef")n=nbMsgsNonLusApp;
               if(tb.id==="dashboard"){
                 const nUrgent=(objPeriodeRemplis?0:1)+nbNotifDashboard.relances+nbCommandesNonVues;
                 const nActions=nbNotifDashboard.actions;
