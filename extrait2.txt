@@ -1,0 +1,4 @@
+﻿20 minutes de focus intense pour toute l'équipe</div>
+          {canCreate&&(
+            <button onClick={lancer}
+              style={{background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem 1.5rem",fontSize:".82rem",fontWei

@@ -1,0 +1,63 @@
+$path = "C:\Users\melou\blazing-dynasty\functions\index.js"
+
+$content = [System.IO.File]::ReadAllText($path)
+Write-Host "Longueur AVANT modification : $($content.Length) caracteres"
+
+$old1 = @'
+exports.notifPowerHourFin = onSchedule({ schedule: "* * * * *", timeZone: "Europe/Paris" }, async () => {
+  try {
+    const ref = db.collection("equipe").doc("power-hour");
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const d = snap.data();
+    if (!d.startedAt) return;
+    const DUREE_MIN = 20 * 60000;
+    const elapsed = Date.now() - d.startedAt;
+    if (elapsed >= DUREE_MIN && elapsed < DUREE_MIN + 5 * 60000 && !d.finNotifiee) {
+      await sendNotifToAll("✅ Power Hour terminee !", "Bravo pour ces 20 minutes de focus intense !");
+      await ref.set({finNotifiee: true}, {merge: true});
+    }
+  } catch(e) { console.error("notifPowerHourFin error", e); }
+});
+'@
+
+$new1 = @'
+exports.notifPowerHourFin = onSchedule({ schedule: "* * * * *", timeZone: "Europe/Paris" }, async () => {
+  try {
+    const ref = db.collection("equipe").doc("power-hour");
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const d = snap.data();
+    if (!d.startedAt) return;
+    const DUREE_MIN = 20 * 60000;
+    const elapsed = Date.now() - d.startedAt;
+    if (elapsed >= DUREE_MIN && elapsed < DUREE_MIN + 5 * 60000 && !d.finNotifiee) {
+      await sendNotifToAll("✅ Power Hour terminee !", "Bravo pour ces 20 minutes de focus intense !");
+      await ref.set({finNotifiee: true}, {merge: true});
+    }
+  } catch(e) { console.error("notifPowerHourFin error", e); }
+});
+
+exports.notifAnnonceEquipe = onDocumentWritten("equipe/derniere-annonce", async (event) => {
+  try {
+    const before = event.data.before.exists ? event.data.before.data() : {};
+    const after = event.data.after.exists ? event.data.after.data() : {};
+    if (after.id && after.id !== before.id) {
+      const titre = (after.icone || "📢") + " " + (after.titre || "Annonce de l equipe");
+      await sendNotifToAll(titre, after.message || "");
+    }
+  } catch(e) { console.error("notifAnnonceEquipe error", e); }
+});
+'@
+
+if (-not $content.Contains($old1)) {
+  Write-Host "ERREUR : bloc ancre introuvable. Arret sans modification." -ForegroundColor Red
+  exit 1
+}
+
+$content = $content.Replace($old1, $new1)
+Write-Host "Remplacement applique."
+Write-Host "Longueur APRES modification : $($content.Length) caracteres"
+
+[System.IO.File]::WriteAllText($path, $content, [System.Text.Encoding]::UTF8)
+Write-Host "Fichier sauvegarde avec succes." -ForegroundColor Green

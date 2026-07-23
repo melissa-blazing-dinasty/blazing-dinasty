@@ -1,0 +1,30 @@
+﻿Boutons messagerie */}
+      <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
+        <button onClick={()=>setShowMsg(true)}
+          style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:".4rem",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".76rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          💬 Envoyer un message
+        </button>
+        <button onClick={()=>setShowMsgsRecus(true)}
+          style={{position:"relative",background:nbMsgsNonLus>0?C.rose+"15":C.creme,border:`1px solid ${nbMsgsNonLus>0?C.rose:C.pale}`,borderRadius:10,padding:".6rem .9rem",fontSize:".76rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",color:nbMsgsNonLus>0?C.rose:C.gris}}>
+          📭 Reçus
+          {nbMsgsNonLus>0&&(
+            <span style={{position:"absolute",top:-6,right:-6,background:C.rose,color:"white",borderRadius:"50%",minWidth:18,height:18,fontSize:".6rem",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>
+              {nbMsgsNonLus}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Mise à jour app */}
+      <div style={{marginBottom:"1rem"}}>
+        <BoutonMiseAJour style={{width:"100%",justifyContent:"center"}}/>
+      </div>
+
+      <ResumeSemaineChef annuaire={annuaire}/>
+
+      {Object.entries(sections.reduce((acc,s)=>{
+        const g=s.groupe||"Autre";
+        (acc[g]=acc[g]||[]).push(s);
+        return acc;
+      },{})).map(([groupe,items])=>(
+        <div key={groupe} 

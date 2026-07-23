@@ -1,0 +1,2 @@
+﻿t:300,color:C.blanc}}>Power Hour lancÃ©e !</div>
+          <div style={{fontSize:".8rem",color:C.pale,marginTop:".3rem"}}>par {session.startedBy} Â· 
