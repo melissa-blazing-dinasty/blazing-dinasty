@@ -357,6 +357,23 @@ exports.notifAnnonceEquipe = onDocumentWritten("equipe/derniere-annonce", async 
     }
   } catch(e) { console.error("notifAnnonceEquipe error", e); }
 });
+
+exports.notifMessageEquipe = onDocumentWritten("messages/{destUid}", async (event) => {
+  try {
+    const destUid = event.params.destUid;
+    const before = event.data.before.exists ? event.data.before.data() : {};
+    const after = event.data.after.exists ? event.data.after.data() : {};
+    const msgsBefore = before.msgs || [];
+    const msgsAfter = after.msgs || [];
+    if (!msgsAfter.length) return;
+    const dernier = msgsAfter[0];
+    const dernierAvant = msgsBefore[0];
+    if (dernierAvant && dernierAvant.id === dernier.id) return;
+    const apercu = dernier.texte ? dernier.texte.slice(0, 60) : "";
+    const titre = "\u{1F4AC} " + (dernier.deNom || "Message de l equipe");
+    await sendNotifToUid(destUid, titre, apercu);
+  } catch(e) { console.error("notifMessageEquipe error", e); }
+});
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const resendApiKey = defineSecret("RESEND_API_KEY");
 
