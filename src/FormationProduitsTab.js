@@ -389,7 +389,7 @@ function AdminFormationProduits(){
 
   const save=async(nextProduits)=>{
     setSaving(true);
-    try{await setDoc(doc(db,"admin","formation_produits"),{produits:nextProduits});setProduits(nextProduits);}catch(e){console.error("Erreur sauvegarde formation produits:",e);alert("Erreur lors de l'enregistrement : "+e.message);}
+    try{await setDoc(doc(db,"admin","formation_produits"),{produits:nextProduits,derniereMaj:Date.now()});setProduits(nextProduits);}catch(e){console.error("Erreur sauvegarde formation produits:",e);alert("Erreur lors de l'enregistrement : "+e.message);}
     setSaving(false);
   };
 

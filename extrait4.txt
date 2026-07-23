@@ -1,0 +1,4 @@
+﻿
+          const maj=id==="formaproduits"?dateFormaProduits:FORMATION_DATES_MAJ[id];
+          const vue=progress[id]?.derniereConsultation;
+       

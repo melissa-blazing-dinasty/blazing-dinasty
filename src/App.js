@@ -1488,8 +1488,15 @@ function App(){
         const termines={};
         const nouveautes={};
         Object.keys(progress).forEach(k=>{if(progress[k]?.termine)termines[k]=true;});
+        let dateFormaProduits=FORMATION_DATES_MAJ.formaproduits;
+        try{
+          const fpSnap=await getDoc(doc(db,"admin","formation_produits"));
+          if(fpSnap.exists()&&fpSnap.data().derniereMaj){
+            dateFormaProduits=new Date(fpSnap.data().derniereMaj).toISOString().slice(0,10);
+          }
+        }catch{}
         FORMATION_SUBTABS_SUIVIES.forEach(id=>{
-          const maj=FORMATION_DATES_MAJ[id];
+          const maj=id==="formaproduits"?dateFormaProduits:FORMATION_DATES_MAJ[id];
           const vue=progress[id]?.derniereConsultation;
           if(maj&&(!vue||new Date(vue)<new Date(maj)))nouveautes[id]=true;
         });
