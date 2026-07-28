@@ -4815,7 +4815,7 @@ function Root(){
   const ordId=p.get("ordonnance");
   if(ordId) return <OrdonnancePubliquePage ordId={ordId}/>;
   const tunnelSlug=p.get("tunnel");
-  if(tunnelSlug) return <TunnelRecrutementPublic slug={tunnelSlug} db={db}/>;
+  if(tunnelSlug) return <TunnelHybridePage slug={tunnelSlug}/>;
   return <App/>;
 }
 

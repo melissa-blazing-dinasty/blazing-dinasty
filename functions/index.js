@@ -123,7 +123,7 @@ exports.notifChallenge = onDocumentUpdated("challenges/liste", async (event) => 
   } catch(e) { console.error("notifChallenge error", e); }
 });
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
-
+const {defineSecret} = require("firebase-functions/params");
 exports.authentifier = onCall(async (request) => {
   const {prenom, nom, codeSecret, motDePasse} = request.data || {};
   if (!prenom || !nom) throw new HttpsError("invalid-argument", "Prenom et nom requis");
