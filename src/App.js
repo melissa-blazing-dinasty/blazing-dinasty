@@ -16,6 +16,7 @@ import { AdminLinkBioSection } from './EspaceChefTab';
 import { TunnelTab } from './TunnelTab';
 import { DreamBoardWidget, DreamBoardTab } from './DreamBoardTab';
 import { EbooksTab } from './EbooksTab';
+import { SemaineThemeTab } from './SemaineThemeTab';
 import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_PRODUITS } from './FormationProduitsTab';
 import { DashboardTab } from './DashboardTab';
 import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
@@ -1911,9 +1912,10 @@ function App(){
 
   const DASHBOARD_SOUS_ONGLETS=[
     {id:"quotidien",label:"📊 Quotidien"},
+    {id:"semainetheme",label:"🗓️ Semaine à thème"},
     {id:"sprint",label:"⚡ Sprint"},
     {id:"dreamboard",label:"✨ Dream Board"},
-    {id:"reseaux",label:"📱 Réseaux"},
+    {id:"reseaux",label:"📱 Réseaux"},
     {id:"editorial",label:"✍️ Éditorial"},
   ];
   const OUTILS_SOUS_ONGLETS=[
@@ -3631,6 +3633,7 @@ function App(){
         )}
 
         {/* ── SPRINT / ACCÉLÈRE ── */}
+        {tab==="dashboard"&&dashboardSousOnglet==="semainetheme"&&<SemaineThemeTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="sprint"&&(
           <div>
             <SecTitle title="Prends" em="de la vitesse" desc="7 actions quotidiennes pour passer à l'action. Chaque jour compte — coche et avance."/>
