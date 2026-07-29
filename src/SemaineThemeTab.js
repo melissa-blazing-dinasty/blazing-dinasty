@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
 import { ss, sg } from './utils';
+import { DecouverteTour } from './App';
 
 // ═══════════════════════════════════════════════════════════════
 //  SEMAINE A THEME — 24 themes pre-remplis, 7 angles chacun
@@ -24,6 +25,7 @@ export const FAMILLES = [
   { id: "corps", label: "🧴 Peau du corps", col: "#9B8AA6" },
   { id: "cheveux", label: "💇 Cheveux", col: "#8B5E00" },
   { id: "poids", label: "⚖️ Poids & bien-être", col: "#5E8B5E" },
+  { id: "maison", label: "🏠 Maison & entretien", col: "#4A8FA6" },
   { id: "autres", label: "⚡ Énergie · Beauté · Parfum", col: "#C4788C" },
 ];
 
@@ -454,6 +456,134 @@ export const THEMES_SEMAINE = [
       "Dernière semaine sur les parfums avec l'offre en cours. Après, je passe à autre chose.",
     ],
   },
+
+  // ─────────── MAISON & ENTRETIEN ───────────
+  {
+    id: "dimanche-menage", fam: "maison", icon: "🧹",
+    titre: "Je passe mon dimanche à nettoyer",
+    sous: "Temps perdu, corvée qui n'en finit pas",
+    qui: "Celle qui bosse toute la semaine et qui sacrifie son dimanche au ménage. Elle ne cherche pas un produit — elle cherche à récupérer son week-end.",
+    produits: ["Nettoyant multi-usage", "Spray sols", "Lingettes réutilisables"],
+    diag: "🏠 Maison",
+    angles: [
+      "Dimanche, 14 h. Tu es à genoux devant ta baignoire. Et lundi tu retournes bosser sans avoir eu de week-end. À un moment il faut se poser la question du temps que ça coûte.",
+      "Ma routine du samedi matin, filmée en accéléré. 40 minutes pour tout l'appartement. Le secret n'est pas la vitesse — c'est de ne pas changer de produit entre chaque pièce.",
+      "Un flacon de concentré fait 15 litres de produit prêt à l'emploi. Ramené au litre, on est à quelques centimes. Compare avec ton spray du supermarché, l'écart est énorme.",
+      "Si tu aimes avoir un produit spécifique pour chaque surface et que ça te rassure, ce n'est pas pour toi. Ça, c'est pour celles qui veulent simplifier.",
+      "Ce message d'une cliente maman de trois enfants sur son temps de ménage. Partagé avec son accord.",
+      "« Un multi-usage, ça nettoie mal partout. » C'était mon avis aussi. La vraie question n'est pas la polyvalence, c'est la concentration — je vous explique.",
+      "Dernière semaine sur ce produit avec l'offre en cours, après je change de thème.",
+    ],
+    dgccrf: "menage",
+  },
+  {
+    id: "odeur-chimique", fam: "maison", icon: "🌬️",
+    titre: "Ça sent le produit chimique chez moi",
+    sous: "Odeurs agressives, gorge qui pique",
+    qui: "Celle qui doit ouvrir les fenêtres après avoir nettoyé sa salle de bain. Souvent asthmatique, ou avec un enfant qui tousse.",
+    produits: ["Nettoyant doux", "Spray sans javel", "Parfum d'ambiance"],
+    diag: "🏠 Maison",
+    angles: [
+      "Tu nettoies ta salle de bain, et après tu dois ouvrir la fenêtre en grand pendant vingt minutes. Ta gorge pique. On a fini par trouver ça normal — ça ne l'est pas.",
+      "Ce que je fais maintenant, et ce que j'ai arrêté de mélanger. Une erreur que beaucoup font encore et qui est vraiment dangereuse — je vous montre.",
+      "Le concentré revient à quelques centimes le litre une fois dilué. Et tu achètes un flacon au lieu de six, ce qui change aussi le calcul du transport et du plastique.",
+      "Si tu veux une odeur de propre très marquée, celle qui reste trois heures, tu vas être déçue. Ici l'odeur est discrète et part vite — c'est justement le principe.",
+      "Le message d'une cliente dont le fils est asthmatique. Elle raconte très concrètement ce qui a changé chez elle.",
+      "Oui, « naturel » est un mot galvaudé et ça ne veut pas dire grand-chose en soi. Alors regardons la composition ligne par ligne, c'est plus honnête.",
+      "Fin de période sur ce produit, dernier rappel avant de passer à autre chose.",
+    ],
+    dgccrf: "menage",
+  },
+  {
+    id: "placard-produits", fam: "maison", icon: "🧴",
+    titre: "Mon placard déborde de produits différents",
+    sous: "Un produit par surface, budget qui file",
+    qui: "Celle qui a huit flacons sous son évier, dont trois entamés qu'elle n'utilise jamais. Elle sait que c'est absurde mais elle rachète quand même.",
+    produits: ["Nettoyant multi-usage", "Concentré", "Recharges"],
+    diag: "🏠 Maison",
+    angles: [
+      "Ouvre le placard sous ton évier. Compte les flacons. Maintenant compte ceux que tu as utilisés cette semaine. Voilà, on est d'accord.",
+      "Ce qu'il me reste sous l'évier aujourd'hui, filmé sans préparation. Trois produits. Je vous montre lequel fait quoi.",
+      "Un concentré remplace plusieurs sprays. Le calcul au litre dilué est déjà favorable, mais le vrai gain c'est ce que tu ne rachètes plus.",
+      "Si tu as des surfaces très spécifiques — marbre, pierre naturelle, parquet huilé — il te faudra quand même un produit dédié. Je ne vais pas te dire l'inverse.",
+      "Ce message d'une cliente qui a fait le tri sous son évier. Elle a compté ce qu'elle a jeté — le chiffre fait réfléchir.",
+      "« Marketing : un produit qui fait tout, ça fait tout mal. » C'est vrai pour beaucoup de multi-usages. Voilà ce qui change ici, et voilà les cas où ça ne suffit pas.",
+      "Dernière publication sur ce produit avant la fin de période.",
+    ],
+    dgccrf: "menage",
+  },
+  {
+    id: "sol-enfants", fam: "maison", icon: "👶",
+    titre: "Mes enfants jouent par terre",
+    sous: "Sols, surfaces, contact quotidien",
+    qui: "Jeune parent, ou propriétaire d'animaux. Elle regarde les étiquettes depuis qu'il y a un bébé qui rampe et qui met tout à la bouche.",
+    produits: ["Nettoyant sols", "Spray surfaces", "Lingettes"],
+    diag: "🏠 Maison",
+    angles: [
+      "Ton bébé rampe. Il met ses mains par terre, puis dans sa bouche. Depuis qu'on m'a fait remarquer ça, je ne regarde plus mes produits de la même façon.",
+      "Mon geste pour les sols, et le temps de séchage que je respecte maintenant. Ça paraît bête mais c'est là que tout se joue.",
+      "Dilué, on descend à quelques centimes le litre. Sur une année de sols lavés deux fois par semaine, l'économie devient très concrète.",
+      "Si tu cherches un désinfectant hospitalier, ce n'est pas ça et je ne vais pas te le vendre comme tel. C'est un nettoyant du quotidien, pour un usage domestique normal.",
+      "Le retour d'une cliente jeune maman. Elle parle surtout de sa tranquillité d'esprit, et c'est le bon angle.",
+      "Oui, tout le monde met « respectueux de la famille » sur son étiquette. Ça ne veut rien dire juridiquement. Alors voilà la composition, jugez vous-mêmes.",
+      "Fin de période sur ce produit. Dernier rappel avant que je change de thème lundi.",
+    ],
+    dgccrf: "menage",
+  },
+  {
+    id: "traces-vitres", fam: "maison", icon: "🪟",
+    titre: "Mes vitres ont toujours des traces",
+    sous: "Vitres, miroirs, inox",
+    qui: "Tout le monde. C'est le thème le plus visuel de tous — la démo se filme toute seule et le résultat est immédiat.",
+    produits: ["Nettoyant vitres", "Chiffon microfibre", "Spray inox"],
+    diag: "🏠 Maison",
+    angles: [
+      "Tu nettoies ta vitre. Le soleil passe. Et là : les traces. Tu recommences. Toujours des traces. Le problème n'est pas ton produit — c'est ton chiffon.",
+      "La démo la plus satisfaisante que je connaisse. Moitié gauche avec, moitié droite sans. Filmé à contre-jour, sans montage. Regardez.",
+      "Le flacon dure une saison entière. Ramené au nettoyage de vitres, on est sur des centimes — et surtout tu ne rachètes plus d'essuie-tout.",
+      "Si tu n'utilises pas une microfibre propre, aucun produit au monde ne te donnera un résultat sans traces. Le produit ne fait que la moitié du travail.",
+      "Ce message d'une cliente qui a des baies vitrées plein sud. C'est le test le plus dur qui soit.",
+      "« Le vinaigre blanc fait la même chose pour trois fois rien. » Sur les vitres, franchement, il fait déjà un bon travail. Voilà où se situe la vraie différence.",
+      "Dernière semaine sur ce produit avec l'offre du catalogue en cours.",
+    ],
+    dgccrf: "menage",
+  },
+  {
+    id: "linge-renferme", fam: "maison", icon: "🧺",
+    titre: "Mon linge sent le renfermé",
+    sous: "Lessive, séchage, machine",
+    qui: "Celle qui étend en intérieur l'hiver, ou qui oublie sa machine deux heures. L'odeur revient dès que le linge est porté.",
+    produits: ["Lessive concentrée", "Assouplissant", "Nettoyant machine"],
+    diag: "🏠 Maison",
+    angles: [
+      "Tu sors ton linge de la machine, il sent bon. Tu le portes deux heures, et l'odeur de renfermé revient. Ce n'est pas ta lessive — c'est ta machine.",
+      "Ce que je fais une fois par mois et que presque personne ne fait. Dix minutes, et ça change l'odeur de tout mon linge. Je vous montre.",
+      "Une dose de concentré par machine. Compare le prix à la dose avec ta lessive habituelle plutôt qu'au flacon — c'est là que la différence apparaît.",
+      "Si ton linge sent le renfermé à cause d'un séchage trop lent en intérieur l'hiver, aucune lessive ne réglera ça. Il te faut aérer, pas racheter.",
+      "Ce retour d'une cliente qui étend dans sa salle de bain toute l'année. Partagé avec son accord.",
+      "Oui, la lessive c'est le rayon où on se fait le plus avoir avec les parfums. Je vous montre comment lire une étiquette de lessive en trente secondes.",
+      "Fin de période, dernier post sur ce produit avant de changer de thème.",
+    ],
+    dgccrf: "menage",
+  },
+  {
+    id: "calcaire", fam: "maison", icon: "🚿",
+    titre: "Le calcaire de ma salle de bain",
+    sous: "Dépôts, robinetterie, paroi de douche",
+    qui: "Celle qui vit en zone d'eau dure. Sa paroi de douche est blanche en permanence et elle a renoncé à frotter.",
+    produits: ["Anticalcaire", "Spray douche quotidien", "Raclette"],
+    diag: "🏠 Maison",
+    angles: [
+      "Ta paroi de douche est blanche. Pas sale — blanche. Tu as frotté, ça revient en trois jours. Si tu es en zone d'eau dure, tu sais exactement de quoi je parle.",
+      "Le geste de 10 secondes après chaque douche qui m'a fait arrêter de frotter le samedi. Ce n'est même pas le produit le plus important ici.",
+      "Le concentré fait plusieurs litres dilués. À l'usage quotidien, on parle de centimes par semaine pour ne plus jamais avoir à décaper.",
+      "Si ton calcaire est incrusté depuis des années, un spray quotidien ne suffira pas au début — il faudra un vrai décapage d'abord. Autant le dire franchement.",
+      "Ce message d'une cliente en Bretagne, eau très dure. Elle est précise sur le temps que ça lui a pris.",
+      "« Le vinaigre blanc suffit. » Sur du calcaire léger, oui. Sur de l'incrusté, il faut autre chose — et je vous explique pourquoi, chimiquement.",
+      "Dernière semaine sur ce produit avant que je passe au thème suivant.",
+    ],
+    dgccrf: "menage",
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -477,17 +607,24 @@ function BoutonCopier({ texte }) {
   );
 }
 
-function EncadreDgccrf() {
+function EncadreDgccrf({ type }) {
+  const menage = type === "menage";
   return (
     <div style={{ border: "1.5px solid rgba(179,38,30,.35)", background: "rgba(179,38,30,.05)", borderRadius: 10, padding: ".7rem", marginBottom: ".8rem" }}>
-      <div style={{ fontSize: ".68rem", fontWeight: 700, color: "#B3261E", marginBottom: ".4rem" }}>⚠️ Thème sensible — formulations</div>
+      <div style={{ fontSize: ".68rem", fontWeight: 700, color: "#B3261E", marginBottom: ".4rem" }}>
+        {menage ? "⚠️ Attention aux allégations biocides" : "⚠️ Thème sensible — formulations"}
+      </div>
       <div style={{ fontSize: ".68rem", color: "#2E7D32", fontWeight: 700, marginBottom: ".15rem" }}>✅ Tu peux dire</div>
       <div style={{ fontSize: ".67rem", color: C.texte, lineHeight: 1.6, marginBottom: ".4rem" }}>
-        « Contribue à réduire la fatigue » · « Participe au maintien de… » · « Ce que moi j'ai ressenti, sans promesse pour toi » · « En complément d'une alimentation variée »
+        {menage
+          ? "« Nettoie » · « dégraisse » · « élimine les salissures » · « ravive » · « laisse une surface nette »"
+          : "« Contribue à réduire la fatigue » · « Participe au maintien de… » · « Ce que moi j'ai ressenti, sans promesse pour toi » · « En complément d'une alimentation variée »"}
       </div>
       <div style={{ fontSize: ".68rem", color: "#B3261E", fontWeight: 700, marginBottom: ".15rem" }}>❌ Tu ne peux pas dire</div>
       <div style={{ fontSize: ".67rem", color: C.texte, lineHeight: 1.6 }}>
-        « Soigne » · « guérit » · « traite » · « fait perdre X kilos » · « remplace ton traitement » · un avant/après présenté comme un résultat garanti
+        {menage
+          ? "« Désinfecte » · « tue 99,9 % des bactéries » · « antibactérien » · « virucide » · « assainit » — ce sont des allégations biocides réglementées, réservées aux produits qui disposent de l'autorisation correspondante."
+          : "« Soigne » · « guérit » · « traite » · « fait perdre X kilos » · « remplace ton traitement » · un avant/après présenté comme un résultat garanti"}
       </div>
       <div style={{ fontSize: ".64rem", color: C.gris, fontStyle: "italic", marginTop: ".45rem", lineHeight: 1.5 }}>
         En cas de doute sur une formulation, demande avant de publier.
@@ -502,6 +639,7 @@ export function SemaineThemeTab({ uid }) {
   const [filtre, setFiltre] = useState("tous");
   const [perso, setPerso] = useState([]);
   const [chargement, setChargement] = useState(true);
+  const [showDecouverte, setShowDecouverte] = useState(false);
 
   const estMelissa = !!uid && uid.toLowerCase().startsWith("melissa");
 
@@ -582,6 +720,15 @@ export function SemaineThemeTab({ uid }) {
   return (
     <div style={{ paddingBottom: "2rem" }}>
 
+      {showDecouverte && <DecouverteTour outil="semainetheme" onClose={() => setShowDecouverte(false)} />}
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: ".5rem" }}>
+        <button onClick={() => setShowDecouverte(true)}
+          style={{ background: "#C49A8A", color: "white", border: "none", borderRadius: 20, padding: ".3rem .75rem", fontSize: ".64rem", fontWeight: 600, cursor: "pointer" }}>
+          ? Découvrir cet onglet
+        </button>
+      </div>
+
       {/* EN-TÊTE */}
       <div style={{ fontFamily: "Georgia,serif", fontSize: "1.35rem", fontWeight: 300, color: C.brun, marginBottom: ".25rem" }}>
         Semaine à <em style={{ fontStyle: "italic", color: C.rose }}>thème</em>
@@ -660,7 +807,7 @@ export function SemaineThemeTab({ uid }) {
                   🩺 Diagnostic à lier en CTA : <strong style={{ color: C.brun }}>{t.diag}</strong>
                 </div>
 
-                {t.dgccrf && <EncadreDgccrf />}
+                {t.dgccrf && <EncadreDgccrf type={t.dgccrf} />}
 
                 <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: fam?.col || C.rose, marginBottom: ".4rem" }}>Tes 7 angles</div>
                 {t.angles.map((a, i) => {
