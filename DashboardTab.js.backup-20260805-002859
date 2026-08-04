@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
@@ -18,7 +18,7 @@ import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
-function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onVoirDiagResultats=()=>{}, nbCommandesNonVues=0, onMarquerCommandesVues=()=>{}, ouvrirBusiness=0}){
+function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onVoirDiagResultats=()=>{}, nbCommandesNonVues=0, onMarquerCommandesVues=()=>{}}){
   const[dtab,setDtab]=useState(forceQuizJour?"faststart":"today");
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
@@ -81,7 +81,6 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   const[relancesDuJour,setRelancesDuJour]=useState([]);
   const[relanceBannerOuverte,setRelanceBannerOuverte]=useState(false);
   const[cibleRappel,setCibleRappel]=useState(null);
-  useEffect(()=>{ if(ouvrirBusiness>0) setDtab("business"); },[ouvrirBusiness]);
   const[clientCibleId,setClientCibleId]=useState(null);
   const[isChefDash,setIsChefDash]=useState(false);
   const[loaded,setLoaded]=useState(false);

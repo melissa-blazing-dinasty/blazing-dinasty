@@ -1986,6 +1986,7 @@ function App(){
     {id:"monunivers",label:"🌟 Mon Univers"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
+  const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
 
   // Sous-onglets du menu Formation
@@ -2453,7 +2454,7 @@ function App(){
       </div>
 
       {userId&&<BandeauChallenge uid={userId} onOuvrir={()=>setTab("communaute")}/>}
-      {userId&&<RappelPeriodePopup uid={userId} onAller={()=>{setTab("dashboard");setDashboardSousOnglet("quotidien");}}/>}
+      {userId&&<RappelPeriodePopup uid={userId} onAller={()=>{setTab("dashboard");setDashboardSousOnglet("quotidien");setOuvrirBusinessTrigger(t=>t+1);}}/>}
 
       {/* SOUS-NAV TABLEAU DE BORD */}
       {tab==="dashboard"&&(
@@ -3783,7 +3784,7 @@ function App(){
         {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues}/>}
+        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues} ouvrirBusiness={ouvrirBusinessTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="scripts"&&<ScriptsTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
