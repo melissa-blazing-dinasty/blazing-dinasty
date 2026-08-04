@@ -19,6 +19,7 @@ import { EbooksTab } from './EbooksTab';
 import { SemaineThemeTab } from './SemaineThemeTab';
 import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_PRODUITS } from './FormationProduitsTab';
 import { DashboardTab } from './DashboardTab';
+import { AuditResultatsTab } from './AuditResultatsTab';
 import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { FastStartTab } from './FastStartTab';
 import { ObjectifsTab } from './ObjectifsTab';
@@ -1914,6 +1915,7 @@ function App(){
     {id:"quotidien",label:"📊 Quotidien"},
     {id:"semainetheme",label:"🗓️ Semaine à thème"},
     {id:"sprint",label:"⚡ Sprint"},
+    {id:"audit",label:"🔍 Audit"},
     {id:"dreamboard",label:"✨ Dream Board"},
     {id:"reseaux",label:"📱 Réseaux"},
     {id:"editorial",label:"✍️ Éditorial"},
@@ -3634,6 +3636,7 @@ function App(){
 
         {/* ── SPRINT / ACCÉLÈRE ── */}
         {tab==="dashboard"&&dashboardSousOnglet==="semainetheme"&&<SemaineThemeTab uid={userId}/>}
+        {tab==="dashboard"&&dashboardSousOnglet==="audit"&&<AuditResultatsTab uid={userId} prenom={name&&name.split(' ')[0]}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="sprint"&&(
           <div>
             <SecTitle title="Prends" em="de la vitesse" desc="7 actions quotidiennes pour passer à l'action. Chaque jour compte — coche et avance."/>

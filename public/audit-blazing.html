@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<title>Blazing Dynasty — Ton avis</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500;600&display=swap">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-text-size-adjust:100%}
+html{color-scheme:dark;background:#12101f;min-height:100%}
+body{background:#12101f;color:#f6f1e7;font-family:'DM Sans',system-ui,-apple-system,sans-serif;min-height:100%}
+
+/* le fond est porté par .page, pas par body : si un navigateur
+   remplace le fond du body, la page reste lisible */
+.page{
+  min-height:100vh; width:100%;
+  background-color:#12101f;
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(185,167,217,.18), transparent 60%),
+    radial-gradient(90% 60% at 50% 110%, rgba(232,196,192,.12), transparent 60%);
+  color:#f6f1e7;
+  display:flex; justify-content:center;
+  padding:20px 18px 44px;
+}
+.shell{width:100%;max-width:560px;display:flex;flex-direction:column;flex:1;color:#f6f1e7}
+
+.rail{display:flex;gap:3px;align-items:flex-end;height:14px;margin-bottom:6px}
+.tick{flex:1;height:3px;background-color:rgba(246,241,231,.16);transition:all .4s ease}
+.tick.done{background-color:#c9a227}
+.tick.now{background-color:#e6cf8a;height:12px}
+.meta{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.22em;
+  text-transform:uppercase;color:rgba(246,241,231,.5);margin-bottom:26px}
+
+.carte{flex:1;animation:entree .45s ease both}
+@keyframes entree{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.q{font-family:'Cormorant Garamond',Georgia,serif;font-weight:500;font-size:30px;
+  line-height:1.2;letter-spacing:-.01em;margin-bottom:10px;color:#f6f1e7}
+.aide{font-size:13.5px;color:#e8c4c0;margin-bottom:22px;line-height:1.5}
+
+.liste{display:flex;flex-direction:column;gap:9px;margin-top:22px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px 16px;
+  background-color:rgba(246,241,231,.06);border:1px solid rgba(246,241,231,.2);color:#f6f1e7;
+  font:inherit;font-size:15px;line-height:1.35;cursor:pointer;-webkit-appearance:none;
+  transition:background-color .18s,border-color .18s,transform .18s}
+.opt:hover{background-color:rgba(246,241,231,.1);border-color:rgba(201,162,39,.5)}
+.opt:active{transform:scale(.99)}
+.opt.on{background-color:rgba(201,162,39,.18);border-color:#c9a227}
+.puce{width:16px;height:16px;flex:0 0 16px;border:1px solid rgba(246,241,231,.4);
+  transform:rotate(45deg);transition:all .18s}
+.opt.on .puce{background-color:#c9a227;border-color:#c9a227}
+
+.echelle{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:22px}
+.note{aspect-ratio:1;display:grid;place-items:center;background-color:rgba(246,241,231,.06);
+  border:1px solid rgba(246,241,231,.2);color:#f6f1e7;font:inherit;font-size:15px;
+  cursor:pointer;-webkit-appearance:none;transition:all .18s}
+.note:hover{border-color:rgba(201,162,39,.5)}
+.note.on{background-color:#c9a227;border-color:#c9a227;color:#12101f;font-weight:600}
+.bornes{display:flex;justify-content:space-between;margin-top:10px;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:rgba(246,241,231,.45)}
+
+.champ{width:100%;min-height:130px;resize:vertical;margin-top:22px;-webkit-appearance:none;
+  background-color:rgba(246,241,231,.06);border:1px solid rgba(246,241,231,.2);
+  color:#f6f1e7;font:inherit;font-size:16px;line-height:1.5;padding:14px 16px}
+.champ::placeholder{color:rgba(246,241,231,.38)}
+.champ:focus{outline:none;border-color:#c9a227}
+input.ligne{width:100%;background-color:transparent;border:none;-webkit-appearance:none;
+  border-bottom:1px solid rgba(246,241,231,.28);color:#f6f1e7;font:inherit;
+  font-size:16px;padding:10px 2px;border-radius:0}
+input.ligne::placeholder{color:rgba(246,241,231,.38)}
+input.ligne:focus{outline:none;border-bottom-color:#c9a227}
+
+.barre{display:flex;align-items:center;gap:14px;margin-top:28px;padding-top:18px}
+.cta{flex:1;padding:15px 20px;background-color:#c9a227;border:none;color:#12101f;
+  font:inherit;font-size:13px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+  cursor:pointer;-webkit-appearance:none;transition:filter .18s}
+.cta:hover{filter:brightness(1.08)}
+.cta:disabled{opacity:.35;cursor:not-allowed}
+.lien{background-color:transparent;border:none;color:rgba(246,241,231,.5);font:inherit;font-size:12px;
+  letter-spacing:.14em;text-transform:uppercase;cursor:pointer;padding:6px 2px;-webkit-appearance:none}
+.lien:hover{color:#e6cf8a}
+
+.centre{flex:1;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:30px 0}
+.eyebrow{font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;color:#c9a227;margin-bottom:20px}
+.titre{font-family:'Cormorant Garamond',Georgia,serif;font-size:44px;line-height:1.05;
+  font-weight:500;margin-bottom:18px;color:#f6f1e7}
+.titre em{font-style:italic;color:#e8c4c0}
+.chapo{font-size:15px;line-height:1.65;color:rgba(246,241,231,.78);margin:0 auto 12px;max-width:400px}
+.eventail{display:block;margin:0 auto 26px}
+.promesses{list-style:none;margin:24px auto 30px;max-width:360px;text-align:left;
+  font-size:13.5px;color:rgba(246,241,231,.68)}
+.promesses li{display:flex;gap:11px;padding:7px 0;align-items:baseline}
+.promesses li::before{content:'';width:6px;height:6px;flex:0 0 6px;background-color:#c9a227;transform:rotate(45deg)}
+.accroche{display:flex;flex-direction:column;gap:14px;margin:26px 0 10px;text-align:left}
+.case{display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.45;
+  cursor:pointer;color:rgba(246,241,231,.85)}
+.case input{margin-top:3px;accent-color:#c9a227;width:17px;height:17px}
+.erreur{color:#e8c4c0;font-size:13px;margin-top:14px}
+
+@media(max-width:380px){.q{font-size:26px}.titre{font-size:36px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid #e6cf8a;outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="page"><div class="shell" id="app"></div></div>
+
+<script>
+/* ================== CONFIGURATION ==================
+   Laisse PROJET vide pour tester sans rien enregistrer.
+   Mets ton ID de projet pour que les réponses partent dans Firestore. */
+var PROJET = "blazing-dinasty-1fad9"; // ex : "blazing-dinasty-1fad9"
+var COLLECTION = "audit_reponses";
+/* ==================================================== */
+
+var P = {
+  REGULIERE:"Cliente régulière",
+  UNE_DEUX:"J'ai commandé une ou deux fois",
+  ANCIENNE:"J'ai commandé avant, plus maintenant",
+  JAMAIS:"Jamais commandé, mais je te suis",
+  DECOUVERTE:"Je viens de te découvrir",
+  EQUIPE:"Je fais partie de l'équipe"
+};
+var A_ACHETE = [P.REGULIERE, P.UNE_DEUX, P.ANCIENNE, P.EQUIPE];
+
+var QUESTIONS = [
+ {id:"profil",section:"Toi",type:"single",label:"On commence par toi. Où tu en es avec Mihi ?",
+  options:[P.REGULIERE,P.UNE_DEUX,P.ANCIENNE,P.JAMAIS,P.DECOUVERTE,P.EQUIPE]},
+ {id:"anciennete",section:"Toi",type:"single",label:"Depuis combien de temps tu me suis ?",
+  options:["Quelques jours","Quelques mois","Plus d'un an","Depuis le début"]},
+ {id:"source",section:"Toi",type:"single",label:"Comment tu es arrivée jusqu'à moi ?",
+  options:["Instagram","Facebook","Une amie m'en a parlé","Une distributrice de l'équipe","Je ne sais plus"]},
+
+ {id:"trois_mots",section:"Ce que tu vois",type:"text",
+  label:"En trois mots, tu décrirais Mihi comment à une amie ?",
+  aide:"Sois franche. Personne ne saura que c'est toi.",placeholder:"Les trois premiers qui viennent"},
+ {id:"reaction",section:"Ce que tu vois",type:"single",
+  label:"Quand on te parle de Mihi, ta première réaction c'est plutôt…",
+  options:["De la curiosité","De l'envie","De la méfiance","De l'indifférence","Je connais déjà et j'aime"]},
+ {id:"confiance",section:"Ce que tu vois",type:"scale",
+  label:"À quel point tu fais confiance à la qualité des produits ?",bas:"Pas du tout",haut:"Totalement"},
+ {id:"doutes",section:"Ce que tu vois",type:"multi",max:3,label:"Qu'est-ce qui te fait douter le plus ?",
+  options:["Le prix","Je ne connais pas la marque","C'est de la vente directe","J'ai vu des avis négatifs",
+  "Je manque d'infos sur la composition","J'ai peur que ça ne marche pas sur moi",
+  "Les promesses semblent trop belles","Rien, je suis convaincue"]},
+
+ {id:"frein_achat",section:"Ce qui te freine",type:"multi",max:3,
+  label:"Il t'est déjà arrivé d'avoir envie de commander, puis de ne pas le faire. Qu'est-ce qui t'a arrêtée ?",
+  options:["Le budget à ce moment-là","Je ne savais pas quel produit choisir","Je voulais des preuves avant",
+  "La commande m'a semblé compliquée","J'avais peur d'être relancée","Je n'ai pas osé poser mes questions",
+  "J'ai remis à plus tard, puis oublié","Ça ne m'est jamais arrivé"]},
+ {id:"prix",section:"Ce qui te freine",type:"single",label:"Le prix, pour toi, c'est…",
+  options:["Trop élevé, quoi qu'il arrive","Élevé, mais justifié si ça marche","Correct","Je n'ai aucune idée des prix"]},
+ {id:"rassurance",section:"Ce qui te freine",type:"multi",max:3,
+  label:"Qu'est-ce qui te rassurerait le plus avant de commander ?",
+  options:["Des avant/après de vraies personnes","La composition détaillée et le labo derrière",
+  "Un format découverte pour tester","Une garantie satisfaite ou remboursée",
+  "Le témoignage de quelqu'un qui me ressemble","Un échange perso avant d'acheter","Des prix affichés clairement"]},
+ {id:"question_libre",section:"Ce qui te freine",type:"text",
+  label:"La question que tu n'as jamais osé me poser sur les produits ?",
+  aide:"Tu peux passer si tu n'en as pas.",placeholder:"Vas-y, sans filtre",optionnel:true},
+
+ {id:"contenu_aime",section:"Mes contenus",type:"multi",max:2,
+  label:"Qu'est-ce qui te donne le plus envie de m'écrire ?",
+  options:["Mes citations et mes histoires","Les avant/après","Les routines et les conseils",
+  "Les coulisses de ma vie de maman","Les lives","Les offres du moment","Les explications produit"]},
+ {id:"contenu_rebute",section:"Mes contenus",type:"multi",max:2,
+  label:"Et à l'inverse, qu'est-ce qui te fait passer ton chemin ?",
+  options:["Trop de publications qui vendent","Un ton trop business","Les posts de recrutement",
+  "Les promesses trop belles","Les textes trop longs","Pas assez de preuves concrètes","Rien ne me dérange"]},
+ {id:"trop_vendu",section:"Mes contenus",type:"single",
+  label:"Franchement : tu as déjà eu l'impression que je vendais trop ?",
+  options:["Oui, souvent","Parfois","Non, jamais","Au contraire, je ne sais même pas ce que tu vends"]},
+ {id:"parler_plus",section:"Mes contenus",type:"text",label:"De quoi tu aimerais que je parle plus ?",
+  placeholder:"Un sujet, un format, une envie",optionnel:true},
+
+ {id:"resultats",section:"Ton expérience",type:"single",cond:function(r){return A_ACHETE.indexOf(r.profil)>-1},
+  label:"Tes résultats, par rapport à ce que tu espérais :",
+  options:["Au-delà de mes attentes","Conformes","En partie seulement","Aucun résultat",
+  "Je n'ai pas tenu la cure jusqu'au bout"]},
+ {id:"manque_suivi",section:"Ton expérience",type:"multi",max:2,cond:function(r){return A_ACHETE.indexOf(r.profil)>-1},
+  label:"Qu'est-ce qui t'a le plus manqué après ta commande ?",
+  options:["Un suivi régulier","Des explications pour bien prendre les produits",
+  "Un rappel quand ma cure se terminait","Des conseils nutrition à côté","Rien, j'ai été bien accompagnée"]},
+ {id:"nps",section:"Ton expérience",type:"scale",cond:function(r){return A_ACHETE.indexOf(r.profil)>-1},
+  label:"Tu me recommanderais à une amie ?",bas:"Jamais",haut:"Les yeux fermés"},
+ {id:"recommander_achat",section:"Ton expérience",type:"text",cond:function(r){return A_ACHETE.indexOf(r.profil)>-1},
+  label:"Qu'est-ce qui te ferait recommander aujourd'hui ?",
+  placeholder:"Une condition, une envie, un produit",optionnel:true},
+
+ {id:"opportunite",section:"L'opportunité",type:"single",cond:function(r){return r.profil!==P.EQUIPE},
+  label:"L'idée de te lancer toi aussi t'a déjà traversé l'esprit ?",
+  options:["Oui, sérieusement","Oui, en passant","Jamais","Non, ce n'est pas pour moi"]},
+ {id:"frein_opportunite",section:"L'opportunité",type:"multi",max:3,
+  cond:function(r){return r.profil!==P.EQUIPE && r.opportunite!=="Non, ce n'est pas pour moi"},
+  label:"Qu'est-ce qui te retient ?",
+  options:["Le regard des autres","Je n'ai pas le temps","Je ne sais pas vendre",
+  "L'image de la vente directe","L'investissement de départ","Je ne me sens pas légitime",
+  "Personne autour de moi n'achèterait","Rien, j'attends le bon moment"]},
+
+ {id:"arreter",section:"Si tu étais à ma place",type:"text",
+  label:"Une chose que je devrais arrêter de faire ?",
+  aide:"C'est la question la plus utile de tout le questionnaire.",placeholder:"Dis-le vraiment"},
+ {id:"faire_plus",section:"Si tu étais à ma place",type:"text",
+  label:"Une chose que je devrais faire beaucoup plus ?",placeholder:"Ce qui te manque"},
+ {id:"baguette",section:"Si tu étais à ma place",type:"text",
+  label:"Baguette magique : tu changerais quoi en priorité ?",placeholder:"Une seule chose",optionnel:true}
+];
+
+var etape="accueil", index=0, R={}, envoi=false, erreur=null;
+var contact={prenom:"",contact:"",rappel:false};
+var debut=Date.now();
+var app=document.getElementById("app");
+
+/* Identifiant de la distributrice qui a partagé le lien.
+   blazingdinasty.com/audit.html?ref=UID&p=Sophie
+   Sans paramètre, la réponse est rattachée à Melissa. */
+var REF = "melissa", NOM = "Melissa";
+try{
+  var _p = new URLSearchParams(window.location.search);
+  REF = _p.get("ref") || "melissa";
+  NOM = (_p.get("p") || "").trim() || (REF === "melissa" ? "Melissa" : "");
+}catch(e){}
+var EST_MELISSA = (REF === "melissa");
+
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function visibles(){return QUESTIONS.filter(function(q){return !q.cond||q.cond(R);});}
+
+function eventail(t){
+  t=t||90; var r="";
+  for(var i=0;i<=8;i++){
+    var a=Math.PI*i/8;
+    r+='<line x1="50" y1="48" x2="'+(50-44*Math.cos(a)).toFixed(2)+'" y2="'+(48-44*Math.sin(a)).toFixed(2)+
+       '" stroke="#c9a227" stroke-width="'+(i%2?0.6:1.1)+'" opacity="'+(i%2?0.45:0.9)+'"/>';
+  }
+  return '<svg class="eventail" width="'+t+'" height="'+(t*0.55)+'" viewBox="0 0 100 52" aria-hidden="true">'+r+
+    '<path d="M6 48 A44 44 0 0 1 94 48" fill="none" stroke="#c9a227" stroke-width="1.1"/>'+
+    '<path d="M20 48 A30 30 0 0 1 80 48" fill="none" stroke="#e8c4c0" stroke-width=".7" opacity=".7"/></svg>';
+}
+
+function rendre(){
+  if(etape==="accueil"){
+    var titre = EST_MELISSA
+      ? 'Dis-moi ce que<br>je fais <em>mal</em>.'
+      : 'Ton avis,<br><em>sans filtre</em>.';
+    var chapo = EST_MELISSA
+      ? 'Je construis cette aventure depuis le début, et j\'ai besoin d\'un regard '+
+        'qui ne soit pas le mien. Cliente ou pas, il n\'y a aucune mauvaise réponse ici.'
+      : 'J\'ai besoin d\'un regard qui ne soit pas le mien pour avancer. '+
+        'Cliente ou pas, il n\'y a aucune mauvaise réponse ici.';
+    app.innerHTML='<div class="centre">'+eventail(92)+
+      '<p class="eyebrow">Blazing Dynasty</p>'+
+      '<h1 class="titre">'+titre+'</h1>'+
+      '<p class="chapo">'+chapo+'</p>'+
+      '<ul class="promesses">'+
+      '<li>Anonyme, sauf si tu laisses ton prénom à la fin.</li>'+
+      '<li>Environ 6 minutes, une question à la fois.</li>'+
+      '<li>Aucune relance, aucune inscription. Promis.</li></ul>'+
+      '<button class="cta" data-go="questions">Je commence</button></div>';
+  }
+  else if(etape==="questions"){
+    var V=visibles(), q=V[index];
+    if(!q){etape="contact";return rendre();}
+    var v=R[q.id], corps="";
+
+    if(q.type==="single"){
+      corps='<div class="liste">'+q.options.map(function(o){
+        return '<button class="opt '+(v===o?"on":"")+'" data-single="'+esc(o)+'">'+
+               '<span class="puce"></span>'+esc(o)+'</button>';}).join("")+'</div>';
+    }
+    else if(q.type==="multi"){
+      var sel=v||[];
+      corps='<p class="aide" style="margin-top:-8px">'+q.max+' réponses maximum.</p>'+
+        '<div class="liste">'+q.options.map(function(o){
+        return '<button class="opt '+(sel.indexOf(o)>-1?"on":"")+'" data-multi="'+esc(o)+'">'+
+               '<span class="puce"></span>'+esc(o)+'</button>';}).join("")+'</div>';
+    }
+    else if(q.type==="scale"){
+      var n="";
+      for(var i=0;i<=10;i++) n+='<button class="note '+(v===i?"on":"")+'" data-scale="'+i+'">'+i+'</button>';
+      corps='<div class="echelle">'+n+'</div><div class="bornes"><span>'+esc(q.bas)+
+            '</span><span>'+esc(q.haut)+'</span></div>';
+    }
+    else{
+      corps='<textarea class="champ" id="txt" placeholder="'+esc(q.placeholder||"")+'">'+esc(v||"")+'</textarea>';
+    }
+
+    var rempli = q.optionnel || (q.type==="multi" ? (v||[]).length>0 : (v!==undefined && v!==""));
+    var besoinBouton = q.type==="multi"||q.type==="text";
+
+    app.innerHTML=
+      '<div class="rail">'+V.map(function(_,i){
+        return '<span class="tick '+(i<index?"done":"")+' '+(i===index?"now":"")+'"></span>';}).join("")+'</div>'+
+      '<div class="meta"><span>'+esc(q.section)+'</span><span>'+(index+1)+' / '+V.length+'</span></div>'+
+      '<div class="carte"><h2 class="q">'+esc(q.label)+'</h2>'+
+      (q.aide?'<p class="aide">'+esc(q.aide)+'</p>':'')+corps+'</div>'+
+      '<div class="barre">'+
+      (index>0?'<button class="lien" data-back>Retour</button>':'')+
+      (besoinBouton?'<button class="cta" data-next '+(rempli?"":"disabled")+'>'+
+        (index+1===V.length?"Terminer":"Suivant")+'</button>':'')+'</div>';
+  }
+  else if(etape==="contact"){
+    app.innerHTML='<div class="centre">'+eventail(76)+
+      '<p class="eyebrow">Dernière étape</p>'+
+      '<h2 class="titre" style="font-size:34px">Tu veux rester<br><em>anonyme</em> ?</h2>'+
+      '<p class="chapo">Laisse ces champs vides et tes réponses partent sans aucun nom. '+
+      'Ou signe, si tu acceptes que je revienne vers toi.</p>'+
+      '<div class="accroche">'+
+      '<input class="ligne" id="prenom" placeholder="Ton prénom (facultatif)" value="'+esc(contact.prenom)+'">'+
+      '<input class="ligne" id="coord" placeholder="Instagram ou e-mail (facultatif)" value="'+esc(contact.contact)+'">'+
+      '<label class="case"><input type="checkbox" id="rappel" '+(contact.rappel?"checked":"")+'>'+
+      '<span>J\'accepte '+(NOM?'que '+esc(NOM)+' m\'écrive':'qu\'on m\'écrive')+' pour en discuter.</span></label></div>'+
+      (erreur?'<p class="erreur">'+esc(erreur)+'</p>':'')+
+      '<div class="barre"><button class="lien" data-back-q>Retour</button>'+
+      '<button class="cta" data-send '+(envoi?"disabled":"")+'>'+
+      (envoi?"Envoi…":"J'envoie mes réponses")+'</button></div></div>';
+  }
+  else if(etape==="ferme"){
+    app.innerHTML='<div class="centre">'+eventail(88)+
+      '<p class="eyebrow">Blazing Dynasty</p>'+
+      '<h2 class="titre">C\'est <em>clos</em><br>pour le moment.</h2>'+
+      '<p class="chapo">Le questionnaire est en pause. Merci d\'être passée — '+
+      'reviens plus tard, il rouvrira.</p></div>';
+  }
+  else{
+    app.innerHTML='<div class="centre">'+eventail(100)+
+      '<p class="eyebrow">Reçu</p>'+
+      '<h2 class="titre">Merci.<br><em>Vraiment.</em></h2>'+
+      '<p class="chapo">Ce que tu viens d\'écrire vaut plus que dix heures de réunion. '+
+      'Je lis tout, une par une, et j\'ajuste avec.</p>'+
+      '<p class="chapo" style="color:#e8c4c0">Si tu penses à quelqu\'un d\'autre dont l\'avis compte, '+
+      'passe-lui le lien.</p></div>';
+  }
+  window.scrollTo(0,0);
+}
+
+function avancer(){
+  var V=visibles();
+  if(index+1<V.length){index++;rendre();}
+  else{etape="contact";rendre();}
+}
+
+app.addEventListener("click",function(e){
+  var b=e.target.closest("button");
+  if(!b)return;
+  var V=visibles(), q=V[index];
+
+  if(b.dataset.go){etape=b.dataset.go;index=0;return rendre();}
+  if(b.hasAttribute("data-back")){index=Math.max(0,index-1);return rendre();}
+  if(b.hasAttribute("data-back-q")){etape="questions";index=visibles().length-1;return rendre();}
+
+  if(b.dataset.single!==undefined){
+    R[q.id]=b.dataset.single; rendre(); return setTimeout(avancer,200);
+  }
+  if(b.dataset.scale!==undefined){
+    R[q.id]=parseInt(b.dataset.scale,10); rendre(); return setTimeout(avancer,200);
+  }
+  if(b.dataset.multi!==undefined){
+    var val=b.dataset.multi, cur=R[q.id]||[];
+    if(cur.indexOf(val)>-1) R[q.id]=cur.filter(function(x){return x!==val;});
+    else if(cur.length<q.max) R[q.id]=cur.concat([val]);
+    return rendre();
+  }
+  if(b.hasAttribute("data-next")){
+    if(q.type==="text"){var t=document.getElementById("txt"); if(t) R[q.id]=t.value;}
+    return avancer();
+  }
+  if(b.hasAttribute("data-send")) return envoyer();
+});
+
+app.addEventListener("input",function(e){
+  var V=visibles(), q=V[index];
+  if(e.target.id==="txt"){
+    var btn=app.querySelector("[data-next]");
+    if(btn && q && !q.optionnel) btn.disabled = e.target.value.trim()==="";
+  }
+  if(e.target.id==="prenom") contact.prenom=e.target.value;
+  if(e.target.id==="coord")  contact.contact=e.target.value;
+});
+app.addEventListener("change",function(e){
+  if(e.target.id==="rappel") contact.rappel=e.target.checked;
+});
+
+function versFirestore(obj){
+  var f={};
+  Object.keys(obj).forEach(function(k){
+    var v=obj[k];
+    if(v===null||v===undefined) f[k]={nullValue:null};
+    else if(typeof v==="number") f[k]={integerValue:String(v)};
+    else if(typeof v==="boolean") f[k]={booleanValue:v};
+    else if(Array.isArray(v)) f[k]={arrayValue:{values:v.map(function(x){return {stringValue:String(x)};})}};
+    else f[k]={stringValue:String(v)};
+  });
+  return {fields:f};
+}
+
+function envoyer(){
+  var p=document.getElementById("prenom"), c=document.getElementById("coord"),
+      rp=document.getElementById("rappel");
+  if(p) contact.prenom=p.value;
+  if(c) contact.contact=c.value;
+  if(rp) contact.rappel=rp.checked;
+
+  envoi=true; erreur=null; rendre();
+
+  var charge={};
+  Object.keys(R).forEach(function(k){charge[k]=R[k];});
+  charge.prenom=contact.prenom.trim()||null;
+  charge.contact=contact.contact.trim()||null;
+  charge.accepteRappel=contact.rappel;
+  charge.ref=REF;
+  charge.dureeSecondes=Math.round((Date.now()-debut)/1000);
+  charge.envoyeLe=new Date().toISOString();
+
+  if(!PROJET){
+    console.log("Réponse (mode test, rien n'est enregistré) :",charge);
+    envoi=false; etape="merci"; return rendre();
+  }
+
+  var url="https://firestore.googleapis.com/v1/projects/"+PROJET+
+          "/databases/(default)/documents/"+COLLECTION;
+  fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(versFirestore(charge))})
+  .then(function(rep){ if(!rep.ok) throw new Error("HTTP "+rep.status); etape="merci"; })
+  .catch(function(err){ console.error(err);
+    erreur="L'envoi n'a pas abouti. Vérifie ta connexion et réessaie."; })
+  .then(function(){ envoi=false; rendre(); });
+}
+
+/* Le quiz interroge reglages_publics/audit avant de s'afficher.
+   Si le document n'existe pas ou est injoignable, le quiz reste ouvert. */
+function demarrer(){
+  if(!PROJET){ return rendre(); }
+  var u="https://firestore.googleapis.com/v1/projects/"+PROJET+
+        "/databases/(default)/documents/reglages_publics/audit";
+  fetch(u)
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      if(d && d.fields && d.fields.actif && d.fields.actif.booleanValue===false){
+        etape="ferme";
+      }
+      rendre();
+    })
+    .catch(function(){ rendre(); });
+}
+
+demarrer();
+</script>
+</body>
+</html>

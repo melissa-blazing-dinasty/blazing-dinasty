@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
 
-function ObjectifsTab({uid,userName,isMelissa}){
+export function ObjectifsTab({uid,userName,isMelissa}){
   const[obj,setObj]=useState({ventesObj:"",ventesReal:"",recruesObj:"",recruesReal:"",caObj:"",caReal:"",msg:"",updatedBy:"",updatedAt:0});
   const[loaded,setLoaded]=useState(false);
   const[saving,setSaving]=useState(false);
@@ -109,4 +109,3 @@ function ObjectifsTab({uid,userName,isMelissa}){
 }
 
 
-export { ObjectifsTab };
