@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/auth";
@@ -651,6 +651,52 @@ function getCitationDuJour(citations){
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 // ── CHALLENGE DÉCOUVERTE APP — 7 JOURS ───────────────────────────────────────
+// ---- CHALLENGES : un document par challenge (anti-ecrasement) ----
+export async function chargerChallenges(){
+  const out = [];
+  try{
+    const snap = await getDocs(collection(db,"challenges","liste","items"));
+    snap.forEach(d=>out.push(d.data()));
+  }catch(e){ console.error("chargerChallenges:", e); }
+  try{
+    const legacy = await getDoc(doc(db,"challenges","liste"));
+    if(legacy.exists()){
+      const anciens = legacy.data().items || [];
+      anciens.forEach(a=>{ if(a && a.id && !out.some(x=>x.id===a.id)) out.push(a); });
+    }
+  }catch(e){}
+  return out;
+}
+
+export async function chargerDeclarations(){
+  const res = {};
+  try{
+    const snap = await getDocs(collection(db,"challenges","declarations","items"));
+    snap.forEach(d=>{ res[d.id] = d.data().liste || []; });
+  }catch(e){ console.error("chargerDeclarations:", e); }
+  try{
+    const legacy = await getDoc(doc(db,"challenges","declarations"));
+    if(legacy.exists()){
+      Object.entries(legacy.data()).forEach(([k,v])=>{
+        if(!res[k] && Array.isArray(v)) res[k] = v;
+      });
+    }
+  }catch(e){}
+  return res;
+}
+
+export async function enregistrerChallenge(ch){
+  await setDoc(doc(db,"challenges","liste","items",ch.id), ch);
+}
+
+export async function effacerChallenge(id){
+  await deleteDoc(doc(db,"challenges","liste","items",id));
+}
+
+export async function enregistrerDeclarations(challengeId, liste){
+  await setDoc(doc(db,"challenges","declarations","items",challengeId), {liste});
+}
+
 const CHALLENGE_APP_JOURS = [
   {
     jour: 1,
@@ -1079,13 +1125,11 @@ function App(){
     (async()=>{
       try{
         let total=0;
-        const snapC2=await getDoc(doc(db,"challenges","liste"));
-        const items2=snapC2.exists()?(snapC2.data().items||[]):[];
+        const items2=await chargerChallenges();
         const now2=Date.now();
         const actifs2=items2.filter(c=>!c.deadline||c.deadline>now2);
         if(actifs2.length>0){
-          const snapD2=await getDoc(doc(db,"challenges","declarations"));
-          const decls2=snapD2.exists()?snapD2.data():{};
+          const decls2=await chargerDeclarations();
           const nbChallengesNonFaits=actifs2.filter(c=>{
             const mesDecl2=(decls2[c.id]||[]).filter(d=>d.uid===userId);
             return mesDecl2.length===0;
@@ -1297,8 +1341,7 @@ function App(){
       // Popup bienvenue si première connexion
       try{const snapW=await getDoc(doc(db,"users",uid));const welcomed=snapW.exists()?snapW.data()["db-welcomed"]:false;if(!welcomed){setShowWelcome(true);await setDoc(doc(db,"users",uid),{"db-welcomed":true},{merge:true});}}catch{}
       try{
-        const challSnap=await getDoc(doc(db,"challenges","liste"));
-        const challItems=challSnap.exists()?(challSnap.data().items||[]):[];
+        const challItems=await chargerChallenges();
         const now2=Date.now();
         const actifs2=challItems.filter(c=>!c.deadline||c.deadline>now2);
         if(actifs2.length>0){
@@ -1407,13 +1450,11 @@ function App(){
       try{
         let total=0;
         try{
-          const snapC3=await getDoc(doc(db,"challenges","liste"));
-          const items3=snapC3.exists()?(snapC3.data().items||[]):[];
+          const items3=await chargerChallenges();
           const now3=Date.now();
           const actifs3=items3.filter(c=>!c.deadline||c.deadline>now3);
           if(actifs3.length>0){
-            const snapD3=await getDoc(doc(db,"challenges","declarations"));
-            const decls3=snapD3.exists()?snapD3.data():{};
+            const decls3=await chargerDeclarations();
             const nonFaits=actifs3.filter(c=>{
               const mesDecl3=(decls3[c.id]||[]).filter(d=>d.uid===userId);
               return mesDecl3.length===0;
@@ -7539,8 +7580,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       }catch{}
       try{
         // Charger les challenges
-        const snap=await getDoc(doc(db,"challenges","liste"));
-        const data=snap.exists()?snap.data().items||[]:[];
+        const data=await chargerChallenges();
         // Filtrer selon l'équipe de l'utilisateur — en remontant sa lignée jusqu'aux chefs
         const now=Date.now();
         const mesChefs=getLigneeChefs(annuaire,uid,chefsUids);
@@ -7555,15 +7595,13 @@ export function DefisTab({uid, userName, canCreate, isChef}){
         });
         setChallenges(actifs.sort((a,b)=>b.ts-a.ts));
         // Charger les déclarations par challenge
-        const declSnap=await getDoc(doc(db,"challenges","declarations"));
-        setDeclarations(declSnap.exists()?declSnap.data():{});
+        setDeclarations(await chargerDeclarations());
       }catch{}
       setLoading(false);
     })();
   },[uid]);
 
-  const saveAll=async(items)=>{
-    await setDoc(doc(db,"challenges","liste"),{items});
+  const rafraichirListe=(items)=>{
     setChallenges(items.filter(c=>{
       if(c.deadline&&c.deadline<Date.now())return false;
       if(isMelissa)return true;
@@ -7586,9 +7624,9 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       global:form.global,equipesCibles:form.global?[]:form.equipesCibles,
       createdBy:userName,ts:Date.now(),
     };
-    const snap=await getDoc(doc(db,"challenges","liste"));
-    const existing=snap.exists()?snap.data().items||[]:[];
-    await saveAll([nouveau,...existing]);
+    await enregistrerChallenge(nouveau);
+    const existing=await chargerChallenges();
+    rafraichirListe(existing.sort((a,b)=>b.ts-a.ts));
     try{
       const fmtNom=(id)=>id.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
       const getDescendants=(rootUid)=>{
@@ -7651,13 +7689,12 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       postToWallOfFame&&postToWallOfFame(uid,userName,`a validé l'action "${actionLabel}" 💪`,"✅");
     }
     setDeclarations(next);
-    await setDoc(doc(db,"challenges","declarations"),next,{merge:true});
+    await enregistrerDeclarations(challengeId, next[challengeId]||[]);
   };
 
   const supprimer=async(id)=>{
-    const snap=await getDoc(doc(db,"challenges","liste"));
-    const items=(snap.exists()?(snap.data().items||[]):[]).filter(c=>c.id!==id);
-    await saveAll(items);
+    await effacerChallenge(id);
+    rafraichirListe(await chargerChallenges());
   };
 
   if(loading)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
