@@ -2439,6 +2439,8 @@ function App(){
         ))}
       </div>
 
+      {userId&&<BandeauChallenge uid={userId} onOuvrir={()=>setTab("communaute")}/>}
+
       {/* SOUS-NAV TABLEAU DE BORD */}
       {tab==="dashboard"&&(
         <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:99,gap:".4rem",padding:".5rem .75rem"}}>
@@ -7537,6 +7539,113 @@ export function WallOfFameTab({uid, userName}){
 }
 
 // Module de Défis éphémères équipe
+// ---- BANDEAU CHALLENGE PERMANENT ----
+function BandeauChallenge({uid, onOuvrir}){
+  const[actif,setActif]=useState(null);
+  const[autres,setAutres]=useState(0);
+  const[tick,setTick]=useState(0);
+
+  useEffect(()=>{
+    let annule=false;
+    const charger=async()=>{
+      try{
+        const tous=await chargerChallenges();
+        const now=Date.now();
+        let annuaire={};
+        try{
+          const s=await getDoc(doc(db,"equipe","annuaire"));
+          annuaire=s.exists()?(s.data().membres||{}):{};
+        }catch(e){}
+        const estMelissa = uid==="melissa"||uid==="melissa-da-silveira";
+        const visibles=tous.filter(c=>{
+          if(c.deadline&&c.deadline<now)return false;
+          if(estMelissa)return true;
+          if(c.global)return true;
+          if(!c.equipesCibles||c.equipesCibles.length===0)return true;
+          if(c.equipesCibles.includes("all"))return true;
+          if(c.equipesCibles.includes(uid))return true;
+          let courant=annuaire[uid]?.marraine;
+          const vus=new Set();
+          while(courant&&!vus.has(courant)){
+            vus.add(courant);
+            if(c.equipesCibles.includes(courant))return true;
+            courant=annuaire[courant]?.marraine;
+          }
+          return false;
+        });
+        if(annule)return;
+        const avecFin=visibles.filter(c=>c.deadline).sort((a,b)=>a.deadline-b.deadline);
+        const sansFin=visibles.filter(c=>!c.deadline);
+        const ordonnes=[...avecFin,...sansFin];
+        setActif(ordonnes[0]||null);
+        setAutres(Math.max(0,ordonnes.length-1));
+      }catch(e){}
+    };
+    charger();
+    const t=setInterval(charger,300000);
+    return()=>{annule=true;clearInterval(t);};
+  },[uid]);
+
+  useEffect(()=>{
+    const t=setInterval(()=>setTick(x=>x+1),60000);
+    return()=>clearInterval(t);
+  },[]);
+
+  if(!actif)return null;
+
+  let reste="";
+  if(actif.deadline){
+    const r=actif.deadline-Date.now();
+    if(r<=0)return null;
+    const j=Math.floor(r/86400000);
+    const h=Math.floor((r%86400000)/3600000);
+    const mn=Math.floor((r%3600000)/60000);
+    if(actif.type==="long"||j>=3) reste="J-"+(j+1);
+    else if(j>0) reste=j+"j "+h+"h";
+    else if(h>0) reste=h+"h "+mn+"min";
+    else reste=mn+"min";
+  }
+
+  const urgent = actif.deadline && (actif.deadline-Date.now())<86400000;
+
+  return(
+    <>
+      <style>{`@keyframes bd-pulse-challenge{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(1.25)}}`}</style>
+      <div onClick={onOuvrir}
+        style={{position:"sticky",top:0,zIndex:150,display:"flex",alignItems:"center",justifyContent:"space-between",gap:".7rem",
+          background:urgent?"linear-gradient(100deg,#C62828,#E63946)":"linear-gradient(100deg,#8B5E00,#B8862A)",
+          boxShadow:"0 2px 10px rgba(0,0,0,.22)",
+          padding:".6rem .85rem",cursor:"pointer",userSelect:"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:".6rem",minWidth:0,flex:1}}>
+          <span style={{width:9,height:9,borderRadius:"50%",background:"#fff",flexShrink:0,
+            animation:"bd-pulse-challenge 2s ease-in-out infinite",boxShadow:"0 0 8px rgba(255,255,255,.9)"}}/>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:".8rem",fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.25}}>
+              {"\u{1F3C6}"} {actif.titre}
+              {autres>0&&(
+                <span style={{fontSize:".6rem",fontWeight:600,color:"rgba(255,255,255,.75)",marginLeft:".35rem"}}>+{autres}</span>
+              )}
+            </div>
+            <div style={{fontSize:".62rem",color:"rgba(255,255,255,.85)",lineHeight:1.3}}>
+              {urgent?"Derniers moments \u2014 clique pour participer":"Challenge en cours \u2014 clique pour participer"}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:".45rem",flexShrink:0}}>
+          {reste&&(
+            <span style={{fontSize:".72rem",fontWeight:700,color:"#fff",whiteSpace:"nowrap",
+              background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",
+              borderRadius:20,padding:".18rem .5rem"}}>
+              {reste}
+            </span>
+          )}
+          <span style={{color:"rgba(255,255,255,.8)",fontSize:".85rem",fontWeight:700}}>{"\u203A"}</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ChallengeCountdown({deadline}){
   const[r,setR]=useState(deadline-Date.now());
   useEffect(()=>{const t=setInterval(()=>setR(deadline-Date.now()),30000);return()=>clearInterval(t);},[deadline]);
@@ -7669,13 +7778,21 @@ export function DefisTab({uid, userName, canCreate, isChef}){
     setForm({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
   };
 
-  const declarer=async(challengeId,amount)=>{
+  const declarer=async(challengeId,amount,unite)=>{
     const d={uid,userName,count:+amount||1,ts:Date.now()};
     const current=declarations[challengeId]||[];
-    const next={...declarations,[challengeId]:[...current,d]};
-    setDeclarations(next);
-    await setDoc(doc(db,"challenges","declarations"),next,{merge:true});
-    postToWallOfFame&&postToWallOfFame(uid,userName,`a déclaré ${amount} ${form.unite} sur le challenge "${challengeId}" 💪`,"🚀");
+    const liste=[...current,d];
+    setDeclarations({...declarations,[challengeId]:liste});
+    await enregistrerDeclarations(challengeId, liste);
+    const ch=challenges.find(x=>x.id===challengeId);
+    postToWallOfFame&&postToWallOfFame(uid,userName,`a déclaré ${amount} ${unite||ch?.unite||""} sur le challenge "${ch?.titre||challengeId}" 💪`,"🚀");
+  };
+  const supprimerDeclaration=async(challengeId,ts)=>{
+    if(!window.confirm("Supprimer cette declaration ?"))return;
+    const current=declarations[challengeId]||[];
+    const liste=current.filter(d=>!(d.uid===uid&&d.ts===ts));
+    setDeclarations({...declarations,[challengeId]:liste});
+    await enregistrerDeclarations(challengeId, liste);
   };
   const validerAction=async(challengeId,actionId,actionLabel)=>{
     const current=declarations[challengeId]||[];
@@ -7704,7 +7821,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
   return(
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
-        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🏆 Challenges & Défis</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🏆 Challenges</div>
         {canCreate&&(
           <button onClick={()=>setShowCreate(p=>!p)}
             style={{background:showCreate?C.pale:C.brun,color:showCreate?C.gris:C.blanc,border:"none",borderRadius:9,padding:".4rem .8rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
@@ -7903,7 +8020,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
                 </div>
               )}
 
-              {c.type!=="action"?(
+              {c.type!=="action"?(<>
               <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem",display:"flex",alignItems:"center",gap:".6rem"}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:".6rem",color:C.gris,marginBottom:".1rem"}}>Ma participation</div>
@@ -7912,11 +8029,38 @@ export function DefisTab({uid, userName, canCreate, isChef}){
                 <input type="number" min="1" value={declareInput[c.id]||""} onChange={e=>setDeclareInput(p=>({...p,[c.id]:e.target.value}))}
                   placeholder="Qte"
                   style={{width:60,border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .4rem",fontSize:".8rem",fontFamily:"inherit",textAlign:"center",color:C.texte,background:C.blanc,outline:"none"}}/>
-                <button onClick={()=>{declarer(c.id,declareInput[c.id]||1);setDeclareInput(p=>({...p,[c.id]:""}));}}
+                <button onClick={()=>{declarer(c.id,declareInput[c.id]||1,c.unite);setDeclareInput(p=>({...p,[c.id]:""}));}}
                   style={{background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".35rem .7rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>
                   + Declarer
                 </button>
               </div>
+              {decls.filter(d=>d.uid===uid&&!d.actionId).length>0&&(
+                <div style={{marginTop:"-.45rem",marginBottom:".75rem",padding:".5rem .85rem",background:"rgba(255,255,255,.5)",border:`1px solid ${C.pale}`,borderRadius:10}}>
+                  <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".3rem"}}>
+                    Mes declarations
+                  </div>
+                  {decls.filter(d=>d.uid===uid&&!d.actionId).sort((a,b)=>b.ts-a.ts).map(d=>(
+                    <div key={d.ts} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:".5rem",padding:".22rem 0",borderTop:`1px solid ${C.creme}`}}>
+                      <span style={{fontSize:".7rem",color:C.texte}}>
+                        <strong style={{color:C.brun}}>{d.count}</strong> {c.unite}
+                      </span>
+                      <span style={{display:"flex",alignItems:"center",gap:".45rem"}}>
+                        <span style={{fontSize:".6rem",color:C.gris}}>
+                          {new Date(d.ts).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} a {new Date(d.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
+                        </span>
+                        <button onClick={()=>supprimerDeclaration(c.id,d.ts)}
+                          style={{background:"none",border:"none",color:"#C0504D",fontSize:".7rem",cursor:"pointer",fontFamily:"inherit",padding:"0 .15rem",lineHeight:1}}>
+                          {"\u2715"}
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{fontSize:".58rem",color:C.gris,fontStyle:"italic",marginTop:".35rem"}}>
+                    Une erreur ? Supprime la ligne et redeclare le bon chiffre.
+                  </div>
+                </div>
+              )}
+              </>
             ):(
               <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem"}}>
                 <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem"}}>Coche les actions realisees</div>
