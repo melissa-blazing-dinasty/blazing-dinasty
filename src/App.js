@@ -1738,6 +1738,19 @@ function App(){
           totalCaCumul:String(totalCaCumul),
           totalRecruesCumul:String(totalRecruesCumul),
         };
+        try{
+          const refCA=doc(db,"users",uid);
+          const snapCA=await getDoc(refCA);
+          const brutCA=snapCA.exists()?snapCA.data()["db-suivi-ca"]:null;
+          const dataCA=brutCA?JSON.parse(brutCA):{};
+          const keyCA="p"+lastPeriode;
+          const curCA=dataCA[keyCA]||{obj:0,jours:{}};
+          dataCA[keyCA]={...curCA,caPerso:parseFloat(obj.caPerso)||0,recrues:parseFloat(obj.recruesReal)||0};
+          await setDoc(refCA,{"db-suivi-ca":JSON.stringify(dataCA)},{merge:true});
+        }catch(e){ console.error("archivage suivi-ca:",e); }
+        try{
+          await setDoc(doc(db,"users",uid),{"db-rappel-periode":JSON.stringify({periode:lastPeriode,ca:parseFloat(obj.ca)||0,vu:false})},{merge:true});
+        }catch(e){}
         await setDoc(doc(db,"users",uid),{"db-obj-perso":JSON.stringify(nextObj),"last_periode":periodeCourante},{merge:true});
         // Sync annuaire avec les nouvelles valeurs vides
         await syncAnnuaire(uid, name||uid, nextObj);
@@ -2440,6 +2453,7 @@ function App(){
       </div>
 
       {userId&&<BandeauChallenge uid={userId} onOuvrir={()=>setTab("communaute")}/>}
+      {userId&&<RappelPeriodePopup uid={userId} onAller={()=>{setTab("dashboard");setDashboardSousOnglet("quotidien");}}/>}
 
       {/* SOUS-NAV TABLEAU DE BORD */}
       {tab==="dashboard"&&(
@@ -4083,6 +4097,7 @@ const DECOUVERTE = {
   business: [
     {titre:"Bienvenue !", texte:"Cet onglet te donne une vue complete de ton activite : ton chiffre d\u2019affaires, ton entonnoir de conversion, et l\u2019historique de toutes tes periodes. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-business-tabs"},
     {titre:"Etape 1 : le suivi CA", texte:"Dans l\u2019onglet CA, saisis ton chiffre d\u2019affaires jour apres jour. Chaque jour rempli met a jour ton total automatiquement.", icon:"\uD83D\uDCB0", cible:"decouverte-suivi-ca"},
+    {titre:"Etape 1 bis : ventes perso et recrues", texte:"Clique sur le petit crayon d\u2019une p\u00E9riode pour ouvrir sa fiche. En plus du CA total, tu peux y noter tes ventes perso et ton nombre de recrues. Remplis-les \u00E0 chaque fin de p\u00E9riode : c\u2019est ce qui alimente tes courbes d\u2019\u00E9volution.", icon:"\u270F", cible:"decouverte-suivi-ca"},
     {titre:"Etape 2 : l\u2019entonnoir", texte:"Clique sur l\u2019onglet Entonnoir pour voir combien de tes prospects deviennent clientes, puis combien de clientes rejoignent l\u2019equipe. Ca t\u2019aide a comprendre ta conversion.", icon:"\uD83D\uDCC9", cible:"decouverte-business-tabs"},
     {titre:"Etape 3 : l\u2019historique", texte:"Clique sur l\u2019onglet Historique pour revoir toutes tes periodes precedentes et le detail de tes commandes.", icon:"\uD83D\uDCD6", cible:"decouverte-business-tabs"},
     {titre:"Bravo, tu es prete !", texte:"Tu pilotes maintenant ton activite avec de vrais chiffres. Reviens ici regulierement pour suivre ta progression !", icon:"\uD83C\uDF89", cible:"decouverte-business-tabs"},
@@ -7540,6 +7555,63 @@ export function WallOfFameTab({uid, userName}){
 
 // Module de Défis éphémères équipe
 // ---- BANDEAU CHALLENGE PERMANENT ----
+// ---- RAPPEL FIN DE PERIODE ----
+function RappelPeriodePopup({uid, onAller}){
+  const[info,setInfo]=useState(null);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(!snap.exists())return;
+        const brut=snap.data()["db-rappel-periode"];
+        if(!brut)return;
+        const r=JSON.parse(brut);
+        if(r.vu)return;
+        if(!r.ca)return;
+        const brutCA=snap.data()["db-suivi-ca"];
+        const dataCA=brutCA?JSON.parse(brutCA):{};
+        const p=dataCA["p"+r.periode]||{};
+        if((+p.caPerso||0)>0&&(+p.recrues||0)>0)return;
+        setInfo(r);
+      }catch(e){}
+    })();
+  },[uid]);
+  const fermer=async()=>{
+    setInfo(null);
+    try{
+      const snap=await getDoc(doc(db,"users",uid));
+      const brut=snap.exists()?snap.data()["db-rappel-periode"]:null;
+      if(brut){
+        const r=JSON.parse(brut);
+        await setDoc(doc(db,"users",uid),{"db-rappel-periode":JSON.stringify({...r,vu:true})},{merge:true});
+      }
+    }catch(e){}
+  };
+  if(!info)return null;
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:16,padding:"1.4rem",maxWidth:340,width:"100%",textAlign:"center"}}>
+        <div style={{fontSize:"2rem",marginBottom:".4rem"}}>{"\u{1F4CA}"}</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:C.brun,marginBottom:".5rem"}}>
+          Ta periode P{info.periode} est terminee
+        </div>
+        <p style={{fontSize:".76rem",color:C.texte,lineHeight:1.65,marginBottom:"1rem"}}>
+          Prends 30 secondes pour completer tes <strong>ventes perso</strong> et ton <strong>nombre de recrues</strong>.
+          Ce sont ces chiffres qui construisent tes courbes d'evolution d'une periode a l'autre.
+        </p>
+        <button onClick={()=>{fermer();onAller&&onAller();}}
+          style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".45rem"}}>
+          Completer maintenant
+        </button>
+        <button onClick={fermer}
+          style={{width:"100%",background:"none",border:"none",color:C.gris,fontSize:".72rem",fontFamily:"inherit",cursor:"pointer"}}>
+          Plus tard
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BandeauChallenge({uid, onOuvrir}){
   const[actif,setActif]=useState(null);
   const[autres,setAutres]=useState(0);
