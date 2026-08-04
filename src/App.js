@@ -8862,7 +8862,13 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   const historique=obj.historique||[];
   const snapshotNow=()=>{
     const entry={date:todayLocalStr(),ca:+obj.ca||0,caObj:+obj.caObj||0,caPerso:+obj.caPerso||0,recruesReal:+obj.recruesReal||0,recruesObj:+obj.recruesObj||0,palier:obj.palier||"2%"};
+    // Ne pas archiver un point totalement vide : il ecrase la lecture des courbes
+    if(entry.ca===0&&entry.caPerso===0&&entry.recruesReal===0)return historique;
     return [...historique,entry].slice(-24);
+  };
+  const supprimerPointHisto=(idx)=>{
+    if(!window.confirm("Supprimer ce point de l'historique ?"))return;
+    save({...obj,historique:historique.filter((_,i)=>i!==idx)});
   };
 
   const resetPeriode=async()=>{
@@ -8894,7 +8900,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
           <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
           <polyline points={`0,${h} ${pts} ${w},${h}`} fill={color} fillOpacity={.12} stroke="none"/>
         </svg>
-        <div style={{fontSize:".55rem",color,fontWeight:700,textAlign:"right",marginTop:".1rem"}}>{vals[vals.length-1]}</div>
+        <div style={{fontSize:".55rem",color,fontWeight:700,textAlign:"right",marginTop:".1rem"}}>{+obj[dataKey]||0}</div>
       </div>
     );
   };
@@ -8921,9 +8927,14 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
             ))}
           </svg>
           {vals.map((v,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:".65rem",color:C.gris,padding:".2rem 0",borderBottom:`1px solid ${C.pale}`}}>
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".65rem",color:C.gris,padding:".2rem 0",borderBottom:`1px solid ${C.pale}`}}>
               <span>{dates[i]||`Point ${i+1}`}</span>
-              <span style={{fontWeight:700,color}}>{v}{unit}</span>
+              <span style={{display:"flex",alignItems:"center",gap:".5rem"}}>
+                <span style={{fontWeight:700,color}}>{v}{unit}</span>
+                <button onClick={()=>{supprimerPointHisto(i);setGraphEnGros(null);}}
+                  style={{background:"none",border:"none",color:"#C0504D",fontSize:".7rem",cursor:"pointer",fontFamily:"inherit",padding:"0 .1rem",lineHeight:1}}
+                  title="Supprimer ce point">{"\u2715"}</button>
+              </span>
             </div>
           ))}
           <button onClick={()=>setGraphEnGros(null)} style={{width:"100%",marginTop:".75rem",background:C.brun,color:C.blanc,border:"none",borderRadius:9,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Fermer</button>
