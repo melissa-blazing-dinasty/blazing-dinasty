@@ -203,7 +203,7 @@ function LinkBioTab({uid, userName, initialSection="theme"}){
   return(
     <div>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.35rem",fontWeight:300,color:C.brun,marginBottom:".2rem"}}>
-        Mon <em style={{fontStyle:"italic",color:C.rose}}>Link-in-Bio</em>
+       {activeSection==="boutique"?"Ma ":"Mon "}<em style={{fontStyle:"italic",color:C.rose}}>{activeSection==="boutique"?"Boutique":"Link-in-Bio"}</em>
       </div>
 
       {/* Lien à copier */}
