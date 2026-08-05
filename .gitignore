@@ -26,3 +26,7 @@ functions/node_modules
 
 App.js.backup-*
 *.ps1
+
+*.backup-*
+.firebase/
+firebase-debug.log
