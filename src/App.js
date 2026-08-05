@@ -1987,6 +1987,7 @@ function App(){
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
+  const[ouvrirChallengesTrigger,setOuvrirChallengesTrigger]=useState(0);
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
 
   // Sous-onglets du menu Formation
@@ -2453,7 +2454,7 @@ function App(){
         ))}
       </div>
 
-      {userId&&<BandeauChallenge uid={userId} onOuvrir={()=>setTab("communaute")}/>}
+      {userId&&<BandeauChallenge uid={userId} onOuvrir={()=>{setTab("communaute");setOuvrirChallengesTrigger(t=>t+1);}}/>}
       {userId&&<RappelPeriodePopup uid={userId} onAller={()=>{setTab("dashboard");setDashboardSousOnglet("quotidien");setOuvrirBusinessTrigger(t=>t+1);}}/>}
 
       {/* SOUS-NAV TABLEAU DE BORD */}
@@ -3794,7 +3795,7 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="monunivers"&&<MonUniversTab uid={userId}/>}
-        {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
+        {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
         

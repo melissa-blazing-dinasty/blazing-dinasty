@@ -8,7 +8,7 @@ import { WallOfFameTab, DefisTab, PowerHourTab, THEMES_IMAGES, chargerChallenges
 import { MessagerieTab, getUnreadMessagesCount } from './MessagerieTab';
 import { CopyBtn } from './components';
 
-function CommunauteTab({uid, userName, isChef}){
+function CommunauteTab({uid, userName, isChef, ouvrirChallenges=0}){
   const[posts,setPosts]=useState([]);
   const[infos,setInfos]=useState([]);
   const[loading,setLoading]=useState(true);
@@ -22,6 +22,7 @@ function CommunauteTab({uid, userName, isChef}){
   const[newPhoto,setNewPhoto]=useState("");
   const[newTemoignageTheme,setNewTemoignageTheme]=useState("skincare");
   const[bulleOuverte,setBulleOuverte]=useState(null);
+  useEffect(()=>{ if(ouvrirChallenges>0) setBulleOuverte("defis"); },[ouvrirChallenges]);
   const[challengeATraiter,setChallengeATraiter]=useState(false);
   const[nouvelleInfo,setNouvelleInfo]=useState(false);
   const[messagesNonLus,setMessagesNonLus]=useState(0);
