@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
+﻿import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
 import { TunnelRecrutementPublic } from './TunnelRecrutementTab';
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
@@ -118,54 +118,41 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
       });
       produits = produits.filter(p=>p&&p.nom);
 
-      // Categories reelles du catalogue : corps / visage / makeup / parfums / sets / home / sante / cheveux
-      const CATEGORIES_CATALOGUE = {
-        skincare:  ["visage"],
-        cheveux:   ["cheveux"],
-        peaucorps: ["corps"],
-        makeup:    ["makeup"],
-        sante:     ["sante"],
-        parfum:    ["parfums"],
+      const MC = {
+        cheveux: ["cheveu","chevel","capillair","shampoo","shampooing","apres-shampo","après-shampo","masque cheveux","masque capillaire","huile cheveux","huile capil","serum cheveux","sérum cheveux","traitement capil","keratine","kératine","soin capil","brillance cheveux","anti-chute","anti chute","pousse cheveux","cuir chevelu"],
+        skincare: ["visage","creme visage","crème visage","serum visage","sérum visage","serum","sérum","hydrat","nettoy","demaquill","démaquill","contour des yeux","contour yeux","peau","anti-age","anti-âge","antiage","eclat","éclat","masque visage","gommage visage","exfoli","tonique","lotion visage","creme de nuit","crème de nuit","creme de jour","crème de jour"],
+        sante: ["complement","complément","vitalite","vitalité","energie","énergie","brule","brûle graisse","coupe-faim","coupe faim","digestion","probiotique","detox","minceur","silhouette","draineur","collagene","collagène","multivitamine","omega","oméga","spiruline","sommeil","stress","immunite","immunité"],
+        makeup: ["fond de teint","rouge a levres","rouge à lèvres","mascara","eyeliner","eye liner","blush","poudre","anticerne","concealer","correcteur","levres","lèvres","palette","ombre a paupieres","ombre à paupières","gel fixateur sourcils","crayon sourcils","highlighter","enlumineur"],
+        peaucorps: ["corps","gommage corps","gel douche","lait corporel","huile corps","beurre corporel","creme corps","crème corps","mains","pieds"],
       };
-      const typeKey = type==="skincare"?"skincare"
-        :type==="cheveux"?"cheveux"
-        :(type==="sante"||type==="silhouette"||type==="detox"||type==="antiage")?"sante"
-        :type==="makeup"?"makeup"
-        :type==="peaucorps"?"peaucorps"
-        :type==="parfum"?"parfum"
-        :null;
+      const EXCLUDE = {
+        cheveux: MC.makeup.concat(MC.sante).concat(["visage","gel douche","lait corporel"]),
+        skincare: MC.makeup.concat(MC.sante).concat(MC.cheveux).concat(["corps"]),
+        sante: MC.makeup.concat(MC.cheveux).concat(["visage","corps"]),
+        makeup: MC.cheveux.concat(MC.sante).concat(["visage hydrat","creme visage","crème visage"]),
+        peaucorps: MC.makeup.concat(MC.sante).concat(MC.cheveux),
+      };
 
-      const catsVoulues = (typeKey && CATEGORIES_CATALOGUE[typeKey]) ? CATEGORIES_CATALOGUE[typeKey] : ["visage","corps","cheveux","makeup"];
+      const typeKey = type==="skincare"?"skincare":type==="cheveux"?"cheveux":(type==="sante"||type==="silhouette"||type==="detox"||type==="antiage")?"sante":type==="makeup"?"makeup":type==="peaucorps"?"peaucorps":null;
 
-      let produitsFiltres = [];
-      catsVoulues.forEach(cle=>{
-        const val = cat[cle];
-        if(Array.isArray(val)) produitsFiltres = produitsFiltres.concat(val.filter(p=>p&&p.nom));
-        else if(val && typeof val==="object") produitsFiltres = produitsFiltres.concat(Object.values(val).filter(p=>p&&p.nom));
-      });
-      produitsFiltres = produitsFiltres.filter(p=>!p.rupture);
-
-      // Repli : si la categorie est vide, on reprend tout sauf sante/home/sets
-      if(produitsFiltres.length===0){
-        ["visage","corps","cheveux","makeup"].forEach(cle=>{
-          const val = cat[cle];
-          if(Array.isArray(val)) produitsFiltres = produitsFiltres.concat(val.filter(p=>p&&p.nom));
-          else if(val && typeof val==="object") produitsFiltres = produitsFiltres.concat(Object.values(val).filter(p=>p&&p.nom));
+      let produitsFiltres = produits;
+      if(typeKey && MC[typeKey]){
+        const inc = MC[typeKey];
+        const exc = EXCLUDE[typeKey]||[];
+        const filtres = produits.filter(p=>{
+          const n = p.nom.toLowerCase();
+          const isIn = inc.some(m=>n.includes(m));
+          const isOut = exc.some(m=>n.includes(m));
+          return isIn && !isOut;
         });
-        produitsFiltres = produitsFiltres.filter(p=>!p.rupture);
+        if(filtres.length>=4) produitsFiltres = filtres;
       }
-
       if(produitsFiltres.length>90) produitsFiltres=produitsFiltres.slice(0,90);
-      catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" - "+(p.prix!=null?p.prix:"?")+"EUR"+(p.prixVIP?" (prix VIP : "+p.prixVIP+"EUR)":"")).join("\n");
+      catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" — "+(p.prix!=null?p.prix:"?")+"€"+(p.prixVIP?" (prix VIP : "+p.prixVIP+"€)":"")).join("\n");
 
-      // Complements alimentaires : liste separee, jamais melangee au catalogue principal
-      if(typeKey==="skincare"||typeKey==="cheveux"||typeKey==="peaucorps"){
-        let comp = [];
-        const valSante = cat["sante"];
-        if(Array.isArray(valSante)) comp = valSante.filter(p=>p&&p.nom);
-        else if(valSante && typeof valSante==="object") comp = Object.values(valSante).filter(p=>p&&p.nom);
-        comp = comp.filter(p=>!p.rupture);
-        complementsText = comp.slice(0,15).map((p,i)=>(i+1)+". "+p.nom+" - "+(p.prix!=null?p.prix:"?")+"EUR"+(p.prixVIP?" (prix VIP : "+p.prixVIP+"EUR)":"")).join("\n");
+      if(typeKey==="skincare"||typeKey==="cheveux"){
+        const comp = produits.filter(p=>MC.sante.some(m=>p.nom.toLowerCase().includes(m)));
+        complementsText = comp.slice(0,15).map((p,i)=>(i+1)+". "+p.nom+" — "+(p.prix!=null?p.prix:"?")+"€").join("\n");
       }
     }
   } catch (e) { console.error("Erreur chargement catalogue:", e); }
@@ -200,7 +187,7 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
   } catch {}
 
   // eslint-disable-next-line no-use-before-define
-  const isSkincareOuCheveux = (type==="skincare"||type==="cheveux"||type==="peaucorps");
+  const isSkincareOuCheveux = (type==="skincare"||type==="cheveux");
   const prompt = `Tu es une experte beauté et santé de la marque MIHI. Tu dois créer une ordonnance produit personnalisée pour ${nomClient||"Cliente"} suite à son diagnostic ${typeLabel}.
 RÈGLES ABSOLUES SUR LES PRODUITS :
 1. Utilise UNIQUEMENT les produits listés dans le CATALOGUE ci-dessous — recopie le nom EXACT et le prix EXACT du catalogue, n'invente jamais un produit ni un prix

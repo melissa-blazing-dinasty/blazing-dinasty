@@ -7727,7 +7727,7 @@ function ChallengeCountdown({deadline}){
   return <span style={{fontWeight:700,color:C.or,fontSize:".72rem"}}>{d2>0?`${d2}j `:""}{h}h {m}min</span>;
 }
 
-export function DefisTab({uid, userName, canCreate, isChef}){
+export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=false}){
   const[challenges,setChallenges]=useState([]);
   const[loading,setLoading]=useState(true);
   const[showCreate,setShowCreate]=useState(false);
@@ -7804,7 +7804,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       cadeau:form.cadeau.trim(),cadeauImage:form.cadeauImage.trim(),
       actions:form.type==="action"?form.actionsListe.filter(a=>a.trim()).map((label,i)=>({id:"a"+i,label:label.trim()})):[],
       global:form.global,equipesCibles:form.global?[]:form.equipesCibles,
-      createdBy:userName,ts:Date.now(),
+      createdBy:userName,createdByUid:uid,ts:Date.now(),
     };
     await enregistrerChallenge(nouveau);
     const existing=await chargerChallenges();
@@ -7883,6 +7883,9 @@ export function DefisTab({uid, userName, canCreate, isChef}){
   };
 
   const supprimer=async(id)=>{
+    const ch=challenges.find(x=>x.id===id);
+    const nomCh=(ch&&ch.titre)||'ce challenge';
+    if(!window.confirm('Supprimer definitivement : '+nomCh+' ?\n\nCette action est irreversible et concerne toute l equipe.'))return;
     await effacerChallenge(id);
     rafraichirListe(await chargerChallenges());
   };
@@ -8057,7 +8060,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:".2rem",flexShrink:0,marginLeft:".5rem"}}>
                   {c.deadline&&<Countdown deadline={c.deadline}/>}
-                  {canCreate&&<button onClick={()=>supprimer(c.id)}
+                  {depuisEspaceChef&&(c.createdByUid?c.createdByUid===uid:c.createdBy===userName)&&<button onClick={()=>supprimer(c.id)}
                     style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:5,padding:".18rem .4rem",color:"rgba(255,255,255,.6)",cursor:"pointer",fontSize:".6rem",fontFamily:"inherit"}}>
                     ✕
                   </button>}
@@ -8902,6 +8905,22 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   const[showDecouverte,setShowDecouverte]=useState(false);
   const[suiviCATotal,setSuiviCATotal]=useState(0);useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"users",uid));if(snap.exists()&&snap.data()["db-suivi-ca"]){const sc=JSON.parse(snap.data()["db-suivi-ca"]);const total=Object.values(sc).reduce((s,v)=>s+(parseFloat(v)||0),0);setSuiviCATotal(total);}}catch{}})();},[uid]);
   const[graphEnGros,setGraphEnGros]=useState(null);
+  const[histoPeriodes,setHistoPeriodes]=useState([]);
+  useEffect(()=>{(async()=>{
+    try{
+      const snapH=await getDoc(doc(db,"users",uid));
+      if(!snapH.exists())return;
+      const brutH=snapH.data()["db-suivi-ca"];
+      if(!brutH)return;
+      const dataH=JSON.parse(brutH);
+      const pts=Object.entries(dataH)
+        .map(([k,v])=>({num:parseInt(String(k).replace("p",""),10),ca:+v.ca||0,caPerso:+v.caPerso||0,recrues:+v.recrues||0}))
+        .filter(p=>!isNaN(p.num)&&(p.ca>0||p.caPerso>0||p.recrues>0))
+        .sort((x,y)=>x.num-y.num)
+        .map(p=>({...p,label:"P"+p.num}));
+      setHistoPeriodes(pts);
+    }catch(e){ console.error("histoPeriodes:",e); }
+  })();},[uid]);
   const[recrutementOuvert,setRecrutementOuvert]=useState(()=>!!(obj.recruesObj&&obj.recruesObj!=="0"));
   const raw=getPeriodeInfo();
   const pCourant=getPeriodeActuelle();
@@ -8982,7 +9001,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   // Graphique en grand (popup)
   const GrandGraph=({data,dataKey,color,label,unit=""})=>{
     const vals=data.map(d=>+d[dataKey]||0);
-    const dates=data.map(d=>d.date?.slice(5)||"");
+    const dates=data.map(d=>d.label||(d.date?d.date.slice(5):""));
     const max=Math.max(...vals,1);
     const w=280,h=120;
     const pts=vals.map((v,i)=>`${Math.round(i/(vals.length-1)*w)},${Math.round(h-(v/max*h*.85+h*.05))}`).join(" ");
@@ -9023,7 +9042,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
       <Fireworks trigger={fireworksTrigger}/>
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
       {showDecouverte&&<DecouverteTour outil="objectifs" onClose={()=>setShowDecouverte(false)}/>}
-      {graphEnGros&&historique.length>=2&&<GrandGraph data={historique} dataKey={graphEnGros} color={graphEnGros==="recruesReal"?C.lilas:graphEnGros==="caPerso"?C.rose:C.brun} label={graphEnGros==="recruesReal"?"👥 Recrues":graphEnGros==="caPerso"?"🛍️ Ventes perso":"💰 CA total"} unit={graphEnGros==="recruesReal"?"":" €"}/>}
+      {graphEnGros&&histoPeriodes.length>=2&&<GrandGraph data={histoPeriodes} dataKey={graphEnGros} color={graphEnGros==="recrues"?C.lilas:graphEnGros==="caPerso"?C.rose:C.brun} label={graphEnGros==="recrues"?"👥 Recrues":graphEnGros==="caPerso"?"🛍️ Ventes perso":"💰 CA total"} unit={graphEnGros==="recrues"?"":" €"}/>}
 
       {/* 1. PÉRIODE EN COURS */}
       <div id="decouverte-periode" style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:".75rem",color:C.blanc}}>
@@ -9152,9 +9171,9 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
           </div>
           <div style={{display:"flex",gap:".5rem"}}>
             {historique.length>=2?(<>
-              <MiniGraph data={historique} dataKey="ca" color={C.brun} label="💰 CA total" onClick={()=>setGraphEnGros("ca")}/>
-            <MiniGraph data={historique} dataKey="caPerso" color={C.rose} label="🛍️ Ventes perso" onClick={()=>setGraphEnGros("caPerso")}/>
-            <MiniGraph data={historique} dataKey="recruesReal" color={C.lilas} label="👥 Recrues" onClick={()=>setGraphEnGros("recruesReal")}/>
+              <MiniGraph data={histoPeriodes.slice(-12)} dataKey="ca" color={C.brun} label="💰 CA total" onClick={()=>setGraphEnGros("ca")}/>
+            <MiniGraph data={histoPeriodes.slice(-12)} dataKey="caPerso" color={C.rose} label="🛍️ Ventes perso" onClick={()=>setGraphEnGros("caPerso")}/>
+            <MiniGraph data={histoPeriodes.slice(-12)} dataKey="recrues" color={C.lilas} label="👥 Recrues" onClick={()=>setGraphEnGros("recruesReal")}/>
             </>):(
               <div style={{textAlign:"center",padding:"1rem .5rem",fontSize:".72rem",color:C.gris,lineHeight:1.6}}>
                 Reviens ici une fois que tu auras enregistre au moins 2 periodes pour voir tes graphiques d'evolution.
@@ -11964,7 +11983,7 @@ function EspaceChefTab({uid, isChef}){
         {section==="membres"&&<MembresTab uid={uid}/>}
         {section==="assiduite"&&<AssiduiteTab uid={uid}/>}
         {section==="suiviformation"&&<SuiviFormationTab uid={uid}/>}
-        {section==="defi"&&<DefisTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={true} isChef={isChef}/>}
+        {section==="defi"&&<DefisTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={true} isChef={isChef} depuisEspaceChef={true}/>}
         {section==="powerhour"&&<PowerHourTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={isChef}/>}
         {section==="distributeurs"&&<DistributeursTab distributeurs={distrib} save={saveDistrib} uid={uid}/>}
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
