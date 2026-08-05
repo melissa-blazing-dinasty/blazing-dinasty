@@ -30,3 +30,7 @@ App.js.backup-*
 *.backup-*
 .firebase/
 firebase-debug.log
+
+*.backup-*
+.firebase/
+firebase-debug.log
