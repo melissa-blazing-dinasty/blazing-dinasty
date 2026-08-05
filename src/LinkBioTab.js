@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
@@ -207,15 +207,17 @@ function LinkBioTab({uid, userName, initialSection="theme"}){
       </div>
 
       {/* Lien à copier */}
+      {(()=>{ const estBoutique = activeSection==="boutique"; return (<>
       <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:"1rem",display:"flex",alignItems:"center",gap:".75rem"}}>
         <div style={{flex:1}}>
-          <div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase",marginBottom:".2rem"}}>🔗 Ton lien de bio</div>
-          <div style={{fontSize:".68rem",color:C.pale,wordBreak:"break-all"}}>{bioUrl}</div>
+          <div style={{fontSize:".55rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase",marginBottom:".2rem"}}>🔗 {estBoutique?"Ton lien boutique":"Ton lien de bio"}</div>
+          <div style={{fontSize:".68rem",color:C.pale,wordBreak:"break-all"}}>{estBoutique?boutiqueUrl:bioUrl}</div>
         </div>
-        <button onClick={copyUrl} style={{background:C.or,color:C.brun,border:"none",borderRadius:8,padding:".38rem .7rem",fontSize:".7rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
-          {copied?"✓ Copié!":"📋 Copier"}
+        <button onClick={estBoutique?copyBoutiqueUrl:copyUrl} style={{background:C.or,color:C.brun,border:"none",borderRadius:8,padding:".38rem .7rem",fontSize:".7rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+          {(estBoutique?copiedBoutique:copied)?"✓ Copié!":"📋 Copier"}
         </button>
       </div>
+      </>); })()}
 
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
       {showDecouverte&&<DecouverteTour outil="linkbio" onClose={()=>setShowDecouverte(false)} onStepChange={sec=>{if(sec)setActiveSection(sec);}}/>}
