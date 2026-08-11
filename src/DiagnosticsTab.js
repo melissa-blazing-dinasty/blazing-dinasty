@@ -112,11 +112,6 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
     const catSnap = await getDoc(doc(db,"admin","catalogue_mihi"));
     if(catSnap.exists()){
       const cat = catSnap.data();
-      console.log("🔑 DEBUG — CHAMPS RÉELS du document catalogue_mihi:", Object.keys(cat));
-      Object.entries(cat).forEach(([cle,val])=>{
-        const nb = Array.isArray(val) ? val.length : (val&&typeof val==="object" ? Object.keys(val).length : "(pas un tableau/objet)");
-        console.log(`🔑 DEBUG — champ "${cle}" → ${nb} entrées`);
-      });
       Object.values(cat).forEach(val=>{
         if(Array.isArray(val)) produits=[...produits,...val];
         else if(val&&typeof val==="object") produits=[...produits,...Object.values(val).filter(p=>p&&p.nom)];
@@ -141,7 +136,6 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
         :null;
 
       const catsVoulues = (typeKey && CATEGORIES_CATALOGUE[typeKey]) ? CATEGORIES_CATALOGUE[typeKey] : ["face","corps","hair","makeup"];
-      console.log("🔍 DEBUG DIAGNOSTIC — type:", type, "| typeKey:", typeKey, "| catsVoulues:", catsVoulues);
 
       let produitsFiltres = [];
       catsVoulues.forEach(cle=>{
@@ -149,13 +143,10 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
         if(Array.isArray(val)) produitsFiltres = produitsFiltres.concat(val.filter(p=>p&&p.nom));
         else if(val && typeof val==="object") produitsFiltres = produitsFiltres.concat(Object.values(val).filter(p=>p&&p.nom));
       });
-      console.log("🔍 DEBUG — produits trouvés AVANT filtre rupture:", produitsFiltres.length, produitsFiltres.map(p=>p.nom));
       produitsFiltres = produitsFiltres.filter(p=>!p.rupture);
-      console.log("🔍 DEBUG — produits trouvés APRÈS filtre rupture:", produitsFiltres.length);
 
       // Repli : si la categorie est vide, on reprend tout sauf sets/home/enfants/hommes
       if(produitsFiltres.length===0){
-        console.warn("⚠️ DEBUG — catégorie vide après filtre rupture, BASCULE sur tout le catalogue (face+corps+hair+makeup) !");
         ["face","corps","hair","makeup"].forEach(cle=>{
           const val = cat[cle];
           if(Array.isArray(val)) produitsFiltres = produitsFiltres.concat(val.filter(p=>p&&p.nom));
@@ -166,7 +157,6 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
 
       if(produitsFiltres.length>90) produitsFiltres=produitsFiltres.slice(0,90);
       catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" - "+(p.prix!=null?p.prix:"?")+"EUR"+(p.prixVIP?" (prix VIP : "+p.prixVIP+"EUR)":"")).join("\n");
-      console.log("🔍 DEBUG — CATALOGUE ENVOYÉ À L'IA :\n"+catalogueText);
 
       // Complements alimentaires : liste separee, jamais melangee au catalogue principal
       if(typeKey==="skincare"||typeKey==="cheveux"||typeKey==="peaucorps"){
@@ -847,7 +837,11 @@ function DiagnosticParfumTab({uid, externalMode=false, distributeurNom="", onRes
   if(showContactParfum) return(
     <div style={{paddingBottom:"2rem"}}>
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.brun,marginBottom:".3rem"}}>Presque terminé <em style={{fontStyle:"italic",color:C.rose}}>✨</em></div>
-      <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>Laisse tes coordonnées pour recevoir tes recommandations parfum personnalisées 🌸</p>
+      <div style={{background:"linear-gradient(135deg,#9B59B6,#6C3483)",borderRadius:12,padding:"1rem 1.1rem",marginBottom:"1.1rem",fontSize:".85rem",color:"white",lineHeight:1.6,fontWeight:600,textAlign:"center",boxShadow:"0 4px 14px rgba(108,52,131,.25)"}}>
+        🌸 Encore une petite étape !<br/>
+        <span style={{fontWeight:400,fontSize:".8rem"}}>Dès que tu valides ci-dessous, ta recommandation parfum complète apparaît <u>immédiatement</u> à l'écran.</span>
+      </div>
+      <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>Laisse-nous juste un moyen de te recontacter.</p>
       <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".6rem .75rem",marginBottom:"1rem",fontSize:".72rem",color:"#B04040",lineHeight:1.55}}>
         ℹ️ Merci d'indiquer <strong>au moins un moyen de te contacter</strong> (téléphone, email ou pseudo réseau social) — sans ça, on ne peut tout simplement pas t'envoyer ni traiter tes recommandations.
       </div>
@@ -2116,8 +2110,13 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.brun,marginBottom:".3rem"}}>
         Presque terminé <em style={{fontStyle:"italic",color:C.rose}}>✨</em>
       </div>
+      <div style={{background:"linear-gradient(135deg,#5A3829,#3D2020)",borderRadius:12,padding:"1rem 1.1rem",marginBottom:"1.1rem",fontSize:".85rem",color:"white",lineHeight:1.6,fontWeight:600,textAlign:"center",boxShadow:"0 4px 14px rgba(90,56,41,.25)"}}>
+        ✨ Encore une petite étape !<br/>
+        <span style={{fontWeight:400,fontSize:".8rem"}}>Dès que tu valides ci-dessous, ton diagnostic complet (produits recommandés + prix) apparaît <u>immédiatement</u> à l'écran.</span>
+      </div>
+
       <p style={{fontSize:".76rem",color:C.gris,marginBottom:"1.25rem",lineHeight:1.65}}>
-        Laisse tes coordonnées pour que ta conseillère puisse te recontacter avec tes recommandations personnalisées 💛
+        Laisse-nous juste un moyen de te recontacter 💛
       </p>
 
       <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".6rem .75rem",marginBottom:"1rem",fontSize:".72rem",color:"#B04040",lineHeight:1.55}}>
@@ -2497,13 +2496,10 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
         <button type="button" onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
 
-        {/* DEBUG TEMPORAIRE */}
-        <details style={{marginTop:".5rem"}}>
-          <summary style={{fontSize:".6rem",color:C.gris,cursor:"pointer"}}>🔍 Debug (clic pour voir)</summary>
-          <pre style={{fontSize:".55rem",color:"#333",background:"#f5f5f5",padding:".5rem",borderRadius:6,overflowX:"auto",whiteSpace:"pre-wrap",wordBreak:"break-all",marginTop:".3rem"}}>
-            {JSON.stringify({budget:!!ordonnance?.budget, bestseller:!!ordonnance?.bestseller, premium:!!ordonnance?.premium, conseil:!!ordonnance?.conseil, keys:Object.keys(ordonnance||{}), premiumData:ordonnance?.premium||"ABSENT"},null,2)}
-          </pre>
-        </details>
+        <p style={{ fontSize: ".65rem", color: C.gris, textAlign: "center", marginTop:".5rem" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
+        </>)}
+
+        {/* Boutique + lien VIP : visibles pour TOUT LE MONDE, y compris les clientes externes qui reçoivent le lien */}
         <div style={{display:"flex",flexDirection:"column",gap:".6rem",margin:"1rem 0 .5rem"}}>
           <button onClick={()=>window.open("?boutique="+uid, "_blank")}
             style={{width:"100%",background:C.creme,border:"1.5px solid "+C.pale,borderRadius:12,padding:".75rem 1rem",fontSize:".82rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:".75rem"}}>
@@ -2517,8 +2513,6 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           </button>}
         </div>
         {/* BOUTONS_FIN_DIAG */}
-        <p style={{ fontSize: ".65rem", color: C.gris, textAlign: "center" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
-        </>)}
         {onComplete&&<button onClick={onComplete} style={{width:"100%",background:"#2D5A3D",color:"white",border:"none",borderRadius:12,padding:".85rem",fontSize:".9rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginTop:"1rem"}}>Recevoir mon guide gratuit 🎁</button>}
         {showPopupInscriptionDiag&&(
           <div onClick={()=>setShowPopupInscriptionDiag(false)} style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:500,background:'rgba(0,0,0,.65)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
@@ -4392,6 +4386,21 @@ function OrdonnancePubliquePage({ordId}){
           );
         })}
         {ord?.conseil&&<div style={{background:'#3D1F0E',borderRadius:12,padding:'1rem',marginBottom:'1rem'}}><div style={{fontSize:'.6rem',fontWeight:700,color:'#C4A882',marginBottom:'.4rem'}}>CONSEIL PERSONNALISE</div><div style={{fontSize:'.8rem',color:'white',lineHeight:1.7}}>{ord.conseil}</div></div>}
+
+        {/* Boutique + lien VIP : toujours accessibles depuis la page partagée */}
+        <div style={{display:'flex',flexDirection:'column',gap:'.6rem',marginBottom:'1rem'}}>
+          {data.distribUid&&<button onClick={()=>window.open(window.location.origin+"?boutique="+data.distribUid,"_blank")}
+            style={{width:'100%',background:'white',border:'1.5px solid #E8DDD4',borderRadius:12,padding:'.75rem 1rem',fontSize:'.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',textAlign:'left',display:'flex',alignItems:'center',gap:'.75rem'}}>
+            <span style={{fontSize:'1.2rem'}}>🛍️</span>
+            <div><div style={{fontWeight:700,color:'#3D1F0E'}}>Découvrir tous les produits Mihi</div><div style={{fontSize:'.7rem',opacity:.7,fontWeight:400,color:'#3D2B1F'}}>Qui correspondent à ton profil</div></div>
+          </button>}
+          {(afficherVIP&&lienInscriptionMihi)&&<button onClick={()=>window.open(lienInscriptionMihi,"_blank")}
+            style={{width:'100%',background:'linear-gradient(135deg,#5A3829,#3D2020)',color:'white',border:'none',borderRadius:12,padding:'.75rem 1rem',fontSize:'.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',textAlign:'left',display:'flex',alignItems:'center',gap:'.75rem'}}>
+            <span style={{fontSize:'1.2rem'}}>👑</span>
+            <div><div style={{fontWeight:700}}>Créer un revenu avec ces produits</div><div style={{fontSize:'.7rem',opacity:.85,fontWeight:400}}>Découvrir l'opportunité Mihi</div></div>
+          </button>}
+        </div>
+
         <button onClick={()=>window.print()} style={{width:'100%',background:'#C49A8A',color:'white',border:'none',borderRadius:10,padding:'.7rem',fontSize:'.82rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Imprimer / Sauvegarder en PDF</button>
         <div style={{textAlign:'center',fontSize:'.62rem',color:'#888',marginTop:'1rem'}}>Blazing Dynasty x Mihi France</div>
       </div>

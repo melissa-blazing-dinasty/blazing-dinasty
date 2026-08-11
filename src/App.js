@@ -2006,7 +2006,8 @@ function App(){
   // ── MODE DIAGNOSTIC EXTERNE (cliente sans login) ──
   const urlParams = new URLSearchParams(window.location.search);
   const diagMode = urlParams.has("diag");
-  const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||"";
+  const diagUidFromPath = (window.location.pathname.match(/\/d\/([^/?]+)/)||[])[1] || "";
+  const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||diagUidFromPath||"";
 
   // ── MODE TUNNEL (vente/recrutement, visiteur sans login) ──
   const tunnelMode = urlParams.has("tunnel");
