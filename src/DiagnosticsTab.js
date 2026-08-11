@@ -112,19 +112,24 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
     const catSnap = await getDoc(doc(db,"admin","catalogue_mihi"));
     if(catSnap.exists()){
       const cat = catSnap.data();
+      console.log("🔑 DEBUG — CHAMPS RÉELS du document catalogue_mihi:", Object.keys(cat));
+      Object.entries(cat).forEach(([cle,val])=>{
+        const nb = Array.isArray(val) ? val.length : (val&&typeof val==="object" ? Object.keys(val).length : "(pas un tableau/objet)");
+        console.log(`🔑 DEBUG — champ "${cle}" → ${nb} entrées`);
+      });
       Object.values(cat).forEach(val=>{
         if(Array.isArray(val)) produits=[...produits,...val];
         else if(val&&typeof val==="object") produits=[...produits,...Object.values(val).filter(p=>p&&p.nom)];
       });
       produits = produits.filter(p=>p&&p.nom);
 
-      // Categories reelles du catalogue : corps / visage / makeup / parfums / sets / home / sante / cheveux
+      // Categories reelles du catalogue (noms EXACTS des champs Firestore) : corps / face / makeup / parfums / sets / home / health / hair
       const CATEGORIES_CATALOGUE = {
-        skincare:  ["visage"],
-        cheveux:   ["cheveux"],
+        skincare:  ["face"],
+        cheveux:   ["hair"],
         peaucorps: ["corps"],
         makeup:    ["makeup"],
-        sante:     ["sante"],
+        sante:     ["health"],
         parfum:    ["parfums"],
       };
       const typeKey = type==="skincare"?"skincare"
@@ -135,7 +140,8 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
         :type==="parfum"?"parfum"
         :null;
 
-      const catsVoulues = (typeKey && CATEGORIES_CATALOGUE[typeKey]) ? CATEGORIES_CATALOGUE[typeKey] : ["visage","corps","cheveux","makeup"];
+      const catsVoulues = (typeKey && CATEGORIES_CATALOGUE[typeKey]) ? CATEGORIES_CATALOGUE[typeKey] : ["face","corps","hair","makeup"];
+      console.log("🔍 DEBUG DIAGNOSTIC — type:", type, "| typeKey:", typeKey, "| catsVoulues:", catsVoulues);
 
       let produitsFiltres = [];
       catsVoulues.forEach(cle=>{
@@ -143,11 +149,14 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
         if(Array.isArray(val)) produitsFiltres = produitsFiltres.concat(val.filter(p=>p&&p.nom));
         else if(val && typeof val==="object") produitsFiltres = produitsFiltres.concat(Object.values(val).filter(p=>p&&p.nom));
       });
+      console.log("🔍 DEBUG — produits trouvés AVANT filtre rupture:", produitsFiltres.length, produitsFiltres.map(p=>p.nom));
       produitsFiltres = produitsFiltres.filter(p=>!p.rupture);
+      console.log("🔍 DEBUG — produits trouvés APRÈS filtre rupture:", produitsFiltres.length);
 
-      // Repli : si la categorie est vide, on reprend tout sauf sante/home/sets
+      // Repli : si la categorie est vide, on reprend tout sauf sets/home/enfants/hommes
       if(produitsFiltres.length===0){
-        ["visage","corps","cheveux","makeup"].forEach(cle=>{
+        console.warn("⚠️ DEBUG — catégorie vide après filtre rupture, BASCULE sur tout le catalogue (face+corps+hair+makeup) !");
+        ["face","corps","hair","makeup"].forEach(cle=>{
           const val = cat[cle];
           if(Array.isArray(val)) produitsFiltres = produitsFiltres.concat(val.filter(p=>p&&p.nom));
           else if(val && typeof val==="object") produitsFiltres = produitsFiltres.concat(Object.values(val).filter(p=>p&&p.nom));
@@ -157,11 +166,12 @@ async function genererOrdonnanceIA(type, reponses, nomClient) {
 
       if(produitsFiltres.length>90) produitsFiltres=produitsFiltres.slice(0,90);
       catalogueText=produitsFiltres.map((p,i)=>(i+1)+". "+p.nom+" - "+(p.prix!=null?p.prix:"?")+"EUR"+(p.prixVIP?" (prix VIP : "+p.prixVIP+"EUR)":"")).join("\n");
+      console.log("🔍 DEBUG — CATALOGUE ENVOYÉ À L'IA :\n"+catalogueText);
 
       // Complements alimentaires : liste separee, jamais melangee au catalogue principal
       if(typeKey==="skincare"||typeKey==="cheveux"||typeKey==="peaucorps"){
         let comp = [];
-        const valSante = cat["sante"];
+        const valSante = cat["health"];
         if(Array.isArray(valSante)) comp = valSante.filter(p=>p&&p.nom);
         else if(valSante && typeof valSante==="object") comp = Object.values(valSante).filter(p=>p&&p.nom);
         comp = comp.filter(p=>!p.rupture);
@@ -227,6 +237,70 @@ ${notesAdmin?`NOTES EXPERTES :\n${notesAdmin}`:""}
 Réponds UNIQUEMENT avec ce JSON strict, sans markdown :
 {"introduction":"2 phrases analysant le profil","budget":{"total":XX,"produits":[{"nom":"Nom EXACT du catalogue","prix":XX,"prixVIP":XX,"usage":"Matin ou Soir","benefice":"bénéfice concret","comment":"geste application"}],"routine":"routine complète matin → soir"},"bestseller":{"total":XX,"produits":[{"nom":"Nom EXACT","prix":XX,"prixVIP":XX,"usage":"usage","benefice":"bénéfice","comment":"geste"}],"routine":"routine complète"},"premium":{"total":XX,"produits":[{"nom":"Nom EXACT","prix":XX,"prixVIP":XX,"usage":"usage","benefice":"bénéfice","comment":"geste"}],"routine":"routine complète"},"conseil":"conseil personnalisé final"}`;
 
+  const rangePacks = {
+    budget:     { min:30, max:50,  label:"Pack Essentiel (\"budget\")",     consigne:"1 à 2 produits indispensables pour démarrer" },
+    bestseller: { min:50, max:80,  label:"Pack Recommandé (\"bestseller\")", consigne:"3 à 5 produits, une routine un peu plus complète" },
+    premium:    { min:90, max:115, label:"Pack Premium (\"premium\")",       consigne:"3 à 5 produits, la routine la plus complète, avec un produit premium" },
+  };
+
+  // Génère (ou régénère) UN SEUL pack isolément, avec une fourchette de prix précise — utilisé en filet de secours
+  const genererPackIsole = async(cle) => {
+    const r = rangePacks[cle];
+    const promptPack = `Tu es une experte beauté Mihi. Génère UNIQUEMENT le ${r.label} pour ${nomClient||"cette cliente"} suite à son diagnostic ${typeLabel}.
+
+Profil cliente (réponses au diagnostic) :
+${reponsesText}
+
+CATALOGUE PRODUITS MIHI (utilise UNIQUEMENT ces produits avec ces prix exacts, recopie le nom EXACT) :
+${catalogueText}
+${complementsText?`COMPLÉMENTS ALIMENTAIRES DISPONIBLES :\n${complementsText}\n`:""}
+RÈGLES : total entre ${r.min}€ et ${r.max}€. ${r.consigne}.${(isSkincareOuCheveux&&cle==="premium")?" Inclus OBLIGATOIREMENT un complément alimentaire de la liste ci-dessus si disponible.":""} N'invente jamais un produit ni un prix hors catalogue. Réponds UNIQUEMENT avec ce JSON strict, sans markdown, rien d'autre :
+{"total":XX,"produits":[{"nom":"Nom EXACT du catalogue","prix":XX,"prixVIP":XX,"usage":"Matin ou Soir","benefice":"bénéfice concret","comment":"geste application"}],"routine":"routine complète matin → soir"}`;
+    const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPack}]})});
+    const d2 = await r2.json();
+    if(d2.error) throw new Error(d2.error.message||"erreur API");
+    const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
+    return JSON.parse(t2);
+  };
+
+  // Vérifie les 3 packs un par un ; régénère individuellement (et seulement) ceux qui manquent ou sont vides
+  const garantirLesTroisPacks = async(resultat) => {
+    for(const cle of ["budget","bestseller","premium"]){
+      if(!resultat[cle] || !Array.isArray(resultat[cle].produits) || resultat[cle].produits.length===0){
+        console.warn(`Pack "${cle}" manquant ou vide, régénération isolée...`);
+        try { resultat[cle] = await genererPackIsole(cle); }
+        catch(e){ console.error(`Échec régénération pack "${cle}":`, e); }
+      }
+    }
+    return resultat;
+  };
+
+  // Recalcule le total réel (normal + VIP) de chaque pack à partir des VRAIS prix du catalogue,
+  // pour ne jamais afficher un total inventé/mal calculé par l'IA
+  const recalculerTotaux = (resultat) => {
+    if(!resultat) return resultat;
+    ["budget","bestseller","premium"].forEach(k=>{
+      const pack=resultat[k];
+      if(!pack||!Array.isArray(pack.produits)||pack.produits.length===0)return;
+      let total=0, totalVIP=0, tousOntVIP=true;
+      pack.produits.forEach(pr=>{
+        const match=produits.find(cp=>cp.nom===pr.nom);
+        const prixReel = (match&&match.prix!=null) ? match.prix : (parseFloat(pr.prix)||0);
+        pr.prix = prixReel;
+        total += parseFloat(prixReel)||0;
+        if(match&&match.prixVIP){
+          pr.prixVIP=match.prixVIP;
+          totalVIP+=match.prixVIP;
+        } else {
+          tousOntVIP=false;
+        }
+      });
+      pack.total = Math.round(total*100)/100;
+      if(tousOntVIP&&totalVIP>0) pack.totalVIP = Math.round(totalVIP*100)/100;
+    });
+    return resultat;
+  };
+
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -238,7 +312,7 @@ Réponds UNIQUEMENT avec ce JSON strict, sans markdown :
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 3000,
+        max_tokens: 4500,
         messages: [{ role: "user", content: prompt }]
       })
     });
@@ -250,36 +324,14 @@ Réponds UNIQUEMENT avec ce JSON strict, sans markdown :
       throw new Error("API: " + (data.error.message || JSON.stringify(data.error)));
     }
 
-    const text = data.content?.map(i => i.text || "").join("") || ""; console.log("REPONSE BRUTE:", text.substring(0,500));
+    const text = data.content?.map(i => i.text || "").join("") || "";
     console.log("=== RÉPONSE IA BRUTE ===", text);
     console.log("=== LONGUEUR ===", text.length);
     const clean = text.replace(/```json|```/g, "").trim();
 
-    // Injecte le prix VIP directement depuis le vrai catalogue (plus fiable que de compter sur l IA), et calcule le total VIP par pack
-    const injecterPrixVIP=(resultat)=>{
-      if(!resultat)return resultat;
-      ["budget","bestseller","premium"].forEach(k=>{
-        const pack=resultat[k];
-        if(!pack||!pack.produits)return;
-        let totalVIP=0;
-        let tousOntVIP=pack.produits.length>0;
-        pack.produits.forEach(pr=>{
-          const match=produits.find(cp=>cp.nom===pr.nom);
-          if(match&&match.prixVIP){
-            pr.prixVIP=match.prixVIP;
-            totalVIP+=match.prixVIP;
-          } else {
-            tousOntVIP=false;
-          }
-        });
-        if(tousOntVIP&&totalVIP>0)pack.totalVIP=Math.round(totalVIP*100)/100;
-      });
-      return resultat;
-    };
-
-    // Parse robuste : extraire les 4 blocs JSON indépendants
+    let resultatFinal;
     try {
-      return injecterPrixVIP(JSON.parse(clean));
+      resultatFinal = JSON.parse(clean);
     } catch(e) {
       // Si le JSON est tronqué, extraire ce qui est disponible champ par champ
       const extract = (key) => {
@@ -290,38 +342,19 @@ Réponds UNIQUEMENT avec ce JSON strict, sans markdown :
       };
       const introRx = clean.match(/"introduction"\s*:\s*"([^"]+)"/);
       const conseilRx = clean.match(/"conseil"\s*:\s*"([^"]+)"/);
-      const result = {
+      resultatFinal = {
         introduction: introRx?.[1] || "",
         budget: extract("budget"),
         bestseller: extract("bestseller"),
         premium: extract("premium"),
         conseil: conseilRx?.[1] || "",
       };
-      // Si un pack est manquant, on tente de le régénérer
-      if(!result.premium) {
-        console.warn("Pack premium manquant dans la réponse IA, tentative de récupération...");
-        result._incomplet = true;
-      }
-      // Si pack premium manquant, appel séparé pour le récupérer
-      if(!result.premium && catalogueText) {
-        try {
-          const promptPremium = `Tu es une experte beauté Mihi. Génère UNIQUEMENT le Pack Boost Premium pour ${nomClient||"cette cliente"} (${typeLabel}).
-
-Profil cliente: ${reponsesText}
-
-CATALOGUE MIHI:
-${catalogueText}
-
-RÈGLES : total entre 90€ et 115€ (idéalement autour de 100€). Utilise UNIQUEMENT les produits et prix exacts du catalogue ci-dessus. Si un produit indique un prix VIP, recopie-le dans le champ prixVIP.${isSkincareOuCheveux?" Inclus OBLIGATOIREMENT un complément alimentaire de la liste ci-dessus si disponible.":""} 3 à 5 produits. Réponds UNIQUEMENT avec ce JSON (rien d'autre):
-{"nom":"🚀 Pack Boost Premium","total":"XX.XX€","produits":[{"nom":"Nom EXACT du catalogue","prix":"XX.XX€","prixVIP":"XX.XX€","usage":"Matin/Soir","benefice":"1 phrase"}],"routine":"1 phrase"}`;;
-          const r2 = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:promptPremium}]})});
-          const d2 = await r2.json();
-          const t2 = d2.content?.map(i=>i.text||"").join("").replace(/```json|```/g,"").trim();
-          result.premium = JSON.parse(t2);
-        } catch(e2) { console.warn("Récupération pack premium échouée:", e2); }
-      }
-      return injecterPrixVIP(result);
     }
+
+    // Filet de secours généralisé : quoi qu'il arrive, les 3 packs doivent être présents
+    resultatFinal = await garantirLesTroisPacks(resultatFinal);
+    return recalculerTotaux(resultatFinal);
+
   } catch (fetchErr) {
     console.error("Erreur réseau / fetch:", fetchErr);
     throw fetchErr;

@@ -8158,8 +8158,8 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
               {classement.length>0&&(
                 <div>
                   <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>🏆 Classement</div>
-                  {classement.slice(0,5).map((p,i)=>(
-                    <div key={p.userName} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",borderBottom:i<classement.slice(0,5).length-1?`1px solid ${C.pale}30`:"none"}}>
+                  {classement.map((p,i)=>(
+                    <div key={p.userName} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",borderBottom:i<classement.length-1?`1px solid ${C.pale}30`:"none"}}>
                       <div style={{width:22,textAlign:"center",fontSize:i<3?"1rem":".7rem",flexShrink:0}}>{i<3?medals[i]:`${i+1}.`}</div>
                       <div style={{flex:1,fontSize:".76rem",fontWeight:p.userName===userName?700:400,color:p.userName===userName?C.rose:C.texte}}>{p.userName}{p.userName===userName?" ✓":""}</div>
                       <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",fontWeight:700,color:C.brun}}>{p.total} {c.unite}</div>
