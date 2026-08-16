@@ -45,7 +45,7 @@ export function AssistanteIATab({uid, userName, goToTab=()=>{}}){
         const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
         if(catSnap.exists()){
           const cat=catSnap.data();
-          allProduits=[...(cat.face||[]),...(cat.hair||[]),...(cat.health||[]),...(cat.corps||[]),...(cat.makeup||[]),...(cat.parfums||[])].slice(0,60);
+          allProduits=[...(cat.face||[]),...(cat.hair||[]),...(cat.health||[]),...(cat.corps||[]),...(cat.makeup||[]),...(cat.parfums||[])];
           catalogueText=allProduits.map(p=>`- ${p.nom} (${p.serie}) — ${p.prix}€`).join("\n");
         }
       }catch{}
@@ -72,7 +72,7 @@ export function AssistanteIATab({uid, userName, goToTab=()=>{}}){
               if(p.description) lignes.push(`[${cat}] ${p.titre}: ${p.description.slice(0,200)}`);
             });
           });
-          produitsFormationText=lignes.slice(0,80).join("\n");
+          produitsFormationText=lignes.join("\n");
         }
       }catch{}
 

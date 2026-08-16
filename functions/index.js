@@ -1016,16 +1016,16 @@ exports.envoyerLienConnexionClient = onCall({secrets: [resendApiKey]}, async (re
 // Genere des previews de liens personnalises pour WhatsApp/Facebook/Instagram
 exports.metaTags = onRequest(async (req, res) => {
   const url = req.query.url || '';
+  const urlPath = url.split('?')[0] || '';
   const params = new URLSearchParams(url.split('?')[1] || '');
+  const uidFromPath = (urlPath.match(/\/d\/([^/?]+)/) || [])[1] || '';
 
   let titre = 'Blazing Dynasty × Mihi France';
   let description = 'Decouvre une opportunite beaute unique en France.';
   const diagType = params.get('diag') || '';
+  const diagUidEarly = params.get('uid') || params.get('distrib') || uidFromPath;
   let image = 'https://blazing-dinasty-1fad9.web.app/meta-linkbio.png';
-  if (diagType === 'parfum') image = 'https://blazing-dinasty-1fad9.web.app/meta-parfum.png';
-  else if (diagType === 'skincare' || diagType === 'peauvisage') image = 'https://blazing-dinasty-1fad9.web.app/meta-skincare.png';
-  else if (diagType === 'silhouette' || diagType === 'peaucorps') image = 'https://blazing-dinasty-1fad9.web.app/meta-silhouette.png';
-  else if (diagType === 'sante') image = 'https://blazing-dinasty-1fad9.web.app/meta-sante.png';
+  if (diagUidEarly) image = 'https://blazing-dinasty-1fad9.web.app/meta-diagnostic-resultat.png';
   else if (params.get('recrutement')) image = 'https://blazing-dinasty-1fad9.web.app/meta-recrutement.png';
 
   try {
@@ -1033,7 +1033,7 @@ exports.metaTags = onRequest(async (req, res) => {
     const bioSlug = params.get('bio');
     const recrutSlug = params.get('recrutement');
     const boutiqueSlug = params.get('boutique');
-    const diagUid = params.get('uid') || params.get('distrib');
+    const diagUid = params.get('uid') || params.get('distrib') || uidFromPath;
 
     // Recuperer le prenom depuis Firestore selon le type
     let prenom = '';
@@ -1045,7 +1045,7 @@ exports.metaTags = onRequest(async (req, res) => {
         const snap = await db.collection('linkbio').doc(slug).get();
         if (snap.exists) {
           prenom = snap.data().prenom || '';
-          if (snap.data().photo) image = snap.data().photo;
+          if (bioSlug && snap.data().photo) image = snap.data().photo;
         }
       } catch {}
 
@@ -1058,7 +1058,7 @@ exports.metaTags = onRequest(async (req, res) => {
             const snap3 = await db.collection('linkbio').doc(uid).get();
             if (snap3.exists) {
               prenom = snap3.data().prenom || '';
-              if (snap3.data().photo) image = snap3.data().photo;
+              if (bioSlug && snap3.data().photo) image = snap3.data().photo;
             }
           }
         } catch {}
