@@ -2488,7 +2488,14 @@ function App(){
       {/* NAV */}
       <div style={{background:C.blanc,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 8px rgba(61,31,14,.06)"}}>
         {TABS.map(tb=>(
-          <button key={tb.id} onClick={()=>setTab(tb.id)}
+          <button key={tb.id} onClick={()=>{
+              setTab(tb.id);
+              if(tb.id==="formation"){
+                const nouveautesIds=Object.keys(formationNouveautes);
+                if(nouveautesIds.length===1)setFormationSubTab(nouveautesIds[0]);
+                else setFormationSubTab("");
+              }
+            }}
             style={{flex:"none",padding:".72rem .85rem",fontSize:".6rem",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase",color:tab===tb.id?C.brun:C.gris,border:"none",borderBottom:`2px solid ${tab===tb.id?C.rose:"transparent"}`,background:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",transition:"all .2s",position:"relative"}}>
             {(()=>{
               let n=0;
