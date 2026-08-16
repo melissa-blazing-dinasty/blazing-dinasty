@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/auth";
@@ -58,10 +58,18 @@ const creerSessionCheckoutFn = httpsCallable(fbFunctions,'creerSessionCheckout')
 async function saveFCMToken(uid) {
   if (!messaging) return;
   try {
+    let swReg;
+    if ("serviceWorker" in navigator) {
+      try {
+        swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+        await navigator.serviceWorker.ready;
+      } catch (e) { console.error("[saveFCMToken] Echec enregistrement service worker:", e); }
+    }
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return;
     const token = await getToken(messaging, {
-      vapidKey: "BFI7Uodh64p0EnejAc9xQ6y0hOS0w4CVA2QO-3mCxFmcm13orUtX7mYDwSRuaS8iDs8ovcClbKj2j2JzMi47sRE"
+      vapidKey: "BFI7Uodh64p0EnejAc9xQ6y0hOS0w4CVA2QO-3mCxFmcm13orUtX7mYDwSRuaS8iDs8ovcClbKj2j2JzMi47sRE",
+      serviceWorkerRegistration: swReg
     });
     if (token) {
       await setDoc(doc(db, "fcm_tokens", uid), { web: token });
@@ -683,6 +691,65 @@ export async function chargerDeclarations(){
     }
   }catch(e){}
   return res;
+}
+
+export async function chargerObjectifCommun(){
+  try{
+    const snap=await getDoc(doc(db,"objectif_commun","actuel"));
+    if(snap.exists())return snap.data();
+  }catch(e){ console.error("chargerObjectifCommun:", e); }
+  return null;
+}
+
+export async function chargerParticipantsObjectif(){
+  try{
+    const snap=await getDoc(doc(db,"objectif_commun","participants"));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerParticipantsObjectif:", e); }
+  return [];
+}
+
+export async function enregistrerObjectifCommun(obj){
+  await setDoc(doc(db,"objectif_commun","actuel"),obj);
+  await setDoc(doc(db,"objectif_commun","participants"),{liste:[]});
+}
+
+export async function ajouterPasObjectif(uid,nomAffiche){
+  const participants=await chargerParticipantsObjectif();
+  if(participants.some(p=>p.uid===uid))return participants;
+  const nouvelleListe=[...participants,{uid,nom:nomAffiche||"",date:Date.now()}];
+  await setDoc(doc(db,"objectif_commun","participants"),{liste:nouvelleListe});
+  return nouvelleListe;
+}
+
+export async function chargerSondages(){
+  const out = [];
+  try{
+    const snap = await getDocs(collection(db,"sondages","liste","items"));
+    snap.forEach(d=>out.push(d.data()));
+  }catch(e){ console.error("chargerSondages:", e); }
+  return out.sort((a,b)=>(b.creeLe||0)-(a.creeLe||0));
+}
+
+export async function chargerVotesSondages(){
+  const res = {};
+  try{
+    const snap = await getDocs(collection(db,"sondages","votes","items"));
+    snap.forEach(d=>{ res[d.id] = d.data().liste || []; });
+  }catch(e){ console.error("chargerVotesSondages:", e); }
+  return res;
+}
+
+export async function enregistrerSondage(s){
+  await setDoc(doc(db,"sondages","liste","items",s.id), s);
+}
+
+export async function voterSondage(sondageId, uid, choix){
+  const votesActuels = await chargerVotesSondages();
+  const liste = (votesActuels[sondageId]||[]).filter(v=>v.uid!==uid);
+  liste.push({uid, choix, votedLe:Date.now()});
+  await setDoc(doc(db,"sondages","votes","items",sondageId), {liste});
+  return liste;
 }
 
 export async function enregistrerChallenge(ch){
@@ -1603,6 +1670,8 @@ function App(){
   // â”€â”€ ANNONCES OFFICIELLES EQUIPE â”€â”€
   const[showAnnonce,setShowAnnonce]=useState(false);
   const[annonceData,setAnnonceData]=useState(null);
+  const[showInfosImportantes,setShowInfosImportantes]=useState(false);
+  const[showAnnonceAdminFlottant,setShowAnnonceAdminFlottant]=useState(false);
   useEffect(()=>{
     if(!userId||screen!=="app")return;
     const checkAnnonce=async()=>{
@@ -1617,6 +1686,7 @@ function App(){
           setAnnonceData(d);
           setShowAnnonce(true);
           try{localStorage.setItem("bd-annonce-seen",String(d.id));}catch{}
+          try{await setDoc(doc(db,"annonces_vues",String(d.id)),{vus:arrayUnion(userId)},{merge:true});}catch{}
         }
       }catch{}
     };
@@ -3835,6 +3905,24 @@ function App(){
           : <span style={{fontSize:"1.4rem"}}>👑</span>
         }
       </button>
+
+      {/* ── BOUTON FLOTTANT INFOS IMPORTANTES ── */}
+      <button onClick={()=>setShowInfosImportantes(p=>!p)}
+        style={{position:"fixed",bottom:"5rem",left:"1.2rem",width:56,height:56,borderRadius:"50%",background:C.brun,border:`2px solid ${C.or}`,boxShadow:"0 4px 20px rgba(61,31,14,.4)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,transition:"all .2s",padding:0,overflow:"hidden"}}>
+        {showInfosImportantes
+          ? <span style={{fontSize:"1rem",color:C.or,fontWeight:700}}>✕</span>
+          : <span style={{fontSize:"1.4rem"}}>📌</span>
+        }
+      </button>
+      {showInfosImportantes&&(
+        <InfosImportantesPanel
+          uid={userId}
+          nomAffiche={name}
+          isMelissa={userId==="melissa-da-silveira"}
+          onModifierAnnonce={()=>setShowAnnonceAdminFlottant(true)}
+        />
+      )}
+      {showAnnonceAdminFlottant&&<AnnonceAdminPopup uid={userId} onClose={()=>setShowAnnonceAdminFlottant(false)}/>}
 
       {/* ── POPUP BIENVENUE ── */}
       {showWelcome&&(
@@ -6634,16 +6722,40 @@ function PowerHourEndPopup({session, onClose}){
 }
 function AnnonceRecuePopup({annonce, onClose}){
   const urgent=!!annonce.urgente;
+  const[copie,setCopie]=useState(false);
+  const copierTexte=()=>{
+    navigator.clipboard.writeText(annonce.message||"").then(()=>{
+      setCopie(true);
+      setTimeout(()=>setCopie(false),2000);
+    }).catch(()=>{});
+  };
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
-      <div style={{background:C.blanc,borderRadius:20,width:"100%",maxWidth:420,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,.3)"}}>
-        <div style={{background:urgent?"#B8442F":`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:"1.5rem 1.2rem",textAlign:"center"}}>
+      <div style={{background:C.blanc,borderRadius:20,width:"100%",maxWidth:420,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{background:urgent?"#B8442F":`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:"1.5rem 1.2rem",textAlign:"center",borderRadius:"20px 20px 0 0"}}>
           <div style={{fontSize:"2.4rem",marginBottom:".4rem"}}>{annonce.icone||"\u{1F4E2}"}</div>
           <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.blanc}}>{annonce.titre||"Annonce de l equipe"}</div>
           {urgent&&<div style={{fontSize:".68rem",color:"#FFD9D0",marginTop:".3rem",fontWeight:700,letterSpacing:".05em",textTransform:"uppercase"}}>Important</div>}
         </div>
         <div style={{padding:"1.2rem"}}>
-          <p style={{fontSize:".84rem",color:C.texte,lineHeight:1.7,marginBottom:"1rem",whiteSpace:"pre-wrap"}}>{annonce.message}</p>
+          {annonce.video?(
+            <div style={{marginBottom:"1rem"}}>
+              <video src={annonce.video} controls style={{width:"100%",borderRadius:12,display:"block"}}/>
+            </div>
+          ):annonce.photo&&(
+            <div style={{marginBottom:"1rem"}}>
+              <img src={annonce.photo} alt="" style={{width:"100%",borderRadius:12,display:"block"}}/>
+              <a href={annonce.photo} download target="_blank" rel="noreferrer"
+                style={{display:"inline-flex",alignItems:"center",gap:".3rem",fontSize:".7rem",color:C.brun,marginTop:".4rem",textDecoration:"underline"}}>
+                💾 Enregistrer la photo
+              </a>
+            </div>
+          )}
+          <p style={{fontSize:".84rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem",whiteSpace:"pre-wrap"}}>{annonce.message}</p>
+          <button onClick={copierTexte}
+            style={{display:"flex",alignItems:"center",gap:".35rem",background:"none",border:"none",color:C.gris,fontSize:".72rem",fontFamily:"inherit",cursor:"pointer",padding:0,marginBottom:"1rem"}}>
+            {copie?"✓ Texte copié !":"📋 Copier le texte"}
+          </button>
           <button onClick={onClose}
             style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:12,padding:".9rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
             J'ai compris {"\u{2713}"}
@@ -6661,20 +6773,59 @@ function AnnonceAdminPopup({uid, onClose}){
   const[urgente,setUrgente]=useState(false);
   const[sending,setSending]=useState(false);
   const[sent,setSent]=useState(false);
+  const[media,setMedia]=useState(null);
+  const[mediaPreview,setMediaPreview]=useState(null);
+  const[mediaType,setMediaType]=useState(null); // "image" | "video"
+  const[uploadingMedia,setUploadingMedia]=useState(false);
+  const[datePublication,setDatePublication]=useState("");
+
+  const choisirMedia=(e)=>{
+    const f=e.target.files&&e.target.files[0];
+    if(!f)return;
+    const type=f.type.startsWith("video/")?"video":"image";
+    if(type==="video"&&f.size>50*1024*1024){alert("La vidéo est trop lourde (50 Mo max).");return;}
+    setMedia(f);
+    setMediaType(type);
+    const reader=new FileReader();
+    reader.onload=()=>setMediaPreview(reader.result);
+    reader.readAsDataURL(f);
+  };
 
   const publier=async()=>{
     if(!titre.trim()||!message.trim())return;
     setSending(true);
     try{
-      await setDoc(doc(db,"equipe","derniere-annonce"),{
-        id:Date.now(),
+      const id=Date.now();
+      let photoUrl="", videoUrl="";
+      if(media){
+        setUploadingMedia(true);
+        try{
+          const ext=mediaType==="video"?(media.name.split(".").pop()||"mp4"):"jpg";
+          const chemin=storageRef(storage,`annonces/${id}.${ext}`);
+          await uploadBytes(chemin,media);
+          const url=await getDownloadURL(chemin);
+          if(mediaType==="video")videoUrl=url; else photoUrl=url;
+        }catch{}
+        setUploadingMedia(false);
+      }
+      const estProgrammee=datePublication&&new Date(datePublication).getTime()>Date.now();
+      const donneesAnnonce={
+        id,
         titre:titre.trim(),
         message:message.trim(),
         icone,
         urgente,
+        photo:photoUrl,
+        video:videoUrl,
         creePar:uid,
-        creeLe:Date.now(),
-      });
+        creeLe:id,
+      };
+      if(estProgrammee){
+        await setDoc(doc(db,"annonces_programmees",String(id)),{...donneesAnnonce,publierLe:new Date(datePublication).getTime()});
+      }else{
+        await setDoc(doc(db,"equipe","derniere-annonce"),donneesAnnonce);
+        await setDoc(doc(db,"annonces_historique",String(id)),donneesAnnonce);
+      }
       setSent(true);
       setTimeout(()=>{onClose();},1500);
     }catch{}
@@ -6703,16 +6854,502 @@ function AnnonceAdminPopup({uid, onClose}){
           style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".7rem .85rem",fontFamily:"inherit",fontSize:".85rem",color:C.texte,marginBottom:".7rem",outline:"none"}}/>
         <textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="Ton message..."
           style={{width:"100%",minHeight:110,border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem",fontFamily:"inherit",fontSize:".82rem",color:C.texte,resize:"vertical",outline:"none",lineHeight:1.6,marginBottom:".8rem"}}/>
-        <label style={{display:"flex",alignItems:"center",gap:".5rem",fontSize:".78rem",color:C.brun,marginBottom:"1rem",cursor:"pointer"}}>
+        <label style={{display:"flex",alignItems:"center",gap:".5rem",fontSize:".78rem",color:C.brun,marginBottom:".8rem",cursor:"pointer"}}>
           <input type="checkbox" checked={urgente} onChange={e=>setUrgente(e.target.checked)}/>
           Marquer comme importante (mise en avant en rouge)
         </label>
+        <div style={{marginBottom:"1rem"}}>
+          <label style={{display:"inline-flex",alignItems:"center",gap:".4rem",fontSize:".76rem",fontWeight:600,color:C.brun,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .8rem",cursor:"pointer"}}>
+            📷 {mediaPreview?"Changer le média":"Ajouter une photo ou vidéo (optionnel)"}
+            <input type="file" accept="image/*,video/*" onChange={choisirMedia} style={{display:"none"}}/>
+          </label>
+          {mediaPreview&&(
+            <div style={{position:"relative",marginTop:".6rem",width:120}}>
+              {mediaType==="video"
+                ? <video src={mediaPreview} style={{width:120,height:120,objectFit:"cover",borderRadius:10,border:`1px solid ${C.pale}`}} muted/>
+                : <img src={mediaPreview} alt="Aperçu" style={{width:120,height:120,objectFit:"cover",borderRadius:10,border:`1px solid ${C.pale}`}}/>
+              }
+              <button onClick={()=>{setMedia(null);setMediaPreview(null);setMediaType(null);}}
+                style={{position:"absolute",top:-8,right:-8,width:24,height:24,borderRadius:"50%",background:C.brun,color:"white",border:"none",fontSize:".75rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+          )}
+        </div>
+        <div style={{marginBottom:"1rem"}}>
+          <label style={{display:"block",fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".35rem"}}>Programmer pour plus tard (optionnel)</label>
+          <input type="datetime-local" value={datePublication} onChange={e=>setDatePublication(e.target.value)}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem",fontFamily:"inherit",fontSize:".78rem",color:C.texte,outline:"none"}}/>
+          {datePublication&&new Date(datePublication).getTime()>Date.now()&&(
+            <div style={{fontSize:".68rem",color:C.gris,marginTop:".3rem"}}>📅 Sera publiée automatiquement le {new Date(datePublication).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>
+          )}
+        </div>
         <button onClick={publier} disabled={!titre.trim()||!message.trim()||sending||sent}
           style={{width:"100%",background:sent?C.vert:(titre.trim()&&message.trim())?C.brun:C.pale,color:(titre.trim()&&message.trim())?C.blanc:C.gris,border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:(titre.trim()&&message.trim())?"pointer":"default"}}>
-          {sent?"Envoyee a toute l equipe !":sending?"Envoi...":"Publier a toute l equipe ->"}
+          {sent?(datePublication&&new Date(datePublication).getTime()>Date.now()?"Annonce programmée !":"Envoyee a toute l equipe !"):uploadingMedia?"Envoi du média...":sending?"Envoi...":(datePublication&&new Date(datePublication).getTime()>Date.now()?"Programmer l'annonce →":"Publier a toute l equipe ->")}
         </button>
       </div>
     </div>
+  );
+}
+function SondageAdminPopup({uid, onClose}){
+  const[question,setQuestion]=useState("");
+  const[options,setOptions]=useState(["",""]);
+  const[multiChoix,setMultiChoix]=useState(false);
+  const[sending,setSending]=useState(false);
+  const[sent,setSent]=useState(false);
+
+  const modifierOption=(i,val)=>{
+    const copie=[...options];
+    copie[i]=val;
+    setOptions(copie);
+  };
+  const ajouterOption=()=>{ if(options.length<6)setOptions([...options,""]); };
+  const retirerOption=(i)=>{ if(options.length>2)setOptions(options.filter((_,idx)=>idx!==i)); };
+
+  const optionsValides=options.map(o=>o.trim()).filter(Boolean);
+  const pretAPublier=question.trim()&&optionsValides.length>=2;
+
+  const publier=async()=>{
+    if(!pretAPublier)return;
+    setSending(true);
+    try{
+      const id=String(Date.now());
+      await enregistrerSondage({
+        id,
+        question:question.trim(),
+        options:optionsValides.map((texte,i)=>({id:"opt"+i,texte})),
+        multiChoix,
+        actif:true,
+        creePar:uid,
+        creeLe:Date.now(),
+      });
+      setSent(true);
+      setTimeout(()=>{onClose();},1200);
+    }catch{}
+    setSending(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:"20px 20px 0 0",padding:"1.4rem",width:"100%",maxWidth:480,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🗳️ Nouveau sondage</div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer",padding:".2rem"}}>x</button>
+        </div>
+        <input value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ta question..."
+          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".7rem .85rem",fontFamily:"inherit",fontSize:".85rem",color:C.texte,marginBottom:".8rem",outline:"none"}}/>
+        <div style={{fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".5rem"}}>Options de réponse</div>
+        {options.map((opt,i)=>(
+          <div key={i} style={{display:"flex",gap:".4rem",marginBottom:".5rem",alignItems:"center"}}>
+            <input value={opt} onChange={e=>modifierOption(i,e.target.value)} placeholder={`Option ${i+1}`}
+              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .8rem",fontFamily:"inherit",fontSize:".82rem",color:C.texte,outline:"none"}}/>
+            {options.length>2&&(
+              <button onClick={()=>retirerOption(i)} style={{background:"none",border:"none",color:C.gris,fontSize:"1rem",cursor:"pointer",padding:".3rem"}}>✕</button>
+            )}
+          </div>
+        ))}
+        {options.length<6&&(
+          <button onClick={ajouterOption}
+            style={{background:"none",border:"none",color:C.brun,fontSize:".76rem",fontWeight:600,cursor:"pointer",padding:".2rem 0",marginBottom:".9rem",textDecoration:"underline"}}>
+            + Ajouter une option
+          </button>
+        )}
+        <label style={{display:"flex",alignItems:"center",gap:".5rem",fontSize:".78rem",color:C.brun,marginBottom:"1.1rem",cursor:"pointer"}}>
+          <input type="checkbox" checked={multiChoix} onChange={e=>setMultiChoix(e.target.checked)}/>
+          Autoriser plusieurs réponses par personne
+        </label>
+        <button onClick={publier} disabled={!pretAPublier||sending||sent}
+          style={{width:"100%",background:sent?C.vert:pretAPublier?C.brun:C.pale,color:pretAPublier?C.blanc:C.gris,border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:pretAPublier?"pointer":"default"}}>
+          {sent?"Sondage publié !":sending?"Publication...":"Publier le sondage →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SondageCard({sondage, votes, uid, isMelissa, onVoted}){
+  const monVote=votes.find(v=>v.uid===uid);
+  const[selection,setSelection]=useState(monVote?monVote.choix:[]);
+  const[voting,setVoting]=useState(false);
+  const dejaVote=!!monVote;
+  const totalVotes=votes.length;
+
+  const toggleOption=(optId)=>{
+    if(dejaVote||!sondage.actif)return;
+    if(sondage.multiChoix){
+      setSelection(p=>p.includes(optId)?p.filter(x=>x!==optId):[...p,optId]);
+    }else{
+      setSelection([optId]);
+    }
+  };
+
+  const confirmerVote=async()=>{
+    if(selection.length===0)return;
+    setVoting(true);
+    try{
+      const nouvellesListe=await voterSondage(sondage.id,uid,selection);
+      onVoted(sondage.id,nouvellesListe);
+    }catch{}
+    setVoting(false);
+  };
+
+  const compteParOption=(optId)=>votes.filter(v=>v.choix.includes(optId)).length;
+
+  const afficherResultats=dejaVote||!sondage.actif;
+
+  return(
+    <div style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem .9rem"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:".4rem",marginBottom:".6rem"}}>
+        <span style={{fontSize:"1rem"}}>🗳️</span>
+        <span style={{fontSize:".8rem",fontWeight:700,color:C.brun,flex:1}}>{sondage.question}</span>
+        {!sondage.actif&&<span style={{fontSize:".55rem",fontWeight:700,color:C.gris,background:C.pale,borderRadius:6,padding:".1rem .4rem",whiteSpace:"nowrap"}}>CLÔTURÉ</span>}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+        {sondage.options.map(opt=>{
+          const n=compteParOption(opt.id);
+          const pct=totalVotes>0?Math.round((n/totalVotes)*100):0;
+          const estMonChoix=selection.includes(opt.id);
+          if(afficherResultats){
+            return(
+              <div key={opt.id} style={{position:"relative",borderRadius:8,overflow:"hidden",background:C.blanc,border:`1px solid ${estMonChoix?C.brun:C.pale}`}}>
+                <div style={{position:"absolute",top:0,left:0,bottom:0,width:`${pct}%`,background:estMonChoix?C.brun+"30":C.pale+"80",transition:"width .4s"}}/>
+                <div style={{position:"relative",display:"flex",justifyContent:"space-between",padding:".45rem .6rem",fontSize:".76rem"}}>
+                  <span style={{color:C.texte,fontWeight:estMonChoix?700:400}}>{estMonChoix?"✓ ":""}{opt.texte}</span>
+                  <span style={{color:C.gris,fontWeight:600}}>{pct}% ({n})</span>
+                </div>
+              </div>
+            );
+          }
+          return(
+            <button key={opt.id} onClick={()=>toggleOption(opt.id)}
+              style={{textAlign:"left",background:estMonChoix?C.brun:C.blanc,color:estMonChoix?C.blanc:C.texte,border:`1px solid ${estMonChoix?C.brun:C.pale}`,borderRadius:8,padding:".5rem .7rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
+              {opt.texte}
+            </button>
+          );
+        })}
+      </div>
+      {!afficherResultats&&(
+        <button onClick={confirmerVote} disabled={selection.length===0||voting}
+          style={{width:"100%",marginTop:".6rem",background:selection.length>0?C.brun:C.pale,color:selection.length>0?C.blanc:C.gris,border:"none",borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:selection.length>0?"pointer":"default"}}>
+          {voting?"Envoi...":"Voter"}
+        </button>
+      )}
+      <div style={{fontSize:".62rem",color:C.gris,marginTop:".45rem",opacity:.75}}>{totalVotes} vote{totalVotes!==1?"s":""}</div>
+    </div>
+  );
+}
+
+function ObjectifCommunAdminPopup({uid, onClose}){
+  const[titre,setTitre]=useState("");
+  const[description,setDescription]=useState("");
+  const[objectifPas,setObjectifPas]=useState(20);
+  const[media,setMedia]=useState(null);
+  const[mediaPreview,setMediaPreview]=useState(null);
+  const[uploading,setUploading]=useState(false);
+  const[sending,setSending]=useState(false);
+  const[sent,setSent]=useState(false);
+
+  const choisirMedia=(e)=>{
+    const f=e.target.files&&e.target.files[0];
+    if(!f)return;
+    setMedia(f);
+    const reader=new FileReader();
+    reader.onload=()=>setMediaPreview(reader.result);
+    reader.readAsDataURL(f);
+  };
+
+  const pretAPublier=titre.trim()&&objectifPas>0;
+
+  const publier=async()=>{
+    if(!pretAPublier)return;
+    setSending(true);
+    try{
+      const id=Date.now();
+      let photoUrl="";
+      if(media){
+        setUploading(true);
+        try{
+          const chemin=storageRef(storage,`objectif_commun/${id}.jpg`);
+          await uploadBytes(chemin,media);
+          photoUrl=await getDownloadURL(chemin);
+        }catch{}
+        setUploading(false);
+      }
+      await enregistrerObjectifCommun({
+        id,
+        titre:titre.trim(),
+        description:description.trim(),
+        objectifPas:Number(objectifPas),
+        photo:photoUrl,
+        creePar:uid,
+        creeLe:id,
+      });
+      setSent(true);
+      setTimeout(()=>{onClose();},1200);
+    }catch{}
+    setSending(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:"20px 20px 0 0",padding:"1.4rem",width:"100%",maxWidth:480,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🎯 Objectif commun</div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer",padding:".2rem"}}>x</button>
+        </div>
+        <p style={{fontSize:".72rem",color:C.gris,marginBottom:"1rem",lineHeight:1.6}}>
+          Ça remplace l'objectif en cours (s'il y en a un). Chaque personne de l'équipe pourra cliquer une fois pour ajouter son pas.
+        </p>
+        <input value={titre} onChange={e=>setTitre(e.target.value)} placeholder="Titre de l'objectif"
+          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".7rem .85rem",fontFamily:"inherit",fontSize:".85rem",color:C.texte,marginBottom:".7rem",outline:"none"}}/>
+        <textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Décris l'objectif et la récompense à la clé..."
+          style={{width:"100%",minHeight:90,border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem",fontFamily:"inherit",fontSize:".82rem",color:C.texte,resize:"vertical",outline:"none",lineHeight:1.6,marginBottom:".8rem"}}/>
+        <div style={{marginBottom:".8rem"}}>
+          <label style={{display:"block",fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".4rem"}}>Nombre de pas pour atteindre l'objectif</label>
+          <input type="number" min="1" value={objectifPas} onChange={e=>setObjectifPas(e.target.value)}
+            style={{width:120,border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .8rem",fontFamily:"inherit",fontSize:".85rem",color:C.texte,outline:"none"}}/>
+        </div>
+        <div style={{marginBottom:"1.1rem"}}>
+          <label style={{display:"inline-flex",alignItems:"center",gap:".4rem",fontSize:".76rem",fontWeight:600,color:C.brun,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .8rem",cursor:"pointer"}}>
+            📷 {mediaPreview?"Changer la photo":"Ajouter une photo (optionnel)"}
+            <input type="file" accept="image/*" onChange={choisirMedia} style={{display:"none"}}/>
+          </label>
+          {mediaPreview&&(
+            <div style={{position:"relative",marginTop:".6rem",width:120}}>
+              <img src={mediaPreview} alt="Aperçu" style={{width:120,height:120,objectFit:"cover",borderRadius:10,border:`1px solid ${C.pale}`}}/>
+              <button onClick={()=>{setMedia(null);setMediaPreview(null);}}
+                style={{position:"absolute",top:-8,right:-8,width:24,height:24,borderRadius:"50%",background:C.brun,color:"white",border:"none",fontSize:".75rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+          )}
+        </div>
+        <button onClick={publier} disabled={!pretAPublier||sending||sent}
+          style={{width:"100%",background:sent?C.vert:pretAPublier?C.brun:C.pale,color:pretAPublier?C.blanc:C.gris,border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:pretAPublier?"pointer":"default"}}>
+          {sent?"Objectif publié !":uploading?"Envoi de la photo...":sending?"Publication...":"Lancer cet objectif →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ObjectifCommunCard({objectif, participants, uid, nomAffiche, isMelissa, onPasAjoute}){
+  const[ajout,setAjout]=useState(false);
+  const dejaParticipe=participants.some(p=>p.uid===uid);
+  const total=participants.length;
+  const cible=objectif.objectifPas||1;
+  const pct=Math.min(100,Math.round((total/cible)*100));
+  const atteint=total>=cible;
+
+  const ajouterPas=async()=>{
+    if(dejaParticipe||ajout)return;
+    setAjout(true);
+    try{
+      const nouvelleListe=await ajouterPasObjectif(uid,nomAffiche);
+      onPasAjoute(nouvelleListe);
+    }catch{}
+    setAjout(false);
+  };
+
+  return(
+    <div style={{background:atteint?"#F0F7ED":C.creme,border:`1px solid ${atteint?"#B8D9A5":C.pale}`,borderRadius:12,padding:".85rem .9rem"}}>
+      <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".4rem"}}>
+        <span style={{fontSize:"1rem"}}>{atteint?"🎉":"🎯"}</span>
+        <span style={{fontSize:".82rem",fontWeight:700,color:C.brun,flex:1}}>{objectif.titre}</span>
+      </div>
+      {objectif.photo&&<img src={objectif.photo} alt="" style={{width:"100%",borderRadius:8,marginBottom:".5rem",display:"block"}}/>}
+      {objectif.description&&<div style={{fontSize:".74rem",color:C.texte,lineHeight:1.55,marginBottom:".6rem",whiteSpace:"pre-wrap"}}>{objectif.description}</div>}
+      <div style={{background:C.pale+"60",borderRadius:8,height:14,overflow:"hidden",marginBottom:".35rem"}}>
+        <div style={{height:"100%",width:`${pct}%`,background:atteint?"#7FAF8A":C.brun,transition:"width .5s"}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.gris,marginBottom:".6rem"}}>
+        <span>{total} / {cible} pas</span>
+        <span>{pct}%</span>
+      </div>
+      {atteint?(
+        <div style={{textAlign:"center",fontSize:".76rem",fontWeight:700,color:"#5A8A5A",padding:".3rem 0"}}>Objectif atteint, bravo à toute l'équipe ! 🎉</div>
+      ):dejaParticipe?(
+        <div style={{textAlign:"center",fontSize:".72rem",color:C.gris,padding:".3rem 0"}}>✓ Tu as déjà ajouté ton pas</div>
+      ):(
+        <button onClick={ajouterPas} disabled={ajout}
+          style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          {ajout?"...":"➕ Ajouter mon pas !"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
+  const[flux,setFlux]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[sondages,setSondages]=useState(null);
+  const[votesSondages,setVotesSondages]=useState({});
+  const[showSondageAdmin,setShowSondageAdmin]=useState(false);
+  const[vuesParAnnonce,setVuesParAnnonce]=useState({});
+  const[objectif,setObjectif]=useState(null);
+  const[participantsObjectif,setParticipantsObjectif]=useState([]);
+  const[showObjectifAdmin,setShowObjectifAdmin]=useState(false);
+  const[programmees,setProgrammees]=useState([]);
+
+  const chargerProgrammees=async()=>{
+    if(!isMelissa)return;
+    try{
+      const snap=await getDocs(collection(db,"annonces_programmees"));
+      const liste=snap.docs.map(d=>d.data()).sort((a,b)=>(a.publierLe||0)-(b.publierLe||0));
+      setProgrammees(liste);
+    }catch{}
+  };
+
+  const annulerProgrammee=async(id)=>{
+    try{
+      await deleteDoc(doc(db,"annonces_programmees",String(id)));
+      setProgrammees(p=>p.filter(a=>String(a.id)!==String(id)));
+    }catch{}
+  };
+
+  const chargerSondagesEtVotes=async()=>{
+    try{
+      const[s,v]=await Promise.all([chargerSondages(),chargerVotesSondages()]);
+      setSondages(s.slice(0,10));
+      setVotesSondages(v);
+    }catch{setSondages([]);}
+  };
+
+  const chargerObjectif=async()=>{
+    try{
+      const[o,p]=await Promise.all([chargerObjectifCommun(),chargerParticipantsObjectif()]);
+      setObjectif(o);
+      setParticipantsObjectif(p);
+    }catch{}
+  };
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDocs(collection(db,"annonces_historique"));
+        let liste=snap.docs.map(d=>d.data()).sort((a,b)=>(b.creeLe||0)-(a.creeLe||0));
+        if(liste.length===0){
+          // Compatibilite : si aucune annonce archivee, on retombe sur la derniere annonce seule
+          try{
+            const snap2=await getDoc(doc(db,"equipe","derniere-annonce"));
+            if(snap2.exists()&&snap2.data().id)liste=[snap2.data()];
+          }catch{}
+        }
+        setFlux(liste.slice(0,30));
+        if(isMelissa){
+          try{
+            const snapVues=await getDocs(collection(db,"annonces_vues"));
+            const map={};
+            snapVues.forEach(d=>{map[d.id]=(d.data().vus||[]).length;});
+            setVuesParAnnonce(map);
+          }catch{}
+        }
+      }catch{setFlux([]);}
+      setLoading(false);
+      chargerSondagesEtVotes();
+      chargerObjectif();
+      chargerProgrammees();
+    })();
+  },[]);
+
+  const onVoted=(sondageId,nouvelleListe)=>{
+    setVotesSondages(p=>({...p,[sondageId]:nouvelleListe}));
+  };
+
+  return(
+    <>
+    <div style={{position:"fixed",bottom:"8rem",left:"1.2rem",width:300,maxWidth:"calc(100vw - 2.4rem)",background:C.blanc,borderRadius:16,boxShadow:"0 8px 32px rgba(61,31,14,.25)",border:`1px solid ${C.pale}`,zIndex:199,overflow:"hidden",maxHeight:"70vh",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.brun,padding:".85rem 1rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+        <span style={{fontSize:"1.3rem"}}>📌</span>
+        <div style={{fontSize:".72rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase"}}>Infos importantes</div>
+      </div>
+      <div style={{padding:"1rem",overflowY:"auto"}}>
+        {isMelissa&&(
+          <button onClick={onModifierAnnonce}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".8rem"}}>
+            ✏️ Nouvelle annonce
+          </button>
+        )}
+        {isMelissa&&programmees.length>0&&(
+          <div style={{marginBottom:".9rem"}}>
+            <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".4rem"}}>📅 Programmées</div>
+            <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+              {programmees.map(a=>(
+                <div key={a.id} style={{background:"#FFF8E8",border:"1px solid #E8D5A0",borderRadius:10,padding:".55rem .7rem",display:"flex",alignItems:"center",gap:".5rem"}}>
+                  <span style={{fontSize:".9rem"}}>{a.icone||"📢"}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:".74rem",fontWeight:700,color:C.brun,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.titre}</div>
+                    <div style={{fontSize:".62rem",color:C.gris}}>{a.publierLe?new Date(a.publierLe).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):""}</div>
+                  </div>
+                  <button onClick={()=>annulerProgrammee(a.id)}
+                    style={{background:"none",border:"none",color:C.gris,fontSize:".9rem",cursor:"pointer",padding:".2rem"}}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>Annonces de l'équipe</div>
+        {loading?(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
+        ):flux&&flux.length>0?(
+          <div style={{display:"flex",flexDirection:"column",gap:".6rem"}}>
+            {flux.map((a,i)=>(
+              <div key={a.id} style={{background:(i===0&&a.urgente)?"#FDF0ED":C.creme,border:`1px solid ${(i===0&&a.urgente)?"#E8B4A5":C.pale}`,borderRadius:12,padding:".8rem .9rem"}}>
+                <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
+                  <span style={{fontSize:"1.05rem"}}>{a.icone||"📢"}</span>
+                  <span style={{fontSize:".8rem",fontWeight:700,color:C.brun,flex:1}}>{a.titre}</span>
+                  {i===0&&<span style={{fontSize:".55rem",fontWeight:700,color:C.or,background:C.brun,borderRadius:6,padding:".1rem .4rem"}}>NOUVEAU</span>}
+                </div>
+                {a.video?(
+                  <video src={a.video} controls style={{width:"100%",borderRadius:8,margin:".4rem 0",display:"block"}}/>
+                ):a.photo&&(
+                  <img src={a.photo} alt="" style={{width:"100%",borderRadius:8,margin:".4rem 0",display:"block"}}/>
+                )}
+                <div style={{fontSize:".76rem",color:C.texte,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.message}</div>
+                <div style={{fontSize:".6rem",color:C.gris,marginTop:".35rem",opacity:.7,display:"flex",justifyContent:"space-between"}}>
+                  <span>{a.creeLe?new Date(a.creeLe).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):""}</span>
+                  {isMelissa&&<span>👁 {vuesParAnnonce[String(a.id)]||0} vue{(vuesParAnnonce[String(a.id)]||0)!==1?"s":""}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ):(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Aucune annonce pour le moment.</div>
+        )}
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",margin:"1rem 0 .5rem"}}>Objectif commun</div>
+        {isMelissa&&(
+          <button onClick={()=>setShowObjectifAdmin(true)}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+            🎯 {objectif?"Modifier l'objectif":"Lancer un objectif"}
+          </button>
+        )}
+        {objectif?(
+          <ObjectifCommunCard objectif={objectif} participants={participantsObjectif} uid={uid} nomAffiche={nomAffiche} isMelissa={isMelissa}
+            onPasAjoute={(nouvelleListe)=>setParticipantsObjectif(nouvelleListe)}/>
+        ):(
+          <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0"}}>Aucun objectif pour le moment.</div>
+        )}
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",margin:"1rem 0 .5rem"}}>Sondages</div>
+        {isMelissa&&(
+          <button onClick={()=>setShowSondageAdmin(true)}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+            🗳️ Créer un sondage
+          </button>
+        )}
+        {sondages===null?(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
+        ):sondages.length>0?(
+          <div style={{display:"flex",flexDirection:"column",gap:".6rem"}}>
+            {sondages.map(s=>(
+              <SondageCard key={s.id} sondage={s} votes={votesSondages[s.id]||[]} uid={uid} isMelissa={isMelissa} onVoted={onVoted}/>
+            ))}
+          </div>
+        ):(
+          <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0"}}>Aucun sondage pour le moment.</div>
+        )}
+      </div>
+    </div>
+    {showSondageAdmin&&<SondageAdminPopup uid={uid} onClose={()=>{setShowSondageAdmin(false);chargerSondagesEtVotes();}}/>}
+    {showObjectifAdmin&&<ObjectifCommunAdminPopup uid={uid} onClose={()=>{setShowObjectifAdmin(false);chargerObjectif();}}/>}
+    </>
   );
 }
 function NouveauChallengePopup({challenge, onClose}){
@@ -7733,7 +8370,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
   const[challenges,setChallenges]=useState([]);
   const[loading,setLoading]=useState(true);
   const[showCreate,setShowCreate]=useState(false);
-  const[form,setForm]=useState({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
+  const[form,setForm]=useState({titre:"",description:"",type:"flash",dureeHeures:"48",dateFinExacte:"",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
   const[equipes,setEquipes]=useState([]);
   const[declarations,setDeclarations]=useState({});
   const[declareInput,setDeclareInput]=useState({});
@@ -7801,7 +8438,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
     const nouveau={
       id,titre:form.titre.trim(),description:form.description.trim(),
       type:form.type,
-      deadline:form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null,
+      deadline:form.dateFinExacte?new Date(form.dateFinExacte).getTime():(form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null),
       objectif:form.type==="action"?0:(+form.objectif||0),unite:form.type==="action"?"actions":form.unite,
       cadeau:form.cadeau.trim(),cadeauImage:form.cadeauImage.trim(),
       actions:form.type==="action"?form.actionsListe.filter(a=>a.trim()).map((label,i)=>({id:"a"+i,label:label.trim()})):[],
@@ -7850,7 +8487,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
       }));
     }catch(e){console.error("notif challenge msg error",e);}
     setShowCreate(false);
-    setForm({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
+    setForm({titre:"",description:"",type:"flash",dureeHeures:"48",dateFinExacte:"",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
   };
 
   const declarer=async(challengeId,amount,unite)=>{
@@ -7889,6 +8526,29 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
     const nomCh=(ch&&ch.titre)||'ce challenge';
     if(!window.confirm('Supprimer definitivement : '+nomCh+' ?\n\nCette action est irreversible et concerne toute l equipe.'))return;
     await effacerChallenge(id);
+    rafraichirListe(await chargerChallenges());
+  };
+
+  const[editDeadlineId,setEditDeadlineId]=useState(null);
+  const[editDeadlineValue,setEditDeadlineValue]=useState("");
+
+  const ouvrirEditDeadline=(c)=>{
+    setEditDeadlineId(c.id);
+    if(c.deadline){
+      const d=new Date(c.deadline);
+      const pad=n=>String(n).padStart(2,"0");
+      setEditDeadlineValue(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    }else{
+      setEditDeadlineValue("");
+    }
+  };
+
+  const enregistrerNouvelleDeadline=async()=>{
+    const ch=challenges.find(x=>x.id===editDeadlineId);
+    if(!ch)return;
+    const nouvelleDeadline=editDeadlineValue?new Date(editDeadlineValue).getTime():null;
+    await enregistrerChallenge({...ch,deadline:nouvelleDeadline});
+    setEditDeadlineId(null);
     rafraichirListe(await chargerChallenges());
   };
 
@@ -7941,6 +8601,13 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
               ))}
             </div>
           )}
+
+          {/* Date de fin precise (facultatif, remplace la duree/type par defaut) */}
+          <div style={{marginBottom:".5rem"}}>
+            <label style={{fontSize:".68rem",color:C.gris,display:"block",marginBottom:".25rem"}}>Ou choisir une date de fin précise (optionnel, remplace la durée ci-dessus) :</label>
+            <input type="datetime-local" value={form.dateFinExacte||""} onChange={e=>setForm(p=>({...p,dateFinExacte:e.target.value}))}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .55rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          </div>
 
           {form.type!=="action"?(
             <div>
@@ -8062,13 +8729,37 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:".2rem",flexShrink:0,marginLeft:".5rem"}}>
                   {c.deadline&&<Countdown deadline={c.deadline}/>}
-                  {depuisEspaceChef&&(c.createdByUid?c.createdByUid===uid:c.createdBy===userName)&&<button onClick={()=>supprimer(c.id)}
-                    style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:5,padding:".18rem .4rem",color:"rgba(255,255,255,.6)",cursor:"pointer",fontSize:".6rem",fontFamily:"inherit"}}>
-                    ✕
-                  </button>}
+                  <div style={{display:"flex",gap:".3rem"}}>
+                    {depuisEspaceChef&&(c.createdByUid?c.createdByUid===uid:c.createdBy===userName)&&<button onClick={()=>ouvrirEditDeadline(c)}
+                      style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:5,padding:".18rem .4rem",color:"rgba(255,255,255,.8)",cursor:"pointer",fontSize:".62rem",fontFamily:"inherit"}}>
+                      ✏️
+                    </button>}
+                    {depuisEspaceChef&&(c.createdByUid?c.createdByUid===uid:c.createdBy===userName)&&<button onClick={()=>supprimer(c.id)}
+                      style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:5,padding:".18rem .4rem",color:"rgba(255,255,255,.6)",cursor:"pointer",fontSize:".6rem",fontFamily:"inherit"}}>
+                      ✕
+                    </button>}
+                  </div>
                 </div>
               </div>
             </div>
+            {editDeadlineId===c.id&&(
+              <div style={{padding:".7rem 1rem",background:C.creme,borderTop:`1px solid ${C.pale}`,display:"flex",gap:".4rem",alignItems:"center",flexWrap:"wrap"}}>
+                <input type="datetime-local" value={editDeadlineValue} onChange={e=>setEditDeadlineValue(e.target.value)}
+                  style={{flex:1,minWidth:170,border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .5rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,outline:"none"}}/>
+                <button onClick={enregistrerNouvelleDeadline}
+                  style={{background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".4rem .7rem",fontSize:".74rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                  ✓ Enregistrer
+                </button>
+                <button onClick={()=>{setEditDeadlineValue("");}}
+                  style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .6rem",fontSize:".7rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                  Sans date de fin
+                </button>
+                <button onClick={()=>setEditDeadlineId(null)}
+                  style={{background:"none",border:"none",fontSize:".7rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",padding:".4rem"}}>
+                  Annuler
+                </button>
+              </div>
+            )}
 
             <div style={{padding:".85rem 1rem"}}>
               {/* Barre de progression */}

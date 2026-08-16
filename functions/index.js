@@ -51,6 +51,29 @@ exports.notifSoir = onSchedule({ schedule: "30 20 * * *", timeZone: "Europe/Pari
   } catch(e) { console.error("notifSoir error", e); }
 });
 
+// Rappel d'encouragement chaleureux apres plusieurs jours sans connexion (distinct du rappel quotidien notifSoir)
+exports.rappelEncouragementInactivite = onSchedule({ schedule: "0 10 * * *", timeZone: "Europe/Paris" }, async () => {
+  const SEUIL_JOURS = 5; // nombre de jours d'inactivite avant le message d'encouragement
+  const MESSAGES = [
+    "On ne t'a pas vue depuis un moment, ton equipe pense a toi ! Reviens quand tu veux, on est la 💛",
+    "Une petite pause ? Pas de souci du tout, on t'attend avec plaisir sur l'appli des que tu es prete 🌸",
+    "Ta place dans l'equipe compte enormement. Reviens jeter un oeil, il y a surement du nouveau ✨",
+  ];
+  try {
+    const today = new Date();
+    const usersSnap = await db.collection("users").get();
+    for (const doc of usersSnap.docs) {
+      const lastLogin = doc.data()["db-last-login"];
+      if (!lastLogin) continue;
+      const diffJours = Math.floor((today - new Date(lastLogin)) / 86400000);
+      if (diffJours === SEUIL_JOURS) {
+        const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+        await sendNotifToUid(doc.id, "On pense à toi 💛", msg);
+      }
+    }
+  } catch(e) { console.error("rappelEncouragementInactivite error", e); }
+});
+
 exports.notifReco = onDocumentUpdated("users/{uid}", async (event) => {
   try {
     const before = event.data.before.data();
@@ -65,6 +88,47 @@ exports.notifReco = onDocumentUpdated("users/{uid}", async (event) => {
       await sendNotifToUid(uid, "Nouvelle recommandation !", msg);
     }
   } catch(e) { console.error("notifReco error", e); }
+});
+
+// Felicitations automatiques a chaque nouvelle vente enregistree (db-clients)
+exports.notifNouvelleVente = onDocumentUpdated("users/{uid}", async (event) => {
+  try {
+    const uid = event.params.uid;
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    const clientsAvant = before["db-clients"] ? JSON.parse(before["db-clients"]) : [];
+    const clientsApres = after["db-clients"] ? JSON.parse(after["db-clients"]) : [];
+    const idsAvant = new Set();
+    clientsAvant.forEach(c => (c.commandes || []).forEach(cmd => idsAvant.add(cmd.id)));
+    const nouvellesCommandes = [];
+    clientsApres.forEach(c => (c.commandes || []).forEach(cmd => {
+      if (!idsAvant.has(cmd.id)) nouvellesCommandes.push({ cmd, client: c });
+    }));
+    for (const { cmd, client } of nouvellesCommandes) {
+      const montant = cmd.montant ? parseFloat(cmd.montant) : null;
+      const prenomClient = client.prenom || "une cliente";
+      const msg = montant
+        ? `Nouvelle vente enregistree pour ${prenomClient} : ${montant}€. Continue comme ca !`
+        : `Nouvelle vente enregistree pour ${prenomClient} ! Continue comme ca !`;
+      await sendNotifToUid(uid, "Bravo, nouvelle vente ! 🎉", msg);
+    }
+  } catch(e) { console.error("notifNouvelleVente error", e); }
+});
+
+// Felicitations automatiques a chaque nouvelle recrue (equipe/annuaire, champ marraine)
+exports.notifNouvelleRecrue = onDocumentUpdated("equipe/annuaire", async (event) => {
+  try {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    const membresAvant = before.membres || {};
+    const membresApres = after.membres || {};
+    for (const [uidRecrue, info] of Object.entries(membresApres)) {
+      if (!membresAvant[uidRecrue] && info && info.marraine) {
+        const prenomRecrue = info.prenom || "une nouvelle distributrice";
+        await sendNotifToUid(info.marraine, "Bravo, nouvelle recrue ! 🎉", `${prenomRecrue} vient de rejoindre l'equipe grace a toi. Belle energie !`);
+      }
+    }
+  } catch(e) { console.error("notifNouvelleRecrue error", e); }
 });
 
 exports.notifDiag = onDocumentCreated("diag_ex/{docId}", async (event) => {
@@ -345,6 +409,24 @@ exports.notifPowerHourFin = onSchedule({ schedule: "* * * * *", timeZone: "Europ
       await ref.set({finNotifiee: true}, {merge: true});
     }
   } catch(e) { console.error("notifPowerHourFin error", e); }
+});
+
+// Publie automatiquement les annonces programmees des que leur date arrive (verifie toutes les 5 minutes)
+exports.publierAnnoncesProgrammees = onSchedule({ schedule: "*/5 * * * *", timeZone: "Europe/Paris" }, async () => {
+  try {
+    const snap = await db.collection("annonces_programmees").get();
+    const now = Date.now();
+    for (const docSnap of snap.docs) {
+      const a = docSnap.data();
+      if (a.publierLe && a.publierLe <= now) {
+        const donneesAnnonce = { ...a };
+        delete donneesAnnonce.publierLe;
+        await db.collection("equipe").doc("derniere-annonce").set(donneesAnnonce);
+        await db.collection("annonces_historique").doc(String(a.id)).set(donneesAnnonce);
+        await docSnap.ref.delete();
+      }
+    }
+  } catch(e) { console.error("publierAnnoncesProgrammees error", e); }
 });
 
 exports.notifAnnonceEquipe = onDocumentWritten("equipe/derniere-annonce", async (event) => {
