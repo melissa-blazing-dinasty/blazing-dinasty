@@ -840,6 +840,11 @@ export async function enregistrerSondage(s){
   await setDoc(doc(db,"sondages","liste","items",s.id), s);
 }
 
+export async function supprimerSondage(id){
+  await deleteDoc(doc(db,"sondages","liste","items",String(id)));
+  try{ await deleteDoc(doc(db,"sondages","votes","items",String(id))); }catch{}
+}
+
 export async function voterSondage(sondageId, uid, choix){
   const votesActuels = await chargerVotesSondages();
   const liste = (votesActuels[sondageId]||[]).filter(v=>v.uid!==uid);
@@ -7099,10 +7104,11 @@ function SondageAdminPopup({uid, onClose}){
   );
 }
 
-function SondageCard({sondage, votes, uid, isMelissa, onVoted}){
+function SondageCard({sondage, votes, uid, isMelissa, onVoted, onSupprime}){
   const monVote=votes.find(v=>v.uid===uid);
   const[selection,setSelection]=useState(monVote?monVote.choix:[]);
   const[voting,setVoting]=useState(false);
+  const[suppression,setSuppression]=useState(false);
   const dejaVote=!!monVote;
   const totalVotes=votes.length;
   const dateFinDepassee=sondage.dateFin&&Date.now()>sondage.dateFin;
@@ -7127,6 +7133,16 @@ function SondageCard({sondage, votes, uid, isMelissa, onVoted}){
     setVoting(false);
   };
 
+  const supprimer=async()=>{
+    if(!window.confirm(`Supprimer definitivement le sondage "${sondage.question}" ?\n\nCette action est irreversible.`))return;
+    setSuppression(true);
+    try{
+      await supprimerSondage(sondage.id);
+      onSupprime(sondage.id);
+    }catch{}
+    setSuppression(false);
+  };
+
   const compteParOption=(optId)=>votes.filter(v=>v.choix.includes(optId)).length;
 
   const afficherResultats=dejaVote||!estActif;
@@ -7137,6 +7153,12 @@ function SondageCard({sondage, votes, uid, isMelissa, onVoted}){
         <span style={{fontSize:"1rem"}}>🗳️</span>
         <span style={{fontSize:".8rem",fontWeight:700,color:C.brun,flex:1}}>{sondage.question}</span>
         {!estActif&&<span style={{fontSize:".55rem",fontWeight:700,color:C.gris,background:C.pale,borderRadius:6,padding:".1rem .4rem",whiteSpace:"nowrap"}}>CLÔTURÉ</span>}
+        {isMelissa&&(
+          <button onClick={supprimer} disabled={suppression}
+            style={{background:"none",border:"none",fontSize:".78rem",cursor:"pointer",padding:".1rem .2rem",opacity:.6,flexShrink:0}}>
+            {suppression?"...":"🗑️"}
+          </button>
+        )}
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
         {sondage.options.map(opt=>{
@@ -7613,7 +7635,8 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
         ):sondages.length>0?(
           <div style={{display:"flex",flexDirection:"column",gap:".6rem",marginBottom:"1.1rem"}}>
             {sondages.map(s=>(
-              <SondageCard key={s.id} sondage={s} votes={votesSondages[s.id]||[]} uid={uid} isMelissa={isMelissa} onVoted={onVoted}/>
+              <SondageCard key={s.id} sondage={s} votes={votesSondages[s.id]||[]} uid={uid} isMelissa={isMelissa} onVoted={onVoted}
+                onSupprime={(id)=>setSondages(p=>p.filter(x=>x.id!==id))}/>
             ))}
           </div>
         ):(
