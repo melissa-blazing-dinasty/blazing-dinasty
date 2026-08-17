@@ -694,13 +694,25 @@ export async function chargerDeclarations(){
 }
 
 // ═══════════ ENTRAIDE LIENS (systeme independant, collections dediees) ═══════════
-export async function chargerLiensDuJour(){
-  const date=todayLocalStr();
+export async function chargerLiensDuJour(date=todayLocalStr()){
   try{
     const snap=await getDoc(doc(db,"entraide_liens","liens_du_jour","items",date));
     if(snap.exists())return snap.data().liste||[];
   }catch(e){ console.error("chargerLiensDuJour:", e); }
   return [];
+}
+
+// Recupere les liens des 2 jours precedents (pour le rattrapage), en ne gardant que ceux encore dans la fenetre de 72h
+export async function chargerLiensRattrapage(){
+  const resultats=[];
+  for(let i=1;i<=2;i++){
+    const dd=new Date(); dd.setDate(dd.getDate()-i);
+    const cle=dd.toISOString().slice(0,10);
+    const liste=await chargerLiensDuJour(cle);
+    liste.forEach(l=>resultats.push({...l,dateSource:cle}));
+  }
+  const limite=Date.now()-72*3600000;
+  return resultats.filter(l=>l.ts>=limite);
 }
 
 export async function chargerActiviteEntraide(uid){
@@ -748,17 +760,27 @@ export async function ajouterLienEntraide(uid,nom,url){
   return liste;
 }
 
-export async function boosterLienEntraide(boosterUid,lienId){
+export async function boosterLienEntraide(boosterUid,lienId,dateSource=todayLocalStr()){
   const date=todayLocalStr();
-  const liste=await chargerLiensDuJour();
+  const liste=await chargerLiensDuJour(dateSource);
   const lien=liste.find(l=>l.id===lienId);
   if(!lien||lien.boostePar.includes(boosterUid))return liste;
   lien.boostePar=[...lien.boostePar,boosterUid];
-  await setDoc(doc(db,"entraide_liens","liens_du_jour","items",date),{liste});
+  await setDoc(doc(db,"entraide_liens","liens_du_jour","items",dateSource),{liste});
   const hist=await chargerActiviteEntraide(boosterUid);
   hist[date]={postes:hist[date]?.postes||0,boosts:(hist[date]?.boosts||0)+1};
   await setDoc(doc(db,"entraide_liens","activite","items",boosterUid),{historique:hist});
   return liste;
+}
+
+export async function supprimerLienEntraide(uid,lienId,dateSource=todayLocalStr()){
+  const liste=await chargerLiensDuJour(dateSource);
+  const nouvelleListe=liste.filter(l=>l.id!==lienId);
+  await setDoc(doc(db,"entraide_liens","liens_du_jour","items",dateSource),{liste:nouvelleListe});
+  const hist=await chargerActiviteEntraide(uid);
+  if(hist[dateSource])hist[dateSource]={...hist[dateSource],postes:Math.max(0,(hist[dateSource].postes||0)-1)};
+  await setDoc(doc(db,"entraide_liens","activite","items",uid),{historique:hist});
+  return nouvelleListe;
 }
 
 export async function suspendreEntraide(uid,nom,parQui){
@@ -7336,6 +7358,7 @@ function ObjectifCommunCard({objectif, participants, uid, nomAffiche, isMelissa,
 
 function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
   const[liens,setLiens]=useState(null);
+  const[rattrapage,setRattrapage]=useState([]);
   const[historique,setHistorique]=useState({});
   const[suspendus,setSuspendus]=useState([]);
   const[loading,setLoading]=useState(true);
@@ -7343,10 +7366,12 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
   const[nouveauUrl,setNouveauUrl]=useState("");
   const[envoi,setEnvoi]=useState(false);
   const[showRegles,setShowRegles]=useState(false);
+  const[showRattrapage,setShowRattrapage]=useState(false);
 
   const recharger=async()=>{
-    const[l,h,s]=await Promise.all([chargerLiensDuJour(),chargerActiviteEntraide(uid),chargerSuspendusEntraide()]);
+    const[l,r,h,s]=await Promise.all([chargerLiensDuJour(),chargerLiensRattrapage(),chargerActiviteEntraide(uid),chargerSuspendusEntraide()]);
     setLiens(l);
+    setRattrapage(r);
     setHistorique(h);
     setSuspendus(s);
     setLoading(false);
@@ -7361,8 +7386,12 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
   const mesLiensAujourdhui=(liens||[]).filter(l=>l.uid===uid);
   const autresLiensTries=(liens||[]).filter(l=>l.uid!==uid).sort((a,b)=>a.boostePar.length-b.boostePar.length);
   const autresLiens=autresLiensTries;
+  const rattrapageTries=rattrapage.filter(l=>l.uid!==uid).sort((a,b)=>a.boostePar.length-b.boostePar.length);
 
-  const PLAFOND_SECURITE=5;
+  const totalLiensAujourdhui=(liens||[]).length;
+  const totalBoostsAujourdhui=(liens||[]).reduce((s,l)=>s+l.boostePar.length,0);
+
+  const PLAFOND_SECURITE=3;
   const totalLiensDisponibles=autresLiens.length;
   const aToutBooste=totalLiensDisponibles>0&&autresLiens.every(l=>l.boostePar.includes(uid));
   const quotaJour=aToutBooste?Infinity:Math.min(PLAFOND_SECURITE,1+jhui.boosts);
@@ -7395,11 +7424,13 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
   };
 
   const booster=async(lien)=>{
-    if(lien.boostePar.includes(uid))return;
     window.open(lien.url,"_blank");
+    if(lien.boostePar.includes(uid))return;
+    const dateCible=lien.dateSource||today;
     try{
-      const nouvelleListe=await boosterLienEntraide(uid,lien.id);
-      setLiens(nouvelleListe);
+      const nouvelleListe=await boosterLienEntraide(uid,lien.id,dateCible);
+      if(dateCible===today)setLiens(nouvelleListe);
+      else setRattrapage(p=>p.map(l=>l.id===lien.id?{...l,boostePar:[...l.boostePar,uid]}:l));
       const h=await chargerActiviteEntraide(uid);
       setHistorique(h);
     }catch{}
@@ -7419,10 +7450,11 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
         <div style={{background:"#FFF8E8",borderBottom:`1px solid ${C.pale}`,padding:".8rem 1rem",fontSize:".72rem",color:C.brun,lineHeight:1.65}}>
           <div style={{fontWeight:700,marginBottom:".4rem"}}>📜 Comment ça marche ?</div>
           <div>✨ <strong>1 lien gratuit par jour</strong> pour tout le monde.</div>
-          <div style={{marginTop:".3rem"}}>🔓 <strong>+1 lien</strong> pour chaque personne que tu boostes ce jour-là (jusqu'à 5 max).</div>
+          <div style={{marginTop:".3rem"}}>🔓 <strong>+1 lien</strong> pour chaque personne que tu boostes ce jour-là (jusqu'à 3 max).</div>
           <div style={{marginTop:".3rem"}}>🌟 Si tu boostes <strong>absolument tout le monde</strong> dans la journée, le plafond de 5 saute complètement.</div>
           <div style={{marginTop:".3rem"}}>✅ Un "boost" = cliquer réellement sur le lien depuis ce panneau (compté automatiquement, une seule fois par lien).</div>
           <div style={{marginTop:".3rem"}}>🔴 Les liens jamais boostés remontent en haut de la liste, pour que personne ne soit oublié.</div>
+          <div style={{marginTop:".3rem"}}>📅 Les liens restent boostables pendant <strong>72h</strong> — retrouve-les dans "Rattrapage" si tu n'as pas eu le temps le jour même.</div>
           <div style={{marginTop:".3rem"}}>🔒 Si tu partages 2 jours de suite <strong>sans jamais booster personne</strong>, ton lien gratuit se bloque le temps que tu boostes quelqu'un.</div>
           <div style={{marginTop:".3rem"}}>⏸️ En cas de triche signalée, {isMelissa?"tu peux suspendre":"la fondatrice peut suspendre"} temporairement l'accès de quelqu'un.</div>
         </div>
@@ -7431,8 +7463,19 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
         {loading?(
           <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
         ):(<>
-          <div style={{background:estSuspendu||bloqueAbus?"#FDF0ED":C.creme,border:`1px solid ${estSuspendu||bloqueAbus?"#E8B4A5":C.pale}`,borderRadius:10,padding:".6rem .75rem",fontSize:".76rem",color:C.brun,marginBottom:"1rem",lineHeight:1.5}}>
+          <div style={{background:estSuspendu||bloqueAbus?"#FDF0ED":C.creme,border:`1px solid ${estSuspendu||bloqueAbus?"#E8B4A5":C.pale}`,borderRadius:10,padding:".6rem .75rem",fontSize:".76rem",color:C.brun,marginBottom:".6rem",lineHeight:1.5}}>
             {statutTexte}
+          </div>
+
+          <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
+            <div style={{flex:1,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .3rem",textAlign:"center"}}>
+              <div style={{fontSize:".95rem",fontWeight:700,color:C.brun}}>{totalLiensAujourdhui}</div>
+              <div style={{fontSize:".58rem",color:C.gris}}>lien{totalLiensAujourdhui!==1?"s":""} aujourd'hui</div>
+            </div>
+            <div style={{flex:1,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .3rem",textAlign:"center"}}>
+              <div style={{fontSize:".95rem",fontWeight:700,color:C.brun}}>{totalBoostsAujourdhui}</div>
+              <div style={{fontSize:".58rem",color:C.gris}}>boost{totalBoostsAujourdhui!==1?"s":""} au total</div>
+            </div>
           </div>
 
           {peutPoster&&(
@@ -7448,6 +7491,28 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
             </div>
           )}
 
+          {mesLiensAujourdhui.length>0&&(
+            <div style={{background:"#F0F7ED",border:"1px solid #B8D9A5",borderRadius:10,padding:".7rem .8rem",marginBottom:"1.1rem"}}>
+              <div style={{fontSize:".72rem",fontWeight:700,color:"#4A7A4A",marginBottom:".5rem"}}>✅ Ton/tes lien(s) du jour sont bien enregistrés !</div>
+              <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+                {mesLiensAujourdhui.map(l=>(
+                  <div key={l.id} style={{display:"flex",alignItems:"center",gap:".5rem",background:C.blanc,border:"1px solid #B8D9A5",borderRadius:8,padding:".4rem .6rem"}}>
+                    <span style={{fontSize:".72rem",color:C.brun,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.url}</span>
+                    <span style={{fontSize:".62rem",color:C.gris,fontWeight:600,flexShrink:0}}>{l.boostePar.length} boost{l.boostePar.length!==1?"s":""}</span>
+                    <button onClick={async()=>{
+                        if(!window.confirm("Supprimer ce lien ?"))return;
+                        const nouvelleListe=await supprimerLienEntraide(uid,l.id);
+                        setLiens(nouvelleListe);
+                        const h=await chargerActiviteEntraide(uid);
+                        setHistorique(h);
+                      }}
+                      style={{background:"none",border:"none",color:C.gris,fontSize:".85rem",cursor:"pointer",padding:".1rem .2rem",flexShrink:0}}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>À booster aujourd'hui</div>
           {autresLiens.length===0?(
             <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0"}}>Aucun lien partagé pour l'instant.</div>
@@ -7460,11 +7525,12 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
                   <div key={l.id} style={{background:zeroBoost?"#FDF0ED":C.creme,border:`1px solid ${zeroBoost?"#E8B4A5":C.pale}`,borderRadius:10,padding:".55rem .7rem"}}>
                     <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
                       <span style={{fontSize:".74rem",fontWeight:700,color:C.brun,flex:1}}>{l.nom}</span>
+                      <span style={{fontSize:".62rem",color:C.gris,fontWeight:600}}>{l.boostePar.length} boost{l.boostePar.length!==1?"s":""}</span>
                       {zeroBoost&&<span style={{fontSize:".58rem",fontWeight:700,color:"#B8442F"}}>🔴 En attente</span>}
                     </div>
-                    <button onClick={()=>booster(l)} disabled={dejaBooste}
-                      style={{width:"100%",background:dejaBooste?C.pale:C.brun,color:dejaBooste?C.gris:C.blanc,border:"none",borderRadius:7,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:dejaBooste?"default":"pointer"}}>
-                      {dejaBooste?"✓ Déjà boosté":"🔗 Booster ce lien"}
+                    <button onClick={()=>booster(l)}
+                      style={{width:"100%",background:dejaBooste?C.creme:C.brun,color:dejaBooste?C.brun:C.blanc,border:dejaBooste?`1px solid ${C.pale}`:"none",borderRadius:7,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                      {dejaBooste?"✓ Déjà boosté (revoir le lien)":"🔗 Booster ce lien"}
                     </button>
                   </div>
                 );
@@ -7472,10 +7538,35 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
             </div>
           )}
 
-          {mesLiensAujourdhui.length>0&&(
-            <div style={{marginTop:"1rem",fontSize:".68rem",color:C.gris}}>
-              Tes liens du jour : {mesLiensAujourdhui.map(l=>l.boostePar.length+" boost"+(l.boostePar.length!==1?"s":"")).join(" · ")}
-            </div>
+
+          <button onClick={()=>setShowRattrapage(p=>!p)}
+            style={{width:"100%",background:"none",border:"none",color:C.gris,fontSize:".7rem",fontFamily:"inherit",cursor:"pointer",padding:".5rem 0 .2rem",textAlign:"left",textDecoration:"underline"}}>
+            {showRattrapage?"Masquer le rattrapage":`📅 Rattrapage (${rattrapageTries.length} lien${rattrapageTries.length!==1?"s":""} des jours précédents)`}
+          </button>
+          {showRattrapage&&(
+            rattrapageTries.length===0?(
+              <div style={{fontSize:".76rem",color:C.gris,fontStyle:"italic",padding:".4rem 0"}}>Rien à rattraper, tout est à jour !</div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:".5rem",marginTop:".5rem"}}>
+                <div style={{fontSize:".66rem",color:C.gris,fontStyle:"italic",marginBottom:".2rem"}}>Les liens restent boostables pendant 72h après leur partage.</div>
+                {rattrapageTries.map(l=>{
+                  const dejaBooste=l.boostePar.includes(uid);
+                  return(
+                    <div key={l.id} style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
+                        <span style={{fontSize:".74rem",fontWeight:700,color:C.brun,flex:1}}>{l.nom}</span>
+                        <span style={{fontSize:".62rem",color:C.gris,fontWeight:600}}>{l.boostePar.length} boost{l.boostePar.length!==1?"s":""}</span>
+                        <span style={{fontSize:".6rem",color:C.gris}}>{new Date(l.dateSource).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span>
+                      </div>
+                      <button onClick={()=>booster(l)}
+                        style={{width:"100%",background:dejaBooste?C.creme:C.brun,color:dejaBooste?C.brun:C.blanc,border:dejaBooste?`1px solid ${C.pale}`:"none",borderRadius:7,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                        {dejaBooste?"✓ Déjà boosté (revoir le lien)":"🔗 Booster ce lien"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )
           )}
 
           {isMelissa&&(
