@@ -693,6 +693,89 @@ export async function chargerDeclarations(){
   return res;
 }
 
+// ═══════════ ENTRAIDE LIENS (systeme independant, collections dediees) ═══════════
+export async function chargerLiensDuJour(){
+  const date=todayLocalStr();
+  try{
+    const snap=await getDoc(doc(db,"entraide_liens","liens_du_jour","items",date));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerLiensDuJour:", e); }
+  return [];
+}
+
+export async function chargerActiviteEntraide(uid){
+  try{
+    const snap=await getDoc(doc(db,"entraide_liens","activite","items",uid));
+    if(snap.exists())return snap.data().historique||{};
+  }catch(e){ console.error("chargerActiviteEntraide:", e); }
+  return {};
+}
+
+export async function chargerSuspendusEntraide(){
+  try{
+    const snap=await getDoc(doc(db,"entraide_liens","suspendus"));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerSuspendusEntraide:", e); }
+  return [];
+}
+
+// Calcule si l'utilisateur est actuellement bloque (abus repete : liens postes 2 jours de suite sans jamais booster)
+export function calculerBlocageEntraide(historique){
+  const jours=[];
+  const d=new Date();
+  for(let i=1;i<=7;i++){
+    const dd=new Date(d); dd.setDate(dd.getDate()-i);
+    const cle=dd.toISOString().slice(0,10);
+    jours.push(historique[cle]||{postes:0,boosts:0});
+  }
+  let streakAbus=0;
+  for(const j of jours){
+    if(j.postes>0&&j.boosts===0)streakAbus++;
+    else break;
+  }
+  return streakAbus>=2;
+}
+
+export async function ajouterLienEntraide(uid,nom,url){
+  const date=todayLocalStr();
+  const liste=await chargerLiensDuJour();
+  const id=uid+"_"+Date.now();
+  liste.push({id,uid,nom,url,ts:Date.now(),boostePar:[]});
+  await setDoc(doc(db,"entraide_liens","liens_du_jour","items",date),{liste});
+  const hist=await chargerActiviteEntraide(uid);
+  hist[date]={postes:(hist[date]?.postes||0)+1,boosts:hist[date]?.boosts||0};
+  await setDoc(doc(db,"entraide_liens","activite","items",uid),{historique:hist});
+  return liste;
+}
+
+export async function boosterLienEntraide(boosterUid,lienId){
+  const date=todayLocalStr();
+  const liste=await chargerLiensDuJour();
+  const lien=liste.find(l=>l.id===lienId);
+  if(!lien||lien.boostePar.includes(boosterUid))return liste;
+  lien.boostePar=[...lien.boostePar,boosterUid];
+  await setDoc(doc(db,"entraide_liens","liens_du_jour","items",date),{liste});
+  const hist=await chargerActiviteEntraide(boosterUid);
+  hist[date]={postes:hist[date]?.postes||0,boosts:(hist[date]?.boosts||0)+1};
+  await setDoc(doc(db,"entraide_liens","activite","items",boosterUid),{historique:hist});
+  return liste;
+}
+
+export async function suspendreEntraide(uid,nom,parQui){
+  const liste=await chargerSuspendusEntraide();
+  if(liste.some(s=>s.uid===uid))return liste;
+  const nouvelleListe=[...liste,{uid,nom,depuisLe:Date.now(),parQui}];
+  await setDoc(doc(db,"entraide_liens","suspendus"),{liste:nouvelleListe});
+  return nouvelleListe;
+}
+
+export async function reactiverEntraide(uid){
+  const liste=await chargerSuspendusEntraide();
+  const nouvelleListe=liste.filter(s=>s.uid!==uid);
+  await setDoc(doc(db,"entraide_liens","suspendus"),{liste:nouvelleListe});
+  return nouvelleListe;
+}
+
 export async function chargerObjectifCommun(){
   try{
     const snap=await getDoc(doc(db,"objectif_commun","actuel"));
@@ -1671,6 +1754,7 @@ function App(){
   const[showAnnonce,setShowAnnonce]=useState(false);
   const[annonceData,setAnnonceData]=useState(null);
   const[showInfosImportantes,setShowInfosImportantes]=useState(false);
+  const[showEntraideLiens,setShowEntraideLiens]=useState(false);
   const[showAnnonceAdminFlottant,setShowAnnonceAdminFlottant]=useState(false);
   useEffect(()=>{
     if(!userId||screen!=="app")return;
@@ -3930,6 +4014,18 @@ function App(){
         />
       )}
       {showAnnonceAdminFlottant&&<AnnonceAdminPopup uid={userId} onClose={()=>setShowAnnonceAdminFlottant(false)}/>}
+
+      {/* ── BOUTON FLOTTANT ENTRAIDE LIENS (systeme independant) ── */}
+      <button onClick={()=>setShowEntraideLiens(p=>!p)}
+        style={{position:"fixed",bottom:"9.5rem",right:"1.2rem",width:56,height:56,borderRadius:"50%",background:C.brun,border:`2px solid ${C.or}`,boxShadow:"0 4px 20px rgba(61,31,14,.4)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,transition:"all .2s",padding:0,overflow:"hidden"}}>
+        {showEntraideLiens
+          ? <span style={{fontSize:"1rem",color:C.or,fontWeight:700}}>✕</span>
+          : <span style={{fontSize:"1.4rem"}}>🔗</span>
+        }
+      </button>
+      {showEntraideLiens&&(
+        <EntraideLiensPanel uid={userId} nomAffiche={name} isMelissa={userId==="melissa-da-silveira"}/>
+      )}
 
       {/* ── POPUP BIENVENUE ── */}
       {showWelcome&&(
@@ -7180,6 +7276,177 @@ function ObjectifCommunCard({objectif, participants, uid, nomAffiche, isMelissa,
           {ajout?"...":"➕ Ajouter mon pas !"}
         </button>
       )}
+    </div>
+  );
+}
+
+function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
+  const[liens,setLiens]=useState(null);
+  const[historique,setHistorique]=useState({});
+  const[suspendus,setSuspendus]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[nouveauNom,setNouveauNom]=useState("");
+  const[nouveauUrl,setNouveauUrl]=useState("");
+  const[envoi,setEnvoi]=useState(false);
+  const[showRegles,setShowRegles]=useState(false);
+
+  const recharger=async()=>{
+    const[l,h,s]=await Promise.all([chargerLiensDuJour(),chargerActiviteEntraide(uid),chargerSuspendusEntraide()]);
+    setLiens(l);
+    setHistorique(h);
+    setSuspendus(s);
+    setLoading(false);
+  };
+
+  useEffect(()=>{ recharger(); },[]);
+
+  const today=todayLocalStr();
+  const estSuspendu=suspendus.some(s=>s.uid===uid);
+  const jhui=historique[today]||{postes:0,boosts:0};
+  const bloqueAbus=calculerBlocageEntraide(historique)&&jhui.boosts===0;
+  const mesLiensAujourdhui=(liens||[]).filter(l=>l.uid===uid);
+  const autresLiens=(liens||[]).filter(l=>l.uid!==uid);
+
+  let statutTexte="", peutPoster=false;
+  if(estSuspendu){
+    statutTexte="⏸️ Ton compte est temporairement suspendu de l'entraide liens.";
+  }else if(bloqueAbus){
+    statutTexte="🔒 Tu as partagé sans jamais booster personne — booste au moins 1 lien pour débloquer.";
+  }else if(jhui.postes===0){
+    statutTexte="✨ Tu peux partager 1 lien gratuit aujourd'hui.";
+    peutPoster=true;
+  }else if(jhui.postes===1&&jhui.boosts>=1){
+    statutTexte="🔓 2e lien débloqué, merci d'avoir boosté !";
+    peutPoster=true;
+  }else if(jhui.postes===1){
+    statutTexte="Tu as partagé ton lien gratuit. Booste quelqu'un pour en débloquer un 2e.";
+  }else{
+    statutTexte="Tu as partagé tes 2 liens du jour, bravo !";
+  }
+
+  const partager=async()=>{
+    if(!nouveauUrl.trim()||!peutPoster||envoi)return;
+    setEnvoi(true);
+    try{
+      const nouvelleListe=await ajouterLienEntraide(uid,nouveauNom.trim()||nomAffiche||"Une distributrice",nouveauUrl.trim());
+      setLiens(nouvelleListe);
+      const h=await chargerActiviteEntraide(uid);
+      setHistorique(h);
+      setNouveauNom("");setNouveauUrl("");
+    }catch{}
+    setEnvoi(false);
+  };
+
+  const booster=async(lien)=>{
+    if(lien.boostePar.includes(uid))return;
+    window.open(lien.url,"_blank");
+    try{
+      const nouvelleListe=await boosterLienEntraide(uid,lien.id);
+      setLiens(nouvelleListe);
+      const h=await chargerActiviteEntraide(uid);
+      setHistorique(h);
+    }catch{}
+  };
+
+  return(
+    <div style={{position:"fixed",bottom:"8rem",right:"1.2rem",width:300,maxWidth:"calc(100vw - 2.4rem)",background:C.blanc,borderRadius:16,boxShadow:"0 8px 32px rgba(61,31,14,.25)",border:`1px solid ${C.pale}`,zIndex:199,overflow:"hidden",maxHeight:"70vh",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.brun,padding:".85rem 1rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+        <span style={{fontSize:"1.3rem"}}>🔗</span>
+        <div style={{fontSize:".72rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase",flex:1}}>Entraide réseaux</div>
+        <button onClick={()=>setShowRegles(p=>!p)}
+          style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:24,height:24,color:C.or,fontSize:".72rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+          ℹ️
+        </button>
+      </div>
+      {showRegles&&(
+        <div style={{background:"#FFF8E8",borderBottom:`1px solid ${C.pale}`,padding:".8rem 1rem",fontSize:".72rem",color:C.brun,lineHeight:1.65}}>
+          <div style={{fontWeight:700,marginBottom:".4rem"}}>📜 Comment ça marche ?</div>
+          <div>✨ <strong>1 lien gratuit par jour</strong> pour tout le monde, à partager pour te faire booster.</div>
+          <div style={{marginTop:".3rem"}}>🔓 Un <strong>2e lien</strong> se débloque dès que tu as boosté quelqu'un d'autre le jour même.</div>
+          <div style={{marginTop:".3rem"}}>✅ Un "boost" = cliquer réellement sur le lien de quelqu'un depuis ce panneau (compté automatiquement, une seule fois par lien).</div>
+          <div style={{marginTop:".3rem"}}>🔒 Si tu partages 2 jours de suite <strong>sans jamais booster personne</strong>, ton lien gratuit se bloque le temps que tu boostes quelqu'un.</div>
+          <div style={{marginTop:".3rem"}}>⏸️ En cas de triche signalée, {isMelissa?"tu peux suspendre":"la fondatrice peut suspendre"} temporairement l'accès de quelqu'un.</div>
+        </div>
+      )}
+      <div style={{padding:"1rem",overflowY:"auto"}}>
+        {loading?(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
+        ):(<>
+          <div style={{background:estSuspendu||bloqueAbus?"#FDF0ED":C.creme,border:`1px solid ${estSuspendu||bloqueAbus?"#E8B4A5":C.pale}`,borderRadius:10,padding:".6rem .75rem",fontSize:".76rem",color:C.brun,marginBottom:"1rem",lineHeight:1.5}}>
+            {statutTexte}
+          </div>
+
+          {peutPoster&&(
+            <div style={{marginBottom:"1.1rem"}}>
+              <input value={nouveauNom} onChange={e=>setNouveauNom(e.target.value)} placeholder="Ton prénom (optionnel)"
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .65rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,outline:"none",marginBottom:".4rem"}}/>
+              <input value={nouveauUrl} onChange={e=>setNouveauUrl(e.target.value)} placeholder="Lien à faire booster (Instagram, TikTok...)"
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .65rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,outline:"none",marginBottom:".4rem"}}/>
+              <button onClick={partager} disabled={!nouveauUrl.trim()||envoi}
+                style={{width:"100%",background:nouveauUrl.trim()?C.brun:C.pale,color:nouveauUrl.trim()?C.blanc:C.gris,border:"none",borderRadius:8,padding:".55rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:nouveauUrl.trim()?"pointer":"default"}}>
+                {envoi?"...":"Partager mon lien"}
+              </button>
+            </div>
+          )}
+
+          <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>À booster aujourd'hui</div>
+          {autresLiens.length===0?(
+            <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0"}}>Aucun lien partagé pour l'instant.</div>
+          ):(
+            <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}>
+              {autresLiens.map(l=>{
+                const dejaBooste=l.boostePar.includes(uid);
+                return(
+                  <div key={l.id} style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem"}}>
+                    <div style={{fontSize:".74rem",fontWeight:700,color:C.brun,marginBottom:".3rem"}}>{l.nom}</div>
+                    <button onClick={()=>booster(l)} disabled={dejaBooste}
+                      style={{width:"100%",background:dejaBooste?C.pale:C.brun,color:dejaBooste?C.gris:C.blanc,border:"none",borderRadius:7,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:dejaBooste?"default":"pointer"}}>
+                      {dejaBooste?"✓ Déjà boosté":"🔗 Booster ce lien"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {mesLiensAujourdhui.length>0&&(
+            <div style={{marginTop:"1rem",fontSize:".68rem",color:C.gris}}>
+              Tes liens du jour : {mesLiensAujourdhui.map(l=>l.boostePar.length+" boost"+(l.boostePar.length!==1?"s":"")).join(" · ")}
+            </div>
+          )}
+
+          {isMelissa&&(
+            <>
+              <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",margin:"1.1rem 0 .5rem"}}>Gestion (toi uniquement)</div>
+              {suspendus.length>0&&(
+                <div style={{display:"flex",flexDirection:"column",gap:".4rem",marginBottom:".6rem"}}>
+                  {suspendus.map(s=>(
+                    <div key={s.uid} style={{display:"flex",alignItems:"center",gap:".5rem",background:"#FDF0ED",border:"1px solid #E8B4A5",borderRadius:8,padding:".4rem .6rem"}}>
+                      <span style={{fontSize:".74rem",color:C.brun,flex:1}}>{s.nom||s.uid}</span>
+                      <button onClick={async()=>setSuspendus(await reactiverEntraide(s.uid))}
+                        style={{background:C.brun,color:C.blanc,border:"none",borderRadius:6,padding:".3rem .5rem",fontSize:".68rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                        ▶️ Réactiver
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {autresLiens.length>0&&(
+                <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+                  {[...new Map(autresLiens.map(l=>[l.uid,l])).values()].map(l=>(
+                    !suspendus.some(s=>s.uid===l.uid)&&(
+                      <button key={l.uid} onClick={async()=>setSuspendus(await suspendreEntraide(l.uid,l.nom,uid))}
+                        style={{width:"100%",background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".4rem .6rem",fontSize:".7rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                        ⏸️ Suspendre {l.nom}
+                      </button>
+                    )
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>)}
+      </div>
     </div>
   );
 }
