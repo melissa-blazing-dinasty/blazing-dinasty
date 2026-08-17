@@ -3939,7 +3939,7 @@ function BoutiquePubliquePage({slug}){
                   <div style={{fontSize:".78rem",fontWeight:700,color:theme.accent}}>{prixAffiche.toFixed(2)}€</div>
                   {prod.offre&&prod.prixOffre&&prod.prix!==prod.prixOffre&&<div style={{fontSize:".58rem",color:"#AAA",textDecoration:"line-through"}}>{prod.prix.toFixed(2)}€</div>}
                 </div>
-                {prod.prixVIP&&profil&&profil.lienRecrutement&&(
+                {afficherVIPBoutique&&prod.prixVIP&&profil&&profil.lienRecrutement&&(
                   <div style={{fontSize:".54rem",fontWeight:700,color:"#8B6FB3",marginBottom:".35rem"}}>💎 Économie VIP possible</div>
                 )}
                 {prod.rupture?(
@@ -4065,7 +4065,7 @@ function BoutiquePubliquePage({slug}){
               <div style={{display:"flex",justifyContent:"space-between",padding:"1rem 0",fontSize:".9rem",fontWeight:700,color:"#3D1F0E",borderTop:"1px solid #F0EBE3",marginTop:".3rem"}}>
                 <span>Total</span><span>{totalAvecPort.toFixed(2)}€</span>
               </div>
-              {economieVIP>0.5&&profil&&profil.lienRecrutement&&(
+              {afficherVIPBoutique&&economieVIP>0.5&&profil&&profil.lienRecrutement&&(
                 <div style={{background:"linear-gradient(135deg,#F3EEFB,#EDE3F7)",border:"1.5px solid #C9A8E8",borderRadius:12,padding:"1rem",marginBottom:".85rem",textAlign:"center"}}>
                   <div style={{fontSize:".8rem",fontWeight:700,color:"#6B4C93",marginBottom:".3rem"}}>💎 Tu économiserais {economieVIP.toFixed(2)}€ sur ce panier !</div>
                   <div style={{fontSize:".7rem",color:"#8B6FB3",lineHeight:1.5,marginBottom:".65rem"}}>
@@ -4303,23 +4303,23 @@ function OrdonnancePubliquePage({ordId}){
         const snap=await getDoc(doc(db,'ordonnances_publiques',ordId));
         if(snap.exists()){
           setData(snap.data());
+          setLoading(false); // affiche le résultat tout de suite, le reste charge en arrière-plan
           const distribUid=snap.data().distribUid;
-          if(distribUid){
-            try{
-              const snapU=await getDoc(doc(db,'users',distribUid));
-              if(snapU.exists()){
-                const vip=!!snapU.data()['db-afficher-prix-vip'];
-                const lien=snapU.data()['db-lien-inscription-mihi']||"";
-                setAfficherVIP(vip);
-                setLienInscriptionMihi(lien);
-                if(vip&&lien)setTimeout(()=>setShowPopupInscription(true),1500);
-              }
-            }catch{}
-          }
-          try{
-            const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
-            if(catSnap.exists())setCatalogueOrd(Object.values(catSnap.data()).flat());
-          }catch{}
+          // Ces deux lectures ne bloquent plus l'affichage : elles se font en parallèle, en tâche de fond
+          Promise.all([
+            distribUid ? getDoc(doc(db,'users',distribUid)).catch(()=>null) : Promise.resolve(null),
+            getDoc(doc(db,"admin","catalogue_mihi")).catch(()=>null)
+          ]).then(([snapU,catSnap])=>{
+            if(snapU&&snapU.exists()){
+              const vip=!!snapU.data()['db-afficher-prix-vip'];
+              const lien=snapU.data()['db-lien-inscription-mihi']||"";
+              setAfficherVIP(vip);
+              setLienInscriptionMihi(lien);
+              if(vip&&lien)setTimeout(()=>setShowPopupInscription(true),1500);
+            }
+            if(catSnap&&catSnap.exists())setCatalogueOrd(Object.values(catSnap.data()).flat());
+          });
+          return;
         }
         else setNotFound(true);
       }catch{setNotFound(true);}
