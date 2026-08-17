@@ -805,6 +805,19 @@ export async function ajouterPasObjectif(uid,nomAffiche){
   return nouvelleListe;
 }
 
+export async function supprimerAnnonce(id){
+  await deleteDoc(doc(db,"annonces_historique",String(id)));
+  try{
+    const curSnap=await getDoc(doc(db,"equipe","derniere-annonce"));
+    if(curSnap.exists()&&String(curSnap.data().id)===String(id)){
+      const snap=await getDocs(collection(db,"annonces_historique"));
+      const restantes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.creeLe||0)-(a.creeLe||0));
+      if(restantes.length>0)await setDoc(doc(db,"equipe","derniere-annonce"),restantes[0]);
+      else await deleteDoc(doc(db,"equipe","derniere-annonce"));
+    }
+  }catch{}
+}
+
 export async function chargerSondages(){
   const out = [];
   try{
@@ -6868,17 +6881,18 @@ function AnnonceRecuePopup({annonce, onClose}){
     </div>
   );
 }
-function AnnonceAdminPopup({uid, onClose}){
+function AnnonceAdminPopup({uid, onClose, annonceExistante}){
+  const enEdition=!!annonceExistante;
   const ICONES=["\u{1F4E2}","\u{26A1}","\u{1F389}","\u{26A0}","\u{1F393}","\u{1F4B0}","\u{1F525}","\u{2728}"];
-  const[titre,setTitre]=useState("");
-  const[message,setMessage]=useState("");
-  const[icone,setIcone]=useState("\u{1F4E2}");
-  const[urgente,setUrgente]=useState(false);
+  const[titre,setTitre]=useState(annonceExistante?.titre||"");
+  const[message,setMessage]=useState(annonceExistante?.message||"");
+  const[icone,setIcone]=useState(annonceExistante?.icone||"\u{1F4E2}");
+  const[urgente,setUrgente]=useState(!!annonceExistante?.urgente);
   const[sending,setSending]=useState(false);
   const[sent,setSent]=useState(false);
   const[media,setMedia]=useState(null);
-  const[mediaPreview,setMediaPreview]=useState(null);
-  const[mediaType,setMediaType]=useState(null); // "image" | "video"
+  const[mediaPreview,setMediaPreview]=useState(annonceExistante?.video||annonceExistante?.photo||null);
+  const[mediaType,setMediaType]=useState(annonceExistante?.video?"video":(annonceExistante?.photo?"image":null)); // "image" | "video"
   const[uploadingMedia,setUploadingMedia]=useState(false);
   const[datePublication,setDatePublication]=useState("");
 
@@ -6898,8 +6912,8 @@ function AnnonceAdminPopup({uid, onClose}){
     if(!titre.trim()||!message.trim())return;
     setSending(true);
     try{
-      const id=Date.now();
-      let photoUrl="", videoUrl="";
+      const id=enEdition?annonceExistante.id:Date.now();
+      let photoUrl=enEdition?(annonceExistante.photo||""):"", videoUrl=enEdition?(annonceExistante.video||""):"";
       if(media){
         setUploadingMedia(true);
         try{
@@ -6907,11 +6921,11 @@ function AnnonceAdminPopup({uid, onClose}){
           const chemin=storageRef(storage,`annonces/${id}.${ext}`);
           await uploadBytes(chemin,media);
           const url=await getDownloadURL(chemin);
-          if(mediaType==="video")videoUrl=url; else photoUrl=url;
+          if(mediaType==="video"){videoUrl=url;photoUrl="";} else {photoUrl=url;videoUrl="";}
         }catch{}
         setUploadingMedia(false);
       }
-      const estProgrammee=datePublication&&new Date(datePublication).getTime()>Date.now();
+      const estProgrammee=!enEdition&&datePublication&&new Date(datePublication).getTime()>Date.now();
       const donneesAnnonce={
         id,
         titre:titre.trim(),
@@ -6920,14 +6934,20 @@ function AnnonceAdminPopup({uid, onClose}){
         urgente,
         photo:photoUrl,
         video:videoUrl,
-        creePar:uid,
-        creeLe:id,
+        creePar:enEdition?annonceExistante.creePar:uid,
+        creeLe:enEdition?annonceExistante.creeLe:id,
       };
       if(estProgrammee){
         await setDoc(doc(db,"annonces_programmees",String(id)),{...donneesAnnonce,publierLe:new Date(datePublication).getTime()});
       }else{
-        await setDoc(doc(db,"equipe","derniere-annonce"),donneesAnnonce);
         await setDoc(doc(db,"annonces_historique",String(id)),donneesAnnonce);
+        // Met a jour l'annonce courante seulement si c'est bien celle-ci qui est affichee actuellement
+        try{
+          const curSnap=await getDoc(doc(db,"equipe","derniere-annonce"));
+          if(!enEdition||(curSnap.exists()&&String(curSnap.data().id)===String(id))){
+            await setDoc(doc(db,"equipe","derniere-annonce"),donneesAnnonce);
+          }
+        }catch{}
       }
       setSent(true);
       setTimeout(()=>{onClose();},1500);
@@ -6939,11 +6959,11 @@ function AnnonceAdminPopup({uid, onClose}){
     <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
       <div style={{background:C.blanc,borderRadius:"16px 16px 0 0",padding:"1.4rem",width:"100%",maxWidth:480,boxShadow:"0 -8px 32px rgba(0,0,0,.2)",maxHeight:"85vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
-          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>{"\u{1F4E2}"} Annonce officielle</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>{"\u{1F4E2}"} {enEdition?"Modifier l'annonce":"Annonce officielle"}</div>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer",padding:".2rem"}}>x</button>
         </div>
         <p style={{fontSize:".72rem",color:C.gris,marginBottom:"1rem",lineHeight:1.6}}>
-          Envoyee a toute l equipe, en popup dans l appli et en notification push sur leur telephone.
+          {enEdition?"Les modifications remplacent l'annonce dans l'historique (et l'annonce du moment si c'est celle-ci qui est actuellement affichée).":"Envoyee a toute l equipe, en popup dans l appli et en notification push sur leur telephone."}
         </p>
         <div style={{display:"flex",gap:".4rem",marginBottom:"1rem",flexWrap:"wrap"}}>
           {ICONES.map(ic=>(
@@ -6977,17 +6997,19 @@ function AnnonceAdminPopup({uid, onClose}){
             </div>
           )}
         </div>
-        <div style={{marginBottom:"1rem"}}>
-          <label style={{display:"block",fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".35rem"}}>Programmer pour plus tard (optionnel)</label>
-          <input type="datetime-local" value={datePublication} onChange={e=>setDatePublication(e.target.value)}
-            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem",fontFamily:"inherit",fontSize:".78rem",color:C.texte,outline:"none"}}/>
-          {datePublication&&new Date(datePublication).getTime()>Date.now()&&(
-            <div style={{fontSize:".68rem",color:C.gris,marginTop:".3rem"}}>📅 Sera publiée automatiquement le {new Date(datePublication).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>
-          )}
-        </div>
+        {!enEdition&&(
+          <div style={{marginBottom:"1rem"}}>
+            <label style={{display:"block",fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".35rem"}}>Programmer pour plus tard (optionnel)</label>
+            <input type="datetime-local" value={datePublication} onChange={e=>setDatePublication(e.target.value)}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem",fontFamily:"inherit",fontSize:".78rem",color:C.texte,outline:"none"}}/>
+            {datePublication&&new Date(datePublication).getTime()>Date.now()&&(
+              <div style={{fontSize:".68rem",color:C.gris,marginTop:".3rem"}}>📅 Sera publiée automatiquement le {new Date(datePublication).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>
+            )}
+          </div>
+        )}
         <button onClick={publier} disabled={!titre.trim()||!message.trim()||sending||sent}
           style={{width:"100%",background:sent?C.vert:(titre.trim()&&message.trim())?C.brun:C.pale,color:(titre.trim()&&message.trim())?C.blanc:C.gris,border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:(titre.trim()&&message.trim())?"pointer":"default"}}>
-          {sent?(datePublication&&new Date(datePublication).getTime()>Date.now()?"Annonce programmée !":"Envoyee a toute l equipe !"):uploadingMedia?"Envoi du média...":sending?"Envoi...":(datePublication&&new Date(datePublication).getTime()>Date.now()?"Programmer l'annonce →":"Publier a toute l equipe ->")}
+          {sent?(enEdition?"Modifications enregistrées !":(datePublication&&new Date(datePublication).getTime()>Date.now()?"Annonce programmée !":"Envoyee a toute l equipe !")):uploadingMedia?"Envoi du média...":sending?"Envoi...":(enEdition?"Enregistrer les modifications":(datePublication&&new Date(datePublication).getTime()>Date.now()?"Programmer l'annonce →":"Publier a toute l equipe ->"))}
         </button>
       </div>
     </div>
@@ -6997,6 +7019,7 @@ function SondageAdminPopup({uid, onClose}){
   const[question,setQuestion]=useState("");
   const[options,setOptions]=useState(["",""]);
   const[multiChoix,setMultiChoix]=useState(false);
+  const[dateFin,setDateFin]=useState("");
   const[sending,setSending]=useState(false);
   const[sent,setSent]=useState(false);
 
@@ -7021,6 +7044,7 @@ function SondageAdminPopup({uid, onClose}){
         question:question.trim(),
         options:optionsValides.map((texte,i)=>({id:"opt"+i,texte})),
         multiChoix,
+        dateFin:dateFin?new Date(dateFin).getTime():null,
         actif:true,
         creePar:uid,
         creeLe:Date.now(),
@@ -7060,6 +7084,12 @@ function SondageAdminPopup({uid, onClose}){
           <input type="checkbox" checked={multiChoix} onChange={e=>setMultiChoix(e.target.checked)}/>
           Autoriser plusieurs réponses par personne
         </label>
+        <div style={{marginBottom:"1.1rem"}}>
+          <label style={{display:"block",fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".35rem"}}>Date de fin (optionnel)</label>
+          <input type="datetime-local" value={dateFin} onChange={e=>setDateFin(e.target.value)}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem",fontFamily:"inherit",fontSize:".78rem",color:C.texte,outline:"none"}}/>
+          {dateFin&&<div style={{fontSize:".68rem",color:C.gris,marginTop:".3rem"}}>🔒 Se clôturera automatiquement le {new Date(dateFin).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>}
+        </div>
         <button onClick={publier} disabled={!pretAPublier||sending||sent}
           style={{width:"100%",background:sent?C.vert:pretAPublier?C.brun:C.pale,color:pretAPublier?C.blanc:C.gris,border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:pretAPublier?"pointer":"default"}}>
           {sent?"Sondage publié !":sending?"Publication...":"Publier le sondage →"}
@@ -7075,9 +7105,11 @@ function SondageCard({sondage, votes, uid, isMelissa, onVoted}){
   const[voting,setVoting]=useState(false);
   const dejaVote=!!monVote;
   const totalVotes=votes.length;
+  const dateFinDepassee=sondage.dateFin&&Date.now()>sondage.dateFin;
+  const estActif=sondage.actif&&!dateFinDepassee;
 
   const toggleOption=(optId)=>{
-    if(dejaVote||!sondage.actif)return;
+    if(dejaVote||!estActif)return;
     if(sondage.multiChoix){
       setSelection(p=>p.includes(optId)?p.filter(x=>x!==optId):[...p,optId]);
     }else{
@@ -7097,14 +7129,14 @@ function SondageCard({sondage, votes, uid, isMelissa, onVoted}){
 
   const compteParOption=(optId)=>votes.filter(v=>v.choix.includes(optId)).length;
 
-  const afficherResultats=dejaVote||!sondage.actif;
+  const afficherResultats=dejaVote||!estActif;
 
   return(
     <div style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem .9rem"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:".4rem",marginBottom:".6rem"}}>
         <span style={{fontSize:"1rem"}}>🗳️</span>
         <span style={{fontSize:".8rem",fontWeight:700,color:C.brun,flex:1}}>{sondage.question}</span>
-        {!sondage.actif&&<span style={{fontSize:".55rem",fontWeight:700,color:C.gris,background:C.pale,borderRadius:6,padding:".1rem .4rem",whiteSpace:"nowrap"}}>CLÔTURÉ</span>}
+        {!estActif&&<span style={{fontSize:".55rem",fontWeight:700,color:C.gris,background:C.pale,borderRadius:6,padding:".1rem .4rem",whiteSpace:"nowrap"}}>CLÔTURÉ</span>}
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
         {sondage.options.map(opt=>{
@@ -7305,23 +7337,26 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
   const jhui=historique[today]||{postes:0,boosts:0};
   const bloqueAbus=calculerBlocageEntraide(historique)&&jhui.boosts===0;
   const mesLiensAujourdhui=(liens||[]).filter(l=>l.uid===uid);
-  const autresLiens=(liens||[]).filter(l=>l.uid!==uid);
+  const autresLiensTries=(liens||[]).filter(l=>l.uid!==uid).sort((a,b)=>a.boostePar.length-b.boostePar.length);
+  const autresLiens=autresLiensTries;
+
+  const PLAFOND_SECURITE=5;
+  const totalLiensDisponibles=autresLiens.length;
+  const aToutBooste=totalLiensDisponibles>0&&autresLiens.every(l=>l.boostePar.includes(uid));
+  const quotaJour=aToutBooste?Infinity:Math.min(PLAFOND_SECURITE,1+jhui.boosts);
 
   let statutTexte="", peutPoster=false;
   if(estSuspendu){
     statutTexte="⏸️ Ton compte est temporairement suspendu de l'entraide liens.";
   }else if(bloqueAbus){
     statutTexte="🔒 Tu as partagé sans jamais booster personne — booste au moins 1 lien pour débloquer.";
-  }else if(jhui.postes===0){
-    statutTexte="✨ Tu peux partager 1 lien gratuit aujourd'hui.";
+  }else if(jhui.postes<quotaJour){
     peutPoster=true;
-  }else if(jhui.postes===1&&jhui.boosts>=1){
-    statutTexte="🔓 2e lien débloqué, merci d'avoir boosté !";
-    peutPoster=true;
-  }else if(jhui.postes===1){
-    statutTexte="Tu as partagé ton lien gratuit. Booste quelqu'un pour en débloquer un 2e.";
+    if(aToutBooste)statutTexte="🌟 Tu as tout boosté aujourd'hui ! Plafond levé, partage autant que tu veux.";
+    else if(jhui.postes===0)statutTexte="✨ Tu peux partager 1 lien gratuit aujourd'hui.";
+    else statutTexte=`🔓 Tu peux encore partager ${quotaJour-jhui.postes} lien${quotaJour-jhui.postes>1?"s":""} (${jhui.boosts} boost${jhui.boosts>1?"s":""} donné${jhui.boosts>1?"s":""} aujourd'hui).`;
   }else{
-    statutTexte="Tu as partagé tes 2 liens du jour, bravo !";
+    statutTexte=totalLiensDisponibles>0?"Tu as atteint ton quota du jour. Booste encore pour en débloquer plus (max "+PLAFOND_SECURITE+"), ou booste tout le monde pour lever le plafond !":"Tu as atteint ton quota du jour, bravo !";
   }
 
   const partager=async()=>{
@@ -7361,9 +7396,11 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
       {showRegles&&(
         <div style={{background:"#FFF8E8",borderBottom:`1px solid ${C.pale}`,padding:".8rem 1rem",fontSize:".72rem",color:C.brun,lineHeight:1.65}}>
           <div style={{fontWeight:700,marginBottom:".4rem"}}>📜 Comment ça marche ?</div>
-          <div>✨ <strong>1 lien gratuit par jour</strong> pour tout le monde, à partager pour te faire booster.</div>
-          <div style={{marginTop:".3rem"}}>🔓 Un <strong>2e lien</strong> se débloque dès que tu as boosté quelqu'un d'autre le jour même.</div>
-          <div style={{marginTop:".3rem"}}>✅ Un "boost" = cliquer réellement sur le lien de quelqu'un depuis ce panneau (compté automatiquement, une seule fois par lien).</div>
+          <div>✨ <strong>1 lien gratuit par jour</strong> pour tout le monde.</div>
+          <div style={{marginTop:".3rem"}}>🔓 <strong>+1 lien</strong> pour chaque personne que tu boostes ce jour-là (jusqu'à 5 max).</div>
+          <div style={{marginTop:".3rem"}}>🌟 Si tu boostes <strong>absolument tout le monde</strong> dans la journée, le plafond de 5 saute complètement.</div>
+          <div style={{marginTop:".3rem"}}>✅ Un "boost" = cliquer réellement sur le lien depuis ce panneau (compté automatiquement, une seule fois par lien).</div>
+          <div style={{marginTop:".3rem"}}>🔴 Les liens jamais boostés remontent en haut de la liste, pour que personne ne soit oublié.</div>
           <div style={{marginTop:".3rem"}}>🔒 Si tu partages 2 jours de suite <strong>sans jamais booster personne</strong>, ton lien gratuit se bloque le temps que tu boostes quelqu'un.</div>
           <div style={{marginTop:".3rem"}}>⏸️ En cas de triche signalée, {isMelissa?"tu peux suspendre":"la fondatrice peut suspendre"} temporairement l'accès de quelqu'un.</div>
         </div>
@@ -7396,9 +7433,13 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
             <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}>
               {autresLiens.map(l=>{
                 const dejaBooste=l.boostePar.includes(uid);
+                const zeroBoost=l.boostePar.length===0;
                 return(
-                  <div key={l.id} style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem"}}>
-                    <div style={{fontSize:".74rem",fontWeight:700,color:C.brun,marginBottom:".3rem"}}>{l.nom}</div>
+                  <div key={l.id} style={{background:zeroBoost?"#FDF0ED":C.creme,border:`1px solid ${zeroBoost?"#E8B4A5":C.pale}`,borderRadius:10,padding:".55rem .7rem"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
+                      <span style={{fontSize:".74rem",fontWeight:700,color:C.brun,flex:1}}>{l.nom}</span>
+                      {zeroBoost&&<span style={{fontSize:".58rem",fontWeight:700,color:"#B8442F"}}>🔴 En attente</span>}
+                    </div>
                     <button onClick={()=>booster(l)} disabled={dejaBooste}
                       style={{width:"100%",background:dejaBooste?C.pale:C.brun,color:dejaBooste?C.gris:C.blanc,border:"none",borderRadius:7,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:dejaBooste?"default":"pointer"}}>
                       {dejaBooste?"✓ Déjà boosté":"🔗 Booster ce lien"}
@@ -7462,6 +7503,9 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
   const[participantsObjectif,setParticipantsObjectif]=useState([]);
   const[showObjectifAdmin,setShowObjectifAdmin]=useState(false);
   const[programmees,setProgrammees]=useState([]);
+  const[annonceAModifier,setAnnonceAModifier]=useState(null);
+  const[annonceASupprimer,setAnnonceASupprimer]=useState(null);
+  const[suppressionEnCours,setSuppressionEnCours]=useState(false);
 
   const chargerProgrammees=async()=>{
     if(!isMelissa)return;
@@ -7495,34 +7539,49 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
     }catch{}
   };
 
+  const chargerFlux=async()=>{
+    try{
+      const snap=await getDocs(collection(db,"annonces_historique"));
+      let liste=snap.docs.map(d=>d.data()).sort((a,b)=>(b.creeLe||0)-(a.creeLe||0));
+      if(liste.length===0){
+        // Compatibilite : si aucune annonce archivee, on retombe sur la derniere annonce seule
+        try{
+          const snap2=await getDoc(doc(db,"equipe","derniere-annonce"));
+          if(snap2.exists()&&snap2.data().id)liste=[snap2.data()];
+        }catch{}
+      }
+      setFlux(liste.slice(0,30));
+      if(isMelissa){
+        try{
+          const snapVues=await getDocs(collection(db,"annonces_vues"));
+          const map={};
+          snapVues.forEach(d=>{map[d.id]=(d.data().vus||[]).length;});
+          setVuesParAnnonce(map);
+        }catch{}
+      }
+    }catch{setFlux([]);}
+  };
+
   useEffect(()=>{
     (async()=>{
-      try{
-        const snap=await getDocs(collection(db,"annonces_historique"));
-        let liste=snap.docs.map(d=>d.data()).sort((a,b)=>(b.creeLe||0)-(a.creeLe||0));
-        if(liste.length===0){
-          // Compatibilite : si aucune annonce archivee, on retombe sur la derniere annonce seule
-          try{
-            const snap2=await getDoc(doc(db,"equipe","derniere-annonce"));
-            if(snap2.exists()&&snap2.data().id)liste=[snap2.data()];
-          }catch{}
-        }
-        setFlux(liste.slice(0,30));
-        if(isMelissa){
-          try{
-            const snapVues=await getDocs(collection(db,"annonces_vues"));
-            const map={};
-            snapVues.forEach(d=>{map[d.id]=(d.data().vus||[]).length;});
-            setVuesParAnnonce(map);
-          }catch{}
-        }
-      }catch{setFlux([]);}
+      await chargerFlux();
       setLoading(false);
       chargerSondagesEtVotes();
       chargerObjectif();
       chargerProgrammees();
     })();
   },[]);
+
+  const confirmerSuppressionAnnonce=async()=>{
+    if(!annonceASupprimer)return;
+    setSuppressionEnCours(true);
+    try{
+      await supprimerAnnonce(annonceASupprimer.id);
+      await chargerFlux();
+    }catch{}
+    setSuppressionEnCours(false);
+    setAnnonceASupprimer(null);
+  };
 
   const onVoted=(sondageId,nouvelleListe)=>{
     setVotesSondages(p=>({...p,[sondageId]:nouvelleListe}));
@@ -7541,6 +7600,24 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
             style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".8rem"}}>
             ✏️ Nouvelle annonce
           </button>
+        )}
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>Sondages</div>
+        {isMelissa&&(
+          <button onClick={()=>setShowSondageAdmin(true)}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+            🗳️ Créer un sondage
+          </button>
+        )}
+        {sondages===null?(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
+        ):sondages.length>0?(
+          <div style={{display:"flex",flexDirection:"column",gap:".6rem",marginBottom:"1.1rem"}}>
+            {sondages.map(s=>(
+              <SondageCard key={s.id} sondage={s} votes={votesSondages[s.id]||[]} uid={uid} isMelissa={isMelissa} onVoted={onVoted}/>
+            ))}
+          </div>
+        ):(
+          <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0",marginBottom:".6rem"}}>Aucun sondage pour le moment.</div>
         )}
         {isMelissa&&programmees.length>0&&(
           <div style={{marginBottom:".9rem"}}>
@@ -7565,25 +7642,58 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
           <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
         ):flux&&flux.length>0?(
           <div style={{display:"flex",flexDirection:"column",gap:".6rem"}}>
-            {flux.map((a,i)=>(
-              <div key={a.id} style={{background:(i===0&&a.urgente)?"#FDF0ED":C.creme,border:`1px solid ${(i===0&&a.urgente)?"#E8B4A5":C.pale}`,borderRadius:12,padding:".8rem .9rem"}}>
-                <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
-                  <span style={{fontSize:"1.05rem"}}>{a.icone||"📢"}</span>
-                  <span style={{fontSize:".8rem",fontWeight:700,color:C.brun,flex:1}}>{a.titre}</span>
-                  {i===0&&<span style={{fontSize:".55rem",fontWeight:700,color:C.or,background:C.brun,borderRadius:6,padding:".1rem .4rem"}}>NOUVEAU</span>}
-                </div>
-                {a.video?(
-                  <video src={a.video} controls style={{width:"100%",borderRadius:8,margin:".4rem 0",display:"block"}}/>
-                ):a.photo&&(
-                  <img src={a.photo} alt="" style={{width:"100%",borderRadius:8,margin:".4rem 0",display:"block"}}/>
-                )}
-                <div style={{fontSize:".76rem",color:C.texte,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.message}</div>
-                <div style={{fontSize:".6rem",color:C.gris,marginTop:".35rem",opacity:.7,display:"flex",justifyContent:"space-between"}}>
-                  <span>{a.creeLe?new Date(a.creeLe).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):""}</span>
-                  {isMelissa&&<span>👁 {vuesParAnnonce[String(a.id)]||0} vue{(vuesParAnnonce[String(a.id)]||0)!==1?"s":""}</span>}
-                </div>
-              </div>
-            ))}
+            {(()=>{
+              const labelJour=(ts)=>{
+                if(!ts)return "";
+                const d=new Date(ts), auj=new Date(), hier=new Date(auj); hier.setDate(hier.getDate()-1);
+                const meme=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+                if(meme(d,auj))return "Aujourd'hui";
+                if(meme(d,hier))return "Hier";
+                return d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
+              };
+              let dernierJour=null;
+              return flux.map((a,i)=>{
+                const jourActuel=labelJour(a.creeLe);
+                const changementJour=jourActuel!==dernierJour;
+                dernierJour=jourActuel;
+                return(
+                  <div key={a.id}>
+                    {changementJour&&(
+                      <div style={{display:"flex",alignItems:"center",gap:".5rem",margin:i===0?"0 0 .1rem":".3rem 0 .1rem"}}>
+                        <div style={{flex:1,height:1,background:C.pale}}/>
+                        <span style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase"}}>{jourActuel}</span>
+                        <div style={{flex:1,height:1,background:C.pale}}/>
+                      </div>
+                    )}
+                    <div style={{background:(i===0&&a.urgente)?"#FDF0ED":C.creme,border:`1px solid ${(i===0&&a.urgente)?"#E8B4A5":C.pale}`,borderRadius:12,padding:".8rem .9rem"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
+                        <span style={{fontSize:"1.05rem"}}>{a.icone||"📢"}</span>
+                        <span style={{fontSize:".8rem",fontWeight:700,color:C.brun,flex:1}}>{a.titre}</span>
+                        {i===0&&<span style={{fontSize:".55rem",fontWeight:700,color:C.or,background:C.brun,borderRadius:6,padding:".1rem .4rem"}}>NOUVEAU</span>}
+                        {isMelissa&&(
+                          <div style={{display:"flex",gap:".25rem",flexShrink:0}}>
+                            <button onClick={()=>setAnnonceAModifier(a)}
+                              style={{background:"none",border:"none",fontSize:".78rem",cursor:"pointer",padding:".15rem .3rem",opacity:.6}}>✏️</button>
+                            <button onClick={()=>setAnnonceASupprimer(a)}
+                              style={{background:"none",border:"none",fontSize:".78rem",cursor:"pointer",padding:".15rem .3rem",opacity:.6}}>🗑️</button>
+                          </div>
+                        )}
+                      </div>
+                      {a.video?(
+                        <video src={a.video} controls style={{width:"100%",borderRadius:8,margin:".4rem 0",display:"block"}}/>
+                      ):a.photo&&(
+                        <img src={a.photo} alt="" style={{width:"100%",borderRadius:8,margin:".4rem 0",display:"block"}}/>
+                      )}
+                      <div style={{fontSize:".76rem",color:C.texte,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.message}</div>
+                      <div style={{fontSize:".6rem",color:C.gris,marginTop:".35rem",opacity:.7,display:"flex",justifyContent:"space-between"}}>
+                        <span>{a.creeLe?new Date(a.creeLe).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):""}</span>
+                        {isMelissa&&<span>👁 {vuesParAnnonce[String(a.id)]||0} vue{(vuesParAnnonce[String(a.id)]||0)!==1?"s":""}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         ):(
           <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Aucune annonce pour le moment.</div>
@@ -7601,28 +7711,29 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
         ):(
           <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0"}}>Aucun objectif pour le moment.</div>
         )}
-        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",margin:"1rem 0 .5rem"}}>Sondages</div>
-        {isMelissa&&(
-          <button onClick={()=>setShowSondageAdmin(true)}
-            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
-            🗳️ Créer un sondage
-          </button>
-        )}
-        {sondages===null?(
-          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
-        ):sondages.length>0?(
-          <div style={{display:"flex",flexDirection:"column",gap:".6rem"}}>
-            {sondages.map(s=>(
-              <SondageCard key={s.id} sondage={s} votes={votesSondages[s.id]||[]} uid={uid} isMelissa={isMelissa} onVoted={onVoted}/>
-            ))}
-          </div>
-        ):(
-          <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0"}}>Aucun sondage pour le moment.</div>
-        )}
       </div>
     </div>
     {showSondageAdmin&&<SondageAdminPopup uid={uid} onClose={()=>{setShowSondageAdmin(false);chargerSondagesEtVotes();}}/>}
     {showObjectifAdmin&&<ObjectifCommunAdminPopup uid={uid} onClose={()=>{setShowObjectifAdmin(false);chargerObjectif();}}/>}
+    {annonceAModifier&&<AnnonceAdminPopup uid={uid} annonceExistante={annonceAModifier} onClose={()=>{setAnnonceAModifier(null);chargerFlux();}}/>}
+    {annonceASupprimer&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
+        <div style={{background:C.blanc,borderRadius:16,padding:"1.2rem",width:"100%",maxWidth:340,boxShadow:"0 8px 32px rgba(0,0,0,.3)"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:C.brun,marginBottom:".6rem"}}>Supprimer cette annonce ?</div>
+          <div style={{fontSize:".78rem",color:C.gris,marginBottom:"1.1rem",lineHeight:1.5}}>"{annonceASupprimer.titre}" sera définitivement retirée de l'historique et de l'affichage. Cette action est irréversible.</div>
+          <div style={{display:"flex",gap:".5rem"}}>
+            <button onClick={()=>setAnnonceASupprimer(null)}
+              style={{flex:1,background:"none",border:`1px solid ${C.pale}`,borderRadius:9,padding:".6rem",fontSize:".78rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+              Annuler
+            </button>
+            <button onClick={confirmerSuppressionAnnonce} disabled={suppressionEnCours}
+              style={{flex:1,background:"#B8442F",color:"white",border:"none",borderRadius:9,padding:".6rem",fontSize:".78rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              {suppressionEnCours?"...":"Supprimer"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }

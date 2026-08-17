@@ -429,6 +429,24 @@ exports.publierAnnoncesProgrammees = onSchedule({ schedule: "*/5 * * * *", timeZ
   } catch(e) { console.error("publierAnnoncesProgrammees error", e); }
 });
 
+// Rappel d'equite : en fin de journee, previens l'equipe s'il reste des liens jamais boostes
+exports.rappelEquiteEntraide = onSchedule({ schedule: "0 18 * * *", timeZone: "Europe/Paris" }, async () => {
+  try {
+    const aujourdhui = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+    const snap = await db.collection("entraide_liens").doc("liens_du_jour").collection("items").doc(aujourdhui).get();
+    if (!snap.exists) return;
+    const liste = snap.data().liste || [];
+    const nonBooste = liste.filter(l => !l.boostePar || l.boostePar.length === 0);
+    if (nonBooste.length > 0) {
+      const nb = nonBooste.length;
+      await sendNotifToAll(
+        "🔗 Il reste des liens à booster !",
+        nb === 1 ? "Un lien n'a encore reçu aucun boost aujourd'hui. Va y jeter un oeil dans Entraide Reseaux !" : (nb + " liens n'ont encore reçu aucun boost aujourd'hui. Va y jeter un oeil dans Entraide Reseaux !")
+      );
+    }
+  } catch(e) { console.error("rappelEquiteEntraide error", e); }
+});
+
 exports.notifAnnonceEquipe = onDocumentWritten("equipe/derniere-annonce", async (event) => {
   try {
     const before = event.data.before.exists ? event.data.before.data() : {};
