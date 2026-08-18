@@ -327,6 +327,44 @@ exports.notifRelance = onSchedule({ schedule: "0 8 * * *", timeZone: "Europe/Par
   } catch (e) { console.error("notifRelance error", e); }
 });
 
+// Notification pour les suivis de commande J+8 / J+21, jusqu'ici uniquement visuels (jamais de push)
+exports.notifSuiviCommande = onSchedule({ schedule: "0 9 * * *", timeZone: "Europe/Paris" }, async () => {
+  const DUREES_PRODUIT = { shampoing: 30, soin_visage: 45, complement: 30, maquillage: 90, parfum: 120, autre: 60 };
+  try {
+    const now = Date.now();
+    const usersSnap = await db.collection("users").get();
+    for (const doc of usersSnap.docs) {
+      const uid = doc.id;
+      const data = doc.data();
+      let dues8 = 0, dues21 = 0, duesConso = 0;
+      try {
+        const clients = data["db-clients"] ? JSON.parse(data["db-clients"]) : [];
+        clients.forEach(c => {
+          (c.commandes || []).forEach(cmd => {
+            if (!cmd.date || cmd.rappelFait) return;
+            const dateCmd = new Date(cmd.date);
+            if (isNaN(dateCmd.getTime())) return;
+            const dd = Math.floor((now - dateCmd.getTime()) / 86400000);
+            if (dd >= 8 && !cmd.suivi8) dues8++;
+            if (dd >= 21 && !cmd.suivi21) dues21++;
+            const premiereLigne = cmd.lignes && cmd.lignes[0];
+            const dureeJours = (premiereLigne && DUREES_PRODUIT[premiereLigne.typeProduit]) || (premiereLigne && premiereLigne.dureeJours) || 30;
+            const dateRappelConso = dateCmd.getTime() + dureeJours * 86400000;
+            if (dateRappelConso <= now) duesConso++;
+          });
+        });
+      } catch (e) {}
+      if (dues8 > 0 || dues21 > 0 || duesConso > 0) {
+        const parts = [];
+        if (dues8 > 0) parts.push(dues8 + (dues8 > 1 ? " suivis J+8" : " suivi J+8"));
+        if (dues21 > 0) parts.push(dues21 + (dues21 > 1 ? " suivis J+21" : " suivi J+21"));
+        if (duesConso > 0) parts.push(duesConso + (duesConso > 1 ? " reappros produit" : " reappro produit"));
+        await sendNotifToUid(uid, "🔔 Suivis commande à faire", "Tu as " + parts.join(", ") + " en attente. Un petit coucou a tes clientes !");
+      }
+    }
+  } catch (e) { console.error("notifSuiviCommande error", e); }
+});
+
 exports.notifInfoImportante = onDocumentUpdated("communaute/infos", async (event) => {
   try {
     const before = event.data.before.data() || {};

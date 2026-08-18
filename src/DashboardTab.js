@@ -61,13 +61,32 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   const[clients,setClients]=useState([]);
   useEffect(()=>{
     try{
+      const TYPES_PRODUITS_DUREE_JOURS={shampoing:30,soin_visage:45,complement:30,maquillage:90,parfum:120,autre:60};
       const todayR=todayLocalStr();
+      const now=Date.now();
       const duesProspects=(prospects||[]).filter(p=>p.relance&&p.relance<=todayR&&p.statut!=="Converti"&&p.statut!=="Archive").map(p=>({id:p.id,name:p.name,type:"prospect",texte:p.relanceHeure?"a "+p.relanceHeure:""}));
       const duesClientes=[];
       (clients||[]).forEach(c=>{
         (c.rappels||[]).forEach(r=>{
           if(!r.fait&&r.date&&r.date<=todayR){
             duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:r.texte,type:"cliente"});
+          }
+        });
+        (c.commandes||[]).forEach(cmd=>{
+          if(!cmd.date||cmd.rappelFait)return;
+          const dateCmd=new Date(cmd.date);
+          if(isNaN(dateCmd.getTime()))return;
+          const dd=Math.floor((now-dateCmd.getTime())/86400000);
+          if(dd>=8&&!cmd.suivi8){
+            duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:"Suivi J+8",type:"suivi"});
+          }
+          if(dd>=21&&!cmd.suivi21){
+            duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:"Suivi J+21",type:"suivi"});
+          }
+          const premiereLigne=cmd.lignes&&cmd.lignes[0];
+          const dureeJours=(premiereLigne&&TYPES_PRODUITS_DUREE_JOURS[premiereLigne.typeProduit])||(premiereLigne&&premiereLigne.dureeJours)||30;
+          if(dateCmd.getTime()+dureeJours*86400000<=now){
+            duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:"Réappro produit",type:"conso"});
           }
         });
       });
@@ -442,9 +461,9 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
               {relanceBannerOuverte&&(
                 <div style={{padding:"0 1rem .85rem"}}>
                   {relancesDuJour.map((p,i)=>(
-                    <div key={i} onClick={()=>{if(p.id){setDtab(p.type==="cliente"?"clients":"prospects");if(p.type==="cliente"){setClientsSubTab("clients");setClientCibleId(p.id);}setCibleRappel({id:p.id,type:p.type});}}}
+                    <div key={i} onClick={()=>{if(p.id){setDtab(p.type!=="prospect"?"clients":"prospects");if(p.type!=="prospect"){setClientsSubTab("clients");setClientCibleId(p.id);}setCibleRappel({id:p.id,type:p.type==="prospect"?"prospect":"cliente"});}}}
                       style={{background:"white",borderRadius:9,padding:".5rem .7rem",marginBottom:".4rem",fontSize:".78rem",color:"#3D2B1F",fontWeight:600,display:"flex",flexDirection:"column",cursor:p.id?"pointer":"default"}}>
-                      <span>{p.type==="cliente"?"💜 ":"👥 "}{p.name}</span>
+                      <span>{p.type==="cliente"?"💜 ":p.type==="suivi"?"📦 ":p.type==="conso"?"🔄 ":"👥 "}{p.name}</span>
                       {p.texte&&<span style={{fontSize:".68rem",color:"#888",fontWeight:400,marginTop:".15rem"}}>{p.texte}</span>}
                     </div>
                   ))}
