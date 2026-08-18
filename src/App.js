@@ -155,7 +155,7 @@ export async function marquerFormationTerminee(uid, subTab) {
     await ss(uid,"db-formation-progress",JSON.stringify(progress));
   }catch(e){console.error("maj completion formation:",e);}
 }
-export const FORMATION_SUBTABS_SUIVIES=["mihibd","demarrage","vente","recrutement","contenu","devperso","outils","formaproduits"];
+export const FORMATION_SUBTABS_SUIVIES=["mihibd","demarrage","vente","recrutement","contenu","devperso","outils","formaproduits","communication"];
 export const FORMATION_SUBTABS_LABELS={mihibd:"Mihi & Blazing Dynasty",demarrage:"Démarrage",vente:"Vente & Stratégies",recrutement:"Recrutement",contenu:"Création de contenu",devperso:"Développement personnel",outils:"Outils",formaproduits:"Formation produits"};
 
 // Met à jour la fiche d'un membre dans l'annuaire global (équipe/annuaire)
@@ -1710,7 +1710,7 @@ function App(){
   const FORMATION_DATES_MAJ={
     mihibd:"2026-01-01", demarrage:"2026-01-01", vente:"2026-07-28",
     recrutement:"2026-07-09", contenu:"2026-01-01", devperso:"2026-07-09",
-    outils:"2026-07-09", formaproduits:"2026-07-09",
+    outils:"2026-07-09", formaproduits:"2026-07-09", communication:"2026-08-17",
   };
   useEffect(()=>{
     if(!userId)return;
@@ -1796,6 +1796,8 @@ function App(){
   const[showInfosImportantes,setShowInfosImportantes]=useState(false);
   const[showEntraideLiens,setShowEntraideLiens]=useState(false);
   const[showAnnonceAdminFlottant,setShowAnnonceAdminFlottant]=useState(false);
+  const[glowInfos,setGlowInfos]=useState(false);
+  const[glowEntraide,setGlowEntraide]=useState(false);
   useEffect(()=>{
     if(!userId||screen!=="app")return;
     const checkAnnonce=async()=>{
@@ -1809,6 +1811,7 @@ function App(){
         if(String(d.id)!==seen){
           setAnnonceData(d);
           setShowAnnonce(true);
+          setGlowInfos(true);
           try{localStorage.setItem("bd-annonce-seen",String(d.id));}catch{}
           try{await setDoc(doc(db,"annonces_vues",String(d.id)),{vus:arrayUnion(userId)},{merge:true});}catch{}
         }
@@ -1817,6 +1820,19 @@ function App(){
     checkAnnonce();
     const t2=setInterval(checkAnnonce,30000);
     return()=>clearInterval(t2);
+  },[userId,screen]);
+  useEffect(()=>{
+    if(!userId||screen!=="app")return;
+    const checkEntraide=async()=>{
+      try{
+        const liste=await chargerLiensDuJour();
+        const nonBoostesParMoi=liste.filter(l=>l.uid!==userId&&!l.boostePar.includes(userId));
+        setGlowEntraide(nonBoostesParMoi.length>0);
+      }catch{}
+    };
+    checkEntraide();
+    const t3=setInterval(checkEntraide,60000);
+    return()=>clearInterval(t3);
   },[userId,screen]);
   const[lang,setLang]=useState("fr");
   const[translations,setTranslations]=useState({});
@@ -2195,6 +2211,7 @@ function App(){
     {id:"outils",label:"🛠️ Outils",icon:"🛠️",col:C.or,desc:"Canva, CapCut, Linktree et plus"},
     {id:"devperso",label:"🧠 Dév. Personnel",icon:"🧠",col:C.lilas,desc:"Mindset et développement personnel"},
     {id:"formaproduits",label:"🧴 Formation Produits",icon:"🧴",col:C.rose,desc:"Tout savoir sur les produits Mihi"},
+    {id:"communication",label:"💬 Communication Mihi",icon:"💬",col:C.or,desc:"Bien communiquer autour de la marque Mihi"},
   ];
 
   // ── MODE DIAGNOSTIC EXTERNE (cliente sans login) ──
@@ -3819,6 +3836,16 @@ function App(){
           </div>
         )}
 
+        {tab==="formation"&&formationSubTab==="communication"&&(
+          <div>
+            <SecTitle title="Communication" em="autour de Mihi" desc="Comment bien parler de Mihi, de la marque et de l'opportunité."/>
+            <Card title="Formation Communication Mihi" sub="YouTube" icon="▶" color={C.or} defaultOpen>
+              <YTBtn href="https://youtu.be/iSkh6iwI2uI" label="💬 Communication autour de Mihi"/>
+            </Card>
+            <BoutonTermineFormation subTab="communication"/>
+          </div>
+        )}
+
         {/* ── OUTILS ── */}
         {tab==="formation"&&formationSubTab==="devperso"&&(
           <div><DevPersoSection adminItems={adminItems}/><BoutonTermineFormation subTab="devperso"/></div>
@@ -4037,9 +4064,15 @@ function App(){
         }
       </button>
 
+      <style>{`
+        @keyframes neonPulseInfos {
+          0%,100% { box-shadow: 0 4px 20px rgba(61,31,14,.4), 0 0 8px 2px ${C.or}, 0 0 16px 4px ${C.or}80; }
+          50% { box-shadow: 0 4px 20px rgba(61,31,14,.4), 0 0 16px 6px ${C.or}, 0 0 28px 10px ${C.or}90; }
+        }
+      `}</style>
       {/* ── BOUTON FLOTTANT INFOS IMPORTANTES ── */}
-      <button onClick={()=>setShowInfosImportantes(p=>!p)}
-        style={{position:"fixed",bottom:"5rem",left:"1.2rem",width:56,height:56,borderRadius:"50%",background:C.brun,border:`2px solid ${C.or}`,boxShadow:"0 4px 20px rgba(61,31,14,.4)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,transition:"all .2s",padding:0,overflow:"hidden"}}>
+      <button onClick={()=>{setShowInfosImportantes(p=>!p);setGlowInfos(false);}}
+        style={{position:"fixed",bottom:"5rem",left:"1.2rem",width:56,height:56,borderRadius:"50%",background:C.brun,border:`2px solid ${C.or}`,boxShadow:"0 4px 20px rgba(61,31,14,.4)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,transition:"all .2s",padding:0,overflow:"hidden",animation:(glowInfos&&!showInfosImportantes)?"neonPulseInfos 1.4s ease-in-out infinite":"none"}}>
         {showInfosImportantes
           ? <span style={{fontSize:"1rem",color:C.or,fontWeight:700}}>✕</span>
           : <span style={{fontSize:"1.4rem"}}>📌</span>
@@ -4056,8 +4089,8 @@ function App(){
       {showAnnonceAdminFlottant&&<AnnonceAdminPopup uid={userId} onClose={()=>setShowAnnonceAdminFlottant(false)}/>}
 
       {/* ── BOUTON FLOTTANT ENTRAIDE LIENS (systeme independant) ── */}
-      <button onClick={()=>setShowEntraideLiens(p=>!p)}
-        style={{position:"fixed",bottom:"9.5rem",right:"1.2rem",width:56,height:56,borderRadius:"50%",background:C.brun,border:`2px solid ${C.or}`,boxShadow:"0 4px 20px rgba(61,31,14,.4)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,transition:"all .2s",padding:0,overflow:"hidden"}}>
+      <button onClick={()=>{setShowEntraideLiens(p=>!p);setGlowEntraide(false);}}
+        style={{position:"fixed",bottom:"9.5rem",right:"1.2rem",width:56,height:56,borderRadius:"50%",background:C.brun,border:`2px solid ${C.or}`,boxShadow:"0 4px 20px rgba(61,31,14,.4)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,transition:"all .2s",padding:0,overflow:"hidden",animation:(glowEntraide&&!showEntraideLiens)?"neonPulseInfos 1.4s ease-in-out infinite":"none"}}>
         {showEntraideLiens
           ? <span style={{fontSize:"1rem",color:C.or,fontWeight:700}}>✕</span>
           : <span style={{fontSize:"1.4rem"}}>🔗</span>
@@ -5218,6 +5251,12 @@ export const SCRIPTS_DATA=[
     {title:"CTA mot-clé commentaire",text:"Tu veux savoir quel est ce produit qui me fait des compliments à chaque fois ? Écris PRODUIT en commentaire et je t'envoie tout en privé 😊"},
     {title:"CTA pour l'opportunité",text:"Tu cherches un revenu complémentaire qui s'adapte à ta vie ? Écris ÉQUIPE en commentaire — je te réponds en privé 🖤"},
     {title:"Intro storytelling",text:"Il y a [X mois], je ne savais pas quoi faire. Aujourd'hui [ton résultat]. Ce n'est pas un miracle — c'est ce que j'ai construit, étape par étape. Je vous raconte ça ce soir en story 👇"},
+  ]},
+  {cat:"✨ Après une inscription",scripts:[
+    {title:"Message 1 — Bienvenue, valeurs & fonctionnement",text:"Bienvenue dans l'aventure Mihi [Prénom] 🥰 Je suis hyper contente de t'accueillir !\n\nPetite présentation rapide de comment on fonctionne : chez nous, pas de pression ni d'objectifs imposés — on avance chacune à son rythme, avec une équipe qui s'entraide vraiment au quotidien (pas juste des mots en l'air).\n\nNos valeurs : bienveillance, transparence, et l'envie sincère de te voir réussir à TA façon — que ce soit simplement pour profiter des produits, ou pour développer une vraie activité 🖤"},
+    {title:"Message 2 — L'importance du Fast Start",text:"Une étape essentielle pour bien démarrer : le Fast Start 🚀\n\nC'est un parcours guidé, étape par étape, disponible directement dans l'application — il t'explique tout ce qu'il faut savoir pour bien commencer, sans te sentir perdue.\n\nJe te conseille vraiment de le suivre dès les premiers jours, c'est ce qui fait toute la différence pour la suite. Tu le trouveras dès l'ouverture de l'app 😊"},
+    {title:"Message — Accès à l'application",text:"Voici l'accès à ton application Blazing Dynasty 📲\n\n🔗 https://blazing-dinasty-1fad9.web.app\n\n🔑 Ton code d'accès est : BD-2026-fire\n\n📥 Installer l'application :\nhttps://drive.google.com/file/d/1wVvxlIZa9TjUHY-q0OAKb6fffjF52LtH/view?usp=drivesdk"},
+    {title:"Message — Inscription automatique (premier contact)",text:"Coucou [Prénom]\n\nMoi c'est [Ton prénom], je suis ta personne de contact pour l'aventure Mihi et je serai là pour t'accompagner.\n\nBienvenue parmi nous !\n\nAvant de te bombarder d'informations, j'aimerais surtout savoir comment tu souhaites être accompagnée.\n\nSi tu souhaites être cliente VIP, ou développer en tant qu'ambassadrice ?\n\nDans tous les cas, je m'adapte à toi.\n\nDis-moi ce qui te correspond le mieux 💛"},
   ]},
 ];
 
@@ -7714,6 +7753,19 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
             ✏️ Nouvelle annonce
           </button>
         )}
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>Objectif commun</div>
+        {isMelissa&&(
+          <button onClick={()=>setShowObjectifAdmin(true)}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+            🎯 {objectif?"Modifier l'objectif":"Lancer un objectif"}
+          </button>
+        )}
+        {objectif?(
+          <ObjectifCommunCard objectif={objectif} participants={participantsObjectif} uid={uid} nomAffiche={nomAffiche} isMelissa={isMelissa}
+            onPasAjoute={(nouvelleListe)=>setParticipantsObjectif(nouvelleListe)}/>
+        ):(
+          <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0",marginBottom:".6rem"}}>Aucun objectif pour le moment.</div>
+        )}
         <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>Sondages</div>
         {isMelissa&&(
           <button onClick={()=>setShowSondageAdmin(true)}
@@ -7811,19 +7863,6 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
           </div>
         ):(
           <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Aucune annonce pour le moment.</div>
-        )}
-        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",margin:"1rem 0 .5rem"}}>Objectif commun</div>
-        {isMelissa&&(
-          <button onClick={()=>setShowObjectifAdmin(true)}
-            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
-            🎯 {objectif?"Modifier l'objectif":"Lancer un objectif"}
-          </button>
-        )}
-        {objectif?(
-          <ObjectifCommunCard objectif={objectif} participants={participantsObjectif} uid={uid} nomAffiche={nomAffiche} isMelissa={isMelissa}
-            onPasAjoute={(nouvelleListe)=>setParticipantsObjectif(nouvelleListe)}/>
-        ):(
-          <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0"}}>Aucun objectif pour le moment.</div>
         )}
       </div>
     </div>
