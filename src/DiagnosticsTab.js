@@ -3615,7 +3615,7 @@ function BoutiquePubliquePage({slug}){
     })();
   },[slug]);
 
-  const CAT_LABELS={face:"Visage",corps:"Corps",hair:"Cheveux",makeup:"Make Up",parfums:"Parfums",health:"Santé",hommes:"Hommes",enfants:"Enfants",home:"Home",sets:"Sets"};
+  const CAT_LABELS={face:"Visage",corps:"Corps",hair:"Cheveux",makeup:"Make Up",parfums:"Parfums",health:"Santé",nutrition:"Nutrition",hommes:"Hommes",enfants:"Enfants",home:"Home",sets:"Sets"};
 
   useEffect(()=>{
     if(!itemSurligne)return;

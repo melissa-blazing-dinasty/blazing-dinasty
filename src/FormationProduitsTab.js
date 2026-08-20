@@ -10,6 +10,7 @@ const CATEGORIES_PRODUITS = [
   {id:"parfum",        label:"Parfum",                  icon:"🌸", color:"#9B59B6"},
   {id:"makeup",        label:"Maquillage",               icon:"💄", color:"#E91E8C"},
   {id:"complement",    label:"Compléments alimentaires", icon:"💊", color:"#27AE60"},
+  {id:"nutrition",     label:"Nutrition",                icon:"🥗", color:"#7CB342"},
   {id:"poids",         label:"Perte de poids",           icon:"⚖️", color:"#E67E22"},
   {id:"skincare",      label:"Skincare",                 icon:"✨", color:"#C49A8A"},
   {id:"cheveux",       label:"Soins cheveux",            icon:"💇", color:"#8E44AD"},

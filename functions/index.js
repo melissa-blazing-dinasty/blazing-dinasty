@@ -38,6 +38,48 @@ exports.notifMatin = onSchedule({ schedule: "30 7 * * *", timeZone: "Europe/Pari
   await sendNotifToAll("Bonjour Blazing !", "Ta citation du jour t attend. Ouvre l app pour bien demarrer ta journee");
 });
 
+// Rappel anniversaire clientes : previens le jour J, et 3 jours avant pour laisser le temps de preparer une attention
+exports.notifAnniversaireClientes = onSchedule({ schedule: "0 8 * * *", timeZone: "Europe/Paris" }, async () => {
+  try {
+    const now = new Date();
+    const dansTroisJours = new Date(now);
+    dansTroisJours.setDate(dansTroisJours.getDate() + 3);
+    const cleMJ = (d) => (d.getMonth() + 1) + "-" + d.getDate();
+    const cleAujourdhui = cleMJ(now);
+    const cleDansTroisJours = cleMJ(dansTroisJours);
+    const usersSnap = await db.collection("users").get();
+    for (const doc of usersSnap.docs) {
+      const uid = doc.id;
+      const data = doc.data();
+      let aujourdhui = [], bientot = [];
+      try {
+        const clients = data["db-clients"] ? JSON.parse(data["db-clients"]) : [];
+        clients.forEach(c => {
+          if (!c.ddn) return;
+          const dNaissance = new Date(c.ddn);
+          if (isNaN(dNaissance.getTime())) return;
+          const cle = cleMJ(dNaissance);
+          const nomAff = c.prenom || c.nom || "Une cliente";
+          if (cle === cleAujourdhui) aujourdhui.push(nomAff);
+          else if (cle === cleDansTroisJours) bientot.push(nomAff);
+        });
+      } catch (e) {}
+      if (aujourdhui.length > 0) {
+        const msg = aujourdhui.length === 1
+          ? ("C'est l'anniversaire de " + aujourdhui[0] + " aujourd'hui ! Un petit message lui ferait plaisir 🎂")
+          : ("C'est l'anniversaire de " + aujourdhui.join(", ") + " aujourd'hui ! Un petit message leur ferait plaisir 🎂");
+        await sendNotifToUid(uid, "🎂 Anniversaire aujourd'hui !", msg);
+      }
+      if (bientot.length > 0) {
+        const msg = bientot.length === 1
+          ? ("L'anniversaire de " + bientot[0] + " arrive dans 3 jours. De quoi preparer une petite attention 🎁")
+          : ("L'anniversaire de " + bientot.join(", ") + " arrive dans 3 jours. De quoi preparer une petite attention 🎁");
+        await sendNotifToUid(uid, "🎁 Anniversaire dans 3 jours", msg);
+      }
+    }
+  } catch (e) { console.error("notifAnniversaireClientes error", e); }
+});
+
 exports.notifSoir = onSchedule({ schedule: "30 20 * * *", timeZone: "Europe/Paris" }, async () => {
   try {
     const today = new Date().toISOString().slice(0, 10);

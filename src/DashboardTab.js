@@ -89,6 +89,15 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
             duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:"Réappro produit",type:"conso"});
           }
         });
+        if(c.ddn){
+          const dNaissance=new Date(c.ddn);
+          if(!isNaN(dNaissance.getTime())){
+            const auj=new Date();
+            if(dNaissance.getMonth()===auj.getMonth()&&dNaissance.getDate()===auj.getDate()){
+              duesClientes.push({id:c.id,name:c.prenom||c.nom||"Cliente",texte:"🎂 Anniversaire aujourd'hui",type:"anniversaire"});
+            }
+          }
+        }
       });
       setRelancesDuJour([...duesProspects,...duesClientes]);
     }catch{}
@@ -463,7 +472,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
                   {relancesDuJour.map((p,i)=>(
                     <div key={i} onClick={()=>{if(p.id){setDtab(p.type!=="prospect"?"clients":"prospects");if(p.type!=="prospect"){setClientsSubTab("clients");setClientCibleId(p.id);}setCibleRappel({id:p.id,type:p.type==="prospect"?"prospect":"cliente"});}}}
                       style={{background:"white",borderRadius:9,padding:".5rem .7rem",marginBottom:".4rem",fontSize:".78rem",color:"#3D2B1F",fontWeight:600,display:"flex",flexDirection:"column",cursor:p.id?"pointer":"default"}}>
-                      <span>{p.type==="cliente"?"💜 ":p.type==="suivi"?"📦 ":p.type==="conso"?"🔄 ":"👥 "}{p.name}</span>
+                      <span>{p.type==="cliente"?"💜 ":p.type==="suivi"?"📦 ":p.type==="conso"?"🔄 ":p.type==="anniversaire"?"🎂 ":"👥 "}{p.name}</span>
                       {p.texte&&<span style={{fontSize:".68rem",color:"#888",fontWeight:400,marginTop:".15rem"}}>{p.texte}</span>}
                     </div>
                   ))}
