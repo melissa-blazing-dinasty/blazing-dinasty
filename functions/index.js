@@ -485,6 +485,37 @@ exports.rappelEquiteEntraide = onSchedule({ schedule: "0 18 * * *", timeZone: "E
   } catch(e) { console.error("rappelEquiteEntraide error", e); }
 });
 
+// Alerte manuelle declenchee par la fondatrice si elle repere un vrai retard sur les boosts (aujourd'hui ou jours precedents)
+exports.envoyerAlerteEntraide = onCall(async (request) => {
+  const auth = request.auth;
+  if (!auth || auth.uid !== "melissa-da-silveira") throw new HttpsError("permission-denied", "Reserve a la fondatrice");
+  try {
+    let totalNonBooste = 0;
+    const participantsUids = new Set();
+    for (let i = 0; i <= 2; i++) {
+      const dd = new Date();
+      dd.setDate(dd.getDate() - i);
+      const cle = dd.toISOString().slice(0, 10);
+      const snap = await db.collection("entraide_liens").doc("liens_du_jour").collection("items").doc(cle).get();
+      if (snap.exists) {
+        const liste = snap.data().liste || [];
+        totalNonBooste += liste.filter(l => !l.boostePar || l.boostePar.length === 0).length;
+        liste.forEach(l => { if (l.uid) participantsUids.add(l.uid); });
+      }
+    }
+    const msg = totalNonBooste > 0
+      ? (totalNonBooste === 1 ? "Il y a 1 lien qui attend encore d etre booste, certaines ont pris du retard. Un petit geste avant ce soir ? 💛" : (totalNonBooste + " liens attendent encore d etre boostes, certaines ont pris du retard. Un petit geste avant ce soir ? 💛"))
+      : "Petit rappel : pensez a booster les liens de vos collegues regulierement, meme ceux d hier ! 💛";
+    for (const participantUid of participantsUids) {
+      await sendNotifToUid(participantUid, "🚨 Rappel entraide reseaux", msg);
+    }
+    return { status: "ok", totalNonBooste, nbDestinataires: participantsUids.size };
+  } catch (e) {
+    console.error("envoyerAlerteEntraide error", e);
+    throw new HttpsError("internal", "Erreur lors de l envoi de l alerte");
+  }
+});
+
 exports.notifAnnonceEquipe = onDocumentWritten("equipe/derniere-annonce", async (event) => {
   try {
     const before = event.data.before.exists ? event.data.before.data() : {};

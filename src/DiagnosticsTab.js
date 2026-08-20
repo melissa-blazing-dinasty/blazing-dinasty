@@ -1617,68 +1617,164 @@ function ScriptsDiagSection(){
   );
 }
 
-function AssignerDiagClienteBtn({ordonnance, type, nomClient, uid}){
+function AssignerDiagClienteBtn({ordonnance, type, nomClient, uid, contact}){
+  const[mode,setMode]=useState("cliente"); // "cliente" | "distributrice"
   const[clients,setClients]=useState([]);
+  const[distribs,setDistribs]=useState([]);
   const[showModal,setShowModal]=useState(false);
   const[loading,setLoading]=useState(false);
   const[done,setDone]=useState(false);
   const[search,setSearch]=useState("");
+  const[creerNouvelle,setCreerNouvelle]=useState(false);
+  const[nvPrenom,setNvPrenom]=useState("");
+  const[nvNom,setNvNom]=useState("");
+  const[nvTel,setNvTel]=useState("");
+  const[nvMail,setNvMail]=useState("");
 
-  const chargerClientes=async()=>{
+  const preremplirDepuisContact=()=>{
+    const c=contact||{};
+    if(c.prenom){
+      setNvPrenom(c.prenom||"");
+      setNvNom(c.nom||"");
+    }else{
+      // nomClient est souvent "Prenom Nom" combine
+      const parts=(nomClient||"").trim().split(/\s+/);
+      setNvPrenom(parts[0]||"");
+      setNvNom(parts.slice(1).join(" ")||"");
+    }
+    setNvTel(c.tel||"");
+    setNvMail(c.mail||c.reseau||"");
+  };
+
+  const chargerListe=async()=>{
     setLoading(true);
     try{
       const snap=await getDoc(doc(db,"users",uid));
-      if(snap.exists()&&snap.data()["db-clients"]){
-        setClients(JSON.parse(snap.data()["db-clients"]));
+      if(snap.exists()){
+        if(snap.data()["db-clients"])setClients(JSON.parse(snap.data()["db-clients"]));
+        if(snap.data()["db-distributeurs"])setDistribs(JSON.parse(snap.data()["db-distributeurs"]));
       }
     }catch{}
     setLoading(false);
   };
 
-  const assigner=async(cliente)=>{
+  const assigner=async(personne)=>{
     try{
+      const champ=mode==="cliente"?"db-clients":"db-distributeurs";
       const snap=await getDoc(doc(db,"users",uid));
       const data=snap.exists()?snap.data():{};
-      const clientsActuels=data["db-clients"]?JSON.parse(data["db-clients"]):[];
+      const actuels=data[champ]?JSON.parse(data[champ]):[];
       const diag={id:`diag_${Date.now()}`,type,date:new Date().toLocaleDateString("fr-FR"),ordonnance,nomClient};
-      const updatedClients=clientsActuels.map(c=>c.id===cliente.id?{...c,diagnostics:[diag,...(c.diagnostics||[])]}:c);
-      await setDoc(doc(db,"users",uid),{"db-clients":JSON.stringify(updatedClients)},{merge:true});
+      const updated=actuels.map(c=>c.id===personne.id?{...c,diagnostics:[diag,...(c.diagnostics||[])]}:c);
+      await setDoc(doc(db,"users",uid),{[champ]:JSON.stringify(updated)},{merge:true});
       setDone(true);
-      setTimeout(()=>{setDone(false);setShowModal(false);},2000);
+      setTimeout(()=>{setDone(false);setShowModal(false);setCreerNouvelle(false);},2000);
     }catch(e){console.error(e);}
   };
 
-  const filteredClientes=clients.filter(c=>`${c.prenom||""} ${c.nom||""}`.toLowerCase().includes(search.toLowerCase()));
+  const creerEtAssigner=async()=>{
+    if(!nvPrenom.trim())return;
+    try{
+      const champ=mode==="cliente"?"db-clients":"db-distributeurs";
+      const snap=await getDoc(doc(db,"users",uid));
+      const data=snap.exists()?snap.data():{};
+      const actuels=data[champ]?JSON.parse(data[champ]):[];
+      const diag={id:`diag_${Date.now()}`,type,date:new Date().toLocaleDateString("fr-FR"),ordonnance,nomClient};
+      const nouvellePersonne={
+        id:Date.now(),
+        prenom:nvPrenom.trim(),nom:nvNom.trim(),
+        tel:nvTel.trim(),mail:nvMail.trim(),
+        dateEnreg:todayLocalStr(),
+        diagnostics:[diag],
+      };
+      if(mode==="distributrice"){
+        // Cree aussi une entree dans l'annuaire d'equipe, pour rester coherent avec l'ajout manuel classique
+        try{
+          const newUid=(nvPrenom.trim()+"-"+nvNom.trim()).toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
+          const entry={uid:newUid,prenom:nvPrenom.trim(),nom:nvNom.trim(),marraine:uid,palier:"2%",manuel:true,dateEnreg:todayLocalStr()};
+          const ref=doc(db,"equipe","annuaire");
+          await setDoc(ref,{membres:{[newUid]:entry}},{merge:true});
+        }catch{}
+      }
+      await setDoc(doc(db,"users",uid),{[champ]:JSON.stringify([...actuels,nouvellePersonne])},{merge:true});
+      setDone(true);
+      setTimeout(()=>{setDone(false);setShowModal(false);setCreerNouvelle(false);setNvPrenom("");setNvNom("");setNvTel("");setNvMail("");},2000);
+    }catch(e){console.error(e);}
+  };
+
+  const listeActive=mode==="cliente"?clients:distribs;
+  const filteredListe=listeActive.filter(c=>`${c.prenom||""} ${c.nom||""}`.toLowerCase().includes(search.toLowerCase()));
 
   return(
     <>
-      <button onClick={()=>{setShowModal(true);chargerClientes();setDone(false);}}
+      <button onClick={()=>{setShowModal(true);chargerListe();setDone(false);setCreerNouvelle(false);}}
         style={{width:"100%",background:"#F0EBF8",color:"#6B4A9E",border:"1.5px solid #C4A8E8",borderRadius:10,padding:".6rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".5rem",display:"flex",alignItems:"center",justifyContent:"center",gap:".4rem"}}>
-        👤 Assigner ce diagnostic à une cliente
+        👤 Assigner ce diagnostic
       </button>
       {showModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
-          <div style={{background:"#fff",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
-            <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:300,color:"#3D1F0E",marginBottom:".75rem"}}>👤 Assigner à une cliente</div>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher une cliente..."
-              style={{border:"1px solid #E8DDD4",borderRadius:8,padding:".45rem .65rem",fontSize:".78rem",fontFamily:"inherit",marginBottom:".65rem",outline:"none"}}/>
-            <div style={{flex:1,overflowY:"auto"}}>
-              {loading&&<div style={{color:"#888",fontSize:".75rem",textAlign:"center",padding:"1rem"}}>Chargement...</div>}
-              {done&&<div style={{background:"#F0FFF4",border:"1px solid #C0E8D0",borderRadius:8,padding:".75rem",color:"#2D7A4F",fontSize:".78rem",textAlign:"center"}}>✅ Diagnostic assigné !</div>}
-              {!loading&&!done&&filteredClientes.map(c=>(
-                <div key={c.id} onClick={()=>assigner(c)}
-                  style={{padding:".55rem .75rem",borderRadius:8,marginBottom:".3rem",cursor:"pointer",border:"1px solid #E8DDD4",background:"#FAF7F2",display:"flex",alignItems:"center",gap:".5rem"}}>
-                  <div style={{width:30,height:30,borderRadius:"50%",background:"#C49A8A",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:".75rem",fontWeight:700,flexShrink:0}}>
-                    {((c.prenom&&c.prenom[0])||(c.nom&&c.nom[0])||"?").toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{fontFamily:"Georgia,serif",fontSize:".82rem",fontWeight:600,color:"#3D1F0E"}}>{c.prenom} {c.nom}</div>
-                    <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".62rem",color:"#888"}}>{c.statut||""}</div>
-                  </div>
-                </div>
-              ))}
-              {!loading&&!done&&filteredClientes.length===0&&<div style={{color:"#888",fontSize:".75rem",textAlign:"center",padding:"1rem"}}>Aucune cliente trouvée</div>}
+          <div style={{background:"#fff",borderRadius:16,padding:"1.5rem",maxWidth:380,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",fontWeight:300,color:"#3D1F0E",marginBottom:".75rem"}}>👤 Assigner ce diagnostic</div>
+
+            <div style={{display:"flex",gap:".4rem",marginBottom:".75rem"}}>
+              <button onClick={()=>{setMode("cliente");setCreerNouvelle(false);setSearch("");}}
+                style={{flex:1,padding:".4rem",borderRadius:8,border:"1px solid "+(mode==="cliente"?"#6B4A9E":"#E8DDD4"),background:mode==="cliente"?"#6B4A9E":"#fff",color:mode==="cliente"?"white":"#888",fontSize:".74rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                👤 Cliente
+              </button>
+              <button onClick={()=>{setMode("distributrice");setCreerNouvelle(false);setSearch("");}}
+                style={{flex:1,padding:".4rem",borderRadius:8,border:"1px solid "+(mode==="distributrice"?"#6B4A9E":"#E8DDD4"),background:mode==="distributrice"?"#6B4A9E":"#fff",color:mode==="distributrice"?"white":"#888",fontSize:".74rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                👑 Distributrice
+              </button>
             </div>
+
+            {done&&<div style={{background:"#F0FFF4",border:"1px solid #C0E8D0",borderRadius:8,padding:".75rem",color:"#2D7A4F",fontSize:".78rem",textAlign:"center"}}>✅ Diagnostic assigné !</div>}
+
+            {!done&&!creerNouvelle&&(<>
+              <button onClick={()=>{preremplirDepuisContact();setCreerNouvelle(true);}}
+                style={{width:"100%",background:"#FAF7F2",border:"1.5px dashed #C4A8E8",borderRadius:8,padding:".6rem",fontSize:".76rem",fontWeight:600,color:"#6B4A9E",cursor:"pointer",fontFamily:"inherit",marginBottom:".65rem"}}>
+                ➕ Créer une nouvelle fiche {mode==="cliente"?"cliente":"distributrice"}
+              </button>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={`Rechercher une ${mode==="cliente"?"cliente":"distributrice"} existante...`}
+                style={{border:"1px solid #E8DDD4",borderRadius:8,padding:".45rem .65rem",fontSize:".78rem",fontFamily:"inherit",marginBottom:".65rem",outline:"none"}}/>
+              <div style={{flex:1,overflowY:"auto"}}>
+                {loading&&<div style={{color:"#888",fontSize:".75rem",textAlign:"center",padding:"1rem"}}>Chargement...</div>}
+                {!loading&&filteredListe.map(c=>(
+                  <div key={c.id} onClick={()=>assigner(c)}
+                    style={{padding:".55rem .75rem",borderRadius:8,marginBottom:".3rem",cursor:"pointer",border:"1px solid #E8DDD4",background:"#FAF7F2",display:"flex",alignItems:"center",gap:".5rem"}}>
+                    <div style={{width:30,height:30,borderRadius:"50%",background:"#C49A8A",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:".75rem",fontWeight:700,flexShrink:0}}>
+                      {((c.prenom&&c.prenom[0])||(c.nom&&c.nom[0])||"?").toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{fontFamily:"Georgia,serif",fontSize:".82rem",fontWeight:600,color:"#3D1F0E"}}>{c.prenom} {c.nom}</div>
+                      <div style={{fontFamily:"Trebuchet MS,sans-serif",fontSize:".62rem",color:"#888"}}>{c.statut||c.palier||""}</div>
+                    </div>
+                  </div>
+                ))}
+                {!loading&&filteredListe.length===0&&<div style={{color:"#888",fontSize:".75rem",textAlign:"center",padding:"1rem"}}>Aucune {mode==="cliente"?"cliente":"distributrice"} trouvée</div>}
+              </div>
+            </>)}
+
+            {!done&&creerNouvelle&&(<>
+              <div style={{display:"flex",flexDirection:"column",gap:".5rem",marginBottom:".75rem"}}>
+                <input value={nvPrenom} onChange={e=>setNvPrenom(e.target.value)} placeholder="Prénom"
+                  style={{border:"1px solid #E8DDD4",borderRadius:8,padding:".5rem .65rem",fontSize:".8rem",fontFamily:"inherit",outline:"none"}}/>
+                <input value={nvNom} onChange={e=>setNvNom(e.target.value)} placeholder="Nom (optionnel)"
+                  style={{border:"1px solid #E8DDD4",borderRadius:8,padding:".5rem .65rem",fontSize:".8rem",fontFamily:"inherit",outline:"none"}}/>
+                <input value={nvTel} onChange={e=>setNvTel(e.target.value)} placeholder="Téléphone" type="tel"
+                  style={{border:"1px solid #E8DDD4",borderRadius:8,padding:".5rem .65rem",fontSize:".8rem",fontFamily:"inherit",outline:"none"}}/>
+                <input value={nvMail} onChange={e=>setNvMail(e.target.value)} placeholder="Email / réseau social"
+                  style={{border:"1px solid #E8DDD4",borderRadius:8,padding:".5rem .65rem",fontSize:".8rem",fontFamily:"inherit",outline:"none"}}/>
+              </div>
+              <button onClick={creerEtAssigner} disabled={!nvPrenom.trim()}
+                style={{width:"100%",background:nvPrenom.trim()?"#6B4A9E":"#E8DDD4",color:"white",border:"none",borderRadius:8,padding:".6rem",fontSize:".78rem",fontWeight:700,cursor:nvPrenom.trim()?"pointer":"default",fontFamily:"inherit",marginBottom:".5rem"}}>
+                ✅ Créer la fiche et y assigner le diagnostic
+              </button>
+              <button onClick={()=>setCreerNouvelle(false)}
+                style={{width:"100%",background:"none",border:"1px solid #E8DDD4",borderRadius:8,padding:".45rem",fontSize:".73rem",fontFamily:"inherit",cursor:"pointer",color:"#888"}}>
+                ← Retour à la recherche
+              </button>
+            </>)}
+
             <button onClick={()=>setShowModal(false)}
               style={{marginTop:".75rem",background:"none",border:"1px solid #E8DDD4",borderRadius:8,padding:".5rem",fontSize:".75rem",fontFamily:"inherit",cursor:"pointer",color:"#888"}}>
               Annuler
@@ -2469,8 +2565,9 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           📋 Copier l'ordonnance complète
         </button>
 
-        {/* Assigner à une cliente */}
-        <AssignerDiagClienteBtn ordonnance={ordonnance} type={type} nomClient={nomClient} uid={uid}/>
+        {/* Assigner à une cliente ou une distributrice */}
+        <AssignerDiagClienteBtn ordonnance={ordonnance} type={type} nomClient={nomClient} uid={uid}
+          contact={{prenom:prenomContact,nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact}}/>
         {/* Bouton PDF côté cliente */}
         <button onClick={()=>{
           if(!ordonnance) return;

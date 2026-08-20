@@ -54,6 +54,7 @@ const reinitialiserMotDePasseFn = httpsCallable(fbFunctions,'reinitialiserMotDeP
 const creerCompteStripeConnectFn = httpsCallable(fbFunctions,'creerCompteStripeConnect');
 const verifierStatutStripeFn = httpsCallable(fbFunctions,'verifierStatutStripe');
 const creerSessionCheckoutFn = httpsCallable(fbFunctions,'creerSessionCheckout');
+const envoyerAlerteEntraideFn = httpsCallable(fbFunctions,'envoyerAlerteEntraide');
 
 async function saveFCMToken(uid) {
   if (!messaging) return;
@@ -881,6 +882,14 @@ export async function enregistrerChallenge(ch){
 
 export async function effacerChallenge(id){
   await deleteDoc(doc(db,"challenges","liste","items",id));
+}
+
+export async function chargerDeclarationsChallenge(challengeId){
+  try{
+    const snap=await getDoc(doc(db,"challenges","declarations","items",challengeId));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerDeclarationsChallenge:", e); }
+  return [];
 }
 
 export async function enregistrerDeclarations(challengeId, liste){
@@ -7170,13 +7179,14 @@ function SondageCard({sondage, votes, uid, isMelissa, onVoted, onSupprime}){
   const[selection,setSelection]=useState(monVote?monVote.choix:[]);
   const[voting,setVoting]=useState(false);
   const[suppression,setSuppression]=useState(false);
+  const[modification,setModification]=useState(false);
   const dejaVote=!!monVote;
   const totalVotes=votes.length;
   const dateFinDepassee=sondage.dateFin&&Date.now()>sondage.dateFin;
   const estActif=sondage.actif&&!dateFinDepassee;
 
   const toggleOption=(optId)=>{
-    if(dejaVote||!estActif)return;
+    if((dejaVote&&!modification)||!estActif)return;
     if(sondage.multiChoix){
       setSelection(p=>p.includes(optId)?p.filter(x=>x!==optId):[...p,optId]);
     }else{
@@ -7190,8 +7200,14 @@ function SondageCard({sondage, votes, uid, isMelissa, onVoted, onSupprime}){
     try{
       const nouvellesListe=await voterSondage(sondage.id,uid,selection);
       onVoted(sondage.id,nouvellesListe);
+      setModification(false);
     }catch{}
     setVoting(false);
+  };
+
+  const ouvrirModification=()=>{
+    setSelection(monVote?monVote.choix:[]);
+    setModification(true);
   };
 
   const supprimer=async()=>{
@@ -7206,7 +7222,7 @@ function SondageCard({sondage, votes, uid, isMelissa, onVoted, onSupprime}){
 
   const compteParOption=(optId)=>votes.filter(v=>v.choix.includes(optId)).length;
 
-  const afficherResultats=dejaVote||!estActif;
+  const afficherResultats=(dejaVote&&!modification)||!estActif;
 
   return(
     <div style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem .9rem"}}>
@@ -7246,9 +7262,23 @@ function SondageCard({sondage, votes, uid, isMelissa, onVoted, onSupprime}){
         })}
       </div>
       {!afficherResultats&&(
-        <button onClick={confirmerVote} disabled={selection.length===0||voting}
-          style={{width:"100%",marginTop:".6rem",background:selection.length>0?C.brun:C.pale,color:selection.length>0?C.blanc:C.gris,border:"none",borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:selection.length>0?"pointer":"default"}}>
-          {voting?"Envoi...":"Voter"}
+        <div style={{display:"flex",gap:".4rem",marginTop:".6rem"}}>
+          <button onClick={confirmerVote} disabled={selection.length===0||voting}
+            style={{flex:1,background:selection.length>0?C.brun:C.pale,color:selection.length>0?C.blanc:C.gris,border:"none",borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:selection.length>0?"pointer":"default"}}>
+            {voting?"Envoi...":modification?"Confirmer mon nouveau vote":"Voter"}
+          </button>
+          {modification&&(
+            <button onClick={()=>setModification(false)}
+              style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .7rem",fontSize:".76rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
+              Annuler
+            </button>
+          )}
+        </div>
+      )}
+      {afficherResultats&&dejaVote&&estActif&&(
+        <button onClick={ouvrirModification}
+          style={{width:"100%",marginTop:".5rem",background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem",fontSize:".72rem",color:C.brun,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          ✏️ Modifier mon vote
         </button>
       )}
       <div style={{fontSize:".62rem",color:C.gris,marginTop:".45rem",opacity:.75}}>{totalVotes} vote{totalVotes!==1?"s":""}</div>
@@ -7406,6 +7436,7 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
   const[envoi,setEnvoi]=useState(false);
   const[showRegles,setShowRegles]=useState(false);
   const[showRattrapage,setShowRattrapage]=useState(false);
+  const[envoiAlerte,setEnvoiAlerte]=useState(false);
 
   const recharger=async()=>{
     const[l,r,h,s]=await Promise.all([chargerLiensDuJour(),chargerLiensRattrapage(),chargerActiviteEntraide(uid),chargerSuspendusEntraide()]);
@@ -7611,6 +7642,18 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
           {isMelissa&&(
             <>
               <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",margin:"1.1rem 0 .5rem"}}>Gestion (toi uniquement)</div>
+              <button onClick={async()=>{
+                  if(!window.confirm("Envoyer un rappel push a toute l'equipe pour les liens en retard (aujourd'hui + 2 derniers jours) ?"))return;
+                  setEnvoiAlerte(true);
+                  try{
+                    const res=await envoyerAlerteEntraideFn();
+                    alert("Alerte envoyée à "+(res.data?.nbDestinataires||0)+" personne(s) ayant partagé un lien ! ("+(res.data?.totalNonBooste||0)+" lien(s) en retard signalé(s))");
+                  }catch(e){alert("Erreur lors de l'envoi de l'alerte.");}
+                  setEnvoiAlerte(false);
+                }} disabled={envoiAlerte}
+                style={{width:"100%",background:"#B8442F",color:"white",border:"none",borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+                {envoiAlerte?"Envoi...":"🚨 Envoyer une alerte retard boosts"}
+              </button>
               {suspendus.length>0&&(
                 <div style={{display:"flex",flexDirection:"column",gap:".4rem",marginBottom:".6rem"}}>
                   {suspendus.map(s=>(
@@ -8901,7 +8944,8 @@ function ChallengeCountdown({deadline}){
   useEffect(()=>{const t=setInterval(()=>setR(deadline-Date.now()),30000);return()=>clearInterval(t);},[deadline]);
   if(r<=0)return <span style={{color:"#B04040",fontWeight:700,fontSize:".72rem"}}>⏰ Terminé</span>;
   const d2=Math.floor(r/86400000),h=Math.floor((r%86400000)/3600000),m=Math.floor((r%3600000)/60000);
-  return <span style={{fontWeight:700,color:C.or,fontSize:".72rem"}}>{d2>0?`${d2}j `:""}{h}h {m}min</span>;
+  const urgent=r<24*3600000;
+  return <span style={{fontWeight:700,color:urgent?"#B8442F":C.or,fontSize:".72rem",animation:urgent?"neonPulseInfos 1.4s ease-in-out infinite":"none",padding:urgent?"1px 6px":0,borderRadius:urgent?8:0,background:urgent?"rgba(255,255,255,.15)":"transparent"}}>{urgent?"⚠️ ":""}{d2>0?`${d2}j `:""}{h}h {m}min{urgent?" — se termine aujourd'hui !":""}</span>;
 }
 
 export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=false}){
@@ -8944,7 +8988,10 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
         const now=Date.now();
         const mesChefs=getLigneeChefs(annuaire,uid,chefsUids);
         const actifs=data.filter(c=>{
-          if(c.deadline&&c.deadline<now)return false;
+          if(c.deadline&&c.deadline<now){
+            const histoMs=7*24*3600000;
+            if(c.deadline<now-histoMs)return false;
+          }
           if(isMelissa)return true;
           if(c.global)return true;
           if(!c.equipesCibles||c.equipesCibles.length===0)return true;
@@ -8961,8 +9008,11 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
   },[uid]);
 
   const rafraichirListe=(items)=>{
+    const histoMs=7*24*3600000; // Garder les challenges termines visibles (historique) pendant 7 jours
     setChallenges(items.filter(c=>{
-      if(c.deadline&&c.deadline<Date.now())return false;
+      if(c.deadline&&c.deadline<Date.now()){
+        if(c.deadline<Date.now()-histoMs)return false;
+      }
       if(isMelissa)return true;
       if(c.global)return true;
       if(!c.equipesCibles||c.equipesCibles.length===0)return true;
@@ -9030,33 +9080,33 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
 
   const declarer=async(challengeId,amount,unite)=>{
     const d={uid,userName,count:+amount||1,ts:Date.now()};
-    const current=declarations[challengeId]||[];
-    const liste=[...current,d];
-    setDeclarations({...declarations,[challengeId]:liste});
+    const fraiche=await chargerDeclarationsChallenge(challengeId);
+    const liste=[...fraiche,d];
+    setDeclarations(prev=>({...prev,[challengeId]:liste}));
     await enregistrerDeclarations(challengeId, liste);
     const ch=challenges.find(x=>x.id===challengeId);
     postToWallOfFame&&postToWallOfFame(uid,userName,`a déclaré ${amount} ${unite||ch?.unite||""} sur le challenge "${ch?.titre||challengeId}" 💪`,"🚀");
   };
   const supprimerDeclaration=async(challengeId,ts)=>{
     if(!window.confirm("Supprimer cette declaration ?"))return;
-    const current=declarations[challengeId]||[];
-    const liste=current.filter(d=>!(d.uid===uid&&d.ts===ts));
-    setDeclarations({...declarations,[challengeId]:liste});
+    const fraiche=await chargerDeclarationsChallenge(challengeId);
+    const liste=fraiche.filter(d=>!(d.uid===uid&&d.ts===ts));
+    setDeclarations(prev=>({...prev,[challengeId]:liste}));
     await enregistrerDeclarations(challengeId, liste);
   };
   const validerAction=async(challengeId,actionId,actionLabel)=>{
-    const current=declarations[challengeId]||[];
-    const dejaFait=current.find(d=>d.uid===uid&&d.actionId===actionId);
-    let next;
+    const fraiche=await chargerDeclarationsChallenge(challengeId);
+    const dejaFait=fraiche.find(d=>d.uid===uid&&d.actionId===actionId);
+    let liste;
     if(dejaFait){
-      next={...declarations,[challengeId]:current.filter(d=>!(d.uid===uid&&d.actionId===actionId))};
+      liste=fraiche.filter(d=>!(d.uid===uid&&d.actionId===actionId));
     }else{
       const d={uid,userName,count:1,actionId,ts:Date.now()};
-      next={...declarations,[challengeId]:[...current,d]};
+      liste=[...fraiche,d];
       postToWallOfFame&&postToWallOfFame(uid,userName,`a validé l'action "${actionLabel}" 💪`,"✅");
     }
-    setDeclarations(next);
-    await enregistrerDeclarations(challengeId, next[challengeId]||[]);
+    setDeclarations(prev=>({...prev,[challengeId]:liste}));
+    await enregistrerDeclarations(challengeId, liste);
   };
 
   const supprimer=async(id)=>{
@@ -9240,7 +9290,11 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
         </div>
       )}
 
-      {challenges.map(c=>{
+      {[...challenges].sort((a,b)=>{
+        const aFini=a.deadline&&a.deadline<Date.now()?1:0;
+        const bFini=b.deadline&&b.deadline<Date.now()?1:0;
+        return aFini-bFini;
+      }).map(c=>{
         const decls=declarations[c.id]||[];
         const total=decls.reduce((s,d)=>s+d.count,0);
         const pct=c.objectif?Math.min(100,Math.round(total/c.objectif*100)):0;
@@ -9251,6 +9305,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
         },{})).sort((a,b)=>b.total-a.total);
         const medals=["🥇","🥈","🥉"];
         const monTotal=decls.filter(d=>d.uid===uid).reduce((s,d)=>s+d.count,0);
+        const estTermine=!!(c.deadline&&c.deadline<Date.now());
 
         return(
           <div key={c.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,overflow:"hidden",marginBottom:".75rem"}}>
@@ -9259,7 +9314,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:".55rem",fontWeight:700,color:"rgba(255,255,255,.7)",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".2rem"}}>
-                    {c.type==="flash"?"⚡ Challenge Flash":c.type==="long"?"📅 Challenge Long terme":"🎯 Challenge"}
+                    {estTermine?"📜 Terminé":c.type==="flash"?"⚡ Challenge Flash":c.type==="long"?"📅 Challenge Long terme":"🎯 Challenge"}
                     {!c.global&&(c.equipesCibles?.length>1?` · 👑 Challenge entre ${c.equipesCibles.length} équipes`:" · Équipe ciblée")}
                   </div>
                   <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:"white"}}>{c.titre}</div>
@@ -9327,7 +9382,12 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
                 </div>
               )}
 
-              {c.type!=="action"?(<>
+              {estTermine&&(
+                <div style={{background:"#F0EEEA",borderRadius:10,padding:".5rem .85rem",marginBottom:".75rem",fontSize:".7rem",color:C.gris,textAlign:"center",fontStyle:"italic"}}>
+                  📜 Challenge terminé — résultats conservés en historique
+                </div>
+              )}
+              {!estTermine&&c.type!=="action"?(<>
               <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem",display:"flex",alignItems:"center",gap:".6rem"}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:".6rem",color:C.gris,marginBottom:".1rem"}}>Ma participation</div>
@@ -9368,7 +9428,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
                 </div>
               )}
               </>
-            ):(
+            ):!estTermine?(
               <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem"}}>
                 <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem"}}>Coche les actions realisees</div>
                 {(c.actions||[]).map(a=>{
@@ -9382,7 +9442,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
                   );
                 })}
               </div>
-            )}
+            ):null}
 
               {/* Classement */}
               {classement.length>0&&(
