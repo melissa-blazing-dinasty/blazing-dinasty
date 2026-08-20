@@ -1,0 +1,111 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // VERROUILLÉ
+    match /secrets/{document=**} {
+      allow read, write: if false;
+    }
+    match /paypal_commandes_attente/{orderId} {
+      allow read, write: if false;
+    }
+    // DONNÉES PERSONNELLES : dépôt libre, lecture réservée
+    match /tunnel_prospects/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+    match /leads_recrutement/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+    match /diag_externes/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+    // CONTACTS PUBLICS : lecture libre (necessaire pour boutiques/tunnels publics), ecriture reservee/creation libre
+    match /contacts_publics/{document=**} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+    // COMPTEURS : incrément libre, lecture réservée
+    match /linkbio_stats/{document=**} {
+      allow create, update: if true;
+      allow read, delete: if request.auth != null;
+    }
+    match /tunnel_stats/{document=**} {
+      allow create, update: if true;
+      allow read, delete: if request.auth != null;
+    }
+    // CONTENU PUBLIC : lecture libre, écriture réservée
+    match /linkbio/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /tunnels/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /tunnel_recrutement/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /recommandations/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /ordonnances_publiques/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /tokens_cadeaux/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /admin/catalogue_mihi {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    // PRIVÉ PAR UTILISATRICE
+    match /favoris_clients/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /analytics/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /notifications_internes/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    // AUDIT
+    match /audit_reponses/{doc} {
+      allow create: if request.resource.data.keys().size() < 45
+                    && request.resource.data.ref is string;
+      allow read: if request.auth != null
+                  && (request.auth.uid == 'melissa-da-silveira'
+                      || resource.data.ref == request.auth.uid);
+      allow update, delete: if false;
+    }
+    match /reglages_publics/{doc} {
+      allow read: if true;
+      allow write: if request.auth.uid == 'melissa-da-silveira';
+    }
+    // IMMERSION : contenu personnalisé par distributrice, lecture publique
+    match /immersion/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == docId;
+    }
+    // TÉMOIGNAGES : dépôt libre par l'équipe, lecture publique des seuls témoignages validés
+    match /temoignages/{docId} {
+      allow read: if resource.data.valide == true;
+      allow create: if true;
+      allow update, delete: if request.auth != null;
+    }
+    // LEADS IMMERSION : dépôt libre (formulaire de coordonnées), lecture réservée
+    match /leads/{docId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+    // RESTE
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
