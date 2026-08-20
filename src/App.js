@@ -820,10 +820,18 @@ export async function enregistrerObjectifCommun(obj){
   await setDoc(doc(db,"objectif_commun","participants"),{liste:[]});
 }
 
-export async function ajouterPasObjectif(uid,nomAffiche){
+export async function supprimerObjectifCommun(){
+  await deleteDoc(doc(db,"objectif_commun","actuel"));
+  await deleteDoc(doc(db,"objectif_commun","participants"));
+}
+
+export async function ajouterPasObjectif(uid,nomAffiche,quantite=1){
   const participants=await chargerParticipantsObjectif();
-  if(participants.some(p=>p.uid===uid))return participants;
-  const nouvelleListe=[...participants,{uid,nom:nomAffiche||"",date:Date.now()}];
+  const qte=Math.max(1,Math.round(+quantite)||1);
+  const dejaLa=participants.find(p=>p.uid===uid);
+  const nouvelleListe=dejaLa
+    ? participants.map(p=>p.uid===uid?{...p,pas:qte,date:Date.now()}:p)
+    : [...participants,{uid,nom:nomAffiche||"",pas:qte,date:Date.now()}];
   await setDoc(doc(db,"objectif_commun","participants"),{liste:nouvelleListe});
   return nouvelleListe;
 }
@@ -882,6 +890,63 @@ export async function enregistrerChallenge(ch){
 
 export async function effacerChallenge(id){
   await deleteDoc(doc(db,"challenges","liste","items",id));
+}
+
+// ═══════════ TIRAGE AU SORT (tickets + resultat) ═══════════
+export async function chargerTicketsManuels(challengeId){
+  try{
+    const snap=await getDoc(doc(db,"challenges","tickets_manuels","items",challengeId));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerTicketsManuels:", e); }
+  return [];
+}
+
+export async function chargerTousTicketsManuels(){
+  const res={};
+  try{
+    const snap=await getDocs(collection(db,"challenges","tickets_manuels","items"));
+    snap.forEach(d=>{ res[d.id]=d.data().liste||[]; });
+  }catch(e){ console.error("chargerTousTicketsManuels:", e); }
+  return res;
+}
+
+export async function ajouterTicketManuel(challengeId,nom,tickets,ajoutePar){
+  const liste=await chargerTicketsManuels(challengeId);
+  const nouvelleListe=[...liste,{id:Date.now(),nom,tickets:Math.max(1,Math.round(+tickets)||1),ajoutePar,ts:Date.now()}];
+  await setDoc(doc(db,"challenges","tickets_manuels","items",challengeId),{liste:nouvelleListe});
+  return nouvelleListe;
+}
+
+export async function supprimerTicketManuel(challengeId,ticketId){
+  const liste=await chargerTicketsManuels(challengeId);
+  const nouvelleListe=liste.filter(t=>t.id!==ticketId);
+  await setDoc(doc(db,"challenges","tickets_manuels","items",challengeId),{liste:nouvelleListe});
+  return nouvelleListe;
+}
+
+export function construireGrilleTickets(declarations,ticketsManuels){
+  const grille=[];
+  const parPersonne={};
+  (declarations||[]).forEach(d=>{
+    const nb=Math.max(1,Math.round(d.count)||1);
+    parPersonne[d.userName]=(parPersonne[d.userName]||0)+nb;
+  });
+  (ticketsManuels||[]).forEach(t=>{
+    parPersonne[t.nom]=(parPersonne[t.nom]||0)+(t.tickets||1);
+  });
+  Object.entries(parPersonne).forEach(([nom,nb])=>{
+    for(let i=0;i<nb;i++)grille.push(nom);
+  });
+  return{grille,parPersonne};
+}
+
+export async function enregistrerResultatTirage(challengeId,challenge,gagnant,totalTickets){
+  await enregistrerChallenge({...challenge,tirage:{gagnant,totalTickets,ts:Date.now()}});
+}
+
+export async function supprimerResultatTirage(challengeId,challenge){
+  const{tirage,...sansTirage}=challenge;
+  await enregistrerChallenge(sansTirage);
 }
 
 export async function chargerDeclarationsChallenge(challengeId){
@@ -1807,6 +1872,8 @@ function App(){
   const[showAnnonceAdminFlottant,setShowAnnonceAdminFlottant]=useState(false);
   const[glowInfos,setGlowInfos]=useState(false);
   const[glowEntraide,setGlowEntraide]=useState(false);
+  const[tirageAVoir,setTirageAVoir]=useState(null); // {id, challenge}
+  const[showTirageBanniere,setShowTirageBanniere]=useState(false);
   useEffect(()=>{
     if(!userId||screen!=="app")return;
     const checkAnnonce=async()=>{
@@ -1842,6 +1909,21 @@ function App(){
     checkEntraide();
     const t3=setInterval(checkEntraide,60000);
     return()=>clearInterval(t3);
+  },[userId,screen]);
+  useEffect(()=>{
+    if(!userId||screen!=="app")return;
+    const checkTirages=async()=>{
+      try{
+        const data=await chargerChallenges();
+        let vus=[];
+        try{vus=JSON.parse(localStorage.getItem("bd-tirages-vus")||"[]");}catch{}
+        const nonVu=data.find(c=>c.tirage&&!vus.includes(c.id)&&Date.now()-c.tirage.ts<7*24*3600000);
+        setTirageAVoir(nonVu?{id:nonVu.id,challenge:nonVu}:null);
+      }catch{}
+    };
+    checkTirages();
+    const t4=setInterval(checkTirages,60000);
+    return()=>clearInterval(t4);
   },[userId,screen]);
   const[lang,setLang]=useState("fr");
   const[translations,setTranslations]=useState({});
@@ -3579,12 +3661,12 @@ function App(){
             <Card title="Parler de Mihi & Blazing Dynasty" sub="Comment présenter l'opportunité sans mentir ni survendre" icon="🔥" color={C.brun} defaultOpen>
               <Info color={C.brun}>Ne vends pas un rêve — partage une réalité concrète. Les gens sentent le baratin à 10km. Sois précise, honnête, et laisse l'opportunité parler d'elle-même.</Info>
               {[
-                ["🏢","Mihi, c'est quoi exactement","Mihi est une marque française de beauté et bien-être (parfums, skincare, compléments, minceur) lancée en 2022, fabriquée par ElfaPharm — un vrai laboratoire pharmaceutique présent dans 62 pays. Ce n'est pas une startup fantôme : derrière les produits, il y a une vraie expertise pharmaceutique. Dis-le simplement : \"Je vends une marque française fabriquée par un laboratoire pharma, pas un produit fabriqué dans un garage.\""],
+                ["🏢","Mihi, c'est quoi exactement","Mihi est une marque polonaise de beauté et bien-être (parfums, skincare, compléments, minceur) lancée en 2022, fabriquée par ElfaPharm — un vrai laboratoire pharmaceutique présent dans 62 pays. Ce n'est pas une startup fantôme : derrière les produits, il y a une vraie expertise pharmaceutique. Dis-le simplement : \"Je vends une marque européenne fabriquée par un laboratoire pharma, pas un produit fabriqué dans un garage.\""],
                 ["🌟","Pourquoi Blazing Dynasty et pas une autre équipe","Blazing Dynasty, c'est l'équipe que tu rejoins, pas juste un statut de distributrice isolée. Tu n'es jamais seule : formation complète (cette appli en est la preuve), accompagnement personnalisé par ta marraine, communauté de femmes qui s'entraident. Le discours : \"Tu ne rejoins pas juste Mihi, tu rejoins une équipe qui te forme et t'accompagne vraiment.\""],
                 ["💰","Le modèle économique honnête","Sois transparente sur le modèle : tu gagnes sur tes propres ventes ET sur celles de l'équipe que tu formes. Ce n'est ni un système pyramidal (pas de gain juste à recruter sans vendre) ni un emploi salarié classique. C'est de la vente directe avec effet de levier d'équipe. Dis : \"Plus tu vends et plus tu aides ton équipe à vendre, plus tu gagnes — c'est aussi simple que ça.\""],
                 ["🎯","Pour qui c'est fait","Sois honnête sur le profil idéal : quelqu'un qui veut un complément de revenu flexible, qui aime le contact humain, et qui est prête à apprendre. Ce n'est pas pour quelqu'un qui cherche un revenu garanti sans effort. \"Si tu cherches 2-10h par semaine pour développer un vrai revenu complémentaire avec un vrai accompagnement, on devrait parler.\""],
                 ["🙅","Ce qu'il ne faut JAMAIS dire","Jamais de promesse de revenu garanti, jamais \"deviens riche vite\", jamais cacher que c'est un investissement de départ (kit) et de temps. La confiance se construit sur l'honnêteté, pas sur le rêve qui s'effondre au premier mois difficile."],
-                ["💬","La phrase d'accroche qui fonctionne","\"Je fais partie d'une équipe qui vend les produits Mihi, une marque française fabriquée par un vrai labo pharmaceutique. On est plusieurs femmes à se former et s'entraider pour développer une activité flexible à côté. Si jamais ça t'intéresse de voir comment ça marche, je peux t'expliquer sans pression.\""],
+                ["💬","La phrase d'accroche qui fonctionne","\"Je fais partie d'une équipe qui vend les produits Mihi, une marque polonaise fabriquée par un vrai labo pharmaceutique. On est plusieurs femmes à se former et s'entraider pour développer une activité flexible à côté. Si jamais ça t'intéresse de voir comment ça marche, je peux t'expliquer sans pression.\""],
               ].map(([icon,title,desc])=>(
                 <div key={title} style={{background:C.creme,borderRadius:9,padding:".7rem .85rem",marginBottom:".55rem",border:`1px solid ${C.pale}`}}>
                   <div style={{display:"flex",gap:".5rem",marginBottom:".3rem",alignItems:"flex-start"}}>
@@ -4123,6 +4205,36 @@ function App(){
       </button>
       {showEntraideLiens&&(
         <EntraideLiensPanel uid={userId} nomAffiche={name} isMelissa={userId==="melissa-da-silveira"}/>
+      )}
+
+      {/* ── BANNIÈRE FLOTTANTE RÉSULTAT TIRAGE AU SORT ── */}
+      {tirageAVoir&&(
+        <div onClick={()=>setShowTirageBanniere(true)}
+          style={{position:"fixed",top:"1rem",left:"50%",transform:"translateX(-50%)",zIndex:9500,background:"linear-gradient(135deg,#E8B84B,#C4922A)",borderRadius:16,padding:".8rem 1.3rem",boxShadow:"0 6px 24px rgba(196,146,42,.5)",cursor:"pointer",display:"flex",alignItems:"center",gap:".5rem",animation:"neonPulseInfos 1.1s ease-in-out infinite",maxWidth:"90vw"}}>
+          <span style={{fontSize:"1.3rem"}}>🎉</span>
+          <span style={{fontFamily:"Georgia,serif",fontWeight:700,color:"#3D1F0E",fontSize:".85rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Le résultat du challenge est sorti !!</span>
+        </div>
+      )}
+      {showTirageBanniere&&tirageAVoir&&(
+        <TirageAuSortModal
+          challenge={tirageAVoir.challenge}
+          grille={[]}
+          parPersonne={{}}
+          resultatExistant={tirageAVoir.challenge.tirage}
+          isMelissa={false}
+          onClose={()=>{
+            setShowTirageBanniere(false);
+            try{
+              const vus=JSON.parse(localStorage.getItem("bd-tirages-vus")||"[]");
+              if(!vus.includes(tirageAVoir.id)){
+                vus.push(tirageAVoir.id);
+                localStorage.setItem("bd-tirages-vus",JSON.stringify(vus));
+              }
+            }catch{}
+            setTirageAVoir(null);
+          }}
+          onTirageTermine={()=>{}}
+        />
       )}
 
       {/* ── POPUP BIENVENUE ── */}
@@ -7396,18 +7508,22 @@ function ObjectifCommunAdminPopup({uid, onClose}){
 
 function ObjectifCommunCard({objectif, participants, uid, nomAffiche, isMelissa, onPasAjoute}){
   const[ajout,setAjout]=useState(false);
-  const dejaParticipe=participants.some(p=>p.uid===uid);
-  const total=participants.length;
+  const monPas=participants.find(p=>p.uid===uid);
+  const dejaParticipe=!!monPas;
+  const[modification,setModification]=useState(false);
+  const[quantite,setQuantite]=useState(monPas?.pas||1);
+  const total=participants.reduce((s,p)=>s+(p.pas||1),0);
   const cible=objectif.objectifPas||1;
   const pct=Math.min(100,Math.round((total/cible)*100));
   const atteint=total>=cible;
 
   const ajouterPas=async()=>{
-    if(dejaParticipe||ajout)return;
+    if(ajout||quantite<1)return;
     setAjout(true);
     try{
-      const nouvelleListe=await ajouterPasObjectif(uid,nomAffiche);
+      const nouvelleListe=await ajouterPasObjectif(uid,nomAffiche,quantite);
       onPasAjoute(nouvelleListe);
+      setModification(false);
     }catch{}
     setAjout(false);
   };
@@ -7429,13 +7545,29 @@ function ObjectifCommunCard({objectif, participants, uid, nomAffiche, isMelissa,
       </div>
       {atteint?(
         <div style={{textAlign:"center",fontSize:".76rem",fontWeight:700,color:"#5A8A5A",padding:".3rem 0"}}>Objectif atteint, bravo à toute l'équipe ! 🎉</div>
-      ):dejaParticipe?(
-        <div style={{textAlign:"center",fontSize:".72rem",color:C.gris,padding:".3rem 0"}}>✓ Tu as déjà ajouté ton pas</div>
+      ):(dejaParticipe&&!modification)?(
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:".72rem",color:C.gris,marginBottom:".4rem"}}>✓ Tu as ajouté {monPas.pas||1} pas</div>
+          <button onClick={()=>{setQuantite(monPas.pas||1);setModification(true);}}
+            style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .7rem",fontSize:".72rem",color:C.brun,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            ✏️ Modifier ma contribution
+          </button>
+        </div>
       ):(
-        <button onClick={ajouterPas} disabled={ajout}
-          style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
-          {ajout?"...":"➕ Ajouter mon pas !"}
-        </button>
+        <div style={{display:"flex",gap:".4rem",alignItems:"center"}}>
+          <input type="number" min="1" value={quantite} onChange={e=>setQuantite(Math.max(1,+e.target.value||1))}
+            style={{width:60,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .4rem",fontSize:".82rem",fontFamily:"inherit",textAlign:"center",color:C.texte,background:C.blanc,outline:"none"}}/>
+          <button onClick={ajouterPas} disabled={ajout}
+            style={{flex:1,background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            {ajout?"...":modification?"Confirmer":"➕ Ajouter mes pas !"}
+          </button>
+          {modification&&(
+            <button onClick={()=>setModification(false)}
+              style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .6rem",fontSize:".78rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
+              Annuler
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -7814,10 +7946,23 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
         )}
         <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>Objectif commun</div>
         {isMelissa&&(
-          <button onClick={()=>setShowObjectifAdmin(true)}
-            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
-            🎯 {objectif?"Modifier l'objectif":"Lancer un objectif"}
-          </button>
+          <div style={{display:"flex",gap:".4rem",marginBottom:".6rem"}}>
+            <button onClick={()=>setShowObjectifAdmin(true)}
+              style={{flex:1,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer"}}>
+              🎯 {objectif?"Modifier l'objectif":"Lancer un objectif"}
+            </button>
+            {objectif&&(
+              <button onClick={async()=>{
+                  if(!window.confirm(`Supprimer definitivement l'objectif "${objectif.titre}" et la progression de toute l'equipe ?\n\nCette action est irreversible.`))return;
+                  await supprimerObjectifCommun();
+                  setObjectif(null);
+                  setParticipantsObjectif([]);
+                }}
+                style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem",fontSize:".78rem",color:"#B04040",fontFamily:"inherit",cursor:"pointer"}}>
+                🗑️
+              </button>
+            )}
+          </div>
         )}
         {objectif?(
           <ObjectifCommunCard objectif={objectif} participants={participantsObjectif} uid={uid} nomAffiche={nomAffiche} isMelissa={isMelissa}
@@ -8955,6 +9100,85 @@ function BandeauChallenge({uid, onOuvrir}){
   );
 }
 
+function TirageAuSortModal({challenge, grille, parPersonne, resultatExistant, isMelissa, onClose, onTirageTermine}){
+  const[phase,setPhase]=useState(resultatExistant?"animation":"pret"); // pret | animation | resultat
+  const[nomAffiche,setNomAffiche]=useState("");
+  const intervalRef=useRef(null);
+  const dejaLance=useRef(false);
+
+  const lancerTirage=(gagnantForce)=>{
+    setPhase("animation");
+    const poolAffichage=grille.length>0?grille:["🎲","🎉","🎁","✨","🏆"];
+    const gagnantNom=gagnantForce||poolAffichage[Math.floor(Math.random()*poolAffichage.length)];
+    let vitesse=60,tempsEcoule=0;
+    const dureeTotal=3200;
+    const tick=()=>{
+      setNomAffiche(poolAffichage[Math.floor(Math.random()*poolAffichage.length)]);
+      tempsEcoule+=vitesse;
+      if(tempsEcoule<dureeTotal*.6)vitesse=Math.min(220,vitesse+8);
+      else vitesse=Math.min(420,vitesse+35);
+      if(tempsEcoule>=dureeTotal){
+        clearTimeout(intervalRef.current);
+        setNomAffiche(gagnantNom);
+        setPhase("resultat");
+        onTirageTermine&&onTirageTermine(gagnantNom,grille.length);
+        return;
+      }
+      intervalRef.current=setTimeout(tick,vitesse);
+    };
+    tick();
+  };
+
+  useEffect(()=>{
+    if(resultatExistant&&!dejaLance.current){
+      dejaLance.current=true;
+      lancerTirage(resultatExistant.gagnant);
+    }
+    return()=>clearTimeout(intervalRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.92)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:99999,padding:"1.2rem"}}>
+      <div style={{width:"100%",maxWidth:420,textAlign:"center"}}>
+        <div style={{fontSize:".68rem",fontWeight:700,letterSpacing:".15em",textTransform:"uppercase",color:C.or,marginBottom:".6rem"}}>🎟️ Tirage au sort</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.15rem",fontWeight:300,color:"white",marginBottom:"1.5rem"}}>{challenge.titre}</div>
+
+        <div style={{background:phase==="resultat"?"linear-gradient(135deg,#E8B84B,#C4922A)":"rgba(255,255,255,.08)",border:`2px solid ${phase==="resultat"?"#FFD98A":C.or}`,borderRadius:20,padding:"2rem 1.2rem",marginBottom:"1.5rem",minHeight:110,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:phase==="resultat"?"0 0 40px rgba(232,184,75,.5)":"none",animation:phase==="animation"?"neonPulseInfos .3s ease-in-out infinite":"none"}}>
+          {phase==="pret"?(
+            <div style={{color:"rgba(255,255,255,.6)",fontSize:".85rem"}}>{grille.length} ticket{grille.length!==1?"s":""} en jeu, prêt à tirer !</div>
+          ):(
+            <div style={{fontFamily:"Georgia,serif",fontSize:phase==="resultat"?"1.7rem":"1.4rem",fontWeight:700,color:phase==="resultat"?"#3D1F0E":"white"}}>
+              {phase==="resultat"&&"🎉 "}{nomAffiche}{phase==="resultat"&&" 🎉"}
+            </div>
+          )}
+        </div>
+
+        {phase==="resultat"&&(
+          <div style={{color:"rgba(255,255,255,.75)",fontSize:".78rem",marginBottom:"1.3rem"}}>
+            sur {resultatExistant?.totalTickets??grille.length} tickets en jeu
+          </div>
+        )}
+
+        {isMelissa&&phase==="pret"&&(
+          <button onClick={lancerTirage} disabled={grille.length===0}
+            style={{width:"100%",background:grille.length?C.or:C.pale,color:"#3D1F0E",border:"none",borderRadius:12,padding:".8rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:grille.length?"pointer":"default",marginBottom:".6rem"}}>
+            🎲 Lancer le tirage au sort
+          </button>
+        )}
+        {phase==="animation"&&(
+          <div style={{color:"rgba(255,255,255,.6)",fontSize:".78rem",marginBottom:".6rem"}}>Tirage en cours...</div>
+        )}
+
+        <button onClick={onClose}
+          style={{background:"none",border:"1px solid rgba(255,255,255,.3)",borderRadius:10,padding:".55rem 1.2rem",fontSize:".76rem",color:"rgba(255,255,255,.8)",fontFamily:"inherit",cursor:"pointer"}}>
+          Fermer
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ChallengeCountdown({deadline}){
   const[r,setR]=useState(deadline-Date.now());
   useEffect(()=>{const t=setInterval(()=>setR(deadline-Date.now()),30000);return()=>clearInterval(t);},[deadline]);
@@ -8973,6 +9197,11 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
   const[declarations,setDeclarations]=useState({});
   const[declareInput,setDeclareInput]=useState({});
   const[annuaireData,setAnnuaireData]=useState({});
+  const[ticketsManuels,setTicketsManuels]=useState({});
+  const[showTirage,setShowTirage]=useState(null); // challengeId ou null
+  const[showGestionTickets,setShowGestionTickets]=useState(null); // challengeId ou null
+  const[nvNomTicket,setNvNomTicket]=useState("");
+  const[nvNbTicket,setNvNbTicket]=useState(1);
 
   const isMelissa = uid==="melissa"||uid==="melissa-da-silveira";
 
@@ -9018,6 +9247,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
         setChallenges(actifs.sort((a,b)=>b.ts-a.ts));
         // Charger les déclarations par challenge
         setDeclarations(await chargerDeclarations());
+        setTicketsManuels(await chargerTousTicketsManuels());
       }catch{}
       setLoading(false);
     })();
@@ -9094,6 +9324,21 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
     setForm({titre:"",description:"",type:"flash",dureeHeures:"48",dateFinExacte:"",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
   };
 
+  const calculerLeaderEquipe=(ch,liste)=>{
+    if(!ch||ch.global||!ch.equipesCibles||ch.equipesCibles.length<2)return null;
+    const totaux={};
+    ch.equipesCibles.forEach(chefUid=>{totaux[chefUid]=0;});
+    liste.forEach(d=>{
+      const lignee=getLigneeChefs(annuaireData,d.uid,equipes.map(e=>e.uid));
+      const sonChef=ch.equipesCibles.find(chefUid=>d.uid===chefUid||lignee.includes(chefUid));
+      if(sonChef!==undefined)totaux[sonChef]=(totaux[sonChef]||0)+d.count;
+    });
+    const tries=Object.entries(totaux).sort((a,b)=>b[1]-a[1]);
+    if(tries.length===0||tries[0][1]===0)return null;
+    if(tries.length>1&&tries[0][1]===tries[1][1])return null; // egalite, pas de leader net
+    return tries[0][0];
+  };
+
   const declarer=async(challengeId,amount,unite)=>{
     const d={uid,userName,count:+amount||1,ts:Date.now()};
     const fraiche=await chargerDeclarationsChallenge(challengeId);
@@ -9102,6 +9347,12 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
     await enregistrerDeclarations(challengeId, liste);
     const ch=challenges.find(x=>x.id===challengeId);
     postToWallOfFame&&postToWallOfFame(uid,userName,`a déclaré ${amount} ${unite||ch?.unite||""} sur le challenge "${ch?.titre||challengeId}" 💪`,"🚀");
+    const leaderAvant=calculerLeaderEquipe(ch,fraiche);
+    const leaderApres=calculerLeaderEquipe(ch,liste);
+    if(leaderApres&&leaderApres!==leaderAvant){
+      const nomEquipe=(equipes.find(e=>e.uid===leaderApres)?.nom)||leaderApres;
+      postToWallOfFame&&postToWallOfFame(uid,userName,`🔥 L'équipe ${nomEquipe} passe en tête sur le challenge "${ch?.titre||challengeId}" ! Qui va reprendre l'avantage ? 👀`,"🏆");
+    }
   };
   const supprimerDeclaration=async(challengeId,ts)=>{
     if(!window.confirm("Supprimer cette declaration ?"))return;
@@ -9322,6 +9573,25 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
         const medals=["🥇","🥈","🥉"];
         const monTotal=decls.filter(d=>d.uid===uid).reduce((s,d)=>s+d.count,0);
         const estTermine=!!(c.deadline&&c.deadline<Date.now());
+        const estChallengeEquipes=!c.global&&c.equipesCibles&&c.equipesCibles.length>=2;
+        let classementEquipes=[];
+        if(estChallengeEquipes){
+          const totauxParChef={};
+          c.equipesCibles.forEach(chefUid=>{totauxParChef[chefUid]=0;});
+          decls.forEach(d=>{
+            const ligneeDeclarant=getLigneeChefs(annuaireData,d.uid,equipes.map(e=>e.uid));
+            const sonChefCible=c.equipesCibles.find(chefUid=>d.uid===chefUid||ligneeDeclarant.includes(chefUid));
+            if(sonChefCible!==undefined)totauxParChef[sonChefCible]=(totauxParChef[sonChefCible]||0)+d.count;
+          });
+          classementEquipes=c.equipesCibles.map(chefUid=>({
+            chefUid,
+            nom:(equipes.find(e=>e.uid===chefUid)?.nom)||chefUid,
+            total:totauxParChef[chefUid]||0,
+          })).sort((a,b)=>b.total-a.total);
+        }
+        const peutGererChallenge=isMelissa||(depuisEspaceChef&&(c.createdByUid?c.createdByUid===uid:c.createdBy===userName));
+        const{grille:grilleTickets,parPersonne:ticketsParPersonne}=construireGrilleTickets(decls,ticketsManuels[c.id]||[]);
+        const totalTicketsManuels=(ticketsManuels[c.id]||[]).reduce((s,t)=>s+t.tickets,0);
 
         return(
           <div key={c.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,overflow:"hidden",marginBottom:".75rem"}}>
@@ -9460,10 +9730,31 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
               </div>
             ):null}
 
+              {/* Jauges par equipe (challenges entre plusieurs equipes) */}
+              {estChallengeEquipes&&classementEquipes.length>0&&(
+                <div style={{marginBottom:".9rem"}}>
+                  <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".5rem"}}>👑 Classement par équipe</div>
+                  {(()=>{
+                    const maxTotal=c.objectif>0?c.objectif:Math.max(1,...classementEquipes.map(e=>e.total))*1.5;
+                    return classementEquipes.map((eq,i)=>(
+                      <div key={eq.chefUid} style={{marginBottom:".55rem"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:".74rem",marginBottom:".2rem"}}>
+                          <span style={{fontWeight:700,color:C.brun}}>{i===0&&eq.total>0?"🥇 ":""}Équipe {eq.nom}</span>
+                          <span style={{fontWeight:700,color:C.brun}}>{eq.total} {c.unite}</span>
+                        </div>
+                        <div style={{background:C.pale+"50",borderRadius:8,height:12,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${Math.min(100,Math.round((eq.total/maxTotal)*100))}%`,background:i===0?"#7FAF8A":C.rose,transition:"width .5s"}}/>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
+
               {/* Classement */}
               {classement.length>0&&(
                 <div>
-                  <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>🏆 Classement</div>
+                  <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>{estChallengeEquipes?"Détail individuel":"🏆 Classement"}</div>
                   {classement.map((p,i)=>(
                     <div key={p.userName} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",borderBottom:i<classement.length-1?`1px solid ${C.pale}30`:"none"}}>
                       <div style={{width:22,textAlign:"center",fontSize:i<3?"1rem":".7rem",flexShrink:0}}>{i<3?medals[i]:`${i+1}.`}</div>
@@ -9472,6 +9763,76 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
                     </div>
                   ))}
                 </div>
+              )}
+
+              {/* Tickets & Tirage au sort */}
+              <div style={{marginTop:".9rem",paddingTop:".8rem",borderTop:`1px solid ${C.pale}`}}>
+                {c.tirage?(
+                  <div onClick={()=>setShowTirage(c.id)} style={{background:"linear-gradient(135deg,#E8B84B,#C4922A)",borderRadius:10,padding:".65rem .8rem",cursor:"pointer",textAlign:"center"}}>
+                    <div style={{fontSize:".72rem",fontWeight:700,color:"#3D1F0E"}}>🎉 Résultat du tirage : {c.tirage.gagnant} !</div>
+                    <div style={{fontSize:".62rem",color:"#5A3829",marginTop:".1rem"}}>Touche pour revoir le tirage</div>
+                  </div>
+                ):peutGererChallenge?(
+                  <div>
+                    <div style={{display:"flex",gap:".4rem"}}>
+                      <button onClick={()=>setShowGestionTickets(p=>p===c.id?null:c.id)}
+                        style={{flex:1,background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem",fontSize:".7rem",color:C.brun,fontFamily:"inherit",cursor:"pointer"}}>
+                        🎟️ Tickets manuels {totalTicketsManuels>0?`(${totalTicketsManuels})`:""}
+                      </button>
+                      <button onClick={()=>setShowTirage(c.id)} disabled={grilleTickets.length===0}
+                        style={{flex:1,background:grilleTickets.length?C.brun:C.pale,color:grilleTickets.length?"white":C.gris,border:"none",borderRadius:8,padding:".45rem",fontSize:".7rem",fontWeight:700,fontFamily:"inherit",cursor:grilleTickets.length?"pointer":"default"}}>
+                        🎲 Tirage au sort
+                      </button>
+                    </div>
+                    {showGestionTickets===c.id&&(
+                      <div style={{marginTop:".6rem",background:C.creme,borderRadius:10,padding:".65rem .75rem"}}>
+                        <div style={{fontSize:".64rem",color:C.gris,marginBottom:".5rem"}}>Pour les personnes ayant participé sans l'application.</div>
+                        {(ticketsManuels[c.id]||[]).map(t=>(
+                          <div key={t.id} style={{display:"flex",alignItems:"center",gap:".4rem",padding:".25rem 0",borderBottom:`1px solid ${C.pale}30`}}>
+                            <span style={{flex:1,fontSize:".74rem",color:C.texte}}>{t.nom}</span>
+                            <span style={{fontSize:".68rem",color:C.gris,fontWeight:600}}>{t.tickets} ticket{t.tickets!==1?"s":""}</span>
+                            <button onClick={async()=>{
+                                const nouvelleListe=await supprimerTicketManuel(c.id,t.id);
+                                setTicketsManuels(p=>({...p,[c.id]:nouvelleListe}));
+                              }}
+                              style={{background:"none",border:"none",color:"#B04040",fontSize:".72rem",cursor:"pointer",padding:"0 .2rem"}}>✕</button>
+                          </div>
+                        ))}
+                        <div style={{display:"flex",gap:".35rem",marginTop:".5rem"}}>
+                          <input value={nvNomTicket} onChange={e=>setNvNomTicket(e.target.value)} placeholder="Nom"
+                            style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .5rem",fontSize:".72rem",fontFamily:"inherit",outline:"none"}}/>
+                          <input type="number" min="1" value={nvNbTicket} onChange={e=>setNvNbTicket(Math.max(1,+e.target.value||1))}
+                            style={{width:50,border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .3rem",fontSize:".72rem",fontFamily:"inherit",textAlign:"center",outline:"none"}}/>
+                          <button onClick={async()=>{
+                              if(!nvNomTicket.trim())return;
+                              const nouvelleListe=await ajouterTicketManuel(c.id,nvNomTicket.trim(),nvNbTicket,uid);
+                              setTicketsManuels(p=>({...p,[c.id]:nouvelleListe}));
+                              setNvNomTicket("");setNvNbTicket(1);
+                            }}
+                            style={{background:C.brun,color:"white",border:"none",borderRadius:7,padding:".35rem .6rem",fontSize:".7rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ):null}
+              </div>
+
+              {showTirage===c.id&&(
+                <TirageAuSortModal
+                  challenge={c}
+                  grille={grilleTickets}
+                  parPersonne={ticketsParPersonne}
+                  resultatExistant={c.tirage}
+                  isMelissa={peutGererChallenge}
+                  onClose={()=>setShowTirage(null)}
+                  onTirageTermine={async(gagnantNom,totalTickets)=>{
+                    await enregistrerResultatTirage(c.id,c,gagnantNom,totalTickets);
+                    rafraichirListe(await chargerChallenges());
+                    postToWallOfFame&&postToWallOfFame(uid,userName,`🎉 Tirage au sort du challenge "${c.titre}" : ${gagnantNom} remporte le lot ! Bravo à elle 🎁`,"🎟️");
+                  }}
+                />
               )}
             </div>
           </div>
