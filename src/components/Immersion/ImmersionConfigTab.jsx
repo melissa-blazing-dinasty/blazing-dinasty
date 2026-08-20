@@ -198,7 +198,7 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 560, margin: "0 auto" }}>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+      <div id="decouverte-immersion-onglets" style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         <button onClick={() => setSousOnglet("contenu")} style={btnOnglet(sousOnglet === "contenu")}>
           Mon contenu
         </button>
@@ -252,7 +252,7 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
           </button>
           {saved && <p style={{ color: "#16a34a", fontSize: 13.5, textAlign: "center", marginBottom: 16 }}>Enregistré ✓</p>}
 
-          <a href={lienPreview} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", fontSize: 13.5, color: COLORS.or, fontWeight: 700, textDecoration: "none" }}>
+          <a href={lienPreview} target="_blank" rel="noreferrer" id="decouverte-immersion-preview" style={{ display: "block", textAlign: "center", fontSize: 13.5, color: COLORS.or, fontWeight: 700, textDecoration: "none" }}>
             Voir ma page d'immersion →
           </a>
         </>

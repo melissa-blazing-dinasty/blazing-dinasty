@@ -2236,7 +2236,6 @@ function App(){
   const immersionUid = urlParams.get("immersion") || immersionUidFromPath || "";
   const immersionScore = urlParams.get("score") ? Number(urlParams.get("score")) : null;
   const [immersionData, setImmersionData] = useState(null);
-  const [showDecouverteImmersion, setShowDecouverteImmersion] = useState(false);
   useEffect(()=>{
     if(!immersionMode) return;
     (async()=>{
@@ -4083,13 +4082,7 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="monunivers"&&<MonUniversTab uid={userId}/>}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="immersion"&&(
-          <>
-            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverteImmersion(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>{"\uD83E\uDDED D\u00e9couverte"}</button></div>
-            {showDecouverteImmersion&&<DecouverteTour outil="immersion" onClose={()=>setShowDecouverteImmersion(false)}/>}
-            <ImmersionConfigTab uid={userId} db={db} isChef={isChefApp}/>
-          </>
-        )}
+{tab==="boiteaoutils"&&outilsSousOnglet==="immersion"&&<ImmersionConfigTab uid={userId} db={db} isChef={isChefApp}/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
@@ -4389,14 +4382,6 @@ const DECOUVERTE = {
     {titre:"Etape 3 : choisis un diagnostic", texte:"Pour chaque diagnostic, deux options : Remplir maintenant (tu fais le diagnostic avec elle en direct) ou Envoyer le lien (elle repond seule, a son rythme).", icon:"\uD83D\uDCCB", cible:"decouverte-diag-liste"},
     {titre:"Etape 4 : recois les resultats", texte:"Une fois le diagnostic termine, l\u2019ordonnance est generee automatiquement par l\u2019IA. Tu peux la partager en PDF ou par lien public avec ta cliente.", icon:"\u2728"},
     {titre:"Bravo, tu es prete !", texte:"Cette experience personnalisee justifie ton role de conseillere et augmente tes ventes !", icon:"\uD83C\uDF89", cible:"decouverte-diag-cats"},
-  ],
-  immersion: [
-    {titre:"Bienvenue !", texte:"Cet onglet te permet de creer ta propre page d'immersion a partager avec tes prospects : ton histoire, ta journee type, tes formations et des temoignages de l'equipe. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-immersion-onglets"},
-    {titre:"Etape 1 : remplis ton contenu", texte:"Dans l'onglet Mon contenu, ecris ton accroche, ton histoire (le Avant et la bascule) et ta journee type. C'est ce qui rendra ta page unique et authentique.", icon:"\u270D\uFE0F", cible:"decouverte-immersion-onglets"},
-    {titre:"Etape 2 : soumets ton temoignage", texte:"Dans Mon temoignage, choisis ta categorie (Maman, Reconversion...) et ecris quelques mots sur ton parcours. Il sera visible une fois valide.", icon:"\uD83D\uDCAC", cible:"decouverte-immersion-onglets"},
-    {titre:"Etape 3 : choisis tes temoignages", texte:"Dans Choisir mes temoignages, tu peux piocher parmi tous les temoignages valides de l'equipe ceux qui apparaitront sur TA page.", icon:"\u2705", cible:"decouverte-immersion-onglets"},
-    {titre:"Etape 4 : previsualise ta page", texte:"En bas de l'onglet Mon contenu, le lien Voir ma page d'immersion te montre le rendu final, exactement ce que verra ton prospect.", icon:"\uD83D\uDC41\uFE0F", cible:"decouverte-immersion-preview"},
-    {titre:"Bravo, tu es prete !", texte:"Une fois ta page remplie, partage le lien avec tes prospects pour leur faire vivre une vraie immersion dans ton quotidien !", icon:"\uD83C\uDF89", cible:"decouverte-immersion-onglets"},
   ],
   scripts: [
     {titre:"Bienvenue !", texte:"Cette biblioth\u00e8que rassemble des scripts prets a utiliser pour tes conversations. Adapte toujours a ta voix, ce sont des bases de depart !", icon:"\uD83D\uDC4B", cible:"decouverte-scripts-liste"},

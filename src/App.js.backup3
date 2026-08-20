@@ -2236,7 +2236,6 @@ function App(){
   const immersionUid = urlParams.get("immersion") || immersionUidFromPath || "";
   const immersionScore = urlParams.get("score") ? Number(urlParams.get("score")) : null;
   const [immersionData, setImmersionData] = useState(null);
-  const [showDecouverteImmersion, setShowDecouverteImmersion] = useState(false);
   useEffect(()=>{
     if(!immersionMode) return;
     (async()=>{
@@ -4083,13 +4082,7 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="monunivers"&&<MonUniversTab uid={userId}/>}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="immersion"&&(
-          <>
-            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverteImmersion(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>{"\uD83E\uDDED D\u00e9couverte"}</button></div>
-            {showDecouverteImmersion&&<DecouverteTour outil="immersion" onClose={()=>setShowDecouverteImmersion(false)}/>}
-            <ImmersionConfigTab uid={userId} db={db} isChef={isChefApp}/>
-          </>
-        )}
+{tab==="boiteaoutils"&&outilsSousOnglet==="immersion"&&<ImmersionConfigTab uid={userId} db={db} isChef={isChefApp}/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
