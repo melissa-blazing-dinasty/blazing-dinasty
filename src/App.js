@@ -1,8 +1,6 @@
-﻿import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion, addDoc } from "firebase/firestore";
-import ImmersionTunnel from "./components/Immersion/ImmersionTunnel";
-import ImmersionConfigTab from "./components/Immersion/ImmersionConfigTab";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion } from "firebase/firestore";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/auth";
@@ -158,7 +156,7 @@ export async function marquerFormationTerminee(uid, subTab) {
     await ss(uid,"db-formation-progress",JSON.stringify(progress));
   }catch(e){console.error("maj completion formation:",e);}
 }
-export const FORMATION_SUBTABS_SUIVIES=["mihibd","demarrage","vente","recrutement","contenu","devperso","outils","formaproduits","communication"];
+export const FORMATION_SUBTABS_SUIVIES=["mihibd","demarrage","vente","recrutement","contenu","devperso","outils","formaproduits","communication","nutrition"];
 export const FORMATION_SUBTABS_LABELS={mihibd:"Mihi & Blazing Dynasty",demarrage:"Démarrage",vente:"Vente & Stratégies",recrutement:"Recrutement",contenu:"Création de contenu",devperso:"Développement personnel",outils:"Outils",formaproduits:"Formation produits"};
 
 // Met à jour la fiche d'un membre dans l'annuaire global (équipe/annuaire)
@@ -1721,7 +1719,7 @@ function App(){
   const FORMATION_DATES_MAJ={
     mihibd:"2026-01-01", demarrage:"2026-01-01", vente:"2026-07-28",
     recrutement:"2026-07-09", contenu:"2026-01-01", devperso:"2026-07-09",
-    outils:"2026-07-09", formaproduits:"2026-07-09", communication:"2026-08-17",
+    outils:"2026-07-09", formaproduits:"2026-07-09", communication:"2026-08-17", nutrition:"2026-08-19",
   };
   useEffect(()=>{
     if(!userId)return;
@@ -2205,7 +2203,6 @@ function App(){
     {id:"liensimportants",label:"🔗 Liens importants"},
     {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
     {id:"monunivers",label:"🌟 Mon Univers"},
-{id:"immersion",label:"✨ Immersion"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
@@ -2224,6 +2221,7 @@ function App(){
     {id:"devperso",label:"🧠 Dév. Personnel",icon:"🧠",col:C.lilas,desc:"Mindset et développement personnel"},
     {id:"formaproduits",label:"🧴 Formation Produits",icon:"🧴",col:C.rose,desc:"Tout savoir sur les produits Mihi"},
     {id:"communication",label:"💬 Communication Mihi",icon:"💬",col:C.or,desc:"Bien communiquer autour de la marque Mihi"},
+    {id:"nutrition",label:"🥗 Nutrition Smart Meal",icon:"🥗",col:C.vert,desc:"Comprendre la nutrition et les produits Smart Meal"},
   ];
 
   // ── MODE DIAGNOSTIC EXTERNE (cliente sans login) ──
@@ -2231,38 +2229,6 @@ function App(){
   const diagMode = urlParams.has("diag");
   const diagUidFromPath = (window.location.pathname.match(/\/d\/([^/?]+)/)||[])[1] || "";
   const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||diagUidFromPath||"";
-  const immersionUidFromPath = (window.location.pathname.match(/\/immersion\/([^/?]+)/)||[])[1] || "";
-  const immersionMode = urlParams.has("immersion") || !!immersionUidFromPath;
-  const immersionUid = urlParams.get("immersion") || immersionUidFromPath || "";
-  const immersionScore = urlParams.get("score") ? Number(urlParams.get("score")) : null;
-  const [immersionData, setImmersionData] = useState(null);
-  const [showDecouverteImmersion, setShowDecouverteImmersion] = useState(false);
-  useEffect(()=>{
-    if(!immersionMode) return;
-    (async()=>{
-      try{
-        const communSnap = await getDoc(doc(db,"immersion","_commun"));
-        const personalSnap = immersionUid ? await getDoc(doc(db,"immersion", immersionUid)) : null;
-               const q = query(collection(db,"temoignages"), where("valide","==",true));
-        const snap = await getDocs(q);
-        const pool = [];
-        snap.forEach(docSnap=>pool.push({id:docSnap.id, ...docSnap.data()}));
-        const perso = personalSnap && personalSnap.exists() ? personalSnap.data() : {};
-        const selectionnes = perso.temoignagesSelectionnes || [];
-        const temoignages = selectionnes.length
-          ? selectionnes.map(id=>pool.find(t=>t.id===id)).filter(Boolean)
-          : pool.slice(0,5);
-        setImmersionData({
-          ...(communSnap.exists()?communSnap.data():{}),
-          ...perso,
-          temoignages,
-        }); 
-      }catch(e){
-        console.error("Erreur chargement immersion", e);
-        setImmersionData({});
-      }
-    })();
-  },[immersionMode, immersionUid]);
 
   // ── MODE TUNNEL (vente/recrutement, visiteur sans login) ──
   const tunnelMode = urlParams.has("tunnel");
@@ -2299,22 +2265,7 @@ function App(){
       </div>
     );
   }
-  if(immersionMode){
-    if(!immersionData){
-      return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#171529",color:"#F7F3EC"}}>Chargement...</div>;
-    }
-    return (
-      <ImmersionTunnel
-        data={immersionData}
-        score={immersionScore}
-        onLeadSubmit={async (lead)=>{
-          try{
-            await addDoc(collection(db,"leads"), {...lead, score:immersionScore, distributriceId: immersionUid, source:"immersion", creeLe: new Date().toISOString()});
-          }catch(e){ console.error("Erreur envoi lead", e); }
-        }}
-      />
-    );
-  }
+
   // ── LOGIN ────────────────────────────────────────────────────────────────────
   if(screen==="login")return(
     <div style={{minHeight:"100vh",background:C.brun,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"2rem 1.2rem",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
@@ -3905,6 +3856,17 @@ function App(){
           </div>
         )}
 
+        {tab==="formation"&&formationSubTab==="nutrition"&&(
+          <div>
+            <SecTitle title="Nutrition" em="Smart Meal" desc="Comprendre la nutrition et bien parler des produits Smart Meal."/>
+            <Card title="Formation Nutrition Smart Meal" sub="YouTube" icon="▶" color={C.vert} defaultOpen>
+              <YTBtn href="https://youtu.be/BUcRlG4XYok" label="🥗 Chapitre 1 — Comprendre réellement la nutrition"/>
+              <YTBtn href="https://youtu.be/C7fXHxKO-ho" label="🍫 Chapitre 2 — Les barres énergétiques et protéinées"/>
+            </Card>
+            <BoutonTermineFormation subTab="nutrition"/>
+          </div>
+        )}
+
         {/* ── OUTILS ── */}
         {tab==="formation"&&formationSubTab==="devperso"&&(
           <div><DevPersoSection adminItems={adminItems}/><BoutonTermineFormation subTab="devperso"/></div>
@@ -3971,6 +3933,10 @@ function App(){
               <Btn href="https://t.me/+2wKWxIROE4c1M2Q0" label="📢 Telegram équipe — Visuels" color={"#0088CC"}/>
               <Btn href="https://t.me/+pv0RY_JJy4wyYzE8" label="💬 Telegram — Témoignages" color={"#0088CC"}/>
               <Btn href="https://www.facebook.com/share/g/1BGRQA1pZQ/?mibextid=wwXIfr" label="👥 Groupe Facebook équipe" color={"#1877F2"}/>
+            </Card>
+
+            <Card title="Immersion" sub="YouTube" icon="▶" color={C.lilas}>
+              <YTBtn href="https://youtube.com/shorts/Ik-v2JTtJxU" label="🎬 Immersion"/>
             </Card>
             <BoutonTermineFormation subTab="outils"/>
           </div>
@@ -4083,13 +4049,6 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="monunivers"&&<MonUniversTab uid={userId}/>}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="immersion"&&(
-          <>
-            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverteImmersion(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>{"\uD83E\uDDED D\u00e9couverte"}</button></div>
-            {showDecouverteImmersion&&<DecouverteTour outil="immersion" onClose={()=>setShowDecouverteImmersion(false)}/>}
-            <ImmersionConfigTab uid={userId} db={db} isChef={isChefApp}/>
-          </>
-        )}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
@@ -4389,14 +4348,6 @@ const DECOUVERTE = {
     {titre:"Etape 3 : choisis un diagnostic", texte:"Pour chaque diagnostic, deux options : Remplir maintenant (tu fais le diagnostic avec elle en direct) ou Envoyer le lien (elle repond seule, a son rythme).", icon:"\uD83D\uDCCB", cible:"decouverte-diag-liste"},
     {titre:"Etape 4 : recois les resultats", texte:"Une fois le diagnostic termine, l\u2019ordonnance est generee automatiquement par l\u2019IA. Tu peux la partager en PDF ou par lien public avec ta cliente.", icon:"\u2728"},
     {titre:"Bravo, tu es prete !", texte:"Cette experience personnalisee justifie ton role de conseillere et augmente tes ventes !", icon:"\uD83C\uDF89", cible:"decouverte-diag-cats"},
-  ],
-  immersion: [
-    {titre:"Bienvenue !", texte:"Cet onglet te permet de creer ta propre page d'immersion a partager avec tes prospects : ton histoire, ta journee type, tes formations et des temoignages de l'equipe. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-immersion-onglets"},
-    {titre:"Etape 1 : remplis ton contenu", texte:"Dans l'onglet Mon contenu, ecris ton accroche, ton histoire (le Avant et la bascule) et ta journee type. C'est ce qui rendra ta page unique et authentique.", icon:"\u270D\uFE0F", cible:"decouverte-immersion-onglets"},
-    {titre:"Etape 2 : soumets ton temoignage", texte:"Dans Mon temoignage, choisis ta categorie (Maman, Reconversion...) et ecris quelques mots sur ton parcours. Il sera visible une fois valide.", icon:"\uD83D\uDCAC", cible:"decouverte-immersion-onglets"},
-    {titre:"Etape 3 : choisis tes temoignages", texte:"Dans Choisir mes temoignages, tu peux piocher parmi tous les temoignages valides de l'equipe ceux qui apparaitront sur TA page.", icon:"\u2705", cible:"decouverte-immersion-onglets"},
-    {titre:"Etape 4 : previsualise ta page", texte:"En bas de l'onglet Mon contenu, le lien Voir ma page d'immersion te montre le rendu final, exactement ce que verra ton prospect.", icon:"\uD83D\uDC41\uFE0F", cible:"decouverte-immersion-preview"},
-    {titre:"Bravo, tu es prete !", texte:"Une fois ta page remplie, partage le lien avec tes prospects pour leur faire vivre une vraie immersion dans ton quotidien !", icon:"\uD83C\uDF89", cible:"decouverte-immersion-onglets"},
   ],
   scripts: [
     {titre:"Bienvenue !", texte:"Cette biblioth\u00e8que rassemble des scripts prets a utiliser pour tes conversations. Adapte toujours a ta voix, ce sont des bases de depart !", icon:"\uD83D\uDC4B", cible:"decouverte-scripts-liste"},
