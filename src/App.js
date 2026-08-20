@@ -13808,7 +13808,8 @@ function AdminImportCatalogue(){
   const CAT_MAP={
     'VISAGE':'face','CORPS':'corps','CHEVEUX':'hair',
     'Make Up':'makeup','PARFUMS':'parfums','SANTÉ':'health',
-    'Hommes':'hommes','Enfants':'enfants','HOME':'home','Sets':'sets'
+    'Hommes':'hommes','Enfants':'enfants','HOME':'home','Sets':'sets',
+    'nutrition':'nutrition','Nutrition':'nutrition','NUTRITION':'nutrition'
   };
 
   const handleFile=async(e)=>{
