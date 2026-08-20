@@ -9110,13 +9110,13 @@ function TirageAuSortModal({challenge, grille, parPersonne, resultatExistant, is
     setPhase("animation");
     const poolAffichage=grille.length>0?grille:["🎲","🎉","🎁","✨","🏆"];
     const gagnantNom=gagnantForce||poolAffichage[Math.floor(Math.random()*poolAffichage.length)];
-    let vitesse=60,tempsEcoule=0;
-    const dureeTotal=3200;
+    let vitesse=70,tempsEcoule=0;
+    const dureeTotal=6500;
     const tick=()=>{
       setNomAffiche(poolAffichage[Math.floor(Math.random()*poolAffichage.length)]);
       tempsEcoule+=vitesse;
-      if(tempsEcoule<dureeTotal*.6)vitesse=Math.min(220,vitesse+8);
-      else vitesse=Math.min(420,vitesse+35);
+      if(tempsEcoule<dureeTotal*.55)vitesse=Math.min(160,vitesse+4);
+      else vitesse=Math.min(380,vitesse+16);
       if(tempsEcoule>=dureeTotal){
         clearTimeout(intervalRef.current);
         setNomAffiche(gagnantNom);
@@ -9161,7 +9161,7 @@ function TirageAuSortModal({challenge, grille, parPersonne, resultatExistant, is
         )}
 
         {isMelissa&&phase==="pret"&&(
-          <button onClick={lancerTirage} disabled={grille.length===0}
+          <button onClick={()=>lancerTirage()} disabled={grille.length===0}
             style={{width:"100%",background:grille.length?C.or:C.pale,color:"#3D1F0E",border:"none",borderRadius:12,padding:".8rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:grille.length?"pointer":"default",marginBottom:".6rem"}}>
             🎲 Lancer le tirage au sort
           </button>
@@ -9768,9 +9768,21 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
               {/* Tickets & Tirage au sort */}
               <div style={{marginTop:".9rem",paddingTop:".8rem",borderTop:`1px solid ${C.pale}`}}>
                 {c.tirage?(
-                  <div onClick={()=>setShowTirage(c.id)} style={{background:"linear-gradient(135deg,#E8B84B,#C4922A)",borderRadius:10,padding:".65rem .8rem",cursor:"pointer",textAlign:"center"}}>
-                    <div style={{fontSize:".72rem",fontWeight:700,color:"#3D1F0E"}}>🎉 Résultat du tirage : {c.tirage.gagnant} !</div>
-                    <div style={{fontSize:".62rem",color:"#5A3829",marginTop:".1rem"}}>Touche pour revoir le tirage</div>
+                  <div>
+                    <div onClick={()=>setShowTirage(c.id)} style={{background:"linear-gradient(135deg,#E8B84B,#C4922A)",borderRadius:10,padding:".65rem .8rem",cursor:"pointer",textAlign:"center"}}>
+                      <div style={{fontSize:".72rem",fontWeight:700,color:"#3D1F0E"}}>🎉 Résultat du tirage : {c.tirage.gagnant} !</div>
+                      <div style={{fontSize:".62rem",color:"#5A3829",marginTop:".1rem"}}>Touche pour revoir le tirage</div>
+                    </div>
+                    {peutGererChallenge&&(
+                      <button onClick={async()=>{
+                          if(!window.confirm("Relancer un nouveau tirage pour ce challenge ?\n\nLe résultat actuel sera remplacé."))return;
+                          await supprimerResultatTirage(c.id,c);
+                          rafraichirListe(await chargerChallenges());
+                        }}
+                        style={{width:"100%",background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem",fontSize:".68rem",color:C.gris,fontFamily:"inherit",cursor:"pointer",marginTop:".4rem"}}>
+                        🔄 Relancer le tirage
+                      </button>
+                    )}
                   </div>
                 ):peutGererChallenge?(
                   <div>
