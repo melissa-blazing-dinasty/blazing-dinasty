@@ -1,6 +1,8 @@
-import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
+﻿import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion, addDoc } from "firebase/firestore";
+import ImmersionTunnel from "./components/Immersion/ImmersionTunnel";
+import ImmersionConfigTab from "./components/Immersion/ImmersionConfigTab";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/auth";
@@ -2203,6 +2205,7 @@ function App(){
     {id:"liensimportants",label:"🔗 Liens importants"},
     {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
     {id:"monunivers",label:"🌟 Mon Univers"},
+{id:"immersion",label:"✨ Immersion"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
@@ -2228,6 +2231,37 @@ function App(){
   const diagMode = urlParams.has("diag");
   const diagUidFromPath = (window.location.pathname.match(/\/d\/([^/?]+)/)||[])[1] || "";
   const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||diagUidFromPath||"";
+  const immersionUidFromPath = (window.location.pathname.match(/\/immersion\/([^/?]+)/)||[])[1] || "";
+  const immersionMode = urlParams.has("immersion") || !!immersionUidFromPath;
+  const immersionUid = urlParams.get("immersion") || immersionUidFromPath || "";
+  const immersionScore = urlParams.get("score") ? Number(urlParams.get("score")) : null;
+  const [immersionData, setImmersionData] = useState(null);
+  useEffect(()=>{
+    if(!immersionMode) return;
+    (async()=>{
+      try{
+        const communSnap = await getDoc(doc(db,"immersion","_commun"));
+        const personalSnap = immersionUid ? await getDoc(doc(db,"immersion", immersionUid)) : null;
+               const q = query(collection(db,"temoignages"), where("valide","==",true));
+        const snap = await getDocs(q);
+        const pool = [];
+        snap.forEach(docSnap=>pool.push({id:docSnap.id, ...docSnap.data()}));
+        const perso = personalSnap && personalSnap.exists() ? personalSnap.data() : {};
+        const selectionnes = perso.temoignagesSelectionnes || [];
+        const temoignages = selectionnes.length
+          ? selectionnes.map(id=>pool.find(t=>t.id===id)).filter(Boolean)
+          : pool.slice(0,5);
+        setImmersionData({
+          ...(communSnap.exists()?communSnap.data():{}),
+          ...perso,
+          temoignages,
+        }); 
+      }catch(e){
+        console.error("Erreur chargement immersion", e);
+        setImmersionData({});
+      }
+    })();
+  },[immersionMode, immersionUid]);
 
   // ── MODE TUNNEL (vente/recrutement, visiteur sans login) ──
   const tunnelMode = urlParams.has("tunnel");
@@ -2264,7 +2298,22 @@ function App(){
       </div>
     );
   }
-
+  if(immersionMode){
+    if(!immersionData){
+      return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#171529",color:"#F7F3EC"}}>Chargement...</div>;
+    }
+    return (
+      <ImmersionTunnel
+        data={immersionData}
+        score={immersionScore}
+        onLeadSubmit={async (lead)=>{
+          try{
+            await addDoc(collection(db,"leads"), {...lead, score:immersionScore, distributriceId: immersionUid, source:"immersion", creeLe: new Date().toISOString()});
+          }catch(e){ console.error("Erreur envoi lead", e); }
+        }}
+      />
+    );
+  }
   // ── LOGIN ────────────────────────────────────────────────────────────────────
   if(screen==="login")return(
     <div style={{minHeight:"100vh",background:C.brun,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"2rem 1.2rem",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
@@ -4033,6 +4082,7 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="monunivers"&&<MonUniversTab uid={userId}/>}
+{tab==="boiteaoutils"&&outilsSousOnglet==="immersion"&&<ImmersionConfigTab uid={userId} db={db} isChef={isChefApp}/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}

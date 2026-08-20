@@ -1,6 +1,7 @@
-﻿import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion, addDoc } from "firebase/f";
+import ImmersionTunnel from "./components/Immersion/ImmersionTunnel";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/auth";
@@ -16,12 +17,21 @@ import { AdminLinkBioSection } from './EspaceChefTab';
 import { TunnelTab } from './TunnelTab';
 import { DreamBoardWidget, DreamBoardTab } from './DreamBoardTab';
 import { EbooksTab } from './EbooksTab';
+import { SemaineThemeTab } from './SemaineThemeTab';
 import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_PRODUITS } from './FormationProduitsTab';
 import { DashboardTab } from './DashboardTab';
+import { AuditResultatsTab } from './AuditResultatsTab';
 import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { FastStartTab } from './FastStartTab';
 import { ObjectifsTab } from './ObjectifsTab';
 import { AssistanteIATab } from './AssistanteIATab';
+import { TunnelRecrutementTab, TunnelRecrutementPublic } from './TunnelRecrutementTab';
+import RoueEquilibre from './RoueEquilibre';
+import TestDISC from './TestDISC';
+import TestValeurs from './TestValeurs';
+import TestStyleEntrepreneur from './TestStyleEntrepreneur';
+import { TokensCadeauxTab } from './TokensCadeauxTab';
+import { TunnelStatsEquipeRecap } from './TunnelStatsTab';
 import { buildEquipeTree, countEquipe, getLigneeChefs, countEquipeSafe, SearchSelect, todayLocalDate, todayLocalStr, BoutonMiseAJour, useLang, useTranslation, useTranslatedContent, useTranslatedProduit, T, Btn, YTBtn, DriveBtn, DocBtn, Card, Info, Tag, SecTitle, LangContext, UI_TEXTS, UI_TEXTS_PT, domOriginals, translateDOM, translateBatch, seedAnnuaireFromMembres, APP_VERSION, C } from './components';
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -45,14 +55,23 @@ const reinitialiserMotDePasseFn = httpsCallable(fbFunctions,'reinitialiserMotDeP
 const creerCompteStripeConnectFn = httpsCallable(fbFunctions,'creerCompteStripeConnect');
 const verifierStatutStripeFn = httpsCallable(fbFunctions,'verifierStatutStripe');
 const creerSessionCheckoutFn = httpsCallable(fbFunctions,'creerSessionCheckout');
+const envoyerAlerteEntraideFn = httpsCallable(fbFunctions,'envoyerAlerteEntraide');
 
 async function saveFCMToken(uid) {
   if (!messaging) return;
   try {
+    let swReg;
+    if ("serviceWorker" in navigator) {
+      try {
+        swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+        await navigator.serviceWorker.ready;
+      } catch (e) { console.error("[saveFCMToken] Echec enregistrement service worker:", e); }
+    }
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return;
     const token = await getToken(messaging, {
-      vapidKey: "BFI7Uodh64p0EnejAc9xQ6y0hOS0w4CVA2QO-3mCxFmcm13orUtX7mYDwSRuaS8iDs8ovcClbKj2j2JzMi47sRE"
+      vapidKey: "BFI7Uodh64p0EnejAc9xQ6y0hOS0w4CVA2QO-3mCxFmcm13orUtX7mYDwSRuaS8iDs8ovcClbKj2j2JzMi47sRE",
+      serviceWorkerRegistration: swReg
     });
     if (token) {
       await setDoc(doc(db, "fcm_tokens", uid), { web: token });
@@ -138,7 +157,7 @@ export async function marquerFormationTerminee(uid, subTab) {
     await ss(uid,"db-formation-progress",JSON.stringify(progress));
   }catch(e){console.error("maj completion formation:",e);}
 }
-export const FORMATION_SUBTABS_SUIVIES=["mihibd","demarrage","vente","recrutement","contenu","devperso","outils","formaproduits"];
+export const FORMATION_SUBTABS_SUIVIES=["mihibd","demarrage","vente","recrutement","contenu","devperso","outils","formaproduits","communication"];
 export const FORMATION_SUBTABS_LABELS={mihibd:"Mihi & Blazing Dynasty",demarrage:"Démarrage",vente:"Vente & Stratégies",recrutement:"Recrutement",contenu:"Création de contenu",devperso:"Développement personnel",outils:"Outils",formaproduits:"Formation produits"};
 
 // Met à jour la fiche d'un membre dans l'annuaire global (équipe/annuaire)
@@ -642,6 +661,242 @@ function getCitationDuJour(citations){
 
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 // ── CHALLENGE DÉCOUVERTE APP — 7 JOURS ───────────────────────────────────────
+// ---- CHALLENGES : un document par challenge (anti-ecrasement) ----
+export async function chargerChallenges(){
+  const out = [];
+  try{
+    const snap = await getDocs(collection(db,"challenges","liste","items"));
+    snap.forEach(d=>out.push(d.data()));
+  }catch(e){ console.error("chargerChallenges:", e); }
+  try{
+    const legacy = await getDoc(doc(db,"challenges","liste"));
+    if(legacy.exists()){
+      const anciens = legacy.data().items || [];
+      anciens.forEach(a=>{ if(a && a.id && !out.some(x=>x.id===a.id)) out.push(a); });
+    }
+  }catch(e){}
+  return out;
+}
+
+export async function chargerDeclarations(){
+  const res = {};
+  try{
+    const snap = await getDocs(collection(db,"challenges","declarations","items"));
+    snap.forEach(d=>{ res[d.id] = d.data().liste || []; });
+  }catch(e){ console.error("chargerDeclarations:", e); }
+  try{
+    const legacy = await getDoc(doc(db,"challenges","declarations"));
+    if(legacy.exists()){
+      Object.entries(legacy.data()).forEach(([k,v])=>{
+        if(!res[k] && Array.isArray(v)) res[k] = v;
+      });
+    }
+  }catch(e){}
+  return res;
+}
+
+// ═══════════ ENTRAIDE LIENS (systeme independant, collections dediees) ═══════════
+export async function chargerLiensDuJour(date=todayLocalStr()){
+  try{
+    const snap=await getDoc(doc(db,"entraide_liens","liens_du_jour","items",date));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerLiensDuJour:", e); }
+  return [];
+}
+
+// Recupere les liens des 2 jours precedents (pour le rattrapage), en ne gardant que ceux encore dans la fenetre de 72h
+export async function chargerLiensRattrapage(){
+  const resultats=[];
+  for(let i=1;i<=2;i++){
+    const dd=new Date(); dd.setDate(dd.getDate()-i);
+    const cle=dd.toISOString().slice(0,10);
+    const liste=await chargerLiensDuJour(cle);
+    liste.forEach(l=>resultats.push({...l,dateSource:cle}));
+  }
+  const limite=Date.now()-72*3600000;
+  return resultats.filter(l=>l.ts>=limite);
+}
+
+export async function chargerActiviteEntraide(uid){
+  try{
+    const snap=await getDoc(doc(db,"entraide_liens","activite","items",uid));
+    if(snap.exists())return snap.data().historique||{};
+  }catch(e){ console.error("chargerActiviteEntraide:", e); }
+  return {};
+}
+
+export async function chargerSuspendusEntraide(){
+  try{
+    const snap=await getDoc(doc(db,"entraide_liens","suspendus"));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerSuspendusEntraide:", e); }
+  return [];
+}
+
+// Calcule si l'utilisateur est actuellement bloque (abus repete : liens postes 2 jours de suite sans jamais booster)
+export function calculerBlocageEntraide(historique){
+  const jours=[];
+  const d=new Date();
+  for(let i=1;i<=7;i++){
+    const dd=new Date(d); dd.setDate(dd.getDate()-i);
+    const cle=dd.toISOString().slice(0,10);
+    jours.push(historique[cle]||{postes:0,boosts:0});
+  }
+  let streakAbus=0;
+  for(const j of jours){
+    if(j.postes>0&&j.boosts===0)streakAbus++;
+    else break;
+  }
+  return streakAbus>=2;
+}
+
+export async function ajouterLienEntraide(uid,nom,url){
+  const date=todayLocalStr();
+  const liste=await chargerLiensDuJour();
+  const id=uid+"_"+Date.now();
+  liste.push({id,uid,nom,url,ts:Date.now(),boostePar:[]});
+  await setDoc(doc(db,"entraide_liens","liens_du_jour","items",date),{liste});
+  const hist=await chargerActiviteEntraide(uid);
+  hist[date]={postes:(hist[date]?.postes||0)+1,boosts:hist[date]?.boosts||0};
+  await setDoc(doc(db,"entraide_liens","activite","items",uid),{historique:hist});
+  return liste;
+}
+
+export async function boosterLienEntraide(boosterUid,lienId,dateSource=todayLocalStr()){
+  const date=todayLocalStr();
+  const liste=await chargerLiensDuJour(dateSource);
+  const lien=liste.find(l=>l.id===lienId);
+  if(!lien||lien.boostePar.includes(boosterUid))return liste;
+  lien.boostePar=[...lien.boostePar,boosterUid];
+  await setDoc(doc(db,"entraide_liens","liens_du_jour","items",dateSource),{liste});
+  const hist=await chargerActiviteEntraide(boosterUid);
+  hist[date]={postes:hist[date]?.postes||0,boosts:(hist[date]?.boosts||0)+1};
+  await setDoc(doc(db,"entraide_liens","activite","items",boosterUid),{historique:hist});
+  return liste;
+}
+
+export async function supprimerLienEntraide(uid,lienId,dateSource=todayLocalStr()){
+  const liste=await chargerLiensDuJour(dateSource);
+  const nouvelleListe=liste.filter(l=>l.id!==lienId);
+  await setDoc(doc(db,"entraide_liens","liens_du_jour","items",dateSource),{liste:nouvelleListe});
+  const hist=await chargerActiviteEntraide(uid);
+  if(hist[dateSource])hist[dateSource]={...hist[dateSource],postes:Math.max(0,(hist[dateSource].postes||0)-1)};
+  await setDoc(doc(db,"entraide_liens","activite","items",uid),{historique:hist});
+  return nouvelleListe;
+}
+
+export async function suspendreEntraide(uid,nom,parQui){
+  const liste=await chargerSuspendusEntraide();
+  if(liste.some(s=>s.uid===uid))return liste;
+  const nouvelleListe=[...liste,{uid,nom,depuisLe:Date.now(),parQui}];
+  await setDoc(doc(db,"entraide_liens","suspendus"),{liste:nouvelleListe});
+  return nouvelleListe;
+}
+
+export async function reactiverEntraide(uid){
+  const liste=await chargerSuspendusEntraide();
+  const nouvelleListe=liste.filter(s=>s.uid!==uid);
+  await setDoc(doc(db,"entraide_liens","suspendus"),{liste:nouvelleListe});
+  return nouvelleListe;
+}
+
+export async function chargerObjectifCommun(){
+  try{
+    const snap=await getDoc(doc(db,"objectif_commun","actuel"));
+    if(snap.exists())return snap.data();
+  }catch(e){ console.error("chargerObjectifCommun:", e); }
+  return null;
+}
+
+export async function chargerParticipantsObjectif(){
+  try{
+    const snap=await getDoc(doc(db,"objectif_commun","participants"));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerParticipantsObjectif:", e); }
+  return [];
+}
+
+export async function enregistrerObjectifCommun(obj){
+  await setDoc(doc(db,"objectif_commun","actuel"),obj);
+  await setDoc(doc(db,"objectif_commun","participants"),{liste:[]});
+}
+
+export async function ajouterPasObjectif(uid,nomAffiche){
+  const participants=await chargerParticipantsObjectif();
+  if(participants.some(p=>p.uid===uid))return participants;
+  const nouvelleListe=[...participants,{uid,nom:nomAffiche||"",date:Date.now()}];
+  await setDoc(doc(db,"objectif_commun","participants"),{liste:nouvelleListe});
+  return nouvelleListe;
+}
+
+export async function supprimerAnnonce(id){
+  await deleteDoc(doc(db,"annonces_historique",String(id)));
+  try{
+    const curSnap=await getDoc(doc(db,"equipe","derniere-annonce"));
+    if(curSnap.exists()&&String(curSnap.data().id)===String(id)){
+      const snap=await getDocs(collection(db,"annonces_historique"));
+      const restantes=snap.docs.map(d=>d.data()).sort((a,b)=>(b.creeLe||0)-(a.creeLe||0));
+      if(restantes.length>0)await setDoc(doc(db,"equipe","derniere-annonce"),restantes[0]);
+      else await deleteDoc(doc(db,"equipe","derniere-annonce"));
+    }
+  }catch{}
+}
+
+export async function chargerSondages(){
+  const out = [];
+  try{
+    const snap = await getDocs(collection(db,"sondages","liste","items"));
+    snap.forEach(d=>out.push(d.data()));
+  }catch(e){ console.error("chargerSondages:", e); }
+  return out.sort((a,b)=>(b.creeLe||0)-(a.creeLe||0));
+}
+
+export async function chargerVotesSondages(){
+  const res = {};
+  try{
+    const snap = await getDocs(collection(db,"sondages","votes","items"));
+    snap.forEach(d=>{ res[d.id] = d.data().liste || []; });
+  }catch(e){ console.error("chargerVotesSondages:", e); }
+  return res;
+}
+
+export async function enregistrerSondage(s){
+  await setDoc(doc(db,"sondages","liste","items",s.id), s);
+}
+
+export async function supprimerSondage(id){
+  await deleteDoc(doc(db,"sondages","liste","items",String(id)));
+  try{ await deleteDoc(doc(db,"sondages","votes","items",String(id))); }catch{}
+}
+
+export async function voterSondage(sondageId, uid, choix){
+  const votesActuels = await chargerVotesSondages();
+  const liste = (votesActuels[sondageId]||[]).filter(v=>v.uid!==uid);
+  liste.push({uid, choix, votedLe:Date.now()});
+  await setDoc(doc(db,"sondages","votes","items",sondageId), {liste});
+  return liste;
+}
+
+export async function enregistrerChallenge(ch){
+  await setDoc(doc(db,"challenges","liste","items",ch.id), ch);
+}
+
+export async function effacerChallenge(id){
+  await deleteDoc(doc(db,"challenges","liste","items",id));
+}
+
+export async function chargerDeclarationsChallenge(challengeId){
+  try{
+    const snap=await getDoc(doc(db,"challenges","declarations","items",challengeId));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerDeclarationsChallenge:", e); }
+  return [];
+}
+
+export async function enregistrerDeclarations(challengeId, liste){
+  await setDoc(doc(db,"challenges","declarations","items",challengeId), {liste});
+}
+
 const CHALLENGE_APP_JOURS = [
   {
     jour: 1,
@@ -1070,13 +1325,11 @@ function App(){
     (async()=>{
       try{
         let total=0;
-        const snapC2=await getDoc(doc(db,"challenges","liste"));
-        const items2=snapC2.exists()?(snapC2.data().items||[]):[];
+        const items2=await chargerChallenges();
         const now2=Date.now();
         const actifs2=items2.filter(c=>!c.deadline||c.deadline>now2);
         if(actifs2.length>0){
-          const snapD2=await getDoc(doc(db,"challenges","declarations"));
-          const decls2=snapD2.exists()?snapD2.data():{};
+          const decls2=await chargerDeclarations();
           const nbChallengesNonFaits=actifs2.filter(c=>{
             const mesDecl2=(decls2[c.id]||[]).filter(d=>d.uid===userId);
             return mesDecl2.length===0;
@@ -1288,8 +1541,7 @@ function App(){
       // Popup bienvenue si première connexion
       try{const snapW=await getDoc(doc(db,"users",uid));const welcomed=snapW.exists()?snapW.data()["db-welcomed"]:false;if(!welcomed){setShowWelcome(true);await setDoc(doc(db,"users",uid),{"db-welcomed":true},{merge:true});}}catch{}
       try{
-        const challSnap=await getDoc(doc(db,"challenges","liste"));
-        const challItems=challSnap.exists()?(challSnap.data().items||[]):[];
+        const challItems=await chargerChallenges();
         const now2=Date.now();
         const actifs2=challItems.filter(c=>!c.deadline||c.deadline>now2);
         if(actifs2.length>0){
@@ -1398,13 +1650,11 @@ function App(){
       try{
         let total=0;
         try{
-          const snapC3=await getDoc(doc(db,"challenges","liste"));
-          const items3=snapC3.exists()?(snapC3.data().items||[]):[];
+          const items3=await chargerChallenges();
           const now3=Date.now();
           const actifs3=items3.filter(c=>!c.deadline||c.deadline>now3);
           if(actifs3.length>0){
-            const snapD3=await getDoc(doc(db,"challenges","declarations"));
-            const decls3=snapD3.exists()?snapD3.data():{};
+            const decls3=await chargerDeclarations();
             const nonFaits=actifs3.filter(c=>{
               const mesDecl3=(decls3[c.id]||[]).filter(d=>d.uid===userId);
               return mesDecl3.length===0;
@@ -1468,9 +1718,9 @@ function App(){
   const[formationTerminees,setFormationTerminees]=useState({});
   const[formationNouveautes,setFormationNouveautes]=useState({});
   const FORMATION_DATES_MAJ={
-    mihibd:"2026-01-01", demarrage:"2026-01-01", vente:"2026-07-09",
+    mihibd:"2026-01-01", demarrage:"2026-01-01", vente:"2026-07-28",
     recrutement:"2026-07-09", contenu:"2026-01-01", devperso:"2026-07-09",
-    outils:"2026-07-09", formaproduits:"2026-07-09",
+    outils:"2026-07-09", formaproduits:"2026-07-09", communication:"2026-08-17",
   };
   useEffect(()=>{
     if(!userId)return;
@@ -1481,8 +1731,15 @@ function App(){
         const termines={};
         const nouveautes={};
         Object.keys(progress).forEach(k=>{if(progress[k]?.termine)termines[k]=true;});
+        let dateFormaProduits=FORMATION_DATES_MAJ.formaproduits;
+        try{
+          const fpSnap=await getDoc(doc(db,"admin","formation_produits"));
+          if(fpSnap.exists()&&fpSnap.data().derniereMaj){
+            dateFormaProduits=new Date(fpSnap.data().derniereMaj).toISOString().slice(0,10);
+          }
+        }catch{}
         FORMATION_SUBTABS_SUIVIES.forEach(id=>{
-          const maj=FORMATION_DATES_MAJ[id];
+          const maj=id==="formaproduits"?dateFormaProduits:FORMATION_DATES_MAJ[id];
           const vue=progress[id]?.derniereConsultation;
           if(maj&&(!vue||new Date(vue)<new Date(maj)))nouveautes[id]=true;
         });
@@ -1510,6 +1767,83 @@ function App(){
     </div>
   );
   const[showObjectifs,setShowObjectifs]=useState(false);
+
+  // â”€â”€ POWER HOUR â€” popups dÃ©marrage/fin â”€â”€
+  const[showPowerHourStart,setShowPowerHourStart]=useState(false);
+  const[showPowerHourEnd,setShowPowerHourEnd]=useState(false);
+  const[powerHourInfo,setPowerHourInfo]=useState(null);
+  useEffect(()=>{
+    if(!userId||screen!=="app")return;
+    const DUREE_PH=20*60000;
+    const checkPowerHour=async()=>{
+      try{
+        const snap=await getDoc(doc(db,"equipe","power-hour"));
+        if(!snap.exists())return;
+        const d=snap.data();
+        if(!d.startedAt)return;
+        const elapsed=Date.now()-d.startedAt;
+        let seenStart=null,seenEnd=null;
+        try{seenStart=localStorage.getItem("bd-ph-start-seen");}catch{}
+        try{seenEnd=localStorage.getItem("bd-ph-end-seen");}catch{}
+        if(elapsed>=0&&elapsed<2*60000&&String(d.startedAt)!==seenStart){
+          setPowerHourInfo(d);setShowPowerHourStart(true);
+          try{localStorage.setItem("bd-ph-start-seen",String(d.startedAt));}catch{}
+        }
+        if(elapsed>=DUREE_PH&&elapsed<DUREE_PH+2*60000&&String(d.startedAt)!==seenEnd){
+          setPowerHourInfo(d);setShowPowerHourEnd(true);
+          try{localStorage.setItem("bd-ph-end-seen",String(d.startedAt));}catch{}
+        }
+      }catch{}
+    };
+    checkPowerHour();
+    const t=setInterval(checkPowerHour,15000);
+    return()=>clearInterval(t);
+  },[userId,screen]);
+
+  // â”€â”€ ANNONCES OFFICIELLES EQUIPE â”€â”€
+  const[showAnnonce,setShowAnnonce]=useState(false);
+  const[annonceData,setAnnonceData]=useState(null);
+  const[showInfosImportantes,setShowInfosImportantes]=useState(false);
+  const[showEntraideLiens,setShowEntraideLiens]=useState(false);
+  const[showAnnonceAdminFlottant,setShowAnnonceAdminFlottant]=useState(false);
+  const[glowInfos,setGlowInfos]=useState(false);
+  const[glowEntraide,setGlowEntraide]=useState(false);
+  useEffect(()=>{
+    if(!userId||screen!=="app")return;
+    const checkAnnonce=async()=>{
+      try{
+        const snap=await getDoc(doc(db,"equipe","derniere-annonce"));
+        if(!snap.exists())return;
+        const d=snap.data();
+        if(!d.id)return;
+        let seen=null;
+        try{seen=localStorage.getItem("bd-annonce-seen");}catch{}
+        if(String(d.id)!==seen){
+          setAnnonceData(d);
+          setShowAnnonce(true);
+          setGlowInfos(true);
+          try{localStorage.setItem("bd-annonce-seen",String(d.id));}catch{}
+          try{await setDoc(doc(db,"annonces_vues",String(d.id)),{vus:arrayUnion(userId)},{merge:true});}catch{}
+        }
+      }catch{}
+    };
+    checkAnnonce();
+    const t2=setInterval(checkAnnonce,30000);
+    return()=>clearInterval(t2);
+  },[userId,screen]);
+  useEffect(()=>{
+    if(!userId||screen!=="app")return;
+    const checkEntraide=async()=>{
+      try{
+        const liste=await chargerLiensDuJour();
+        const nonBoostesParMoi=liste.filter(l=>l.uid!==userId&&!l.boostePar.includes(userId));
+        setGlowEntraide(nonBoostesParMoi.length>0);
+      }catch{}
+    };
+    checkEntraide();
+    const t3=setInterval(checkEntraide,60000);
+    return()=>clearInterval(t3);
+  },[userId,screen]);
   const[lang,setLang]=useState("fr");
   const[translations,setTranslations]=useState({});
   const[translating,setTranslating]=useState(false);
@@ -1624,6 +1958,19 @@ function App(){
           totalCaCumul:String(totalCaCumul),
           totalRecruesCumul:String(totalRecruesCumul),
         };
+        try{
+          const refCA=doc(db,"users",uid);
+          const snapCA=await getDoc(refCA);
+          const brutCA=snapCA.exists()?snapCA.data()["db-suivi-ca"]:null;
+          const dataCA=brutCA?JSON.parse(brutCA):{};
+          const keyCA="p"+lastPeriode;
+          const curCA=dataCA[keyCA]||{obj:0,jours:{}};
+          dataCA[keyCA]={...curCA,caPerso:parseFloat(obj.caPerso)||0,recrues:parseFloat(obj.recruesReal)||0};
+          await setDoc(refCA,{"db-suivi-ca":JSON.stringify(dataCA)},{merge:true});
+        }catch(e){ console.error("archivage suivi-ca:",e); }
+        try{
+          await setDoc(doc(db,"users",uid),{"db-rappel-periode":JSON.stringify({periode:lastPeriode,ca:parseFloat(obj.ca)||0,vu:false})},{merge:true});
+        }catch(e){}
         await setDoc(doc(db,"users",uid),{"db-obj-perso":JSON.stringify(nextObj),"last_periode":periodeCourante},{merge:true});
         // Sync annuaire avec les nouvelles valeurs vides
         await syncAnnuaire(uid, name||uid, nextObj);
@@ -1740,6 +2087,21 @@ function App(){
       }catch{}
     })();
   },[userId]);
+  const[nbMsgsNonLusApp,setNbMsgsNonLusApp]=useState(0);
+  useEffect(()=>{
+    if(!userId)return;
+    const checkMsgsEspaceChef=async()=>{
+      try{
+        const snap=await getDoc(doc(db,"messages",userId));
+        if(!snap.exists()){setNbMsgsNonLusApp(0);return;}
+        const msgs=snap.data().msgs||[];
+        setNbMsgsNonLusApp(msgs.filter(m=>!m.lu).length);
+      }catch{}
+    };
+    checkMsgsEspaceChef();
+    const t=setInterval(checkMsgsEspaceChef,30000);
+    return()=>clearInterval(t);
+  },[userId]);
   const[diagResultsTrigger,setDiagResultsTrigger]=useState(0);
   const voirDiagResultats=()=>{
     setTab("boiteaoutils");
@@ -1825,10 +2187,11 @@ function App(){
 
   const DASHBOARD_SOUS_ONGLETS=[
     {id:"quotidien",label:"📊 Quotidien"},
+    {id:"semainetheme",label:"🗓️ Semaine à thème"},
     {id:"sprint",label:"⚡ Sprint"},
+    {id:"audit",label:"🔍 Audit"},
     {id:"dreamboard",label:"✨ Dream Board"},
     {id:"reseaux",label:"📱 Réseaux"},
-    {id:"liensimportants",label:"🔗 Liens importants"},
     {id:"editorial",label:"✍️ Éditorial"},
   ];
   const OUTILS_SOUS_ONGLETS=[
@@ -1836,10 +2199,15 @@ function App(){
     {id:"boutique",label:"🛍️ Boutique"},
     {id:"diagnostics",label:"🩺 Diagnostics"},
     {id:"scripts",label:"📝 Scripts"},
-    {id:"banqueimages",label:"💬 Témoignages & Visuels"},
+    {id:"banqueimages",label:"📸 Témoignages & Visuels"},
     {id:"ebooks",label:"📚 Ebooks"},
+    {id:"liensimportants",label:"🔗 Liens importants"},
+    {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
+    {id:"monunivers",label:"🌟 Mon Univers"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
+  const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
+  const[ouvrirChallengesTrigger,setOuvrirChallengesTrigger]=useState(0);
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
 
   // Sous-onglets du menu Formation
@@ -1853,12 +2221,35 @@ function App(){
     {id:"outils",label:"🛠️ Outils",icon:"🛠️",col:C.or,desc:"Canva, CapCut, Linktree et plus"},
     {id:"devperso",label:"🧠 Dév. Personnel",icon:"🧠",col:C.lilas,desc:"Mindset et développement personnel"},
     {id:"formaproduits",label:"🧴 Formation Produits",icon:"🧴",col:C.rose,desc:"Tout savoir sur les produits Mihi"},
+    {id:"communication",label:"💬 Communication Mihi",icon:"💬",col:C.or,desc:"Bien communiquer autour de la marque Mihi"},
   ];
 
   // ── MODE DIAGNOSTIC EXTERNE (cliente sans login) ──
   const urlParams = new URLSearchParams(window.location.search);
   const diagMode = urlParams.has("diag");
-  const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||"";
+  const diagUidFromPath = (window.location.pathname.match(/\/d\/([^/?]+)/)||[])[1] || "";
+  const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||diagUidFromPath||"";
+
+  // ── MODE TUNNEL (vente/recrutement, visiteur sans login) ──
+  const tunnelMode = urlParams.has("tunnel");
+  const tunnelSlug = urlParams.get("tunnel")||"";
+  useEffect(()=>{
+    if(!diagMode) return;
+    (async()=>{
+      try{
+        const cfg = await getDoc(doc(db,"admin","config"));
+        const fr = cfg.exists() ? cfg.data().forceReload : 0;
+        const last = +localStorage.getItem("bd-public-last-reload") || 0;
+        if(fr && fr > last){
+          localStorage.setItem("bd-public-last-reload", String(fr));
+          window.location.reload();
+        }
+      }catch{}
+    })();
+  },[]);
+  if(tunnelMode&&tunnelSlug){
+    return <TunnelRecrutementPublic slug={tunnelSlug} db={db}/>;
+  }
   if(diagMode){
     return(
       <div style={{minHeight:"100vh",background:C.creme,fontFamily:"'Trebuchet MS',sans-serif"}}>
@@ -1874,7 +2265,53 @@ function App(){
       </div>
     );
   }
+  if(immersionMode){
+  const immersionUidFromPath = (window.location.pathname.match(/\/immersion\/([^/?]+)/)||[])[1] || "";
+  const immersionMode = urlParams.has("immersion") || !!immersionUidFromPath;
+  const immersionUid = urlParams.get("immersion") || immersionUidFromPath || "";
+  const immersionScore = urlParams.get("score") ? Number(urlParams.get("score")) : null;
+  const [immersionData, setImmersionData] = useState(null);
+  useEffect(()=>{
+    if(!immersionMode) return;
+    (async()=>{
+      try{
+        const communSnap = await getDoc(doc(db,"immersion","_commun"));
+        const personalSnap = immersionUid ? await getDoc(doc(db,"immersion", immersionUid)) : null;
+        const categories = ["Maman","Reconversion","Débutante","Confirmée","Étudiante","Autre"];
+        const temoignages = [];
+        for(const cat of categories){
+          const q = query(collection(db,"temoignages"), where("profil","==",cat), where("valide","==",true));
+          const snap = await getDocs(q);
+          snap.forEach(docSnap=>temoignages.push(docSnap.data()));
+        }
+        setImmersionData({
+          ...(communSnap.exists()?communSnap.data():{}),
+          ...(personalSnap && personalSnap.exists()?personalSnap.data():{}),
+          ...(temoignages.length ? {temoignages} : {}),
+        });
+      }catch(e){
+        console.error("Erreur chargement immersion", e);
+        setImmersionData({});
+      }
+    })();
+  },[immersionMode, immersionUid]);
 
+  if(immersionMode){
+    if(!immersionData){
+      return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#171529",color:"#F7F3EC"}}>Chargement...</div>;
+    }
+    return (
+      <ImmersionTunnel
+        data={immersionData}
+        score={immersionScore}
+        onLeadSubmit={async (lead)=>{
+          try{
+            await addDoc(collection(db,"leads"), {...lead, score:immersionScore, distributriceId: immersionUid, source:"immersion", creeLe: new Date().toISOString()});
+          }catch(e){ console.error("Erreur envoi lead", e); }
+        }}
+      />
+    );
+  }
   // ── LOGIN ────────────────────────────────────────────────────────────────────
   if(screen==="login")return(
     <div style={{minHeight:"100vh",background:C.brun,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"2rem 1.2rem",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
@@ -2064,6 +2501,14 @@ function App(){
             {paiementSaving?"...":paiementSaved?"✅ Enregistré !":"Enregistrer mes liens de paiement"}
           </button>
         </div>
+        {/* TOKENS-COMPTE */}
+        <div style={{background:"#FDF8EC",borderRadius:12,padding:"1rem",marginBottom:"1rem",border:"1px solid #C4A962"}}>
+          <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E",marginBottom:".3rem"}}>🎁 Tokens cadeaux — offres exclusives</div>
+          <div style={{fontSize:".68rem",color:"#888",marginBottom:".7rem",lineHeight:1.5}}>
+            Ajoute des liens tokens Mihi pour offrir des cadeaux a tes nouvelles clientes ou recrues. Chaque lien ne peut etre utilise qu'une seule fois.
+          </div>
+          <TokensCadeauxTab uid={userId} db={db} prenom={name}/>
+        </div>
         <div id="decouverte-compte-email" style={{background:"#FFF3EC",borderRadius:12,padding:"1rem",marginBottom:"1rem",border:"1px solid #F0D8C8"}}>
           <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E",marginBottom:".3rem"}}>🔔 Alerte email nouvelle commande</div>
           <div style={{fontSize:".68rem",color:"#888",marginBottom:".6rem",lineHeight:1.5}}>
@@ -2240,7 +2685,14 @@ function App(){
       {/* NAV */}
       <div style={{background:C.blanc,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 8px rgba(61,31,14,.06)"}}>
         {TABS.map(tb=>(
-          <button key={tb.id} onClick={()=>setTab(tb.id)}
+          <button key={tb.id} onClick={()=>{
+              setTab(tb.id);
+              if(tb.id==="formation"){
+                const nouveautesIds=Object.keys(formationNouveautes);
+                if(nouveautesIds.length===1)setFormationSubTab(nouveautesIds[0]);
+                else setFormationSubTab("");
+              }
+            }}
             style={{flex:"none",padding:".72rem .85rem",fontSize:".6rem",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase",color:tab===tb.id?C.brun:C.gris,border:"none",borderBottom:`2px solid ${tab===tb.id?C.rose:"transparent"}`,background:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",transition:"all .2s",position:"relative"}}>
             {(()=>{
               let n=0;
@@ -2248,6 +2700,7 @@ function App(){
               if(tb.id==="formation")n=Object.keys(formationNouveautes).length;
               if(tb.id==="boiteaoutils")n=nbDiagNonLus;
               if(tb.id==="calendrier")n=nbNotifCalendrier;
+              if(tb.id==="espacechef")n=nbMsgsNonLusApp;
               if(tb.id==="dashboard"){
                 const nUrgent=(objPeriodeRemplis?0:1)+nbNotifDashboard.relances+nbCommandesNonVues;
                 const nActions=nbNotifDashboard.actions;
@@ -2276,6 +2729,9 @@ function App(){
         ))}
       </div>
 
+      {userId&&<BandeauChallenge uid={userId} onOuvrir={()=>{setTab("communaute");setOuvrirChallengesTrigger(t=>t+1);}}/>}
+      {userId&&<RappelPeriodePopup uid={userId} onAller={()=>{setTab("dashboard");setDashboardSousOnglet("quotidien");setOuvrirBusinessTrigger(t=>t+1);}}/>}
+
       {/* SOUS-NAV TABLEAU DE BORD */}
       {tab==="dashboard"&&(
         <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:99,gap:".4rem",padding:".5rem .75rem"}}>
@@ -2299,7 +2755,7 @@ function App(){
           {OUTILS_SOUS_ONGLETS.map(s=>{
             const nPill=s.id==="diagnostics"?nbDiagNonLus:0;
             return(
-            <button key={s.id} onClick={()=>setOutilsSousOnglet(s.id)}
+            <button key={s.id} onClick={()=>{setOutilsSousOnglet(s.id);if(s.id==="diagnostics")setNbDiagNonLus(0);}}
               style={{flexShrink:0,padding:".4rem .8rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${outilsSousOnglet===s.id?C.rose:C.pale}`,background:outilsSousOnglet===s.id?C.rose:C.blanc,color:outilsSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:".3rem"}}>
               {s.label}
               {nPill>0&&<span style={{background:outilsSousOnglet===s.id?"white":"#E63946",color:outilsSousOnglet===s.id?C.rose:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nPill}</span>}
@@ -2962,7 +3418,195 @@ function App(){
                 </div>
               ))}
             </Card>
-            <BoutonTermineFormation subTab="vente"/>
+            {/* ── FORMATION : ARRETE DE VOULOIR TOUT VENDRE ── */}
+<Card title="Arrête de vouloir tout vendre" sub="1 produit par période · 7 angles · la méthode" icon="⚠️" color={C.or} defaultOpen>
+
+  <Info color={C.or}>
+    <strong>La formation la plus importante de cet onglet.</strong> Si tu n'en appliques qu'une, prends celle-là. Elle ne te demande pas de travailler plus — elle te demande de travailler sur <em>moins de produits</em>.
+  </Info>
+
+  {/* 1. LE PIEGE */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginTop:"1.2rem",marginBottom:".5rem"}}>1 · Le piège du catalogue</div>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Ne cherche pas à couvrir le catalogue. C'est le réflexe naturel, et c'est exactement le piège : avec 400 produits, si tu en montres un nouveau chaque jour, <strong>personne ne voit jamais deux fois le même</strong>.
+  </p>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Et on n'achète pas ce qu'on a vu une seule fois. On achète ce qu'on a vu assez souvent pour s'en souvenir le jour où le besoin arrive.
+  </p>
+  <div style={{background:"rgba(139,94,0,.08)",borderLeft:"3px solid "+C.or,padding:".7rem .8rem",borderRadius:"0 8px 8px 0",marginBottom:".6rem"}}>
+    <div style={{fontSize:".72rem",color:C.brun,lineHeight:1.6}}>
+      <strong>400 produits qui défilent = 0 produit installé.</strong><br/>
+      17 produits travaillés en profondeur = 17 produits que ton audience connaît par cœur.
+    </div>
+  </div>
+
+  {/* 2. LA REGLE */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginTop:"1.2rem",marginBottom:".5rem"}}>2 · La règle : 1 produit par période</div>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Tu as environ <strong>7 créneaux produit par période</strong>. Utilise-les <strong>tous sur le même produit</strong>, traité sous 7 angles différents.
+  </p>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Ça paraît répétitif quand tu le prépares. Ça ne l'est jamais pour celle qui te lit : elle ne voit qu'une fraction de ce que tu publies. Ce qui te semble lourd, elle le vit comme « ah tiens, encore ce truc — ça doit être bien ».
+  </p>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Résultat sur l'année : <strong>17 produits vraiment installés</strong> dans la tête de ton audience, au lieu de 400 qui défilent.
+  </p>
+
+  {/* 3. LES 7 ANGLES */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginTop:"1.2rem",marginBottom:".5rem"}}>3 · Les 7 angles pour un seul produit</div>
+  {[
+    ["1","🎯","Le problème — pas le produit","Tu n'ouvres jamais par le nom du produit. Tu ouvres par la sensation. « Ta peau tire après la douche ? » « Ce moment où tu te relèves du canapé et t'as mal partout. » Elle doit se reconnaître avant de savoir que tu vends quelque chose."],
+    ["2","🎬","Ta routine, filmée","Comment tu l'utilises vraiment. Pas une démo léchée — le vrai geste, la vraie texture, la quantité réelle. C'est ce qui transforme un produit abstrait en objet qu'on imagine dans sa salle de bain."],
+    ["3","💶","Le prix — la comparaison au litre","Ton hook le plus partagé. Ramène le prix au litre ou à la dose, et compare à une marque connue. Le chiffre fait le travail tout seul, tu n'as pas besoin d'en rajouter."],
+    ["4","🚫","Pour qui ce n'est PAS","L'angle honnête, et celui qui crédibilise les six autres. « Si tu cherches un effet immédiat, passe ton chemin. » Dire à qui un produit ne convient pas est le signal le plus fort que tu ne racontes pas n'importe quoi."],
+    ["5","💬","Le retour cliente","Avec son accord, et sans promesse de résultat. Un message brut vaut mieux qu'un témoignage reformulé — les gens reconnaissent instantanément le vrai du fabriqué."],
+    ["6","😬","L'objection frontale","Tu dis toi-même ce qu'on pense tout bas. « Oui, c'est une marque que tu ne connais pas. Parlons-en. » Prendre l'objection en premier te met du côté de ta cliente, pas en face d'elle."],
+    ["7","⏳","Le rappel de fin de période","La promo se termine, tu le dis. Simplement, sans faux compte à rebours et sans « dernières pièces » inventé. L'urgence honnête fonctionne. L'urgence fabriquée te grille pour de bon."],
+  ].map(([n,ic,t,d])=>(
+    <div key={n} style={{display:"flex",gap:".7rem",alignItems:"flex-start",marginBottom:".7rem"}}>
+      <div style={{minWidth:"1.7rem",height:"1.7rem",borderRadius:"50%",background:C.or,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".7rem",fontWeight:700,flexShrink:0}}>{n}</div>
+      <div>
+        <div style={{fontSize:".76rem",fontWeight:700,color:C.brun,marginBottom:".15rem"}}>{ic} {t}</div>
+        <div style={{fontSize:".71rem",color:C.texte,lineHeight:1.6}}>{d}</div>
+      </div>
+    </div>
+  ))}
+
+  {/* 4. PLAN DE PERIODE */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginTop:"1.2rem",marginBottom:".5rem"}}>4 · Ton plan de période, clé en main</div>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".7rem"}}>
+    Tu n'as pas à réfléchir à l'ordre : il est déjà pensé pour amener ta cliente d'un point A à un point B.
+  </p>
+  {[
+    ["Semaine 1","Tu installes le produit",["Angle 1 — Le problème","Angle 2 — Ta routine filmée"],C.rose],
+    ["Semaine 2","Tu construis la valeur",["Angle 3 — Le prix au litre","Angle 4 — Pour qui ce n'est pas","Angle 5 — Le retour cliente"],C.lilas],
+    ["Semaine 3","Tu lèves les freins",["Angle 6 — L'objection frontale","Angle 7 — Le rappel de fin de période"],C.or],
+  ].map(([sem,but,items,col])=>(
+    <div key={sem} style={{border:"1px solid rgba(139,94,0,.18)",borderRadius:"10px",padding:".7rem .8rem",marginBottom:".55rem",background:"rgba(255,255,255,.4)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:".4rem",flexWrap:"wrap",gap:".3rem"}}>
+        <span style={{fontSize:".78rem",fontWeight:700,color:col}}>{sem}</span>
+        <span style={{fontSize:".66rem",color:C.gris,fontStyle:"italic"}}>{but}</span>
+      </div>
+      {items.map(it=>(
+        <div key={it} style={{fontSize:".71rem",color:C.texte,lineHeight:1.7,paddingLeft:".2rem"}}>• {it}</div>
+      ))}
+    </div>
+  ))}
+
+  {/* 5. CHOISIR SES 17 */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginTop:"1.2rem",marginBottom:".5rem"}}>5 · Comment choisir tes 17 héros</div>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Ne choisis pas au feeling. Ouvre ton back-office et sors <strong>tes ventes des 6 derniers mois</strong>. Tu vas découvrir que 10 à 15 références font la grande majorité de ton volume. Ce sont tes héros — tu les gardes toute l'année.
+  </p>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Pour arbitrer les places restantes, deux critères :
+  </p>
+  {[
+    ["🔁","Consommable avant tout","Un soin qui se termine en 6 semaines rapporte dix fois plus qu'un appareil acheté une fois. Ton PGV a besoin de récurrence, pas de nouveautés."],
+    ["📅","Aligné sur le catalogue en cours","Chaque période a ses promos. Un produit en promo te donne un argument prix concret — c'est le moment de le pousser, pas dans trois mois."],
+  ].map(([ic,t,d])=>(
+    <div key={t} style={{display:"flex",gap:".6rem",alignItems:"flex-start",marginBottom:".55rem"}}>
+      <span style={{fontSize:"1rem",flexShrink:0}}>{ic}</span>
+      <div>
+        <div style={{fontSize:".75rem",fontWeight:700,color:C.brun}}>{t}</div>
+        <div style={{fontSize:".71rem",color:C.texte,lineHeight:1.6}}>{d}</div>
+      </div>
+    </div>
+  ))}
+
+  {/* 6. SEMAINES A THEME */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginTop:"1.2rem",marginBottom:".5rem"}}>6 · Organise par problème vécu, pas par catégorie</div>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Les semaines à thème : oui. Mais pas par catégorie. « Semaine crèmes », « semaine compléments » — c'est de la logique de catalogue. Ça ne parle qu'à celles qui cherchent déjà.
+  </p>
+  <div style={{background:"rgba(139,94,0,.06)",borderRadius:"10px",padding:".7rem .8rem",marginBottom:".6rem"}}>
+    <div style={{fontSize:".64rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:C.gris,marginBottom:".4rem"}}>Organise plutôt comme ça</div>
+    {["La peau qui tire","La fatigue de fin de journée","Les cheveux qui cassent","Le ventre gonflé après les repas"].map(x=>(
+      <div key={x} style={{fontSize:".72rem",color:C.brun,fontWeight:600,lineHeight:1.8}}>• {x}</div>
+    ))}
+  </div>
+  <div style={{background:"rgba(196,120,140,.1)",borderLeft:"3px solid "+C.rose,padding:".7rem .8rem",borderRadius:"0 8px 8px 0",marginBottom:".6rem"}}>
+    <div style={{fontSize:".72rem",color:C.brun,lineHeight:1.7}}>
+      Une femme ne se dit <strong>jamais</strong> « il me faut un sérum ».<br/>
+      Elle se dit « j'ai une sale tête ce matin ».<br/>
+      <em>Tu entres par là, le produit arrive après.</em>
+    </div>
+  </div>
+
+  {/* 7. GARDE-FOU */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:"#B3261E",marginTop:"1.2rem",marginBottom:".5rem"}}>7 · Le garde-fou — compléments alimentaires</div>
+  <div style={{border:"1.5px solid rgba(179,38,30,.35)",background:"rgba(179,38,30,.05)",borderRadius:"10px",padding:".8rem"}}>
+    <div style={{fontSize:".74rem",color:C.brun,lineHeight:1.7,marginBottom:".6rem"}}>
+      <strong>⚠️ À lire avant de publier.</strong> Sur tout ce qui est complément alimentaire, reste dans les allégations autorisées et ne laisse <strong>jamais</strong> entendre un effet de type médicament. C'est le sujet sur lequel la DGCCRF est la plus attentive — et c'est aussi celui où tes concurrentes se plantent le plus souvent. Donc où ta rigueur se voit.
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr",gap:".5rem"}}>
+      <div>
+        <div style={{fontSize:".66rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"#2E7D32",marginBottom:".25rem"}}>✅ Tu peux dire</div>
+        {["« Contribue à réduire la fatigue »","« Participe au maintien d'une peau normale »","« Ce que moi j'ai ressenti, sans promesse pour toi »","« Complément d'une alimentation variée »"].map(x=>(
+          <div key={x} style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>{x}</div>
+        ))}
+      </div>
+      <div>
+        <div style={{fontSize:".66rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"#B3261E",marginBottom:".25rem"}}>❌ Tu ne peux pas dire</div>
+        {["« Soigne », « guérit », « traite »","« Fait perdre X kilos »","« Remplace ton traitement »","Un avant/après présenté comme un résultat garanti"].map(x=>(
+          <div key={x} style={{fontSize:".7rem",color:C.texte,lineHeight:1.7}}>{x}</div>
+        ))}
+      </div>
+    </div>
+    <div style={{fontSize:".68rem",color:C.gris,fontStyle:"italic",marginTop:".6rem",lineHeight:1.6}}>
+      En cas de doute sur une formulation : demande-la-moi en message avant de publier. Ça prend deux minutes et ça t'évite un vrai problème.
+    </div>
+  </div>
+
+  {/* 8. ERREURS */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginTop:"1.2rem",marginBottom:".5rem"}}>8 · Les 4 erreurs qui tuent la méthode</div>
+  {[
+    ["Craquer au bout de 3 jours","Tu vas trouver ça répétitif bien avant ton audience. C'est normal, et ce n'est pas un signal. Tiens la période complète — c'est justement à partir du 4e ou 5e contenu que ça commence à payer."],
+    ["Changer de produit parce qu'un post a mal marché","Un contenu qui ne performe pas ne condamne pas le produit. Il condamne l'angle. Passe au suivant, garde le produit."],
+    ["Empiler deux produits dans le même contenu","Dès qu'il y a un choix à faire, il n'y a plus de décision. Un contenu = un produit = un angle."],
+    ["Attendre la nouveauté pour se relancer","La nouveauté flatte ton envie de variété, pas les ventes. Tes héros paient tes factures, pas le dernier lancement."],
+  ].map(([t,d],i)=>(
+    <div key={t} style={{display:"flex",gap:".6rem",alignItems:"flex-start",marginBottom:".55rem"}}>
+      <span style={{fontSize:".9rem",flexShrink:0}}>❌</span>
+      <div>
+        <div style={{fontSize:".75rem",fontWeight:700,color:C.brun}}>{t}</div>
+        <div style={{fontSize:".71rem",color:C.texte,lineHeight:1.6}}>{d}</div>
+      </div>
+    </div>
+  ))}
+
+  {/* 9. MESURER */}
+  <div style={{fontSize:".6rem",fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:C.or,marginTop:"1.2rem",marginBottom:".5rem"}}>9 · Comment savoir si ça marche</div>
+  <p style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+    Pas les likes. Les likes ne t'ont jamais payé une facture. Regarde ces trois chiffres à la fin de chaque période :
+  </p>
+  {[
+    ["💬","Messages reçus sur le produit","Le vrai thermomètre. Si les angles fonctionnent, on te pose des questions."],
+    ["🔁","Partages / enregistrements","Surtout sur l'angle prix. C'est le signal que ton contenu circule au-delà de tes abonnées."],
+    ["🛍️","Ventes attribuées à ce produit","Compare avec la période précédente sur un produit traité à l'ancienne. L'écart te dira tout."],
+  ].map(([ic,t,d])=>(
+    <div key={t} style={{display:"flex",gap:".6rem",alignItems:"flex-start",marginBottom:".5rem"}}>
+      <span style={{fontSize:"1rem",flexShrink:0}}>{ic}</span>
+      <div>
+        <div style={{fontSize:".75rem",fontWeight:700,color:C.brun}}>{t}</div>
+        <div style={{fontSize:".71rem",color:C.texte,lineHeight:1.6}}>{d}</div>
+      </div>
+    </div>
+  ))}
+
+  {/* 10. CTA */}
+  <div style={{marginTop:"1.3rem",background:"linear-gradient(135deg,rgba(139,94,0,.12),rgba(196,120,140,.12))",border:"1.5px solid rgba(139,94,0,.25)",borderRadius:"12px",padding:".9rem"}}>
+    <div style={{fontSize:".82rem",fontWeight:700,color:C.brun,marginBottom:".45rem"}}>🎯 Ton plan pour cette période</div>
+    <div style={{fontSize:".72rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem"}}>
+      Regarde quel produit est en promo au catalogue en cours. Croise avec tes 3 meilleures ventes des 6 derniers mois. <strong>Prends celui qui coche les deux.</strong> C'est ton produit de la période, tu ne le lâches plus pendant 3 semaines.
+    </div>
+    <div style={{fontSize:".72rem",color:C.brun,lineHeight:1.7,fontWeight:600,borderTop:"1px solid rgba(139,94,0,.2)",paddingTop:".55rem"}}>
+      ✍️ Écris-moi ton produit en message — je te rédige tes 7 angles en détail, prêts à publier.
+    </div>
+  </div>
+
+</Card>
+<BoutonTermineFormation subTab="vente"/>
           </div>
         )}
 
@@ -3248,6 +3892,16 @@ function App(){
           </div>
         )}
 
+        {tab==="formation"&&formationSubTab==="communication"&&(
+          <div>
+            <SecTitle title="Communication" em="autour de Mihi" desc="Comment bien parler de Mihi, de la marque et de l'opportunité."/>
+            <Card title="Formation Communication Mihi" sub="YouTube" icon="▶" color={C.or} defaultOpen>
+              <YTBtn href="https://youtu.be/iSkh6iwI2uI" label="💬 Communication autour de Mihi"/>
+            </Card>
+            <BoutonTermineFormation subTab="communication"/>
+          </div>
+        )}
+
         {/* ── OUTILS ── */}
         {tab==="formation"&&formationSubTab==="devperso"&&(
           <div><DevPersoSection adminItems={adminItems}/><BoutonTermineFormation subTab="devperso"/></div>
@@ -3325,6 +3979,8 @@ function App(){
         )}
 
         {/* ── SPRINT / ACCÉLÈRE ── */}
+        {tab==="dashboard"&&dashboardSousOnglet==="semainetheme"&&<SemaineThemeTab uid={userId}/>}
+        {tab==="dashboard"&&dashboardSousOnglet==="audit"&&<AuditResultatsTab uid={userId} prenom={name&&name.split(' ')[0]}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="sprint"&&(
           <div>
             <SecTitle title="Prends" em="de la vitesse" desc="7 actions quotidiennes pour passer à l'action. Chaque jour compte — coche et avance."/>
@@ -3414,17 +4070,20 @@ function App(){
         {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues}/>}
+        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues} ouvrirBusiness={ouvrirBusinessTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="scripts"&&<ScriptsTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="boutique"&&<LinkBioTab uid={userId} userName={name} initialSection="boutique"/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="tunnel-recrutement"&&<TunnelRecrutementTab uid={userId} userName={name} db={db}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="ebooks"&&<EbooksTab/>}
-        {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp}/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="monunivers"&&<MonUniversTab uid={userId}/>}
+        {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
-        {tab==="dashboard"&&dashboardSousOnglet==="liensimportants"&&<LiensImportantsTab uid={userId}/>}
+        
         {tab==="dashboard"&&dashboardSousOnglet==="editorial"&&<EditorialTab uid={userId} userName={name}/>}
         {tab==="espacechef"&&(isChefApp||hasTeamApp)&&<EspaceChefTab uid={userId} isChef={isChefApp}/>}
         {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab adminItems={adminItems}/>}
@@ -3461,6 +4120,42 @@ function App(){
         }
       </button>
 
+      <style>{`
+        @keyframes neonPulseInfos {
+          0%,100% { box-shadow: 0 4px 20px rgba(61,31,14,.4), 0 0 8px 2px ${C.or}, 0 0 16px 4px ${C.or}80; }
+          50% { box-shadow: 0 4px 20px rgba(61,31,14,.4), 0 0 16px 6px ${C.or}, 0 0 28px 10px ${C.or}90; }
+        }
+      `}</style>
+      {/* ── BOUTON FLOTTANT INFOS IMPORTANTES ── */}
+      <button onClick={()=>{setShowInfosImportantes(p=>!p);setGlowInfos(false);}}
+        style={{position:"fixed",bottom:"5rem",left:"1.2rem",width:56,height:56,borderRadius:"50%",background:C.brun,border:`2px solid ${C.or}`,boxShadow:"0 4px 20px rgba(61,31,14,.4)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,transition:"all .2s",padding:0,overflow:"hidden",animation:(glowInfos&&!showInfosImportantes)?"neonPulseInfos 1.4s ease-in-out infinite":"none"}}>
+        {showInfosImportantes
+          ? <span style={{fontSize:"1rem",color:C.or,fontWeight:700}}>✕</span>
+          : <span style={{fontSize:"1.4rem"}}>📌</span>
+        }
+      </button>
+      {showInfosImportantes&&(
+        <InfosImportantesPanel
+          uid={userId}
+          nomAffiche={name}
+          isMelissa={userId==="melissa-da-silveira"}
+          onModifierAnnonce={()=>setShowAnnonceAdminFlottant(true)}
+        />
+      )}
+      {showAnnonceAdminFlottant&&<AnnonceAdminPopup uid={userId} onClose={()=>setShowAnnonceAdminFlottant(false)}/>}
+
+      {/* ── BOUTON FLOTTANT ENTRAIDE LIENS (systeme independant) ── */}
+      <button onClick={()=>{setShowEntraideLiens(p=>!p);setGlowEntraide(false);}}
+        style={{position:"fixed",bottom:"9.5rem",right:"1.2rem",width:56,height:56,borderRadius:"50%",background:C.brun,border:`2px solid ${C.or}`,boxShadow:"0 4px 20px rgba(61,31,14,.4)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,transition:"all .2s",padding:0,overflow:"hidden",animation:(glowEntraide&&!showEntraideLiens)?"neonPulseInfos 1.4s ease-in-out infinite":"none"}}>
+        {showEntraideLiens
+          ? <span style={{fontSize:"1rem",color:C.or,fontWeight:700}}>✕</span>
+          : <span style={{fontSize:"1.4rem"}}>🔗</span>
+        }
+      </button>
+      {showEntraideLiens&&(
+        <EntraideLiensPanel uid={userId} nomAffiche={name} isMelissa={userId==="melissa-da-silveira"}/>
+      )}
+
       {/* ── POPUP BIENVENUE ── */}
       {showWelcome&&(
         <WelcomePopup userName={name} onClose={()=>{
@@ -3479,6 +4174,15 @@ function App(){
             await setDoc(uRef,{"db-challenges-vus":[...vusActuels,newChallengeData.id]},{merge:true});
           }catch{}
         }}/>
+      )}
+      {showPowerHourStart&&powerHourInfo&&(
+        <PowerHourStartPopup session={powerHourInfo} onClose={()=>setShowPowerHourStart(false)}/>
+      )}
+      {showPowerHourEnd&&powerHourInfo&&(
+        <PowerHourEndPopup session={powerHourInfo} onClose={()=>setShowPowerHourEnd(false)}/>
+      )}
+      {showAnnonce&&annonceData&&(
+        <AnnonceRecuePopup annonce={annonceData} onClose={()=>setShowAnnonce(false)}/>
       )}
 
       {/* ── POPUP CHALLENGE APP ── */}
@@ -3716,6 +4420,7 @@ const DECOUVERTE = {
   business: [
     {titre:"Bienvenue !", texte:"Cet onglet te donne une vue complete de ton activite : ton chiffre d\u2019affaires, ton entonnoir de conversion, et l\u2019historique de toutes tes periodes. On regarde ca ensemble !", icon:"\uD83D\uDC4B", cible:"decouverte-business-tabs"},
     {titre:"Etape 1 : le suivi CA", texte:"Dans l\u2019onglet CA, saisis ton chiffre d\u2019affaires jour apres jour. Chaque jour rempli met a jour ton total automatiquement.", icon:"\uD83D\uDCB0", cible:"decouverte-suivi-ca"},
+    {titre:"Etape 1 bis : ventes perso et recrues", texte:"Clique sur le petit crayon d\u2019une p\u00E9riode pour ouvrir sa fiche. En plus du CA total, tu peux y noter tes ventes perso et ton nombre de recrues. Remplis-les \u00E0 chaque fin de p\u00E9riode : c\u2019est ce qui alimente tes courbes d\u2019\u00E9volution.", icon:"\u270F", cible:"decouverte-suivi-ca"},
     {titre:"Etape 2 : l\u2019entonnoir", texte:"Clique sur l\u2019onglet Entonnoir pour voir combien de tes prospects deviennent clientes, puis combien de clientes rejoignent l\u2019equipe. Ca t\u2019aide a comprendre ta conversion.", icon:"\uD83D\uDCC9", cible:"decouverte-business-tabs"},
     {titre:"Etape 3 : l\u2019historique", texte:"Clique sur l\u2019onglet Historique pour revoir toutes tes periodes precedentes et le detail de tes commandes.", icon:"\uD83D\uDCD6", cible:"decouverte-business-tabs"},
     {titre:"Bravo, tu es prete !", texte:"Tu pilotes maintenant ton activite avec de vrais chiffres. Reviens ici regulierement pour suivre ta progression !", icon:"\uD83C\uDF89", cible:"decouverte-business-tabs"},
@@ -3785,6 +4490,15 @@ const DECOUVERTE = {
     {titre:"Etape 7 : Distributeurs et Nouveaux Distri", texte:"Navigue dans l\u2019arborescence complete de ton equipe, et suis l\u2019onboarding de tes recrues les plus recentes.", icon:"\uD83D\uDC51", cible:"decouverte-chef-distributeurs"},
     {titre:"Etape 8 : Actions biblio", texte:"Ajoute des actions a la bibliotheque partagee, utilisee par toute l\u2019equipe dans l\u2019onglet Aujourd\u2019hui.", icon:"\uD83D\uDCA1", cible:"decouverte-chef-actionsbiblio"},
     {titre:"Bravo, tu es prete !", texte:"Tu as maintenant tous les outils pour animer et faire grandir ton equipe !", icon:"\uD83C\uDF89", cible:"decouverte-chef-stats"},
+  ],
+  semainetheme: [
+    {titre:"Bienvenue !", texte:"Ici, tu ne cherches plus quoi poster. Tu choisis un th\u00E8me le lundi, et tu as ta p\u00E9riode enti\u00E8re de contenu. 31 th\u00E8mes, 7 angles chacun, d\u00E9j\u00E0 \u00E9crits. On regarde \u00E7a ensemble !", icon:"\uD83D\uDC4B"},
+    {titre:"Un th\u00E8me = un probl\u00E8me v\u00E9cu", texte:"Regarde les titres : ma peau tire, je grignote l\u2019apr\u00E8s-midi, mes vitres ont des traces. Jamais les soins visage. Une femme ne se dit jamais il me faut un s\u00E9rum. Elle se dit j\u2019ai une sale t\u00EAte ce matin. Tu entres par l\u00E0, le produit arrive apr\u00E8s.", icon:"\uD83C\uDFAF"},
+    {titre:"Trouve ton th\u00E8me", texte:"Utilise les filtres en haut : par famille, ou Jamais fait pour voir ce que tu n\u2019as pas encore exploit\u00E9. Astuce : croise avec le produit en promo au catalogue en cours, c\u2019est l\u00E0 que tu auras le meilleur argument prix.", icon:"\uD83D\uDD0D"},
+    {titre:"Tes 7 angles", texte:"Ouvre un th\u00E8me : tu trouves 7 fa\u00E7ons de parler du m\u00EAme produit. Copie l\u2019angle avec le bouton Copier, puis r\u00E9\u00E9cris-le avec tes mots. C\u2019est un point de d\u00E9part, pas un texte \u00E0 publier tel quel. Tes clientes doivent reconna\u00EEtre ta voix.", icon:"\u270F"},
+    {titre:"Les encadr\u00E9s rouges", texte:"Sur les compl\u00E9ments et les produits m\u00E9nagers, respecte les formulations indiqu\u00E9es. Antibact\u00E9rien ou fait maigrir peuvent te causer de vrais ennuis. En cas de doute sur une phrase, demande avant de publier.", icon:"\u26A0"},
+    {titre:"Coche ce que tu as fait", texte:"Le bouton J\u2019ai fait ce th\u00E8me garde ton historique. En un coup d\u2019oeil tu vois ce que tu as d\u00E9j\u00E0 exploit\u00E9 et ce qui dort encore. Les th\u00E8mes jamais faits sont marqu\u00E9s en rose.", icon:"\u2705"},
+    {titre:"Bravo, tu es pr\u00EAte !", texte:"Toute la m\u00E9thode est expliqu\u00E9e dans Formation puis Vente puis Arr\u00EAte de vouloir tout vendre. Cet onglet, c\u2019est la mise en pratique. Un th\u00E8me par p\u00E9riode, et tu ne cherches plus jamais quoi poster.", icon:"\uD83C\uDF89"},
   ],
   objectifs: [
     {titre:"Bienvenue !", texte:"Cet onglet te sert \u00e0 suivre ton chiffre d\u2019affaires pendant la p\u00e9riode en cours. Regarde en haut : tu vois la p\u00e9riode actuelle et combien de jours il te reste.", icon:"\uD83D\uDC4B", cible:"decouverte-periode"},
@@ -4593,6 +5307,12 @@ export const SCRIPTS_DATA=[
     {title:"CTA mot-clé commentaire",text:"Tu veux savoir quel est ce produit qui me fait des compliments à chaque fois ? Écris PRODUIT en commentaire et je t'envoie tout en privé 😊"},
     {title:"CTA pour l'opportunité",text:"Tu cherches un revenu complémentaire qui s'adapte à ta vie ? Écris ÉQUIPE en commentaire — je te réponds en privé 🖤"},
     {title:"Intro storytelling",text:"Il y a [X mois], je ne savais pas quoi faire. Aujourd'hui [ton résultat]. Ce n'est pas un miracle — c'est ce que j'ai construit, étape par étape. Je vous raconte ça ce soir en story 👇"},
+  ]},
+  {cat:"✨ Après une inscription",scripts:[
+    {title:"Message 1 — Bienvenue, valeurs & fonctionnement",text:"Bienvenue dans l'aventure Mihi [Prénom] 🥰 Je suis hyper contente de t'accueillir !\n\nPetite présentation rapide de comment on fonctionne : chez nous, pas de pression ni d'objectifs imposés — on avance chacune à son rythme, avec une équipe qui s'entraide vraiment au quotidien (pas juste des mots en l'air).\n\nNos valeurs : bienveillance, transparence, et l'envie sincère de te voir réussir à TA façon — que ce soit simplement pour profiter des produits, ou pour développer une vraie activité 🖤"},
+    {title:"Message 2 — L'importance du Fast Start",text:"Une étape essentielle pour bien démarrer : le Fast Start 🚀\n\nC'est un parcours guidé, étape par étape, disponible directement dans l'application — il t'explique tout ce qu'il faut savoir pour bien commencer, sans te sentir perdue.\n\nJe te conseille vraiment de le suivre dès les premiers jours, c'est ce qui fait toute la différence pour la suite. Tu le trouveras dès l'ouverture de l'app 😊"},
+    {title:"Message — Accès à l'application",text:"Voici l'accès à ton application Blazing Dynasty 📲\n\n🔗 https://blazing-dinasty-1fad9.web.app\n\n🔑 Ton code d'accès est : BD-2026-fire\n\n📥 Installer l'application :\nhttps://drive.google.com/file/d/1wVvxlIZa9TjUHY-q0OAKb6fffjF52LtH/view?usp=drivesdk"},
+    {title:"Message — Inscription automatique (premier contact)",text:"Coucou [Prénom]\n\nMoi c'est [Ton prénom], je suis ta personne de contact pour l'aventure Mihi et je serai là pour t'accompagner.\n\nBienvenue parmi nous !\n\nAvant de te bombarder d'informations, j'aimerais surtout savoir comment tu souhaites être accompagnée.\n\nSi tu souhaites être cliente VIP, ou développer en tant qu'ambassadrice ?\n\nDans tous les cas, je m'adapte à toi.\n\nDis-moi ce qui te correspond le mieux 💛"},
   ]},
 ];
 
@@ -6195,6 +6915,1071 @@ function WelcomePopup({userName, onClose}){
     </div>
   );
 }
+function PowerHourStartPopup({session, onClose}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:20,width:"100%",maxWidth:420,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:"1.5rem 1.2rem",textAlign:"center"}}>
+          <div style={{fontSize:"2.4rem",marginBottom:".4rem"}}>{"\u{26A1}"}</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",fontWeight:300,color:C.blanc}}>Power Hour lancee !</div>
+          <div style={{fontSize:".8rem",color:C.pale,marginTop:".3rem"}}>par {session.startedBy} - 20 minutes de focus intense</div>
+          {session.theme&&(
+            <div style={{fontSize:".78rem",color:C.or,marginTop:".5rem",fontWeight:700,background:"rgba(255,255,255,.15)",display:"inline-block",padding:".3rem .8rem",borderRadius:20}}>
+              Theme : {session.theme}
+            </div>
+          )}
+        </div>
+        <div style={{padding:"1.2rem"}}>
+          <button onClick={onClose}
+            style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:12,padding:".9rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            Je participe {"\u{1F680}"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function PowerHourEndPopup({session, onClose}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:20,width:"100%",maxWidth:420,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:"1.5rem 1.2rem",textAlign:"center"}}>
+          <div style={{fontSize:"2.4rem",marginBottom:".4rem"}}>{"\u{2705}"}</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.3rem",fontWeight:300,color:C.blanc}}>Power Hour terminee !</div>
+          <div style={{fontSize:".8rem",color:C.pale,marginTop:".3rem"}}>Bravo pour ces 20 minutes de focus {"\u{1F389}"}</div>
+        </div>
+        <div style={{padding:"1.2rem"}}>
+          <button onClick={onClose}
+            style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:12,padding:".9rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            Merci {"\u{2728}"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function AnnonceRecuePopup({annonce, onClose}){
+  const urgent=!!annonce.urgente;
+  const[copie,setCopie]=useState(false);
+  const copierTexte=()=>{
+    navigator.clipboard.writeText(annonce.message||"").then(()=>{
+      setCopie(true);
+      setTimeout(()=>setCopie(false),2000);
+    }).catch(()=>{});
+  };
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:20,width:"100%",maxWidth:420,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{background:urgent?"#B8442F":`linear-gradient(135deg,${C.brun},${C.brun2})`,padding:"1.5rem 1.2rem",textAlign:"center",borderRadius:"20px 20px 0 0"}}>
+          <div style={{fontSize:"2.4rem",marginBottom:".4rem"}}>{annonce.icone||"\u{1F4E2}"}</div>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.2rem",fontWeight:300,color:C.blanc}}>{annonce.titre||"Annonce de l equipe"}</div>
+          {urgent&&<div style={{fontSize:".68rem",color:"#FFD9D0",marginTop:".3rem",fontWeight:700,letterSpacing:".05em",textTransform:"uppercase"}}>Important</div>}
+        </div>
+        <div style={{padding:"1.2rem"}}>
+          {annonce.video?(
+            <div style={{marginBottom:"1rem"}}>
+              <video src={annonce.video} controls style={{width:"100%",borderRadius:12,display:"block"}}/>
+            </div>
+          ):annonce.photo&&(
+            <div style={{marginBottom:"1rem"}}>
+              <img src={annonce.photo} alt="" style={{width:"100%",borderRadius:12,display:"block"}}/>
+              <a href={annonce.photo} download target="_blank" rel="noreferrer"
+                style={{display:"inline-flex",alignItems:"center",gap:".3rem",fontSize:".7rem",color:C.brun,marginTop:".4rem",textDecoration:"underline"}}>
+                💾 Enregistrer la photo
+              </a>
+            </div>
+          )}
+          <p style={{fontSize:".84rem",color:C.texte,lineHeight:1.7,marginBottom:".6rem",whiteSpace:"pre-wrap"}}>{annonce.message}</p>
+          <button onClick={copierTexte}
+            style={{display:"flex",alignItems:"center",gap:".35rem",background:"none",border:"none",color:C.gris,fontSize:".72rem",fontFamily:"inherit",cursor:"pointer",padding:0,marginBottom:"1rem"}}>
+            {copie?"✓ Texte copié !":"📋 Copier le texte"}
+          </button>
+          <button onClick={onClose}
+            style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:12,padding:".9rem",fontSize:".88rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            J'ai compris {"\u{2713}"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function AnnonceAdminPopup({uid, onClose, annonceExistante}){
+  const enEdition=!!annonceExistante;
+  const ICONES=["\u{1F4E2}","\u{26A1}","\u{1F389}","\u{26A0}","\u{1F393}","\u{1F4B0}","\u{1F525}","\u{2728}"];
+  const[titre,setTitre]=useState(annonceExistante?.titre||"");
+  const[message,setMessage]=useState(annonceExistante?.message||"");
+  const[icone,setIcone]=useState(annonceExistante?.icone||"\u{1F4E2}");
+  const[urgente,setUrgente]=useState(!!annonceExistante?.urgente);
+  const[sending,setSending]=useState(false);
+  const[sent,setSent]=useState(false);
+  const[media,setMedia]=useState(null);
+  const[mediaPreview,setMediaPreview]=useState(annonceExistante?.video||annonceExistante?.photo||null);
+  const[mediaType,setMediaType]=useState(annonceExistante?.video?"video":(annonceExistante?.photo?"image":null)); // "image" | "video"
+  const[uploadingMedia,setUploadingMedia]=useState(false);
+  const[datePublication,setDatePublication]=useState("");
+
+  const choisirMedia=(e)=>{
+    const f=e.target.files&&e.target.files[0];
+    if(!f)return;
+    const type=f.type.startsWith("video/")?"video":"image";
+    if(type==="video"&&f.size>50*1024*1024){alert("La vidéo est trop lourde (50 Mo max).");return;}
+    setMedia(f);
+    setMediaType(type);
+    const reader=new FileReader();
+    reader.onload=()=>setMediaPreview(reader.result);
+    reader.readAsDataURL(f);
+  };
+
+  const publier=async()=>{
+    if(!titre.trim()||!message.trim())return;
+    setSending(true);
+    try{
+      const id=enEdition?annonceExistante.id:Date.now();
+      let photoUrl=enEdition?(annonceExistante.photo||""):"", videoUrl=enEdition?(annonceExistante.video||""):"";
+      if(media){
+        setUploadingMedia(true);
+        try{
+          const ext=mediaType==="video"?(media.name.split(".").pop()||"mp4"):"jpg";
+          const chemin=storageRef(storage,`annonces/${id}.${ext}`);
+          await uploadBytes(chemin,media);
+          const url=await getDownloadURL(chemin);
+          if(mediaType==="video"){videoUrl=url;photoUrl="";} else {photoUrl=url;videoUrl="";}
+        }catch{}
+        setUploadingMedia(false);
+      }
+      const estProgrammee=!enEdition&&datePublication&&new Date(datePublication).getTime()>Date.now();
+      const donneesAnnonce={
+        id,
+        titre:titre.trim(),
+        message:message.trim(),
+        icone,
+        urgente,
+        photo:photoUrl,
+        video:videoUrl,
+        creePar:enEdition?annonceExistante.creePar:uid,
+        creeLe:enEdition?annonceExistante.creeLe:id,
+      };
+      if(estProgrammee){
+        await setDoc(doc(db,"annonces_programmees",String(id)),{...donneesAnnonce,publierLe:new Date(datePublication).getTime()});
+      }else{
+        await setDoc(doc(db,"annonces_historique",String(id)),donneesAnnonce);
+        // Met a jour l'annonce courante seulement si c'est bien celle-ci qui est affichee actuellement
+        try{
+          const curSnap=await getDoc(doc(db,"equipe","derniere-annonce"));
+          if(!enEdition||(curSnap.exists()&&String(curSnap.data().id)===String(id))){
+            await setDoc(doc(db,"equipe","derniere-annonce"),donneesAnnonce);
+          }
+        }catch{}
+      }
+      setSent(true);
+      setTimeout(()=>{onClose();},1500);
+    }catch{}
+    setSending(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:"16px 16px 0 0",padding:"1.4rem",width:"100%",maxWidth:480,boxShadow:"0 -8px 32px rgba(0,0,0,.2)",maxHeight:"85vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>{"\u{1F4E2}"} {enEdition?"Modifier l'annonce":"Annonce officielle"}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer",padding:".2rem"}}>x</button>
+        </div>
+        <p style={{fontSize:".72rem",color:C.gris,marginBottom:"1rem",lineHeight:1.6}}>
+          {enEdition?"Les modifications remplacent l'annonce dans l'historique (et l'annonce du moment si c'est celle-ci qui est actuellement affichée).":"Envoyee a toute l equipe, en popup dans l appli et en notification push sur leur telephone."}
+        </p>
+        <div style={{display:"flex",gap:".4rem",marginBottom:"1rem",flexWrap:"wrap"}}>
+          {ICONES.map(ic=>(
+            <button key={ic} onClick={()=>setIcone(ic)}
+              style={{fontSize:"1.3rem",background:icone===ic?C.brun+"20":C.creme,border:icone===ic?`2px solid ${C.brun}`:"1px solid transparent",borderRadius:10,padding:".4rem .6rem",cursor:"pointer"}}>
+              {ic}
+            </button>
+          ))}
+        </div>
+        <input value={titre} onChange={e=>setTitre(e.target.value)} placeholder="Titre de l'annonce"
+          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".7rem .85rem",fontFamily:"inherit",fontSize:".85rem",color:C.texte,marginBottom:".7rem",outline:"none"}}/>
+        <textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="Ton message..."
+          style={{width:"100%",minHeight:110,border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem",fontFamily:"inherit",fontSize:".82rem",color:C.texte,resize:"vertical",outline:"none",lineHeight:1.6,marginBottom:".8rem"}}/>
+        <label style={{display:"flex",alignItems:"center",gap:".5rem",fontSize:".78rem",color:C.brun,marginBottom:".8rem",cursor:"pointer"}}>
+          <input type="checkbox" checked={urgente} onChange={e=>setUrgente(e.target.checked)}/>
+          Marquer comme importante (mise en avant en rouge)
+        </label>
+        <div style={{marginBottom:"1rem"}}>
+          <label style={{display:"inline-flex",alignItems:"center",gap:".4rem",fontSize:".76rem",fontWeight:600,color:C.brun,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .8rem",cursor:"pointer"}}>
+            📷 {mediaPreview?"Changer le média":"Ajouter une photo ou vidéo (optionnel)"}
+            <input type="file" accept="image/*,video/*" onChange={choisirMedia} style={{display:"none"}}/>
+          </label>
+          {mediaPreview&&(
+            <div style={{position:"relative",marginTop:".6rem",width:120}}>
+              {mediaType==="video"
+                ? <video src={mediaPreview} style={{width:120,height:120,objectFit:"cover",borderRadius:10,border:`1px solid ${C.pale}`}} muted/>
+                : <img src={mediaPreview} alt="Aperçu" style={{width:120,height:120,objectFit:"cover",borderRadius:10,border:`1px solid ${C.pale}`}}/>
+              }
+              <button onClick={()=>{setMedia(null);setMediaPreview(null);setMediaType(null);}}
+                style={{position:"absolute",top:-8,right:-8,width:24,height:24,borderRadius:"50%",background:C.brun,color:"white",border:"none",fontSize:".75rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+          )}
+        </div>
+        {!enEdition&&(
+          <div style={{marginBottom:"1rem"}}>
+            <label style={{display:"block",fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".35rem"}}>Programmer pour plus tard (optionnel)</label>
+            <input type="datetime-local" value={datePublication} onChange={e=>setDatePublication(e.target.value)}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem",fontFamily:"inherit",fontSize:".78rem",color:C.texte,outline:"none"}}/>
+            {datePublication&&new Date(datePublication).getTime()>Date.now()&&(
+              <div style={{fontSize:".68rem",color:C.gris,marginTop:".3rem"}}>📅 Sera publiée automatiquement le {new Date(datePublication).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>
+            )}
+          </div>
+        )}
+        <button onClick={publier} disabled={!titre.trim()||!message.trim()||sending||sent}
+          style={{width:"100%",background:sent?C.vert:(titre.trim()&&message.trim())?C.brun:C.pale,color:(titre.trim()&&message.trim())?C.blanc:C.gris,border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:(titre.trim()&&message.trim())?"pointer":"default"}}>
+          {sent?(enEdition?"Modifications enregistrées !":(datePublication&&new Date(datePublication).getTime()>Date.now()?"Annonce programmée !":"Envoyee a toute l equipe !")):uploadingMedia?"Envoi du média...":sending?"Envoi...":(enEdition?"Enregistrer les modifications":(datePublication&&new Date(datePublication).getTime()>Date.now()?"Programmer l'annonce →":"Publier a toute l equipe ->"))}
+        </button>
+      </div>
+    </div>
+  );
+}
+function SondageAdminPopup({uid, onClose}){
+  const[question,setQuestion]=useState("");
+  const[options,setOptions]=useState(["",""]);
+  const[multiChoix,setMultiChoix]=useState(false);
+  const[dateFin,setDateFin]=useState("");
+  const[sending,setSending]=useState(false);
+  const[sent,setSent]=useState(false);
+
+  const modifierOption=(i,val)=>{
+    const copie=[...options];
+    copie[i]=val;
+    setOptions(copie);
+  };
+  const ajouterOption=()=>{ if(options.length<6)setOptions([...options,""]); };
+  const retirerOption=(i)=>{ if(options.length>2)setOptions(options.filter((_,idx)=>idx!==i)); };
+
+  const optionsValides=options.map(o=>o.trim()).filter(Boolean);
+  const pretAPublier=question.trim()&&optionsValides.length>=2;
+
+  const publier=async()=>{
+    if(!pretAPublier)return;
+    setSending(true);
+    try{
+      const id=String(Date.now());
+      await enregistrerSondage({
+        id,
+        question:question.trim(),
+        options:optionsValides.map((texte,i)=>({id:"opt"+i,texte})),
+        multiChoix,
+        dateFin:dateFin?new Date(dateFin).getTime():null,
+        actif:true,
+        creePar:uid,
+        creeLe:Date.now(),
+      });
+      setSent(true);
+      setTimeout(()=>{onClose();},1200);
+    }catch{}
+    setSending(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:"20px 20px 0 0",padding:"1.4rem",width:"100%",maxWidth:480,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🗳️ Nouveau sondage</div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer",padding:".2rem"}}>x</button>
+        </div>
+        <input value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ta question..."
+          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".7rem .85rem",fontFamily:"inherit",fontSize:".85rem",color:C.texte,marginBottom:".8rem",outline:"none"}}/>
+        <div style={{fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".5rem"}}>Options de réponse</div>
+        {options.map((opt,i)=>(
+          <div key={i} style={{display:"flex",gap:".4rem",marginBottom:".5rem",alignItems:"center"}}>
+            <input value={opt} onChange={e=>modifierOption(i,e.target.value)} placeholder={`Option ${i+1}`}
+              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .8rem",fontFamily:"inherit",fontSize:".82rem",color:C.texte,outline:"none"}}/>
+            {options.length>2&&(
+              <button onClick={()=>retirerOption(i)} style={{background:"none",border:"none",color:C.gris,fontSize:"1rem",cursor:"pointer",padding:".3rem"}}>✕</button>
+            )}
+          </div>
+        ))}
+        {options.length<6&&(
+          <button onClick={ajouterOption}
+            style={{background:"none",border:"none",color:C.brun,fontSize:".76rem",fontWeight:600,cursor:"pointer",padding:".2rem 0",marginBottom:".9rem",textDecoration:"underline"}}>
+            + Ajouter une option
+          </button>
+        )}
+        <label style={{display:"flex",alignItems:"center",gap:".5rem",fontSize:".78rem",color:C.brun,marginBottom:"1.1rem",cursor:"pointer"}}>
+          <input type="checkbox" checked={multiChoix} onChange={e=>setMultiChoix(e.target.checked)}/>
+          Autoriser plusieurs réponses par personne
+        </label>
+        <div style={{marginBottom:"1.1rem"}}>
+          <label style={{display:"block",fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".35rem"}}>Date de fin (optionnel)</label>
+          <input type="datetime-local" value={dateFin} onChange={e=>setDateFin(e.target.value)}
+            style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem",fontFamily:"inherit",fontSize:".78rem",color:C.texte,outline:"none"}}/>
+          {dateFin&&<div style={{fontSize:".68rem",color:C.gris,marginTop:".3rem"}}>🔒 Se clôturera automatiquement le {new Date(dateFin).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}</div>}
+        </div>
+        <button onClick={publier} disabled={!pretAPublier||sending||sent}
+          style={{width:"100%",background:sent?C.vert:pretAPublier?C.brun:C.pale,color:pretAPublier?C.blanc:C.gris,border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:pretAPublier?"pointer":"default"}}>
+          {sent?"Sondage publié !":sending?"Publication...":"Publier le sondage →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SondageCard({sondage, votes, uid, isMelissa, onVoted, onSupprime}){
+  const monVote=votes.find(v=>v.uid===uid);
+  const[selection,setSelection]=useState(monVote?monVote.choix:[]);
+  const[voting,setVoting]=useState(false);
+  const[suppression,setSuppression]=useState(false);
+  const[modification,setModification]=useState(false);
+  const dejaVote=!!monVote;
+  const totalVotes=votes.length;
+  const dateFinDepassee=sondage.dateFin&&Date.now()>sondage.dateFin;
+  const estActif=sondage.actif&&!dateFinDepassee;
+
+  const toggleOption=(optId)=>{
+    if((dejaVote&&!modification)||!estActif)return;
+    if(sondage.multiChoix){
+      setSelection(p=>p.includes(optId)?p.filter(x=>x!==optId):[...p,optId]);
+    }else{
+      setSelection([optId]);
+    }
+  };
+
+  const confirmerVote=async()=>{
+    if(selection.length===0)return;
+    setVoting(true);
+    try{
+      const nouvellesListe=await voterSondage(sondage.id,uid,selection);
+      onVoted(sondage.id,nouvellesListe);
+      setModification(false);
+    }catch{}
+    setVoting(false);
+  };
+
+  const ouvrirModification=()=>{
+    setSelection(monVote?monVote.choix:[]);
+    setModification(true);
+  };
+
+  const supprimer=async()=>{
+    if(!window.confirm(`Supprimer definitivement le sondage "${sondage.question}" ?\n\nCette action est irreversible.`))return;
+    setSuppression(true);
+    try{
+      await supprimerSondage(sondage.id);
+      onSupprime(sondage.id);
+    }catch{}
+    setSuppression(false);
+  };
+
+  const compteParOption=(optId)=>votes.filter(v=>v.choix.includes(optId)).length;
+
+  const afficherResultats=(dejaVote&&!modification)||!estActif;
+
+  return(
+    <div style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:12,padding:".85rem .9rem"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:".4rem",marginBottom:".6rem"}}>
+        <span style={{fontSize:"1rem"}}>🗳️</span>
+        <span style={{fontSize:".8rem",fontWeight:700,color:C.brun,flex:1}}>{sondage.question}</span>
+        {!estActif&&<span style={{fontSize:".55rem",fontWeight:700,color:C.gris,background:C.pale,borderRadius:6,padding:".1rem .4rem",whiteSpace:"nowrap"}}>CLÔTURÉ</span>}
+        {isMelissa&&(
+          <button onClick={supprimer} disabled={suppression}
+            style={{background:"none",border:"none",fontSize:".78rem",cursor:"pointer",padding:".1rem .2rem",opacity:.6,flexShrink:0}}>
+            {suppression?"...":"🗑️"}
+          </button>
+        )}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+        {sondage.options.map(opt=>{
+          const n=compteParOption(opt.id);
+          const pct=totalVotes>0?Math.round((n/totalVotes)*100):0;
+          const estMonChoix=selection.includes(opt.id);
+          if(afficherResultats){
+            return(
+              <div key={opt.id} style={{position:"relative",borderRadius:8,overflow:"hidden",background:C.blanc,border:`1px solid ${estMonChoix?C.brun:C.pale}`}}>
+                <div style={{position:"absolute",top:0,left:0,bottom:0,width:`${pct}%`,background:estMonChoix?C.brun+"30":C.pale+"80",transition:"width .4s"}}/>
+                <div style={{position:"relative",display:"flex",justifyContent:"space-between",padding:".45rem .6rem",fontSize:".76rem"}}>
+                  <span style={{color:C.texte,fontWeight:estMonChoix?700:400}}>{estMonChoix?"✓ ":""}{opt.texte}</span>
+                  <span style={{color:C.gris,fontWeight:600}}>{pct}% ({n})</span>
+                </div>
+              </div>
+            );
+          }
+          return(
+            <button key={opt.id} onClick={()=>toggleOption(opt.id)}
+              style={{textAlign:"left",background:estMonChoix?C.brun:C.blanc,color:estMonChoix?C.blanc:C.texte,border:`1px solid ${estMonChoix?C.brun:C.pale}`,borderRadius:8,padding:".5rem .7rem",fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
+              {opt.texte}
+            </button>
+          );
+        })}
+      </div>
+      {!afficherResultats&&(
+        <div style={{display:"flex",gap:".4rem",marginTop:".6rem"}}>
+          <button onClick={confirmerVote} disabled={selection.length===0||voting}
+            style={{flex:1,background:selection.length>0?C.brun:C.pale,color:selection.length>0?C.blanc:C.gris,border:"none",borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:selection.length>0?"pointer":"default"}}>
+            {voting?"Envoi...":modification?"Confirmer mon nouveau vote":"Voter"}
+          </button>
+          {modification&&(
+            <button onClick={()=>setModification(false)}
+              style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .7rem",fontSize:".76rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
+              Annuler
+            </button>
+          )}
+        </div>
+      )}
+      {afficherResultats&&dejaVote&&estActif&&(
+        <button onClick={ouvrirModification}
+          style={{width:"100%",marginTop:".5rem",background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem",fontSize:".72rem",color:C.brun,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+          ✏️ Modifier mon vote
+        </button>
+      )}
+      <div style={{fontSize:".62rem",color:C.gris,marginTop:".45rem",opacity:.75}}>{totalVotes} vote{totalVotes!==1?"s":""}</div>
+    </div>
+  );
+}
+
+function ObjectifCommunAdminPopup({uid, onClose}){
+  const[titre,setTitre]=useState("");
+  const[description,setDescription]=useState("");
+  const[objectifPas,setObjectifPas]=useState(20);
+  const[media,setMedia]=useState(null);
+  const[mediaPreview,setMediaPreview]=useState(null);
+  const[uploading,setUploading]=useState(false);
+  const[sending,setSending]=useState(false);
+  const[sent,setSent]=useState(false);
+
+  const choisirMedia=(e)=>{
+    const f=e.target.files&&e.target.files[0];
+    if(!f)return;
+    setMedia(f);
+    const reader=new FileReader();
+    reader.onload=()=>setMediaPreview(reader.result);
+    reader.readAsDataURL(f);
+  };
+
+  const pretAPublier=titre.trim()&&objectifPas>0;
+
+  const publier=async()=>{
+    if(!pretAPublier)return;
+    setSending(true);
+    try{
+      const id=Date.now();
+      let photoUrl="";
+      if(media){
+        setUploading(true);
+        try{
+          const chemin=storageRef(storage,`objectif_commun/${id}.jpg`);
+          await uploadBytes(chemin,media);
+          photoUrl=await getDownloadURL(chemin);
+        }catch{}
+        setUploading(false);
+      }
+      await enregistrerObjectifCommun({
+        id,
+        titre:titre.trim(),
+        description:description.trim(),
+        objectifPas:Number(objectifPas),
+        photo:photoUrl,
+        creePar:uid,
+        creeLe:id,
+      });
+      setSent(true);
+      setTimeout(()=>{onClose();},1200);
+    }catch{}
+    setSending(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:"20px 20px 0 0",padding:"1.4rem",width:"100%",maxWidth:480,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🎯 Objectif commun</div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:"1.2rem",color:C.gris,cursor:"pointer",padding:".2rem"}}>x</button>
+        </div>
+        <p style={{fontSize:".72rem",color:C.gris,marginBottom:"1rem",lineHeight:1.6}}>
+          Ça remplace l'objectif en cours (s'il y en a un). Chaque personne de l'équipe pourra cliquer une fois pour ajouter son pas.
+        </p>
+        <input value={titre} onChange={e=>setTitre(e.target.value)} placeholder="Titre de l'objectif"
+          style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".7rem .85rem",fontFamily:"inherit",fontSize:".85rem",color:C.texte,marginBottom:".7rem",outline:"none"}}/>
+        <textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Décris l'objectif et la récompense à la clé..."
+          style={{width:"100%",minHeight:90,border:`1px solid ${C.pale}`,borderRadius:10,padding:".75rem",fontFamily:"inherit",fontSize:".82rem",color:C.texte,resize:"vertical",outline:"none",lineHeight:1.6,marginBottom:".8rem"}}/>
+        <div style={{marginBottom:".8rem"}}>
+          <label style={{display:"block",fontSize:".68rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase",marginBottom:".4rem"}}>Nombre de pas pour atteindre l'objectif</label>
+          <input type="number" min="1" value={objectifPas} onChange={e=>setObjectifPas(e.target.value)}
+            style={{width:120,border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .8rem",fontFamily:"inherit",fontSize:".85rem",color:C.texte,outline:"none"}}/>
+        </div>
+        <div style={{marginBottom:"1.1rem"}}>
+          <label style={{display:"inline-flex",alignItems:"center",gap:".4rem",fontSize:".76rem",fontWeight:600,color:C.brun,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .8rem",cursor:"pointer"}}>
+            📷 {mediaPreview?"Changer la photo":"Ajouter une photo (optionnel)"}
+            <input type="file" accept="image/*" onChange={choisirMedia} style={{display:"none"}}/>
+          </label>
+          {mediaPreview&&(
+            <div style={{position:"relative",marginTop:".6rem",width:120}}>
+              <img src={mediaPreview} alt="Aperçu" style={{width:120,height:120,objectFit:"cover",borderRadius:10,border:`1px solid ${C.pale}`}}/>
+              <button onClick={()=>{setMedia(null);setMediaPreview(null);}}
+                style={{position:"absolute",top:-8,right:-8,width:24,height:24,borderRadius:"50%",background:C.brun,color:"white",border:"none",fontSize:".75rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+          )}
+        </div>
+        <button onClick={publier} disabled={!pretAPublier||sending||sent}
+          style={{width:"100%",background:sent?C.vert:pretAPublier?C.brun:C.pale,color:pretAPublier?C.blanc:C.gris,border:"none",borderRadius:10,padding:".8rem",fontSize:".85rem",fontWeight:700,fontFamily:"inherit",cursor:pretAPublier?"pointer":"default"}}>
+          {sent?"Objectif publié !":uploading?"Envoi de la photo...":sending?"Publication...":"Lancer cet objectif →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ObjectifCommunCard({objectif, participants, uid, nomAffiche, isMelissa, onPasAjoute}){
+  const[ajout,setAjout]=useState(false);
+  const dejaParticipe=participants.some(p=>p.uid===uid);
+  const total=participants.length;
+  const cible=objectif.objectifPas||1;
+  const pct=Math.min(100,Math.round((total/cible)*100));
+  const atteint=total>=cible;
+
+  const ajouterPas=async()=>{
+    if(dejaParticipe||ajout)return;
+    setAjout(true);
+    try{
+      const nouvelleListe=await ajouterPasObjectif(uid,nomAffiche);
+      onPasAjoute(nouvelleListe);
+    }catch{}
+    setAjout(false);
+  };
+
+  return(
+    <div style={{background:atteint?"#F0F7ED":C.creme,border:`1px solid ${atteint?"#B8D9A5":C.pale}`,borderRadius:12,padding:".85rem .9rem"}}>
+      <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".4rem"}}>
+        <span style={{fontSize:"1rem"}}>{atteint?"🎉":"🎯"}</span>
+        <span style={{fontSize:".82rem",fontWeight:700,color:C.brun,flex:1}}>{objectif.titre}</span>
+      </div>
+      {objectif.photo&&<img src={objectif.photo} alt="" style={{width:"100%",borderRadius:8,marginBottom:".5rem",display:"block"}}/>}
+      {objectif.description&&<div style={{fontSize:".74rem",color:C.texte,lineHeight:1.55,marginBottom:".6rem",whiteSpace:"pre-wrap"}}>{objectif.description}</div>}
+      <div style={{background:C.pale+"60",borderRadius:8,height:14,overflow:"hidden",marginBottom:".35rem"}}>
+        <div style={{height:"100%",width:`${pct}%`,background:atteint?"#7FAF8A":C.brun,transition:"width .5s"}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:".68rem",color:C.gris,marginBottom:".6rem"}}>
+        <span>{total} / {cible} pas</span>
+        <span>{pct}%</span>
+      </div>
+      {atteint?(
+        <div style={{textAlign:"center",fontSize:".76rem",fontWeight:700,color:"#5A8A5A",padding:".3rem 0"}}>Objectif atteint, bravo à toute l'équipe ! 🎉</div>
+      ):dejaParticipe?(
+        <div style={{textAlign:"center",fontSize:".72rem",color:C.gris,padding:".3rem 0"}}>✓ Tu as déjà ajouté ton pas</div>
+      ):(
+        <button onClick={ajouterPas} disabled={ajout}
+          style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+          {ajout?"...":"➕ Ajouter mon pas !"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
+  const[liens,setLiens]=useState(null);
+  const[rattrapage,setRattrapage]=useState([]);
+  const[historique,setHistorique]=useState({});
+  const[suspendus,setSuspendus]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[nouveauNom,setNouveauNom]=useState("");
+  const[nouveauUrl,setNouveauUrl]=useState("");
+  const[envoi,setEnvoi]=useState(false);
+  const[showRegles,setShowRegles]=useState(false);
+  const[showRattrapage,setShowRattrapage]=useState(false);
+  const[envoiAlerte,setEnvoiAlerte]=useState(false);
+
+  const recharger=async()=>{
+    const[l,r,h,s]=await Promise.all([chargerLiensDuJour(),chargerLiensRattrapage(),chargerActiviteEntraide(uid),chargerSuspendusEntraide()]);
+    setLiens(l);
+    setRattrapage(r);
+    setHistorique(h);
+    setSuspendus(s);
+    setLoading(false);
+  };
+
+  useEffect(()=>{ recharger(); },[]);
+
+  const today=todayLocalStr();
+  const estSuspendu=suspendus.some(s=>s.uid===uid);
+  const jhui=historique[today]||{postes:0,boosts:0};
+  const bloqueAbus=calculerBlocageEntraide(historique)&&jhui.boosts===0;
+  const mesLiensAujourdhui=(liens||[]).filter(l=>l.uid===uid);
+  const autresLiensTries=(liens||[]).filter(l=>l.uid!==uid).sort((a,b)=>a.boostePar.length-b.boostePar.length);
+  const autresLiens=autresLiensTries;
+  const rattrapageTries=rattrapage.filter(l=>l.uid!==uid).sort((a,b)=>a.boostePar.length-b.boostePar.length);
+
+  const totalLiensAujourdhui=(liens||[]).length;
+  const totalBoostsAujourdhui=(liens||[]).reduce((s,l)=>s+l.boostePar.length,0);
+
+  const PLAFOND_SECURITE=3;
+  const totalLiensDisponibles=autresLiens.length;
+  const aToutBooste=totalLiensDisponibles>0&&autresLiens.every(l=>l.boostePar.includes(uid));
+  const quotaJour=aToutBooste?Infinity:Math.min(PLAFOND_SECURITE,1+jhui.boosts);
+
+  let statutTexte="", peutPoster=false;
+  if(estSuspendu){
+    statutTexte="⏸️ Ton compte est temporairement suspendu de l'entraide liens.";
+  }else if(bloqueAbus){
+    statutTexte="🔒 Tu as partagé sans jamais booster personne — booste au moins 1 lien pour débloquer.";
+  }else if(jhui.postes<quotaJour){
+    peutPoster=true;
+    if(aToutBooste)statutTexte="🌟 Tu as tout boosté aujourd'hui ! Plafond levé, partage autant que tu veux.";
+    else if(jhui.postes===0)statutTexte="✨ Tu peux partager 1 lien gratuit aujourd'hui.";
+    else statutTexte=`🔓 Tu peux encore partager ${quotaJour-jhui.postes} lien${quotaJour-jhui.postes>1?"s":""} (${jhui.boosts} boost${jhui.boosts>1?"s":""} donné${jhui.boosts>1?"s":""} aujourd'hui).`;
+  }else{
+    statutTexte=totalLiensDisponibles>0?"Tu as atteint ton quota du jour. Booste encore pour en débloquer plus (max "+PLAFOND_SECURITE+"), ou booste tout le monde pour lever le plafond !":"Tu as atteint ton quota du jour, bravo !";
+  }
+
+  const partager=async()=>{
+    if(!nouveauUrl.trim()||!peutPoster||envoi)return;
+    setEnvoi(true);
+    try{
+      const nouvelleListe=await ajouterLienEntraide(uid,nouveauNom.trim()||nomAffiche||"Une distributrice",nouveauUrl.trim());
+      setLiens(nouvelleListe);
+      const h=await chargerActiviteEntraide(uid);
+      setHistorique(h);
+      setNouveauNom("");setNouveauUrl("");
+    }catch{}
+    setEnvoi(false);
+  };
+
+  const booster=async(lien)=>{
+    window.open(lien.url,"_blank");
+    if(lien.boostePar.includes(uid))return;
+    const dateCible=lien.dateSource||today;
+    try{
+      const nouvelleListe=await boosterLienEntraide(uid,lien.id,dateCible);
+      if(dateCible===today)setLiens(nouvelleListe);
+      else setRattrapage(p=>p.map(l=>l.id===lien.id?{...l,boostePar:[...l.boostePar,uid]}:l));
+      const h=await chargerActiviteEntraide(uid);
+      setHistorique(h);
+    }catch{}
+  };
+
+  return(
+    <div style={{position:"fixed",bottom:"8rem",right:"1.2rem",width:300,maxWidth:"calc(100vw - 2.4rem)",background:C.blanc,borderRadius:16,boxShadow:"0 8px 32px rgba(61,31,14,.25)",border:`1px solid ${C.pale}`,zIndex:199,overflow:"hidden",maxHeight:"70vh",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.brun,padding:".85rem 1rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+        <span style={{fontSize:"1.3rem"}}>🔗</span>
+        <div style={{fontSize:".72rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase",flex:1}}>Entraide réseaux</div>
+        <button onClick={()=>setShowRegles(p=>!p)}
+          style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:24,height:24,color:C.or,fontSize:".72rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
+          ℹ️
+        </button>
+      </div>
+      {showRegles&&(
+        <div style={{background:"#FFF8E8",borderBottom:`1px solid ${C.pale}`,padding:".8rem 1rem",fontSize:".72rem",color:C.brun,lineHeight:1.65}}>
+          <div style={{fontWeight:700,marginBottom:".4rem"}}>📜 Comment ça marche ?</div>
+          <div>✨ <strong>1 lien gratuit par jour</strong> pour tout le monde.</div>
+          <div style={{marginTop:".3rem"}}>🔓 <strong>+1 lien</strong> pour chaque personne que tu boostes ce jour-là (jusqu'à 3 max).</div>
+          <div style={{marginTop:".3rem"}}>🌟 Si tu boostes <strong>absolument tout le monde</strong> dans la journée, le plafond de 5 saute complètement.</div>
+          <div style={{marginTop:".3rem"}}>✅ Un "boost" = cliquer réellement sur le lien depuis ce panneau (compté automatiquement, une seule fois par lien).</div>
+          <div style={{marginTop:".3rem"}}>🔴 Les liens jamais boostés remontent en haut de la liste, pour que personne ne soit oublié.</div>
+          <div style={{marginTop:".3rem"}}>📅 Les liens restent boostables pendant <strong>72h</strong> — retrouve-les dans "Rattrapage" si tu n'as pas eu le temps le jour même.</div>
+          <div style={{marginTop:".3rem"}}>🔒 Si tu partages 2 jours de suite <strong>sans jamais booster personne</strong>, ton lien gratuit se bloque le temps que tu boostes quelqu'un.</div>
+          <div style={{marginTop:".3rem"}}>⏸️ En cas de triche signalée, {isMelissa?"tu peux suspendre":"la fondatrice peut suspendre"} temporairement l'accès de quelqu'un.</div>
+        </div>
+      )}
+      <div style={{padding:"1rem",overflowY:"auto"}}>
+        {loading?(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
+        ):(<>
+          <div style={{background:estSuspendu||bloqueAbus?"#FDF0ED":C.creme,border:`1px solid ${estSuspendu||bloqueAbus?"#E8B4A5":C.pale}`,borderRadius:10,padding:".6rem .75rem",fontSize:".76rem",color:C.brun,marginBottom:".6rem",lineHeight:1.5}}>
+            {statutTexte}
+          </div>
+
+          <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
+            <div style={{flex:1,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .3rem",textAlign:"center"}}>
+              <div style={{fontSize:".95rem",fontWeight:700,color:C.brun}}>{totalLiensAujourdhui}</div>
+              <div style={{fontSize:".58rem",color:C.gris}}>lien{totalLiensAujourdhui!==1?"s":""} aujourd'hui</div>
+            </div>
+            <div style={{flex:1,background:C.creme,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .3rem",textAlign:"center"}}>
+              <div style={{fontSize:".95rem",fontWeight:700,color:C.brun}}>{totalBoostsAujourdhui}</div>
+              <div style={{fontSize:".58rem",color:C.gris}}>boost{totalBoostsAujourdhui!==1?"s":""} au total</div>
+            </div>
+          </div>
+
+          {peutPoster&&(
+            <div style={{marginBottom:"1.1rem"}}>
+              <input value={nouveauNom} onChange={e=>setNouveauNom(e.target.value)} placeholder="Ton prénom (optionnel)"
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .65rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,outline:"none",marginBottom:".4rem"}}/>
+              <input value={nouveauUrl} onChange={e=>setNouveauUrl(e.target.value)} placeholder="Lien à faire booster (Instagram, TikTok...)"
+                style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .65rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,outline:"none",marginBottom:".4rem"}}/>
+              <button onClick={partager} disabled={!nouveauUrl.trim()||envoi}
+                style={{width:"100%",background:nouveauUrl.trim()?C.brun:C.pale,color:nouveauUrl.trim()?C.blanc:C.gris,border:"none",borderRadius:8,padding:".55rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:nouveauUrl.trim()?"pointer":"default"}}>
+                {envoi?"...":"Partager mon lien"}
+              </button>
+            </div>
+          )}
+
+          {mesLiensAujourdhui.length>0&&(
+            <div style={{background:"#F0F7ED",border:"1px solid #B8D9A5",borderRadius:10,padding:".7rem .8rem",marginBottom:"1.1rem"}}>
+              <div style={{fontSize:".72rem",fontWeight:700,color:"#4A7A4A",marginBottom:".5rem"}}>✅ Ton/tes lien(s) du jour sont bien enregistrés !</div>
+              <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+                {mesLiensAujourdhui.map(l=>(
+                  <div key={l.id} style={{display:"flex",alignItems:"center",gap:".5rem",background:C.blanc,border:"1px solid #B8D9A5",borderRadius:8,padding:".4rem .6rem"}}>
+                    <span style={{fontSize:".72rem",color:C.brun,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.url}</span>
+                    <span style={{fontSize:".62rem",color:C.gris,fontWeight:600,flexShrink:0}}>{l.boostePar.length} boost{l.boostePar.length!==1?"s":""}</span>
+                    <button onClick={async()=>{
+                        if(!window.confirm("Supprimer ce lien ?"))return;
+                        const nouvelleListe=await supprimerLienEntraide(uid,l.id);
+                        setLiens(nouvelleListe);
+                        const h=await chargerActiviteEntraide(uid);
+                        setHistorique(h);
+                      }}
+                      style={{background:"none",border:"none",color:C.gris,fontSize:".85rem",cursor:"pointer",padding:".1rem .2rem",flexShrink:0}}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>À booster aujourd'hui</div>
+          {autresLiens.length===0?(
+            <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0"}}>Aucun lien partagé pour l'instant.</div>
+          ):(
+            <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}>
+              {autresLiens.map(l=>{
+                const dejaBooste=l.boostePar.includes(uid);
+                const zeroBoost=l.boostePar.length===0;
+                return(
+                  <div key={l.id} style={{background:zeroBoost?"#FDF0ED":C.creme,border:`1px solid ${zeroBoost?"#E8B4A5":C.pale}`,borderRadius:10,padding:".55rem .7rem"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
+                      <span style={{fontSize:".74rem",fontWeight:700,color:C.brun,flex:1}}>{l.nom}</span>
+                      <span style={{fontSize:".62rem",color:C.gris,fontWeight:600}}>{l.boostePar.length} boost{l.boostePar.length!==1?"s":""}</span>
+                      {zeroBoost&&<span style={{fontSize:".58rem",fontWeight:700,color:"#B8442F"}}>🔴 En attente</span>}
+                    </div>
+                    <button onClick={()=>booster(l)}
+                      style={{width:"100%",background:dejaBooste?C.creme:C.brun,color:dejaBooste?C.brun:C.blanc,border:dejaBooste?`1px solid ${C.pale}`:"none",borderRadius:7,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                      {dejaBooste?"✓ Déjà boosté (revoir le lien)":"🔗 Booster ce lien"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+
+          <button onClick={()=>setShowRattrapage(p=>!p)}
+            style={{width:"100%",background:"none",border:"none",color:C.gris,fontSize:".7rem",fontFamily:"inherit",cursor:"pointer",padding:".5rem 0 .2rem",textAlign:"left",textDecoration:"underline"}}>
+            {showRattrapage?"Masquer le rattrapage":`📅 Rattrapage (${rattrapageTries.length} lien${rattrapageTries.length!==1?"s":""} des jours précédents)`}
+          </button>
+          {showRattrapage&&(
+            rattrapageTries.length===0?(
+              <div style={{fontSize:".76rem",color:C.gris,fontStyle:"italic",padding:".4rem 0"}}>Rien à rattraper, tout est à jour !</div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:".5rem",marginTop:".5rem"}}>
+                <div style={{fontSize:".66rem",color:C.gris,fontStyle:"italic",marginBottom:".2rem"}}>Les liens restent boostables pendant 72h après leur partage.</div>
+                {rattrapageTries.map(l=>{
+                  const dejaBooste=l.boostePar.includes(uid);
+                  return(
+                    <div key={l.id} style={{background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem .7rem"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
+                        <span style={{fontSize:".74rem",fontWeight:700,color:C.brun,flex:1}}>{l.nom}</span>
+                        <span style={{fontSize:".62rem",color:C.gris,fontWeight:600}}>{l.boostePar.length} boost{l.boostePar.length!==1?"s":""}</span>
+                        <span style={{fontSize:".6rem",color:C.gris}}>{new Date(l.dateSource).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</span>
+                      </div>
+                      <button onClick={()=>booster(l)}
+                        style={{width:"100%",background:dejaBooste?C.creme:C.brun,color:dejaBooste?C.brun:C.blanc,border:dejaBooste?`1px solid ${C.pale}`:"none",borderRadius:7,padding:".45rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                        {dejaBooste?"✓ Déjà boosté (revoir le lien)":"🔗 Booster ce lien"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {isMelissa&&(
+            <>
+              <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",margin:"1.1rem 0 .5rem"}}>Gestion (toi uniquement)</div>
+              <button onClick={async()=>{
+                  if(!window.confirm("Envoyer un rappel push a toute l'equipe pour les liens en retard (aujourd'hui + 2 derniers jours) ?"))return;
+                  setEnvoiAlerte(true);
+                  try{
+                    const res=await envoyerAlerteEntraideFn();
+                    alert("Alerte envoyée à "+(res.data?.nbDestinataires||0)+" personne(s) ayant partagé un lien ! ("+(res.data?.totalNonBooste||0)+" lien(s) en retard signalé(s))");
+                  }catch(e){alert("Erreur lors de l'envoi de l'alerte.");}
+                  setEnvoiAlerte(false);
+                }} disabled={envoiAlerte}
+                style={{width:"100%",background:"#B8442F",color:"white",border:"none",borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+                {envoiAlerte?"Envoi...":"🚨 Envoyer une alerte retard boosts"}
+              </button>
+              {suspendus.length>0&&(
+                <div style={{display:"flex",flexDirection:"column",gap:".4rem",marginBottom:".6rem"}}>
+                  {suspendus.map(s=>(
+                    <div key={s.uid} style={{display:"flex",alignItems:"center",gap:".5rem",background:"#FDF0ED",border:"1px solid #E8B4A5",borderRadius:8,padding:".4rem .6rem"}}>
+                      <span style={{fontSize:".74rem",color:C.brun,flex:1}}>{s.nom||s.uid}</span>
+                      <button onClick={async()=>setSuspendus(await reactiverEntraide(s.uid))}
+                        style={{background:C.brun,color:C.blanc,border:"none",borderRadius:6,padding:".3rem .5rem",fontSize:".68rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                        ▶️ Réactiver
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {autresLiens.length>0&&(
+                <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+                  {[...new Map(autresLiens.map(l=>[l.uid,l])).values()].map(l=>(
+                    !suspendus.some(s=>s.uid===l.uid)&&(
+                      <button key={l.uid} onClick={async()=>setSuspendus(await suspendreEntraide(l.uid,l.nom,uid))}
+                        style={{width:"100%",background:"none",border:`1px solid ${C.pale}`,borderRadius:7,padding:".4rem .6rem",fontSize:".7rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                        ⏸️ Suspendre {l.nom}
+                      </button>
+                    )
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
+  const[flux,setFlux]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[sondages,setSondages]=useState(null);
+  const[votesSondages,setVotesSondages]=useState({});
+  const[showSondageAdmin,setShowSondageAdmin]=useState(false);
+  const[vuesParAnnonce,setVuesParAnnonce]=useState({});
+  const[objectif,setObjectif]=useState(null);
+  const[participantsObjectif,setParticipantsObjectif]=useState([]);
+  const[showObjectifAdmin,setShowObjectifAdmin]=useState(false);
+  const[programmees,setProgrammees]=useState([]);
+  const[annonceAModifier,setAnnonceAModifier]=useState(null);
+  const[annonceASupprimer,setAnnonceASupprimer]=useState(null);
+  const[suppressionEnCours,setSuppressionEnCours]=useState(false);
+
+  const chargerProgrammees=async()=>{
+    if(!isMelissa)return;
+    try{
+      const snap=await getDocs(collection(db,"annonces_programmees"));
+      const liste=snap.docs.map(d=>d.data()).sort((a,b)=>(a.publierLe||0)-(b.publierLe||0));
+      setProgrammees(liste);
+    }catch{}
+  };
+
+  const annulerProgrammee=async(id)=>{
+    try{
+      await deleteDoc(doc(db,"annonces_programmees",String(id)));
+      setProgrammees(p=>p.filter(a=>String(a.id)!==String(id)));
+    }catch{}
+  };
+
+  const chargerSondagesEtVotes=async()=>{
+    try{
+      const[s,v]=await Promise.all([chargerSondages(),chargerVotesSondages()]);
+      setSondages(s.slice(0,10));
+      setVotesSondages(v);
+    }catch{setSondages([]);}
+  };
+
+  const chargerObjectif=async()=>{
+    try{
+      const[o,p]=await Promise.all([chargerObjectifCommun(),chargerParticipantsObjectif()]);
+      setObjectif(o);
+      setParticipantsObjectif(p);
+    }catch{}
+  };
+
+  const chargerFlux=async()=>{
+    try{
+      const snap=await getDocs(collection(db,"annonces_historique"));
+      let liste=snap.docs.map(d=>d.data()).sort((a,b)=>(b.creeLe||0)-(a.creeLe||0));
+      if(liste.length===0){
+        // Compatibilite : si aucune annonce archivee, on retombe sur la derniere annonce seule
+        try{
+          const snap2=await getDoc(doc(db,"equipe","derniere-annonce"));
+          if(snap2.exists()&&snap2.data().id)liste=[snap2.data()];
+        }catch{}
+      }
+      setFlux(liste.slice(0,30));
+      if(isMelissa){
+        try{
+          const snapVues=await getDocs(collection(db,"annonces_vues"));
+          const map={};
+          snapVues.forEach(d=>{map[d.id]=(d.data().vus||[]).length;});
+          setVuesParAnnonce(map);
+        }catch{}
+      }
+    }catch{setFlux([]);}
+  };
+
+  useEffect(()=>{
+    (async()=>{
+      await chargerFlux();
+      setLoading(false);
+      chargerSondagesEtVotes();
+      chargerObjectif();
+      chargerProgrammees();
+    })();
+  },[]);
+
+  const confirmerSuppressionAnnonce=async()=>{
+    if(!annonceASupprimer)return;
+    setSuppressionEnCours(true);
+    try{
+      await supprimerAnnonce(annonceASupprimer.id);
+      await chargerFlux();
+    }catch{}
+    setSuppressionEnCours(false);
+    setAnnonceASupprimer(null);
+  };
+
+  const onVoted=(sondageId,nouvelleListe)=>{
+    setVotesSondages(p=>({...p,[sondageId]:nouvelleListe}));
+  };
+
+  return(
+    <>
+    <div style={{position:"fixed",bottom:"8rem",left:"1.2rem",width:300,maxWidth:"calc(100vw - 2.4rem)",background:C.blanc,borderRadius:16,boxShadow:"0 8px 32px rgba(61,31,14,.25)",border:`1px solid ${C.pale}`,zIndex:199,overflow:"hidden",maxHeight:"70vh",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.brun,padding:".85rem 1rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+        <span style={{fontSize:"1.3rem"}}>📌</span>
+        <div style={{fontSize:".72rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase"}}>Infos importantes</div>
+      </div>
+      <div style={{padding:"1rem",overflowY:"auto"}}>
+        {isMelissa&&(
+          <button onClick={onModifierAnnonce}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".8rem"}}>
+            ✏️ Nouvelle annonce
+          </button>
+        )}
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>Objectif commun</div>
+        {isMelissa&&(
+          <button onClick={()=>setShowObjectifAdmin(true)}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+            🎯 {objectif?"Modifier l'objectif":"Lancer un objectif"}
+          </button>
+        )}
+        {objectif?(
+          <ObjectifCommunCard objectif={objectif} participants={participantsObjectif} uid={uid} nomAffiche={nomAffiche} isMelissa={isMelissa}
+            onPasAjoute={(nouvelleListe)=>setParticipantsObjectif(nouvelleListe)}/>
+        ):(
+          <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0",marginBottom:".6rem"}}>Aucun objectif pour le moment.</div>
+        )}
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>Sondages</div>
+        {isMelissa&&(
+          <button onClick={()=>setShowSondageAdmin(true)}
+            style={{width:"100%",background:C.creme,border:`1px solid ${C.pale}`,borderRadius:10,padding:".55rem",fontSize:".74rem",fontWeight:600,color:C.brun,fontFamily:"inherit",cursor:"pointer",marginBottom:".6rem"}}>
+            🗳️ Créer un sondage
+          </button>
+        )}
+        {sondages===null?(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
+        ):sondages.length>0?(
+          <div style={{display:"flex",flexDirection:"column",gap:".6rem",marginBottom:"1.1rem"}}>
+            {sondages.map(s=>(
+              <SondageCard key={s.id} sondage={s} votes={votesSondages[s.id]||[]} uid={uid} isMelissa={isMelissa} onVoted={onVoted}
+                onSupprime={(id)=>setSondages(p=>p.filter(x=>x.id!==id))}/>
+            ))}
+          </div>
+        ):(
+          <div style={{fontSize:".78rem",color:C.gris,fontStyle:"italic",padding:".5rem 0",marginBottom:".6rem"}}>Aucun sondage pour le moment.</div>
+        )}
+        {isMelissa&&programmees.length>0&&(
+          <div style={{marginBottom:".9rem"}}>
+            <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".4rem"}}>📅 Programmées</div>
+            <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+              {programmees.map(a=>(
+                <div key={a.id} style={{background:"#FFF8E8",border:"1px solid #E8D5A0",borderRadius:10,padding:".55rem .7rem",display:"flex",alignItems:"center",gap:".5rem"}}>
+                  <span style={{fontSize:".9rem"}}>{a.icone||"📢"}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:".74rem",fontWeight:700,color:C.brun,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.titre}</div>
+                    <div style={{fontSize:".62rem",color:C.gris}}>{a.publierLe?new Date(a.publierLe).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):""}</div>
+                  </div>
+                  <button onClick={()=>annulerProgrammee(a.id)}
+                    style={{background:"none",border:"none",color:C.gris,fontSize:".9rem",cursor:"pointer",padding:".2rem"}}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".5rem"}}>Annonces de l'équipe</div>
+        {loading?(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Chargement...</div>
+        ):flux&&flux.length>0?(
+          <div style={{display:"flex",flexDirection:"column",gap:".6rem"}}>
+            {(()=>{
+              const labelJour=(ts)=>{
+                if(!ts)return "";
+                const d=new Date(ts), auj=new Date(), hier=new Date(auj); hier.setDate(hier.getDate()-1);
+                const meme=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+                if(meme(d,auj))return "Aujourd'hui";
+                if(meme(d,hier))return "Hier";
+                return d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"});
+              };
+              let dernierJour=null;
+              return flux.map((a,i)=>{
+                const jourActuel=labelJour(a.creeLe);
+                const changementJour=jourActuel!==dernierJour;
+                dernierJour=jourActuel;
+                return(
+                  <div key={a.id}>
+                    {changementJour&&(
+                      <div style={{display:"flex",alignItems:"center",gap:".5rem",margin:i===0?"0 0 .1rem":".3rem 0 .1rem"}}>
+                        <div style={{flex:1,height:1,background:C.pale}}/>
+                        <span style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".05em",textTransform:"uppercase"}}>{jourActuel}</span>
+                        <div style={{flex:1,height:1,background:C.pale}}/>
+                      </div>
+                    )}
+                    <div style={{background:(i===0&&a.urgente)?"#FDF0ED":C.creme,border:`1px solid ${(i===0&&a.urgente)?"#E8B4A5":C.pale}`,borderRadius:12,padding:".8rem .9rem"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:".4rem",marginBottom:".3rem"}}>
+                        <span style={{fontSize:"1.05rem"}}>{a.icone||"📢"}</span>
+                        <span style={{fontSize:".8rem",fontWeight:700,color:C.brun,flex:1}}>{a.titre}</span>
+                        {i===0&&<span style={{fontSize:".55rem",fontWeight:700,color:C.or,background:C.brun,borderRadius:6,padding:".1rem .4rem"}}>NOUVEAU</span>}
+                        {isMelissa&&(
+                          <div style={{display:"flex",gap:".25rem",flexShrink:0}}>
+                            <button onClick={()=>setAnnonceAModifier(a)}
+                              style={{background:"none",border:"none",fontSize:".78rem",cursor:"pointer",padding:".15rem .3rem",opacity:.6}}>✏️</button>
+                            <button onClick={()=>setAnnonceASupprimer(a)}
+                              style={{background:"none",border:"none",fontSize:".78rem",cursor:"pointer",padding:".15rem .3rem",opacity:.6}}>🗑️</button>
+                          </div>
+                        )}
+                      </div>
+                      {a.video?(
+                        <video src={a.video} controls style={{width:"100%",borderRadius:8,margin:".4rem 0",display:"block"}}/>
+                      ):a.photo&&(
+                        <img src={a.photo} alt="" style={{width:"100%",borderRadius:8,margin:".4rem 0",display:"block"}}/>
+                      )}
+                      <div style={{fontSize:".76rem",color:C.texte,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{a.message}</div>
+                      <div style={{fontSize:".6rem",color:C.gris,marginTop:".35rem",opacity:.7,display:"flex",justifyContent:"space-between"}}>
+                        <span>{a.creeLe?new Date(a.creeLe).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):""}</span>
+                        {isMelissa&&<span>👁 {vuesParAnnonce[String(a.id)]||0} vue{(vuesParAnnonce[String(a.id)]||0)!==1?"s":""}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        ):(
+          <div style={{fontSize:".78rem",color:C.gris,padding:".5rem 0"}}>Aucune annonce pour le moment.</div>
+        )}
+      </div>
+    </div>
+    {showSondageAdmin&&<SondageAdminPopup uid={uid} onClose={()=>{setShowSondageAdmin(false);chargerSondagesEtVotes();}}/>}
+    {showObjectifAdmin&&<ObjectifCommunAdminPopup uid={uid} onClose={()=>{setShowObjectifAdmin(false);chargerObjectif();}}/>}
+    {annonceAModifier&&<AnnonceAdminPopup uid={uid} annonceExistante={annonceAModifier} onClose={()=>{setAnnonceAModifier(null);chargerFlux();}}/>}
+    {annonceASupprimer&&(
+      <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:"1rem"}}>
+        <div style={{background:C.blanc,borderRadius:16,padding:"1.2rem",width:"100%",maxWidth:340,boxShadow:"0 8px 32px rgba(0,0,0,.3)"}}>
+          <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:C.brun,marginBottom:".6rem"}}>Supprimer cette annonce ?</div>
+          <div style={{fontSize:".78rem",color:C.gris,marginBottom:"1.1rem",lineHeight:1.5}}>"{annonceASupprimer.titre}" sera définitivement retirée de l'historique et de l'affichage. Cette action est irréversible.</div>
+          <div style={{display:"flex",gap:".5rem"}}>
+            <button onClick={()=>setAnnonceASupprimer(null)}
+              style={{flex:1,background:"none",border:`1px solid ${C.pale}`,borderRadius:9,padding:".6rem",fontSize:".78rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+              Annuler
+            </button>
+            <button onClick={confirmerSuppressionAnnonce} disabled={suppressionEnCours}
+              style={{flex:1,background:"#B8442F",color:"white",border:"none",borderRadius:9,padding:".6rem",fontSize:".78rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              {suppressionEnCours?"...":"Supprimer"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
+  );
+}
 function NouveauChallengePopup({challenge, onClose}){
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:9999,padding:"0"}}>
@@ -6383,7 +8168,7 @@ export function ClassementEquipe({uid}){
 }
 export function CitationDuJour({uid}){
   const[citations,setCitations]=useState(null);
-  const[revealed,setRevealed]=useState(true); // toujours visible
+  const[revealed,setRevealed]=useState(false);
   const[isFirstToday,setIsFirstToday]=useState(false);
   const[flipping,setFlipping]=useState(false);
 
@@ -6766,6 +8551,8 @@ export function PowerHourTab({uid, userName, canCreate}){
   const[loading,setLoading]=useState(true);
   const[message,setMessage]=useState("");
   const[accepted,setAccepted]=useState(false);
+  const[declined,setDeclined]=useState(false);
+  const[themeInput,setThemeInput]=useState("");
   const DUREE_MIN=20;
 
   const load=async()=>{
@@ -6777,11 +8564,12 @@ export function PowerHourTab({uid, userName, canCreate}){
         if(elapsed < DUREE_MIN*60000+5*60000){ setSession(d); }
         else setSession(null);
       } else setSession(null);
-      // Charger si l'utilisateur a accepté cette session
+      // Charger si l'utilisateur a accepté ou refusé cette session
       const accSnap=await getDoc(doc(db,"power-hour-accepts",uid));
       if(accSnap.exists()&&accSnap.data().sessionStart===snap.data()?.startedAt){
-        setAccepted(true);
-      } else setAccepted(false);
+        setAccepted(accSnap.data().status==="accepted");
+        setDeclined(accSnap.data().status==="declined");
+      } else { setAccepted(false); setDeclined(false); }
     }catch{}
     setLoading(false);
   };
@@ -6789,17 +8577,25 @@ export function PowerHourTab({uid, userName, canCreate}){
   useEffect(()=>{ load(); const t=setInterval(load,5000); return()=>clearInterval(t); },[]);
 
   const lancer=async()=>{
-    const nouvelle={startedAt:Date.now(),startedBy:userName,messages:[],accepts:{}};
-    try{ await setDoc(doc(db,"equipe","power-hour"),nouvelle); setSession(nouvelle); }catch{}
+    const nouvelle={startedAt:Date.now(),startedBy:userName,theme:themeInput.trim(),messages:[],accepts:{}};
+    try{ await setDoc(doc(db,"equipe","power-hour"),nouvelle); setSession(nouvelle); setThemeInput(""); }catch{}
   };
 
   const accepter=async()=>{
     if(!session)return;
     const next={...session,accepts:{...(session.accepts||{}),[uid]:{userName,ts:Date.now()}}};
-    setSession(next);setAccepted(true);
+    setSession(next);setAccepted(true);setDeclined(false);
     try{
       await setDoc(doc(db,"equipe","power-hour"),next,{merge:true});
-      await setDoc(doc(db,"power-hour-accepts",uid),{sessionStart:session.startedAt,userName,ts:Date.now()});
+      await setDoc(doc(db,"power-hour-accepts",uid),{sessionStart:session.startedAt,userName,ts:Date.now(),status:"accepted"});
+    }catch{}
+  };
+
+  const refuser=async()=>{
+    if(!session)return;
+    setDeclined(true);setAccepted(false);
+    try{
+      await setDoc(doc(db,"power-hour-accepts",uid),{sessionStart:session.startedAt,userName,ts:Date.now(),status:"declined"});
     }catch{}
   };
 
@@ -6837,7 +8633,11 @@ export function PowerHourTab({uid, userName, canCreate}){
           <div style={{fontSize:"2rem",marginBottom:".5rem"}}>⚡</div>
           <div style={{fontFamily:"Georgia,serif",fontSize:"1rem",color:C.brun,marginBottom:".3rem"}}>Aucune session en cours</div>
           <div style={{fontSize:".72rem",color:C.gris,marginBottom:"1rem"}}>20 minutes de focus intense pour toute l'équipe</div>
-          {canCreate&&(
+                    {canCreate&&(
+            <input value={themeInput} onChange={e=>setThemeInput(e.target.value)} placeholder="Theme du jour (optionnel) ex: Prospection"
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .8rem",fontFamily:"inherit",fontSize:".8rem",color:C.texte,marginBottom:".7rem",outline:"none",textAlign:"center"}}/>
+          )}
+{canCreate&&(
             <button onClick={lancer}
               style={{background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem 1.5rem",fontSize:".82rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
               🚀 Lancer une Power Hour
@@ -6855,7 +8655,7 @@ export function PowerHourTab({uid, userName, canCreate}){
                 <div style={{fontSize:".58rem",fontWeight:700,color:C.or,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".15rem"}}>
                   {isActive?"⚡ POWER HOUR EN COURS":"✅ Session terminée"}
                 </div>
-                <div style={{fontSize:".72rem",color:C.pale}}>Lancée par {session.startedBy}</div>
+                <div style={{fontSize:".72rem",color:C.pale}}>Lancée par {session.startedBy}{session.theme?(" - Theme : "+session.theme):""}</div>
               </div>
               {isActive&&(
                 <div style={{fontFamily:"Georgia,serif",fontSize:"1.8rem",fontWeight:700,color:C.or}}>
@@ -6864,10 +8664,15 @@ export function PowerHourTab({uid, userName, canCreate}){
               )}
             </div>
 
-            {/* Coche d'acceptation */}
-            {isActive&&(
+            {/* Explication + Coche d'acceptation */}
+            {isActive&&!accepted&&!declined&&(
+              <div style={{marginTop:".75rem",background:"rgba(255,255,255,.08)",borderRadius:10,padding:".65rem .8rem",fontSize:".7rem",color:C.pale,lineHeight:1.6}}>
+                💡 Une Power Hour, c'est <strong>20 minutes de focus intense</strong> en même temps que toute l'équipe : prospection, appels, messages... chacune choisit son action, ensemble on avance plus vite ! Tu peux participer ou passer ton tour, aucun souci.
+              </div>
+            )}
+            {isActive&&!declined&&(
               <div onClick={!accepted?accepter:null}
-                style={{marginTop:".75rem",background:accepted?"rgba(127,175,138,.25)":"rgba(255,255,255,.1)",borderRadius:10,padding:".6rem .85rem",display:"flex",alignItems:"center",gap:".6rem",cursor:accepted?"default":"pointer",border:`1px solid ${accepted?"rgba(127,175,138,.5)":"rgba(255,255,255,.2)"}`}}>
+                style={{marginTop:".6rem",background:accepted?"rgba(127,175,138,.25)":"rgba(255,255,255,.1)",borderRadius:10,padding:".6rem .85rem",display:"flex",alignItems:"center",gap:".6rem",cursor:accepted?"default":"pointer",border:`1px solid ${accepted?"rgba(127,175,138,.5)":"rgba(255,255,255,.2)"}`}}>
                 <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${accepted?"#7FAF8A":"rgba(255,255,255,.4)"}`,background:accepted?"#7FAF8A":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   {accepted&&<span style={{color:"white",fontSize:".7rem",fontWeight:700}}>✓</span>}
                 </div>
@@ -6875,6 +8680,12 @@ export function PowerHourTab({uid, userName, canCreate}){
                   {accepted?"✅ Tu participes à cette Power Hour !":"Je participe à cette Power Hour"}
                 </span>
               </div>
+            )}
+            {isActive&&!accepted&&(
+              <button onClick={declined?null:refuser} disabled={declined}
+                style={{marginTop:".4rem",width:"100%",background:declined?"rgba(255,255,255,.06)":"none",border:`1px solid rgba(255,255,255,.2)`,borderRadius:10,padding:".45rem",fontSize:".7rem",fontWeight:600,color:declined?"rgba(255,255,255,.5)":C.pale,cursor:declined?"default":"pointer",fontFamily:"inherit"}}>
+                {declined?"❌ Tu as passé ton tour pour cette Power Hour":"Non merci, pas cette fois"}
+              </button>
             )}
 
             {/* Stats chef */}
@@ -7011,19 +8822,184 @@ export function WallOfFameTab({uid, userName}){
 }
 
 // Module de Défis éphémères équipe
+// ---- BANDEAU CHALLENGE PERMANENT ----
+// ---- RAPPEL FIN DE PERIODE ----
+function RappelPeriodePopup({uid, onAller}){
+  const[info,setInfo]=useState(null);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"users",uid));
+        if(!snap.exists())return;
+        const brut=snap.data()["db-rappel-periode"];
+        if(!brut)return;
+        const r=JSON.parse(brut);
+        if(r.vu)return;
+        if(!r.ca)return;
+        const brutCA=snap.data()["db-suivi-ca"];
+        const dataCA=brutCA?JSON.parse(brutCA):{};
+        const p=dataCA["p"+r.periode]||{};
+        if((+p.caPerso||0)>0&&(+p.recrues||0)>0)return;
+        setInfo(r);
+      }catch(e){}
+    })();
+  },[uid]);
+  const fermer=async()=>{
+    setInfo(null);
+    try{
+      const snap=await getDoc(doc(db,"users",uid));
+      const brut=snap.exists()?snap.data()["db-rappel-periode"]:null;
+      if(brut){
+        const r=JSON.parse(brut);
+        await setDoc(doc(db,"users",uid),{"db-rappel-periode":JSON.stringify({...r,vu:true})},{merge:true});
+      }
+    }catch(e){}
+  };
+  if(!info)return null;
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(61,31,14,.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9998,padding:"1rem"}}>
+      <div style={{background:C.blanc,borderRadius:16,padding:"1.4rem",maxWidth:340,width:"100%",textAlign:"center"}}>
+        <div style={{fontSize:"2rem",marginBottom:".4rem"}}>{"\u{1F4CA}"}</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:C.brun,marginBottom:".5rem"}}>
+          Ta periode P{info.periode} est terminee
+        </div>
+        <p style={{fontSize:".76rem",color:C.texte,lineHeight:1.65,marginBottom:"1rem"}}>
+          Prends 30 secondes pour completer tes <strong>ventes perso</strong> et ton <strong>nombre de recrues</strong>.
+          Ce sont ces chiffres qui construisent tes courbes d'evolution d'une periode a l'autre.
+        </p>
+        <button onClick={()=>{fermer();onAller&&onAller();}}
+          style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".8rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:".45rem"}}>
+          Completer maintenant
+        </button>
+        <button onClick={fermer}
+          style={{width:"100%",background:"none",border:"none",color:C.gris,fontSize:".72rem",fontFamily:"inherit",cursor:"pointer"}}>
+          Plus tard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BandeauChallenge({uid, onOuvrir}){
+  const[actif,setActif]=useState(null);
+  const[autres,setAutres]=useState(0);
+  const[tick,setTick]=useState(0);
+
+  useEffect(()=>{
+    let annule=false;
+    const charger=async()=>{
+      try{
+        const tous=await chargerChallenges();
+        const now=Date.now();
+        let annuaire={};
+        try{
+          const s=await getDoc(doc(db,"equipe","annuaire"));
+          annuaire=s.exists()?(s.data().membres||{}):{};
+        }catch(e){}
+        const estMelissa = uid==="melissa"||uid==="melissa-da-silveira";
+        const visibles=tous.filter(c=>{
+          if(c.deadline&&c.deadline<now)return false;
+          if(estMelissa)return true;
+          if(c.global)return true;
+          if(!c.equipesCibles||c.equipesCibles.length===0)return true;
+          if(c.equipesCibles.includes("all"))return true;
+          if(c.equipesCibles.includes(uid))return true;
+          let courant=annuaire[uid]?.marraine;
+          const vus=new Set();
+          while(courant&&!vus.has(courant)){
+            vus.add(courant);
+            if(c.equipesCibles.includes(courant))return true;
+            courant=annuaire[courant]?.marraine;
+          }
+          return false;
+        });
+        if(annule)return;
+        const avecFin=visibles.filter(c=>c.deadline).sort((a,b)=>a.deadline-b.deadline);
+        const sansFin=visibles.filter(c=>!c.deadline);
+        const ordonnes=[...avecFin,...sansFin];
+        setActif(ordonnes[0]||null);
+        setAutres(Math.max(0,ordonnes.length-1));
+      }catch(e){}
+    };
+    charger();
+    const t=setInterval(charger,300000);
+    return()=>{annule=true;clearInterval(t);};
+  },[uid]);
+
+  useEffect(()=>{
+    const t=setInterval(()=>setTick(x=>x+1),60000);
+    return()=>clearInterval(t);
+  },[]);
+
+  if(!actif)return null;
+
+  let reste="";
+  if(actif.deadline){
+    const r=actif.deadline-Date.now();
+    if(r<=0)return null;
+    const j=Math.floor(r/86400000);
+    const h=Math.floor((r%86400000)/3600000);
+    const mn=Math.floor((r%3600000)/60000);
+    if(actif.type==="long"||j>=3) reste="J-"+(j+1);
+    else if(j>0) reste=j+"j "+h+"h";
+    else if(h>0) reste=h+"h "+mn+"min";
+    else reste=mn+"min";
+  }
+
+  const urgent = actif.deadline && (actif.deadline-Date.now())<86400000;
+
+  return(
+    <>
+      <style>{`@keyframes bd-pulse-challenge{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(1.25)}}`}</style>
+      <div onClick={onOuvrir}
+        style={{position:"sticky",top:0,zIndex:150,display:"flex",alignItems:"center",justifyContent:"space-between",gap:".7rem",
+          background:urgent?"linear-gradient(100deg,#C62828,#E63946)":"linear-gradient(100deg,#8B5E00,#B8862A)",
+          boxShadow:"0 2px 10px rgba(0,0,0,.22)",
+          padding:".6rem .85rem",cursor:"pointer",userSelect:"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:".6rem",minWidth:0,flex:1}}>
+          <span style={{width:9,height:9,borderRadius:"50%",background:"#fff",flexShrink:0,
+            animation:"bd-pulse-challenge 2s ease-in-out infinite",boxShadow:"0 0 8px rgba(255,255,255,.9)"}}/>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:".8rem",fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.25}}>
+              {"\u{1F3C6}"} {actif.titre}
+              {autres>0&&(
+                <span style={{fontSize:".6rem",fontWeight:600,color:"rgba(255,255,255,.75)",marginLeft:".35rem"}}>+{autres}</span>
+              )}
+            </div>
+            <div style={{fontSize:".62rem",color:"rgba(255,255,255,.85)",lineHeight:1.3}}>
+              {urgent?"Derniers moments \u2014 clique pour participer":"Challenge en cours \u2014 clique pour participer"}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:".45rem",flexShrink:0}}>
+          {reste&&(
+            <span style={{fontSize:".72rem",fontWeight:700,color:"#fff",whiteSpace:"nowrap",
+              background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",
+              borderRadius:20,padding:".18rem .5rem"}}>
+              {reste}
+            </span>
+          )}
+          <span style={{color:"rgba(255,255,255,.8)",fontSize:".85rem",fontWeight:700}}>{"\u203A"}</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ChallengeCountdown({deadline}){
   const[r,setR]=useState(deadline-Date.now());
   useEffect(()=>{const t=setInterval(()=>setR(deadline-Date.now()),30000);return()=>clearInterval(t);},[deadline]);
   if(r<=0)return <span style={{color:"#B04040",fontWeight:700,fontSize:".72rem"}}>⏰ Terminé</span>;
   const d2=Math.floor(r/86400000),h=Math.floor((r%86400000)/3600000),m=Math.floor((r%3600000)/60000);
-  return <span style={{fontWeight:700,color:C.or,fontSize:".72rem"}}>{d2>0?`${d2}j `:""}{h}h {m}min</span>;
+  const urgent=r<24*3600000;
+  return <span style={{fontWeight:700,color:urgent?"#B8442F":C.or,fontSize:".72rem",animation:urgent?"neonPulseInfos 1.4s ease-in-out infinite":"none",padding:urgent?"1px 6px":0,borderRadius:urgent?8:0,background:urgent?"rgba(255,255,255,.15)":"transparent"}}>{urgent?"⚠️ ":""}{d2>0?`${d2}j `:""}{h}h {m}min{urgent?" — se termine aujourd'hui !":""}</span>;
 }
 
-export function DefisTab({uid, userName, canCreate, isChef}){
+export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=false}){
   const[challenges,setChallenges]=useState([]);
   const[loading,setLoading]=useState(true);
   const[showCreate,setShowCreate]=useState(false);
-  const[form,setForm]=useState({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
+  const[form,setForm]=useState({titre:"",description:"",type:"flash",dureeHeures:"48",dateFinExacte:"",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
   const[equipes,setEquipes]=useState([]);
   const[declarations,setDeclarations]=useState({});
   const[declareInput,setDeclareInput]=useState({});
@@ -7054,13 +9030,15 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       }catch{}
       try{
         // Charger les challenges
-        const snap=await getDoc(doc(db,"challenges","liste"));
-        const data=snap.exists()?snap.data().items||[]:[];
+        const data=await chargerChallenges();
         // Filtrer selon l'équipe de l'utilisateur — en remontant sa lignée jusqu'aux chefs
         const now=Date.now();
         const mesChefs=getLigneeChefs(annuaire,uid,chefsUids);
         const actifs=data.filter(c=>{
-          if(c.deadline&&c.deadline<now)return false;
+          if(c.deadline&&c.deadline<now){
+            const histoMs=7*24*3600000;
+            if(c.deadline<now-histoMs)return false;
+          }
           if(isMelissa)return true;
           if(c.global)return true;
           if(!c.equipesCibles||c.equipesCibles.length===0)return true;
@@ -7070,17 +9048,18 @@ export function DefisTab({uid, userName, canCreate, isChef}){
         });
         setChallenges(actifs.sort((a,b)=>b.ts-a.ts));
         // Charger les déclarations par challenge
-        const declSnap=await getDoc(doc(db,"challenges","declarations"));
-        setDeclarations(declSnap.exists()?declSnap.data():{});
+        setDeclarations(await chargerDeclarations());
       }catch{}
       setLoading(false);
     })();
   },[uid]);
 
-  const saveAll=async(items)=>{
-    await setDoc(doc(db,"challenges","liste"),{items});
+  const rafraichirListe=(items)=>{
+    const histoMs=7*24*3600000; // Garder les challenges termines visibles (historique) pendant 7 jours
     setChallenges(items.filter(c=>{
-      if(c.deadline&&c.deadline<Date.now())return false;
+      if(c.deadline&&c.deadline<Date.now()){
+        if(c.deadline<Date.now()-histoMs)return false;
+      }
       if(isMelissa)return true;
       if(c.global)return true;
       if(!c.equipesCibles||c.equipesCibles.length===0)return true;
@@ -7094,16 +9073,16 @@ export function DefisTab({uid, userName, canCreate, isChef}){
     const nouveau={
       id,titre:form.titre.trim(),description:form.description.trim(),
       type:form.type,
-      deadline:form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null,
+      deadline:form.dateFinExacte?new Date(form.dateFinExacte).getTime():(form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null),
       objectif:form.type==="action"?0:(+form.objectif||0),unite:form.type==="action"?"actions":form.unite,
       cadeau:form.cadeau.trim(),cadeauImage:form.cadeauImage.trim(),
       actions:form.type==="action"?form.actionsListe.filter(a=>a.trim()).map((label,i)=>({id:"a"+i,label:label.trim()})):[],
       global:form.global,equipesCibles:form.global?[]:form.equipesCibles,
-      createdBy:userName,ts:Date.now(),
+      createdBy:userName,createdByUid:uid,ts:Date.now(),
     };
-    const snap=await getDoc(doc(db,"challenges","liste"));
-    const existing=snap.exists()?snap.data().items||[]:[];
-    await saveAll([nouveau,...existing]);
+    await enregistrerChallenge(nouveau);
+    const existing=await chargerChallenges();
+    rafraichirListe(existing.sort((a,b)=>b.ts-a.ts));
     try{
       const fmtNom=(id)=>id.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
       const getDescendants=(rootUid)=>{
@@ -7143,36 +9122,69 @@ export function DefisTab({uid, userName, canCreate, isChef}){
       }));
     }catch(e){console.error("notif challenge msg error",e);}
     setShowCreate(false);
-    setForm({titre:"",description:"",type:"flash",dureeHeures:"48",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
+    setForm({titre:"",description:"",type:"flash",dureeHeures:"48",dateFinExacte:"",objectif:"",unite:"ventes",cadeau:"",cadeauImage:"",equipesCibles:[],global:true,actionsListe:[""]});
   };
 
-  const declarer=async(challengeId,amount)=>{
+  const declarer=async(challengeId,amount,unite)=>{
     const d={uid,userName,count:+amount||1,ts:Date.now()};
-    const current=declarations[challengeId]||[];
-    const next={...declarations,[challengeId]:[...current,d]};
-    setDeclarations(next);
-    await setDoc(doc(db,"challenges","declarations"),next,{merge:true});
-    postToWallOfFame&&postToWallOfFame(uid,userName,`a déclaré ${amount} ${form.unite} sur le challenge "${challengeId}" 💪`,"🚀");
+    const fraiche=await chargerDeclarationsChallenge(challengeId);
+    const liste=[...fraiche,d];
+    setDeclarations(prev=>({...prev,[challengeId]:liste}));
+    await enregistrerDeclarations(challengeId, liste);
+    const ch=challenges.find(x=>x.id===challengeId);
+    postToWallOfFame&&postToWallOfFame(uid,userName,`a déclaré ${amount} ${unite||ch?.unite||""} sur le challenge "${ch?.titre||challengeId}" 💪`,"🚀");
+  };
+  const supprimerDeclaration=async(challengeId,ts)=>{
+    if(!window.confirm("Supprimer cette declaration ?"))return;
+    const fraiche=await chargerDeclarationsChallenge(challengeId);
+    const liste=fraiche.filter(d=>!(d.uid===uid&&d.ts===ts));
+    setDeclarations(prev=>({...prev,[challengeId]:liste}));
+    await enregistrerDeclarations(challengeId, liste);
   };
   const validerAction=async(challengeId,actionId,actionLabel)=>{
-    const current=declarations[challengeId]||[];
-    const dejaFait=current.find(d=>d.uid===uid&&d.actionId===actionId);
-    let next;
+    const fraiche=await chargerDeclarationsChallenge(challengeId);
+    const dejaFait=fraiche.find(d=>d.uid===uid&&d.actionId===actionId);
+    let liste;
     if(dejaFait){
-      next={...declarations,[challengeId]:current.filter(d=>!(d.uid===uid&&d.actionId===actionId))};
+      liste=fraiche.filter(d=>!(d.uid===uid&&d.actionId===actionId));
     }else{
       const d={uid,userName,count:1,actionId,ts:Date.now()};
-      next={...declarations,[challengeId]:[...current,d]};
+      liste=[...fraiche,d];
       postToWallOfFame&&postToWallOfFame(uid,userName,`a validé l'action "${actionLabel}" 💪`,"✅");
     }
-    setDeclarations(next);
-    await setDoc(doc(db,"challenges","declarations"),next,{merge:true});
+    setDeclarations(prev=>({...prev,[challengeId]:liste}));
+    await enregistrerDeclarations(challengeId, liste);
   };
 
   const supprimer=async(id)=>{
-    const snap=await getDoc(doc(db,"challenges","liste"));
-    const items=(snap.exists()?(snap.data().items||[]):[]).filter(c=>c.id!==id);
-    await saveAll(items);
+    const ch=challenges.find(x=>x.id===id);
+    const nomCh=(ch&&ch.titre)||'ce challenge';
+    if(!window.confirm('Supprimer definitivement : '+nomCh+' ?\n\nCette action est irreversible et concerne toute l equipe.'))return;
+    await effacerChallenge(id);
+    rafraichirListe(await chargerChallenges());
+  };
+
+  const[editDeadlineId,setEditDeadlineId]=useState(null);
+  const[editDeadlineValue,setEditDeadlineValue]=useState("");
+
+  const ouvrirEditDeadline=(c)=>{
+    setEditDeadlineId(c.id);
+    if(c.deadline){
+      const d=new Date(c.deadline);
+      const pad=n=>String(n).padStart(2,"0");
+      setEditDeadlineValue(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    }else{
+      setEditDeadlineValue("");
+    }
+  };
+
+  const enregistrerNouvelleDeadline=async()=>{
+    const ch=challenges.find(x=>x.id===editDeadlineId);
+    if(!ch)return;
+    const nouvelleDeadline=editDeadlineValue?new Date(editDeadlineValue).getTime():null;
+    await enregistrerChallenge({...ch,deadline:nouvelleDeadline});
+    setEditDeadlineId(null);
+    rafraichirListe(await chargerChallenges());
   };
 
   if(loading)return <div style={{textAlign:"center",padding:"2rem",color:C.gris,fontSize:".8rem"}}>Chargement...</div>;
@@ -7182,7 +9194,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
   return(
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
-        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🏆 Challenges & Défis</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:"1.1rem",fontWeight:600,color:C.brun}}>🏆 Challenges</div>
         {canCreate&&(
           <button onClick={()=>setShowCreate(p=>!p)}
             style={{background:showCreate?C.pale:C.brun,color:showCreate?C.gris:C.blanc,border:"none",borderRadius:9,padding:".4rem .8rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
@@ -7224,6 +9236,13 @@ export function DefisTab({uid, userName, canCreate, isChef}){
               ))}
             </div>
           )}
+
+          {/* Date de fin precise (facultatif, remplace la duree/type par defaut) */}
+          <div style={{marginBottom:".5rem"}}>
+            <label style={{fontSize:".68rem",color:C.gris,display:"block",marginBottom:".25rem"}}>Ou choisir une date de fin précise (optionnel, remplace la durée ci-dessus) :</label>
+            <input type="datetime-local" value={form.dateFinExacte||""} onChange={e=>setForm(p=>({...p,dateFinExacte:e.target.value}))}
+              style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".42rem .55rem",fontSize:".78rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none"}}/>
+          </div>
 
           {form.type!=="action"?(
             <div>
@@ -7318,7 +9337,11 @@ export function DefisTab({uid, userName, canCreate, isChef}){
         </div>
       )}
 
-      {challenges.map(c=>{
+      {[...challenges].sort((a,b)=>{
+        const aFini=a.deadline&&a.deadline<Date.now()?1:0;
+        const bFini=b.deadline&&b.deadline<Date.now()?1:0;
+        return aFini-bFini;
+      }).map(c=>{
         const decls=declarations[c.id]||[];
         const total=decls.reduce((s,d)=>s+d.count,0);
         const pct=c.objectif?Math.min(100,Math.round(total/c.objectif*100)):0;
@@ -7329,6 +9352,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
         },{})).sort((a,b)=>b.total-a.total);
         const medals=["🥇","🥈","🥉"];
         const monTotal=decls.filter(d=>d.uid===uid).reduce((s,d)=>s+d.count,0);
+        const estTermine=!!(c.deadline&&c.deadline<Date.now());
 
         return(
           <div key={c.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:14,overflow:"hidden",marginBottom:".75rem"}}>
@@ -7337,7 +9361,7 @@ export function DefisTab({uid, userName, canCreate, isChef}){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:".55rem",fontWeight:700,color:"rgba(255,255,255,.7)",letterSpacing:".1em",textTransform:"uppercase",marginBottom:".2rem"}}>
-                    {c.type==="flash"?"⚡ Challenge Flash":c.type==="long"?"📅 Challenge Long terme":"🎯 Challenge"}
+                    {estTermine?"📜 Terminé":c.type==="flash"?"⚡ Challenge Flash":c.type==="long"?"📅 Challenge Long terme":"🎯 Challenge"}
                     {!c.global&&(c.equipesCibles?.length>1?` · 👑 Challenge entre ${c.equipesCibles.length} équipes`:" · Équipe ciblée")}
                   </div>
                   <div style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",fontWeight:600,color:"white"}}>{c.titre}</div>
@@ -7345,13 +9369,37 @@ export function DefisTab({uid, userName, canCreate, isChef}){
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:".2rem",flexShrink:0,marginLeft:".5rem"}}>
                   {c.deadline&&<Countdown deadline={c.deadline}/>}
-                  {canCreate&&<button onClick={()=>supprimer(c.id)}
-                    style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:5,padding:".18rem .4rem",color:"rgba(255,255,255,.6)",cursor:"pointer",fontSize:".6rem",fontFamily:"inherit"}}>
-                    ✕
-                  </button>}
+                  <div style={{display:"flex",gap:".3rem"}}>
+                    {depuisEspaceChef&&(c.createdByUid?c.createdByUid===uid:c.createdBy===userName)&&<button onClick={()=>ouvrirEditDeadline(c)}
+                      style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:5,padding:".18rem .4rem",color:"rgba(255,255,255,.8)",cursor:"pointer",fontSize:".62rem",fontFamily:"inherit"}}>
+                      ✏️
+                    </button>}
+                    {depuisEspaceChef&&(c.createdByUid?c.createdByUid===uid:c.createdBy===userName)&&<button onClick={()=>supprimer(c.id)}
+                      style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:5,padding:".18rem .4rem",color:"rgba(255,255,255,.6)",cursor:"pointer",fontSize:".6rem",fontFamily:"inherit"}}>
+                      ✕
+                    </button>}
+                  </div>
                 </div>
               </div>
             </div>
+            {editDeadlineId===c.id&&(
+              <div style={{padding:".7rem 1rem",background:C.creme,borderTop:`1px solid ${C.pale}`,display:"flex",gap:".4rem",alignItems:"center",flexWrap:"wrap"}}>
+                <input type="datetime-local" value={editDeadlineValue} onChange={e=>setEditDeadlineValue(e.target.value)}
+                  style={{flex:1,minWidth:170,border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .5rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,outline:"none"}}/>
+                <button onClick={enregistrerNouvelleDeadline}
+                  style={{background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".4rem .7rem",fontSize:".74rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                  ✓ Enregistrer
+                </button>
+                <button onClick={()=>{setEditDeadlineValue("");}}
+                  style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:8,padding:".4rem .6rem",fontSize:".7rem",color:C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                  Sans date de fin
+                </button>
+                <button onClick={()=>setEditDeadlineId(null)}
+                  style={{background:"none",border:"none",fontSize:".7rem",color:C.gris,cursor:"pointer",fontFamily:"inherit",padding:".4rem"}}>
+                  Annuler
+                </button>
+              </div>
+            )}
 
             <div style={{padding:".85rem 1rem"}}>
               {/* Barre de progression */}
@@ -7381,7 +9429,12 @@ export function DefisTab({uid, userName, canCreate, isChef}){
                 </div>
               )}
 
-              {c.type!=="action"?(
+              {estTermine&&(
+                <div style={{background:"#F0EEEA",borderRadius:10,padding:".5rem .85rem",marginBottom:".75rem",fontSize:".7rem",color:C.gris,textAlign:"center",fontStyle:"italic"}}>
+                  📜 Challenge terminé — résultats conservés en historique
+                </div>
+              )}
+              {!estTermine&&c.type!=="action"?(<>
               <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem",display:"flex",alignItems:"center",gap:".6rem"}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:".6rem",color:C.gris,marginBottom:".1rem"}}>Ma participation</div>
@@ -7390,12 +9443,39 @@ export function DefisTab({uid, userName, canCreate, isChef}){
                 <input type="number" min="1" value={declareInput[c.id]||""} onChange={e=>setDeclareInput(p=>({...p,[c.id]:e.target.value}))}
                   placeholder="Qte"
                   style={{width:60,border:`1px solid ${C.pale}`,borderRadius:7,padding:".35rem .4rem",fontSize:".8rem",fontFamily:"inherit",textAlign:"center",color:C.texte,background:C.blanc,outline:"none"}}/>
-                <button onClick={()=>{declarer(c.id,declareInput[c.id]||1);setDeclareInput(p=>({...p,[c.id]:""}));}}
+                <button onClick={()=>{declarer(c.id,declareInput[c.id]||1,c.unite);setDeclareInput(p=>({...p,[c.id]:""}));}}
                   style={{background:C.brun,color:C.blanc,border:"none",borderRadius:7,padding:".35rem .7rem",fontSize:".72rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>
                   + Declarer
                 </button>
               </div>
-            ):(
+              {decls.filter(d=>d.uid===uid&&!d.actionId).length>0&&(
+                <div style={{marginTop:"-.45rem",marginBottom:".75rem",padding:".5rem .85rem",background:"rgba(255,255,255,.5)",border:`1px solid ${C.pale}`,borderRadius:10}}>
+                  <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:C.gris,marginBottom:".3rem"}}>
+                    Mes declarations
+                  </div>
+                  {decls.filter(d=>d.uid===uid&&!d.actionId).sort((a,b)=>b.ts-a.ts).map(d=>(
+                    <div key={d.ts} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:".5rem",padding:".22rem 0",borderTop:`1px solid ${C.creme}`}}>
+                      <span style={{fontSize:".7rem",color:C.texte}}>
+                        <strong style={{color:C.brun}}>{d.count}</strong> {c.unite}
+                      </span>
+                      <span style={{display:"flex",alignItems:"center",gap:".45rem"}}>
+                        <span style={{fontSize:".6rem",color:C.gris}}>
+                          {new Date(d.ts).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})} a {new Date(d.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
+                        </span>
+                        <button onClick={()=>supprimerDeclaration(c.id,d.ts)}
+                          style={{background:"none",border:"none",color:"#C0504D",fontSize:".7rem",cursor:"pointer",fontFamily:"inherit",padding:"0 .15rem",lineHeight:1}}>
+                          {"\u2715"}
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{fontSize:".58rem",color:C.gris,fontStyle:"italic",marginTop:".35rem"}}>
+                    Une erreur ? Supprime la ligne et redeclare le bon chiffre.
+                  </div>
+                </div>
+              )}
+              </>
+            ):!estTermine?(
               <div style={{background:C.creme,borderRadius:10,padding:".65rem .85rem",marginBottom:".75rem"}}>
                 <div style={{fontSize:".6rem",color:C.gris,marginBottom:".5rem"}}>Coche les actions realisees</div>
                 {(c.actions||[]).map(a=>{
@@ -7409,14 +9489,14 @@ export function DefisTab({uid, userName, canCreate, isChef}){
                   );
                 })}
               </div>
-            )}
+            ):null}
 
               {/* Classement */}
               {classement.length>0&&(
                 <div>
                   <div style={{fontSize:".58rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.gris,marginBottom:".4rem"}}>🏆 Classement</div>
-                  {classement.slice(0,5).map((p,i)=>(
-                    <div key={p.userName} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",borderBottom:i<classement.slice(0,5).length-1?`1px solid ${C.pale}30`:"none"}}>
+                  {classement.map((p,i)=>(
+                    <div key={p.userName} style={{display:"flex",alignItems:"center",gap:".5rem",padding:".3rem 0",borderBottom:i<classement.length-1?`1px solid ${C.pale}30`:"none"}}>
                       <div style={{width:22,textAlign:"center",fontSize:i<3?"1rem":".7rem",flexShrink:0}}>{i<3?medals[i]:`${i+1}.`}</div>
                       <div style={{flex:1,fontSize:".76rem",fontWeight:p.userName===userName?700:400,color:p.userName===userName?C.rose:C.texte}}>{p.userName}{p.userName===userName?" ✓":""}</div>
                       <div style={{fontFamily:"Georgia,serif",fontSize:".85rem",fontWeight:700,color:C.brun}}>{p.total} {c.unite}</div>
@@ -8163,6 +10243,22 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   const[showDecouverte,setShowDecouverte]=useState(false);
   const[suiviCATotal,setSuiviCATotal]=useState(0);useEffect(()=>{(async()=>{try{const snap=await getDoc(doc(db,"users",uid));if(snap.exists()&&snap.data()["db-suivi-ca"]){const sc=JSON.parse(snap.data()["db-suivi-ca"]);const total=Object.values(sc).reduce((s,v)=>s+(parseFloat(v)||0),0);setSuiviCATotal(total);}}catch{}})();},[uid]);
   const[graphEnGros,setGraphEnGros]=useState(null);
+  const[histoPeriodes,setHistoPeriodes]=useState([]);
+  useEffect(()=>{(async()=>{
+    try{
+      const snapH=await getDoc(doc(db,"users",uid));
+      if(!snapH.exists())return;
+      const brutH=snapH.data()["db-suivi-ca"];
+      if(!brutH)return;
+      const dataH=JSON.parse(brutH);
+      const pts=Object.entries(dataH)
+        .map(([k,v])=>({num:parseInt(String(k).replace("p",""),10),ca:+v.ca||0,caPerso:+v.caPerso||0,recrues:+v.recrues||0}))
+        .filter(p=>!isNaN(p.num)&&(p.ca>0||p.caPerso>0||p.recrues>0))
+        .sort((x,y)=>x.num-y.num)
+        .map(p=>({...p,label:"P"+p.num}));
+      setHistoPeriodes(pts);
+    }catch(e){ console.error("histoPeriodes:",e); }
+  })();},[uid]);
   const[recrutementOuvert,setRecrutementOuvert]=useState(()=>!!(obj.recruesObj&&obj.recruesObj!=="0"));
   const raw=getPeriodeInfo();
   const pCourant=getPeriodeActuelle();
@@ -8196,10 +10292,17 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   const historique=obj.historique||[];
   const snapshotNow=()=>{
     const entry={date:todayLocalStr(),ca:+obj.ca||0,caObj:+obj.caObj||0,caPerso:+obj.caPerso||0,recruesReal:+obj.recruesReal||0,recruesObj:+obj.recruesObj||0,palier:obj.palier||"2%"};
+    // Ne pas archiver un point totalement vide : il ecrase la lecture des courbes
+    if(entry.ca===0&&entry.caPerso===0&&entry.recruesReal===0)return historique;
     return [...historique,entry].slice(-24);
+  };
+  const supprimerPointHisto=(idx)=>{
+    if(!window.confirm("Supprimer ce point de l'historique ?"))return;
+    save({...obj,historique:historique.filter((_,i)=>i!==idx)});
   };
 
   const resetPeriode=async()=>{
+    try{ await archiverPeriodeSuiviCA(uid, getPeriodeActuelle(), obj.caPerso, obj.recruesReal); }catch(e){}
     const hist=snapshotNow();
     const next={...obj,ca:"",caObj:"",caPerso:"",caEquipe:"",recruesReal:"0",historique:hist};
     const totalCaCumul=(+obj.totalCaCumul||0)+(+obj.ca||0);
@@ -8228,7 +10331,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
           <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
           <polyline points={`0,${h} ${pts} ${w},${h}`} fill={color} fillOpacity={.12} stroke="none"/>
         </svg>
-        <div style={{fontSize:".55rem",color,fontWeight:700,textAlign:"right",marginTop:".1rem"}}>{vals[vals.length-1]}</div>
+        <div style={{fontSize:".55rem",color,fontWeight:700,textAlign:"right",marginTop:".1rem"}}>{+obj[dataKey]||0}</div>
       </div>
     );
   };
@@ -8236,7 +10339,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
   // Graphique en grand (popup)
   const GrandGraph=({data,dataKey,color,label,unit=""})=>{
     const vals=data.map(d=>+d[dataKey]||0);
-    const dates=data.map(d=>d.date?.slice(5)||"");
+    const dates=data.map(d=>d.label||(d.date?d.date.slice(5):""));
     const max=Math.max(...vals,1);
     const w=280,h=120;
     const pts=vals.map((v,i)=>`${Math.round(i/(vals.length-1)*w)},${Math.round(h-(v/max*h*.85+h*.05))}`).join(" ");
@@ -8255,9 +10358,14 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
             ))}
           </svg>
           {vals.map((v,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:".65rem",color:C.gris,padding:".2rem 0",borderBottom:`1px solid ${C.pale}`}}>
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".65rem",color:C.gris,padding:".2rem 0",borderBottom:`1px solid ${C.pale}`}}>
               <span>{dates[i]||`Point ${i+1}`}</span>
-              <span style={{fontWeight:700,color}}>{v}{unit}</span>
+              <span style={{display:"flex",alignItems:"center",gap:".5rem"}}>
+                <span style={{fontWeight:700,color}}>{v}{unit}</span>
+                <button onClick={()=>{supprimerPointHisto(i);setGraphEnGros(null);}}
+                  style={{background:"none",border:"none",color:"#C0504D",fontSize:".7rem",cursor:"pointer",fontFamily:"inherit",padding:"0 .1rem",lineHeight:1}}
+                  title="Supprimer ce point">{"\u2715"}</button>
+              </span>
             </div>
           ))}
           <button onClick={()=>setGraphEnGros(null)} style={{width:"100%",marginTop:".75rem",background:C.brun,color:C.blanc,border:"none",borderRadius:9,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Fermer</button>
@@ -8272,7 +10380,7 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
       <Fireworks trigger={fireworksTrigger}/>
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
       {showDecouverte&&<DecouverteTour outil="objectifs" onClose={()=>setShowDecouverte(false)}/>}
-      {graphEnGros&&historique.length>=2&&<GrandGraph data={historique} dataKey={graphEnGros} color={graphEnGros==="recruesReal"?C.lilas:graphEnGros==="caPerso"?C.rose:C.brun} label={graphEnGros==="recruesReal"?"👥 Recrues":graphEnGros==="caPerso"?"🛍️ Ventes perso":"💰 CA total"} unit={graphEnGros==="recruesReal"?"":" €"}/>}
+      {graphEnGros&&histoPeriodes.length>=2&&<GrandGraph data={histoPeriodes} dataKey={graphEnGros} color={graphEnGros==="recrues"?C.lilas:graphEnGros==="caPerso"?C.rose:C.brun} label={graphEnGros==="recrues"?"👥 Recrues":graphEnGros==="caPerso"?"🛍️ Ventes perso":"💰 CA total"} unit={graphEnGros==="recrues"?"":" €"}/>}
 
       {/* 1. PÉRIODE EN COURS */}
       <div id="decouverte-periode" style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:12,padding:".85rem 1rem",marginBottom:".75rem",color:C.blanc}}>
@@ -8401,9 +10509,9 @@ export function ObjPersoTab({obj,save,uid,userName,distributeurs=[]}){
           </div>
           <div style={{display:"flex",gap:".5rem"}}>
             {historique.length>=2?(<>
-              <MiniGraph data={historique} dataKey="ca" color={C.brun} label="💰 CA total" onClick={()=>setGraphEnGros("ca")}/>
-            <MiniGraph data={historique} dataKey="caPerso" color={C.rose} label="🛍️ Ventes perso" onClick={()=>setGraphEnGros("caPerso")}/>
-            <MiniGraph data={historique} dataKey="recruesReal" color={C.lilas} label="👥 Recrues" onClick={()=>setGraphEnGros("recruesReal")}/>
+              <MiniGraph data={histoPeriodes.slice(-12)} dataKey="ca" color={C.brun} label="💰 CA total" onClick={()=>setGraphEnGros("ca")}/>
+            <MiniGraph data={histoPeriodes.slice(-12)} dataKey="caPerso" color={C.rose} label="🛍️ Ventes perso" onClick={()=>setGraphEnGros("caPerso")}/>
+            <MiniGraph data={histoPeriodes.slice(-12)} dataKey="recrues" color={C.lilas} label="👥 Recrues" onClick={()=>setGraphEnGros("recruesReal")}/>
             </>):(
               <div style={{textAlign:"center",padding:"1rem .5rem",fontSize:".72rem",color:C.gris,lineHeight:1.6}}>
                 Reviens ici une fois que tu auras enregistre au moins 2 periodes pour voir tes graphiques d'evolution.
@@ -10297,7 +12405,7 @@ export function ActionsBiblioChefTab({uid}){
 }
 
 // Composant global — JAMAIS défini à l'intérieur d'un autre composant
-export function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCell, editVal, setEditCell, setEditVal, saveJour, setEditPeriode, setEditCA, setEditObj, setEditNote}){
+export function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, editCell, editVal, setEditCell, setEditVal, saveJour, setEditPeriode, setEditCA, setEditObj, setEditNote, setEditCaPerso, setEditRecrues}){
   const d=data[`p${pNum}`]||{ca:0,obj:0,jours:{}};
   const debut=getPeriodeDebut(pNum);
   const _n=new Date();const _t=new Date(_n.getFullYear(),_n.getMonth(),_n.getDate(),12,0,0);const _dj=Math.floor((_t.getTime()-debut.getTime())/(24*60*60*1000));const _je=courante?Math.min(21,Math.max(0,_dj+1)):joursEcoules;const isFutur=(i)=>courante&&i>=_je;const isToday=(i)=>courante&&i===_je-1;
@@ -10308,7 +12416,7 @@ export function GrilleJoursCA({pNum, color, courante=false, joursEcoules, data, 
       <div style={{background:courante?`linear-gradient(135deg,${C.brun},${C.brun2})`:color+'15',padding:'.5rem .5rem .4rem',borderBottom:`1px solid ${color}30`}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div style={{fontSize:'.6rem',fontWeight:700,color:courante?C.or:color}}>{fmtPLabel(pNum)}</div>
-          <button onClick={()=>{setEditPeriode(pNum);setEditCA(d.ca||'');setEditObj(d.obj||'');setEditNote(d.note||'');}}
+          <button onClick={()=>{setEditPeriode(pNum);setEditCA(d.ca||'');setEditObj(d.obj||'');setEditCaPerso(d.caPerso||'');setEditRecrues(d.recrues||'');setEditNote(d.note||'');}}
             style={{background:'none',border:`1px solid ${courante?'rgba(255,255,255,.25)':color+'40'}`,borderRadius:5,padding:'.1rem .35rem',fontSize:'.52rem',color:courante?C.pale:color,cursor:'pointer',fontFamily:'inherit'}}>✏️</button>
         </div>
         <div style={{fontFamily:'Georgia,serif',fontSize:'.95rem',fontWeight:700,color:courante?C.blanc:color}}>
@@ -10816,6 +12924,20 @@ function StatsEquipeTab({uid, annuaire}){
   );
 }
 
+// Archive caPerso + recrues dans db-suivi-ca pour la periode qui se termine
+export async function archiverPeriodeSuiviCA(uid, pNum, caPerso, recrues){
+  try{
+    const ref=doc(db,"users",uid);
+    const snap=await getDoc(ref);
+    const brut=snap.exists()?snap.data()["db-suivi-ca"]:null;
+    const data=brut?JSON.parse(brut):{};
+    const key="p"+pNum;
+    const cur=data[key]||{obj:0,jours:{}};
+    data[key]={...cur,caPerso:+caPerso||0,recrues:+recrues||0};
+    await setDoc(ref,{"db-suivi-ca":JSON.stringify(data)},{merge:true});
+  }catch(e){ console.error("archiverPeriodeSuiviCA:",e); }
+}
+
 export function SuiviCATab({uid}){
   const raw = getPeriodeInfo();
   const[periodeOverride,setPeriodeOverride]=useState(null);
@@ -10843,6 +12965,8 @@ export function SuiviCATab({uid}){
   // Édition total + objectif
   const[editPeriode,setEditPeriode]=useState(null);
   const[editCA,setEditCA]=useState('');
+  const[editCaPerso,setEditCaPerso]=useState('');
+  const[editRecrues,setEditRecrues]=useState('');
   const[editObj,setEditObj]=useState('');
   const[editNote,setEditNote]=useState('');
 
@@ -10885,7 +13009,7 @@ export function SuiviCATab({uid}){
   const saveEdit=()=>{
     const pKey=`p${editPeriode}`;
     const cur=data[pKey]||{jours:{}};
-    saveData({...data,[pKey]:{...cur,ca:parseFloat(editCA)||0,obj:parseFloat(editObj)||0,note:editNote.trim()}});
+    saveData({...data,[pKey]:{...cur,ca:parseFloat(editCA)||0,obj:parseFloat(editObj)||0,caPerso:parseFloat(editCaPerso)||0,recrues:parseFloat(editRecrues)||0,note:editNote.trim()}});
     setEditPeriode(null);
   };
 
@@ -10970,7 +13094,7 @@ export function SuiviCATab({uid}){
             <span onClick={()=>setEditColB(true)} style={{fontSize:'.55rem',fontWeight:700,color:'#888',cursor:'pointer',textAlign:'center'}}>{editColB?<input type='number' autoFocus value={inputB} onChange={e=>setInputB(e.target.value)} onBlur={()=>{const v=parseInt(inputB);if(v>0)setCompareB(v);setEditColB(false);}} onKeyDown={e=>e.key==='Enter'&&(setCompareB(parseInt(inputB)||1),setEditColB(false))} style={{width:36,border:'1px solid #888',borderRadius:4,fontSize:'.55rem',padding:'.08rem',textAlign:'center',fontFamily:'inherit'}}/>:fmtPLabel(compareB)}</span>
             <button onClick={()=>setCompareB(b=>Math.min(pCourante-1,b+1))} style={{background:'none',border:'none',color:'#aaa',cursor:'pointer',fontSize:'.85rem',lineHeight:1,padding:0}}>›</button>
           </div>
-          <GrilleJoursCA pNum={compareB} color='#888' joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote}/>
+          <GrilleJoursCA pNum={compareB} color='#888' joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote} setEditCaPerso={setEditCaPerso} setEditRecrues={setEditRecrues}/>
         </div>
 
         {/* Colonne A */}
@@ -10980,11 +13104,11 @@ export function SuiviCATab({uid}){
             <span onClick={()=>setEditColA(true)} style={{fontSize:'.55rem',fontWeight:700,color:C.lilas,cursor:'pointer',textAlign:'center'}}>{editColA?<input type='number' autoFocus value={inputA} onChange={e=>setInputA(e.target.value)} onBlur={()=>{const v=parseInt(inputA);if(v>0)setCompareA(v);setEditColA(false);}} onKeyDown={e=>e.key==='Enter'&&(setCompareA(parseInt(inputA)||1),setEditColA(false))} style={{width:36,border:`1px solid ${C.lilas}`,borderRadius:4,fontSize:'.55rem',padding:'.08rem',textAlign:'center',fontFamily:'inherit'}}/>:fmtPLabel(compareA)}</span>
             <button onClick={()=>setCompareA(a=>Math.min(pCourante-1,a+1))} style={{background:'none',border:'none',color:C.lilas,cursor:'pointer',fontSize:'.85rem',lineHeight:1,padding:0}}>›</button>
           </div>
-          <GrilleJoursCA pNum={compareA} color={C.lilas} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote}/>
+          <GrilleJoursCA pNum={compareA} color={C.lilas} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote} setEditCaPerso={setEditCaPerso} setEditRecrues={setEditRecrues}/>
         </div>
         {/* Colonne courante */}
         <div style={{border:`1.5px solid ${C.rose}40`,borderRadius:12,overflow:'hidden'}}>
-          <GrilleJoursCA pNum={pCourante} color={C.rose} courante={true} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote}/>
+          <GrilleJoursCA pNum={pCourante} color={C.rose} courante={true} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote} setEditCaPerso={setEditCaPerso} setEditRecrues={setEditRecrues}/>
         </div>
       </div>
 
@@ -11001,6 +13125,18 @@ export function SuiviCATab({uid}){
             <div style={{flex:1}}>
               <div style={{fontSize:'.6rem',color:C.gris,marginBottom:'.2rem'}}>Objectif (€)</div>
               <input type='number' value={editObj} onChange={e=>setEditObj(e.target.value)} placeholder='0'
+                style={{width:'100%',border:`1px solid ${C.pale}`,borderRadius:8,padding:'.45rem .65rem',fontSize:'.85rem',fontFamily:'inherit',color:C.texte,background:C.creme,outline:'none',fontWeight:700}}/>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:'.5rem',marginBottom:'.6rem'}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:'.6rem',color:C.gris,marginBottom:'.2rem'}}>Ventes perso (€)</div>
+              <input type='number' value={editCaPerso} onChange={e=>setEditCaPerso(e.target.value)} placeholder='0'
+                style={{width:'100%',border:`1px solid ${C.pale}`,borderRadius:8,padding:'.45rem .65rem',fontSize:'.85rem',fontFamily:'inherit',color:C.texte,background:C.creme,outline:'none',fontWeight:700}}/>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:'.6rem',color:C.gris,marginBottom:'.2rem'}}>Recrues</div>
+              <input type='number' value={editRecrues} onChange={e=>setEditRecrues(e.target.value)} placeholder='0'
                 style={{width:'100%',border:`1px solid ${C.pale}`,borderRadius:8,padding:'.45rem .65rem',fontSize:'.85rem',fontFamily:'inherit',color:C.texte,background:C.creme,outline:'none',fontWeight:700}}/>
             </div>
           </div>
@@ -11063,10 +13199,10 @@ export function SuiviCATab({uid}){
               <div style={{borderTop:`1px solid ${C.pale}`,background:C.blanc}}>
                 <div style={{padding:'.5rem .65rem .2rem',background:C.creme,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div style={{fontSize:'.6rem',color:C.gris}}>Clique sur un jour pour saisir ou modifier</div>
-                  <button onClick={()=>{setEditPeriode(num);setEditCA(d3.ca||'');setEditObj(d3.obj||'');setEditNote(d3.note||'');}}
+                  <button onClick={()=>{setEditPeriode(num);setEditCA(d3.ca||'');setEditObj(d3.obj||'');setEditCaPerso(d3.caPerso||'');setEditRecrues(d3.recrues||'');setEditNote(d3.note||'');}}
                     style={{background:C.brun,color:C.blanc,border:'none',borderRadius:6,padding:'.2rem .5rem',fontSize:'.6rem',fontWeight:600,fontFamily:'inherit',cursor:'pointer'}}>✏️ Total & Obj.</button>
                 </div>
-                <GrilleJoursCA pNum={num} color={isCourante?C.rose:C.lilas} courante={isCourante} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote}/>
+                <GrilleJoursCA pNum={num} color={isCourante?C.rose:C.lilas} courante={isCourante} joursEcoules={joursEcoules} data={data} editCell={editCell} editVal={editVal} setEditCell={setEditCell} setEditVal={setEditVal} saveJour={saveJour} setEditPeriode={setEditPeriode} setEditCA={setEditCA} setEditObj={setEditObj} setEditNote={setEditNote} setEditCaPerso={setEditCaPerso} setEditRecrues={setEditRecrues}/>
               </div>
             )}
           </div>
@@ -11135,6 +13271,7 @@ function EspaceChefTab({uid, isChef}){
   const[distrib,setDistrib]=useState([]);
   const[annuaire,setAnnuaire]=useState({});
   const[showMsg,setShowMsg]=useState(false);
+  const[showAnnonceAdmin,setShowAnnonceAdmin]=useState(false);
   const[showMsgsRecus,setShowMsgsRecus]=useState(false);
   const[nbMsgsNonLus,setNbMsgsNonLus]=useState(0);
   const userName=uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ");
@@ -11184,7 +13321,7 @@ function EspaceChefTab({uid, isChef}){
         {section==="membres"&&<MembresTab uid={uid}/>}
         {section==="assiduite"&&<AssiduiteTab uid={uid}/>}
         {section==="suiviformation"&&<SuiviFormationTab uid={uid}/>}
-        {section==="defi"&&<DefisTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={true} isChef={isChef}/>}
+        {section==="defi"&&<DefisTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={true} isChef={isChef} depuisEspaceChef={true}/>}
         {section==="powerhour"&&<PowerHourTab uid={uid} userName={uid.split("-").map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")} canCreate={isChef}/>}
         {section==="distributeurs"&&<DistributeursTab distributeurs={distrib} save={saveDistrib} uid={uid}/>}
         {section==="monequipe"&&<MonEquipeTab uid={uid}/>}
@@ -11199,6 +13336,7 @@ function EspaceChefTab({uid, isChef}){
   return(
     <div>
       {showMsg&&<MessageEquipePopup uid={uid} userName={userName} annuaire={annuaire} onClose={()=>setShowMsg(false)}/>}
+      {showAnnonceAdmin&&<AnnonceAdminPopup uid={uid} onClose={()=>setShowAnnonceAdmin(false)}/>}
       {showMsgsRecus&&<MessagesRecusPopup uid={uid} onClose={()=>{setShowMsgsRecus(false);setNbMsgsNonLus(0);}}/>}
 
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverte(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>
@@ -11229,7 +13367,16 @@ function EspaceChefTab({uid, isChef}){
 
       {/* Mise à jour app */}
       <div style={{marginBottom:"1rem"}}>
-        <BoutonMiseAJour style={{width:"100%",justifyContent:"center"}}/>
+        {isMelissaChef&&(
+        <div style={{marginBottom:"1rem"}}>
+          <button onClick={()=>setShowAnnonceAdmin(true)}
+            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:".4rem",background:"#B8442F",color:C.blanc,border:"none",borderRadius:10,padding:".6rem",fontSize:".76rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            Annonce officielle a toute l equipe
+          </button>
+        </div>
+      )}
+
+      <BoutonMiseAJour style={{width:"100%",justifyContent:"center"}}/>
       </div>
 
       <ResumeSemaineChef annuaire={annuaire}/>
@@ -12987,4 +15134,35 @@ function ReclasserTemoignagesTab(){
 
 // ── DIAGNOSTICS ───────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC BUSINESS (recrutement / ventes / réseaux) ─────────────────────
+
+
+// ── MON UNIVERS TAB ──────────────────────────────────────────────────────────
+export function MonUniversTab({uid}) {
+  const [onglet, setOnglet] = useState('roue');
+  const onglets = [
+    {id:'roue', label:'Equilibre'},
+    {id:'disc', label:'DISC'},
+    {id:'valeurs', label:'Valeurs'},
+    {id:'style', label:'Style'},
+    {id:'dream', label:'Dream Board'},
+  ];
+  return (
+    <div style={{fontFamily:'inherit',padding:'0 0 2rem'}}>
+      <div style={{display:'flex',gap:'.4rem',overflowX:'auto',padding:'.7rem 1rem',background:'white',borderBottom:'1px solid #EDE8E0',position:'sticky',top:0,zIndex:10}}>
+        {onglets.map(function(o){ return (
+          <button key={o.id} onClick={function(){setOnglet(o.id);}}
+            style={{flexShrink:0,padding:'.4rem .85rem',borderRadius:20,border:'none',background:onglet===o.id?'#5A3829':'#EDE8E0',color:onglet===o.id?'white':'#9A8C8C',fontFamily:'inherit',fontSize:'.72rem',fontWeight:onglet===o.id?700:400,cursor:'pointer'}}>
+            {o.label}
+          </button>
+        );})}
+      </div>
+      {onglet==='roue'&&<RoueEquilibre/>}
+      {onglet==='disc'&&<TestDISC/>}
+      {onglet==='valeurs'&&<TestValeurs/>}
+      {onglet==='style'&&<TestStyleEntrepreneur/>}
+      {onglet==='dream'&&<DreamBoardWidget uid={uid}/>}
+    </div>
+  );
+}
+
 export default App;
