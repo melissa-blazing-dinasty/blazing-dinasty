@@ -9063,8 +9063,7 @@ function RappelPeriodePopup({uid, onAller}){
 }
 
 function BandeauChallenge({uid, onOuvrir}){
-  const[actif,setActif]=useState(null);
-  const[autres,setAutres]=useState(0);
+  const[liste,setListe]=useState([]);
   const[tick,setTick]=useState(0);
 
   useEffect(()=>{
@@ -9099,8 +9098,7 @@ function BandeauChallenge({uid, onOuvrir}){
         const avecFin=visibles.filter(c=>c.deadline).sort((a,b)=>a.deadline-b.deadline);
         const sansFin=visibles.filter(c=>!c.deadline);
         const ordonnes=[...avecFin,...sansFin];
-        setActif(ordonnes[0]||null);
-        setAutres(Math.max(0,ordonnes.length-1));
+        setListe(ordonnes.slice(0,3));
       }catch(e){}
     };
     charger();
@@ -9113,56 +9111,58 @@ function BandeauChallenge({uid, onOuvrir}){
     return()=>clearInterval(t);
   },[]);
 
-  if(!actif)return null;
-
-  let reste="";
-  if(actif.deadline){
-    const r=actif.deadline-Date.now();
-    if(r<=0)return null;
-    const j=Math.floor(r/86400000);
-    const h=Math.floor((r%86400000)/3600000);
-    const mn=Math.floor((r%3600000)/60000);
-    if(actif.type==="long"||j>=3) reste="J-"+(j+1);
-    else if(j>0) reste=j+"j "+h+"h";
-    else if(h>0) reste=h+"h "+mn+"min";
-    else reste=mn+"min";
-  }
-
-  const urgent = actif.deadline && (actif.deadline-Date.now())<86400000;
+  if(liste.length===0)return null;
 
   return(
     <>
       <style>{`@keyframes bd-pulse-challenge{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(1.25)}}`}</style>
-      <div onClick={onOuvrir}
-        style={{position:"sticky",top:0,zIndex:150,display:"flex",alignItems:"center",justifyContent:"space-between",gap:".7rem",
-          background:urgent?"linear-gradient(100deg,#C62828,#E63946)":"linear-gradient(100deg,#8B5E00,#B8862A)",
-          boxShadow:"0 2px 10px rgba(0,0,0,.22)",
-          padding:".6rem .85rem",cursor:"pointer",userSelect:"none"}}>
-        <div style={{display:"flex",alignItems:"center",gap:".6rem",minWidth:0,flex:1}}>
-          <span style={{width:9,height:9,borderRadius:"50%",background:"#fff",flexShrink:0,
-            animation:"bd-pulse-challenge 2s ease-in-out infinite",boxShadow:"0 0 8px rgba(255,255,255,.9)"}}/>
-          <div style={{minWidth:0}}>
-            <div style={{fontSize:".8rem",fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.25}}>
-              {"\u{1F3C6}"} {actif.titre}
-              {autres>0&&(
-                <span style={{fontSize:".6rem",fontWeight:600,color:"rgba(255,255,255,.75)",marginLeft:".35rem"}}>+{autres}</span>
-              )}
+      <div style={{position:"sticky",top:0,zIndex:150,display:"flex",flexDirection:"column"}}>
+        {liste.map((c,idx)=>{
+          let reste="";
+          if(c.deadline){
+            const r=c.deadline-Date.now();
+            if(r<=0)return null;
+            const j=Math.floor(r/86400000);
+            const h=Math.floor((r%86400000)/3600000);
+            const mn=Math.floor((r%3600000)/60000);
+            if(c.type==="long"||j>=3) reste="J-"+(j+1);
+            else if(j>0) reste=j+"j "+h+"h";
+            else if(h>0) reste=h+"h "+mn+"min";
+            else reste=mn+"min";
+          }
+          const urgent = c.deadline && (c.deadline-Date.now())<86400000;
+          return(
+            <div key={c.id||idx} onClick={onOuvrir}
+              style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:".7rem",
+                background:urgent?"linear-gradient(100deg,#C62828,#E63946)":"linear-gradient(100deg,#8B5E00,#B8862A)",
+                boxShadow:"0 2px 10px rgba(0,0,0,.22)",
+                padding:".5rem .85rem",cursor:"pointer",userSelect:"none",
+                borderTop:idx>0?"1px solid rgba(255,255,255,.25)":"none"}}>
+              <div style={{display:"flex",alignItems:"center",gap:".6rem",minWidth:0,flex:1}}>
+                <span style={{width:9,height:9,borderRadius:"50%",background:"#fff",flexShrink:0,
+                  animation:"bd-pulse-challenge 2s ease-in-out infinite",boxShadow:"0 0 8px rgba(255,255,255,.9)"}}/>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:".8rem",fontWeight:700,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.25}}>
+                    {"\u{1F3C6}"} {c.titre}
+                  </div>
+                  <div style={{fontSize:".62rem",color:"rgba(255,255,255,.85)",lineHeight:1.3}}>
+                    {urgent?"Derniers moments \u2014 clique pour participer":"Challenge en cours \u2014 clique pour participer"}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:".45rem",flexShrink:0}}>
+                {reste&&(
+                  <span style={{fontSize:".72rem",fontWeight:700,color:"#fff",whiteSpace:"nowrap",
+                    background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",
+                    borderRadius:20,padding:".18rem .5rem"}}>
+                    {reste}
+                  </span>
+                )}
+                <span style={{color:"rgba(255,255,255,.8)",fontSize:".85rem",fontWeight:700}}>{"\u203A"}</span>
+              </div>
             </div>
-            <div style={{fontSize:".62rem",color:"rgba(255,255,255,.85)",lineHeight:1.3}}>
-              {urgent?"Derniers moments \u2014 clique pour participer":"Challenge en cours \u2014 clique pour participer"}
-            </div>
-          </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:".45rem",flexShrink:0}}>
-          {reste&&(
-            <span style={{fontSize:".72rem",fontWeight:700,color:"#fff",whiteSpace:"nowrap",
-              background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",
-              borderRadius:20,padding:".18rem .5rem"}}>
-              {reste}
-            </span>
-          )}
-          <span style={{color:"rgba(255,255,255,.8)",fontSize:".85rem",fontWeight:700}}>{"\u203A"}</span>
-        </div>
+          );
+        })}
       </div>
     </>
   );
