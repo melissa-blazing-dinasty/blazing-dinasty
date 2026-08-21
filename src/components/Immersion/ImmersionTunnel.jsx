@@ -99,12 +99,66 @@ const defaultData = {
       ],
     },
     {
+      titre: "Fast Start — 7 jours",
+      texte: "Un programme progressif pour bien démarrer, jour après jour.",
+      details: [
+        "7 modules : bienvenue, produits, ton histoire, premiers contacts, présentation, ventes, équipe",
+        "Une nouvelle étape débloquée chaque jour",
+        "Ta marraine suit ta progression et t'accompagne en direct",
+      ],
+    },
+    {
+      titre: "Diagnostics Produits IA",
+      texte: "Une intelligence artificielle qui crée une routine sur mesure pour chaque cliente.",
+      details: [
+        "5 questions, 2 minutes, résultat instantané",
+        "Génère une vraie ordonnance produit personnalisée",
+        "Renforce ton rôle de conseillère, pas de vendeuse",
+      ],
+    },
+    {
+      titre: "Éditorial IA",
+      texte: "Un planning de contenu automatique, jamais à court d'idées.",
+      details: [
+        "2 posts et 3 stories générés chaque jour",
+        "Hooks, légendes et thèmes prêts à personnaliser",
+        "Planning structuré sur 4 semaines",
+      ],
+    },
+    {
       titre: "La Roue de l'Équilibre",
       texte: "Un outil pour faire le point sur toi, avant de foncer.",
       details: [
         "Un diagnostic visuel de ton équilibre de vie actuel",
         "Sert de point de départ avant de se lancer dans le projet",
         "Disponible directement dans ton espace Mon Univers",
+      ],
+    },
+    {
+      titre: "Dream Board",
+      texte: "Visualise tes objectifs pour les rendre concrets.",
+      details: [
+        "Un tableau de vision personnalisable",
+        "Relie tes objectifs perso à ton activité",
+        "Un rappel visuel de pourquoi tu as commencé",
+      ],
+    },
+    {
+      titre: "Carte de fidélité",
+      texte: "Un système de récompenses pour fidéliser tes clientes sans effort.",
+      details: [
+        "Chaque commande rapproche la cliente d'un cadeau",
+        "Suivi automatique, rien à calculer",
+        "Renforce la relation sur le long terme",
+      ],
+    },
+    {
+      titre: "Communauté & entraide",
+      texte: "Une équipe qui avance ensemble, jamais seule.",
+      details: [
+        "Challenges, défis et animations régulières",
+        "Un espace pour poser tes questions à tout moment",
+        "Des formations continues sur la vente et le recrutement",
       ],
     },
   ],

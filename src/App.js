@@ -4187,7 +4187,7 @@ function App(){
           <>
             <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverteImmersion(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>{"\uD83E\uDDED D\u00e9couverte"}</button></div>
             {showDecouverteImmersion&&<DecouverteTour outil="immersion" onClose={()=>setShowDecouverteImmersion(false)}/>}
-            <ImmersionConfigTab uid={userId} db={db} isChef={isChefApp}/>
+            <ImmersionConfigTab uid={userId} db={db} isChef={name.toLowerCase().startsWith("melissa")}/>
           </>
         )}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
