@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { doc, getDoc, setDoc, collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, query, where, getDocs, orderBy, updateDoc, deleteDoc } from "firebase/firestore";
 import TemoignagesEspace from "./TemoignagesEspace";
 
 /**
@@ -165,6 +165,10 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
   const [savingChoix, setSavingChoix] = useState(false);
   const [savedChoix, setSavedChoix] = useState(false);
 
+  const [enAttente, setEnAttente] = useState([]);
+  const [loadingAttente, setLoadingAttente] = useState(false);
+  const [traitementId, setTraitementId] = useState(null);
+
   const [communContenu, setCommunContenu] = useState({ outils: [] });
   const [savingCommun, setSavingCommun] = useState(false);
   const [savedCommun, setSavedCommun] = useState(false);
@@ -241,6 +245,45 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
     return acc;
   }, {});
 
+  useEffect(() => {
+    if (!isChef) return;
+    setLoadingAttente(true);
+    (async () => {
+      try {
+        const q = query(collection(db, "temoignages"), where("valide", "==", false));
+        const snap = await getDocs(q);
+        const liste = [];
+        snap.forEach((d) => liste.push({ id: d.id, ...d.data() }));
+        setEnAttente(liste);
+      } catch (e) {
+        console.error("Erreur chargement temoignages en attente", e);
+      }
+      setLoadingAttente(false);
+    })();
+  }, [isChef, sousOnglet]);
+
+  const validerTemoignage = async (id) => {
+    setTraitementId(id);
+    try {
+      await updateDoc(doc(db, "temoignages", id), { valide: true });
+      setEnAttente((liste) => liste.filter((t) => t.id !== id));
+    } catch (e) {
+      console.error("Erreur validation temoignage", e);
+    }
+    setTraitementId(null);
+  };
+
+  const supprimerTemoignage = async (id) => {
+    setTraitementId(id);
+    try {
+      await deleteDoc(doc(db, "temoignages", id));
+      setEnAttente((liste) => liste.filter((t) => t.id !== id));
+    } catch (e) {
+      console.error("Erreur suppression temoignage", e);
+    }
+    setTraitementId(null);
+  };
+
   const sauvegarder = async () => {
     setSaving(true);
     try {
@@ -307,6 +350,11 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
         <button onClick={() => setSousOnglet("choix")} style={btnOnglet(sousOnglet === "choix")}>
           Choisir mes témoignages
         </button>
+        {isChef && (
+          <button onClick={() => setSousOnglet("valider")} style={btnOnglet(sousOnglet === "valider")}>
+            Valider les témoignages{enAttente.length > 0 ? ` (${enAttente.length})` : ""}
+          </button>
+        )}
         {isChef && (
           <button onClick={() => setSousOnglet("commun")} style={btnOnglet(sousOnglet === "commun")}>
             Contenu commun
@@ -412,6 +460,56 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
             </button>
           )}
           {savedChoix && <p style={{ color: "#16a34a", fontSize: 13.5, textAlign: "center", marginTop: 10 }}>Enregistré ✓</p>}
+        </>
+      )}
+
+      {sousOnglet === "valider" && isChef && (
+        <>
+          <p style={{ fontSize: 13.5, opacity: 0.7, marginBottom: 20, lineHeight: 1.5 }}>
+            Ces témoignages ont été soumis par l'équipe et attendent ta validation avant d'apparaître dans les pages d'immersion.
+          </p>
+          {loadingAttente && <p style={{ fontSize: 13.5, opacity: 0.6 }}>Chargement…</p>}
+          {!loadingAttente && enAttente.length === 0 && (
+            <p style={{ fontSize: 13.5, opacity: 0.6 }}>Aucun témoignage en attente pour le moment.</p>
+          )}
+          {enAttente.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                borderRadius: 14,
+                padding: 16,
+                marginBottom: 12,
+                border: "1px solid rgba(0,0,0,0.1)",
+              }}
+            >
+              <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: COLORS.or, marginBottom: 6, fontWeight: 700 }}>
+                {t.profil} · {t.nom}
+              </div>
+              {t.texte && <div style={{ fontSize: 14, lineHeight: 1.5, marginBottom: 10 }}>{t.texte}</div>}
+              {t.media?.url && (
+                <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 10 }}>
+                  {t.media.type === "photo" ? "📷" : "🎥"} {t.media.url}
+                  {t.media.caption && <div style={{ marginTop: 4 }}>{t.media.caption}</div>}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  disabled={traitementId === t.id}
+                  onClick={() => validerTemoignage(t.id)}
+                  style={{ flex: 1, padding: "8px 12px", borderRadius: 999, border: "none", background: "#16a34a", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >
+                  {traitementId === t.id ? "…" : "Valider"}
+                </button>
+                <button
+                  disabled={traitementId === t.id}
+                  onClick={() => supprimerTemoignage(t.id)}
+                  style={{ flex: 1, padding: "8px 12px", borderRadius: 999, border: "1px solid #dc2626", background: "none", color: "#dc2626", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          ))}
         </>
       )}
 
