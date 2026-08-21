@@ -153,14 +153,37 @@ const contenuVide = {
   temoignagesSelectionnes: [],
 };
 
-export default function ImmersionConfigTab({ uid, db, isChef }) {
+export default function ImmersionConfigTab({ uid, db, isChef, statsTrigger }) {
   const [sousOnglet, setSousOnglet] = useState("contenu"); // contenu | temoignage | choix | commun
   const [contenu, setContenu] = useState(contenuVide);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const [stats, setStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  useEffect(() => {
+    if (statsTrigger) setSousOnglet("stats");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statsTrigger]);
+
   const [poolTemoignages, setPoolTemoignages] = useState([]);
+
+  useEffect(() => {
+    if (sousOnglet !== "stats") return;
+    setLoadingStats(true);
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "immersion_stats", uid));
+        setStats(snap.exists() ? snap.data() : {});
+      } catch (e) {
+        console.error("Erreur chargement stats immersion", e);
+        setStats({});
+      }
+      setLoadingStats(false);
+    })();
+  }, [sousOnglet, uid]);
   const [loadingPool, setLoadingPool] = useState(false);
   const [savingChoix, setSavingChoix] = useState(false);
   const [savedChoix, setSavedChoix] = useState(false);
@@ -535,6 +558,63 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
               </div>
             </div>
           ))}
+        </>
+      )}
+
+      {sousOnglet === "stats" && (
+        <>
+          <p style={{ fontSize: 13.5, opacity: 0.7, marginBottom: 20, lineHeight: 1.5 }}>
+            Le nombre de fois où chaque étape de ta page a été vue, et les clics sur tes liens clés.
+          </p>
+          {loadingStats && <p style={{ fontSize: 13.5, opacity: 0.6 }}>Chargement…</p>}
+          {!loadingStats && stats && (
+            <>
+              <div style={{ marginBottom: 24 }}>
+                {[
+                  { key: "accroche", label: "Accroche" },
+                  { key: "avant", label: "Le Avant" },
+                  { key: "bascule", label: "La bascule" },
+                  { key: "journee", label: "Journée type" },
+                  { key: "coulisses", label: "Les coulisses" },
+                  { key: "temoignages", label: "Témoignages" },
+                  { key: "resultat", label: "Étape finale" },
+                ].map((etape, i, arr) => {
+                  const val = stats[etape.key] || 0;
+                  const premier = stats[arr[0].key] || 0;
+                  const pct = premier > 0 ? Math.round((val / premier) * 100) : 0;
+                  return (
+                    <div key={etape.key} style={{ marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 4 }}>
+                        <span>{etape.label}</span>
+                        <span style={{ fontWeight: 700 }}>{val}{i > 0 && premier > 0 ? ` (${pct}%)` : ""}</span>
+                      </div>
+                      <div style={{ height: 8, background: "rgba(0,0,0,0.08)", borderRadius: 6, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: COLORS.or, borderRadius: 6 }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 130, borderRadius: 14, padding: 16, background: "rgba(201,165,92,0.08)", textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.or }}>{stats.clic_diagnostic || 0}</div>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>Clics sur "Diagnostic"</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 130, borderRadius: 14, padding: 16, background: "rgba(201,165,92,0.08)", textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.or }}>{stats.clic_inscription || 0}</div>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>Clics sur "Inscription"</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 130, borderRadius: 14, padding: 16, background: "rgba(201,165,92,0.08)", textAlign: "center" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.or }}>{stats.lead_soumis || 0}</div>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>Coordonnées reçues</div>
+                </div>
+              </div>
+            </>
+          )}
+          {!loadingStats && stats && Object.keys(stats).length === 0 && (
+            <p style={{ fontSize: 13.5, opacity: 0.6 }}>Aucune visite enregistrée pour le moment. Partage ton lien pour commencer à voir des chiffres ici !</p>
+          )}
         </>
       )}
 

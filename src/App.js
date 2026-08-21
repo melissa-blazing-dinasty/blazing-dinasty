@@ -1,6 +1,6 @@
 ﻿import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion, addDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion, addDoc, increment } from "firebase/firestore";
 import ImmersionTunnel from "./components/Immersion/ImmersionTunnel";
 import ImmersionConfigTab from "./components/Immersion/ImmersionConfigTab";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -2321,6 +2321,7 @@ function App(){
   const immersionScore = urlParams.get("score") ? Number(urlParams.get("score")) : null;
   const [immersionData, setImmersionData] = useState(null);
   const [showDecouverteImmersion, setShowDecouverteImmersion] = useState(false);
+  const [statsImmersionTrigger, setStatsImmersionTrigger] = useState(0);
   useEffect(()=>{
     if(!immersionMode) return;
     (async()=>{
@@ -2396,6 +2397,11 @@ function App(){
             await addDoc(collection(db,"leads"), {...lead, score:immersionScore, distributriceId: immersionUid, source:"immersion", creeLe: new Date().toISOString()});
           }catch(e){ console.error("Erreur envoi lead", e); }
         }}
+          onTrack={async (evt)=>{
+            try{
+              await setDoc(doc(db,"immersion_stats", immersionUid||"anonyme"), { [evt]: increment(1), derniereActivite: new Date().toISOString() }, {merge:true});
+            }catch(e){ console.error("Erreur tracking immersion", e); }
+          }}
       />
     );
   }
@@ -4185,9 +4191,9 @@ function App(){
         {tab==="boiteaoutils"&&outilsSousOnglet==="monunivers"&&<MonUniversTab uid={userId}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="immersion"&&(
           <>
-            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:".5rem"}}><button onClick={()=>setShowDecouverteImmersion(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>{"\uD83E\uDDED D\u00e9couverte"}</button></div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:".5rem",marginBottom:".5rem"}}><button onClick={()=>setStatsImmersionTrigger(t=>t+1)} style={{background:"#8B5E00",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(139,94,0,.4)"}}>{"\uD83D\uDCCA Statistiques"}</button><button onClick={()=>setShowDecouverteImmersion(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>{"\uD83E\uDDED D\u00e9couverte"}</button></div>
             {showDecouverteImmersion&&<DecouverteTour outil="immersion" onClose={()=>setShowDecouverteImmersion(false)}/>}
-            <ImmersionConfigTab uid={userId} db={db} isChef={name.toLowerCase().startsWith("melissa")}/>
+            <ImmersionConfigTab uid={userId} db={db} isChef={name.toLowerCase().startsWith("melissa")} statsTrigger={statsImmersionTrigger}/>
           </>
         )}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}

@@ -270,7 +270,6 @@ function Eyebrow({ children }) {
 }
 
 function PrimaryButton({ children, onClick, href, style = {} }) {
-  const props = href ? { as: "a", href, target: "_blank", rel: "noreferrer" } : {};
   const commonStyle = {
     fontFamily: "'DM Sans', sans-serif",
     fontWeight: 700,
@@ -291,7 +290,7 @@ function PrimaryButton({ children, onClick, href, style = {} }) {
   };
   if (href) {
     return (
-      <a href={href} target="_blank" rel="noreferrer" style={commonStyle}>
+      <a href={href} target="_blank" rel="noreferrer" onClick={onClick} style={commonStyle}>
         {children}
       </a>
     );
@@ -304,10 +303,16 @@ function PrimaryButton({ children, onClick, href, style = {} }) {
 }
 
 // ---------- Composant principal ----------
-export default function ImmersionTunnel({ data, score: scoreProp, onLeadSubmit }) {
+export default function ImmersionTunnel({ data, score: scoreProp, onLeadSubmit, onTrack }) {
   const d = { ...defaultData, ...(data || {}) };
   const TOTAL_STEPS = 7;
   const [step, setStep] = useState(0);
+
+  const STEP_NAMES = ["accroche", "avant", "bascule", "journee", "coulisses", "temoignages", "resultat"];
+  useEffect(() => {
+    onTrack && onTrack(STEP_NAMES[step]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const [checked, setChecked] = useState({});
   const avantOptions = [
@@ -344,6 +349,7 @@ export default function ImmersionTunnel({ data, score: scoreProp, onLeadSubmit }
   const [leadEnvoye, setLeadEnvoye] = useState(false);
   const soumettreLead = () => {
     onLeadSubmit && onLeadSubmit(lead);
+    onTrack && onTrack("lead_soumis");
     setLeadEnvoye(true);
   };
 
@@ -662,7 +668,7 @@ export default function ImmersionTunnel({ data, score: scoreProp, onLeadSubmit }
                 <p style={{ opacity: 0.75, marginBottom: 32, lineHeight: 1.6 }}>
                   Réponds à quelques questions pour le savoir vraiment — ça prend deux minutes.
                 </p>
-                <PrimaryButton href={`${d.lienDiagnostic}?ref=immersion`}>
+                <PrimaryButton href={`${d.lienDiagnostic}?ref=immersion`} onClick={() => onTrack && onTrack("clic_diagnostic")}>
                   <Compass size={16} /> Je fais le diagnostic
                 </PrimaryButton>
               </>
@@ -676,7 +682,7 @@ export default function ImmersionTunnel({ data, score: scoreProp, onLeadSubmit }
                 <p style={{ opacity: 0.75, marginBottom: 32, lineHeight: 1.6 }}>
                   Tu viens de vivre un aperçu de ce que peut être ton quotidien avec {d.prenom} et son équipe. La suite, c'est maintenant.
                 </p>
-                <PrimaryButton href={d.lienInscription}>
+                <PrimaryButton href={d.lienInscription} onClick={() => onTrack && onTrack("clic_inscription")}>
                   <Users size={16} /> Je m'inscris
                 </PrimaryButton>
               </>
