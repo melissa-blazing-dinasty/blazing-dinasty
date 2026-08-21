@@ -336,6 +336,14 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
 
   const lienPreview = `${window.location.origin}/?immersion=${uid}`;
 
+  const [copieLien, setCopieLien] = useState(false);
+  const copierLien = () => {
+    navigator.clipboard.writeText(lienPreview).then(() => {
+      setCopieLien(true);
+      setTimeout(() => setCopieLien(false), 2000);
+    });
+  };
+
   if (loading) return <div style={{ padding: 24, textAlign: "center" }}>Chargement...</div>;
 
   return (
@@ -368,6 +376,27 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
             Ce contenu alimente ta page d'immersion personnelle, à partager avec tes prospects.
           </p>
 
+          <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: COLORS.brun, marginBottom: 6 }}>
+            Ton lien à partager avec tes prospects
+          </label>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <input
+              readOnly
+              value={lienPreview}
+              onFocus={(e) => e.target.select()}
+              style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 13, fontFamily: "inherit", background: "#f7f3ec" }}
+            />
+            <button
+              onClick={copierLien}
+              style={{ padding: "10px 16px", borderRadius: 10, border: "none", background: copieLien ? "#16a34a" : COLORS.or, color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              {copieLien ? "Copié ✓" : "Copier"}
+            </button>
+          </div>
+          <a href={lienPreview} target="_blank" rel="noreferrer" id="decouverte-immersion-preview" style={{ display: "block", fontSize: 13, color: COLORS.or, fontWeight: 700, textDecoration: "none", marginBottom: 24 }}>
+            Voir ma page d'immersion →
+          </a>
+
           <Champ label="Ton prénom" value={contenu.prenom} onChange={(v) => setContenu({ ...contenu, prenom: v })} />
           <Champ label="Accroche (1ère phrase)" value={contenu.accroche} onChange={(v) => setContenu({ ...contenu, accroche: v })} textarea placeholder="Et si ta vie ressemblait enfin à ce que tu mérites ?" />
           <Champ label="Le Avant (identification)" value={contenu.avantTexte} onChange={(v) => setContenu({ ...contenu, avantTexte: v })} textarea placeholder="Il y a eu un temps où je me sentais invisible…" />
@@ -398,10 +427,6 @@ export default function ImmersionConfigTab({ uid, db, isChef }) {
             {saving ? "Enregistrement…" : "Enregistrer"}
           </button>
           {saved && <p style={{ color: "#16a34a", fontSize: 13.5, textAlign: "center", marginBottom: 16 }}>Enregistré ✓</p>}
-
-          <a href={lienPreview} target="_blank" rel="noreferrer" id="decouverte-immersion-preview" style={{ display: "block", textAlign: "center", fontSize: 13.5, color: COLORS.or, fontWeight: 700, textDecoration: "none" }}>
-            Voir ma page d'immersion →
-          </a>
         </>
       )}
 
