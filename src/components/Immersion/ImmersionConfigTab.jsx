@@ -153,7 +153,7 @@ const contenuVide = {
   temoignagesSelectionnes: [],
 };
 
-export default function ImmersionConfigTab({ uid, db, isChef, statsTrigger }) {
+export default function ImmersionConfigTab({ uid, db, isChef, statsTrigger, userName }) {
   const [sousOnglet, setSousOnglet] = useState("contenu"); // contenu | temoignage | choix | commun
   const [contenu, setContenu] = useState(contenuVide);
   const [loading, setLoading] = useState(true);
@@ -200,7 +200,12 @@ export default function ImmersionConfigTab({ uid, db, isChef, statsTrigger }) {
     (async () => {
       try {
         const snap = await getDoc(doc(db, "immersion", uid));
-        if (snap.exists()) setContenu({ ...contenuVide, ...snap.data() });
+        if (snap.exists()) {
+          const data = snap.data();
+          setContenu({ ...contenuVide, ...data, prenom: data.prenom || userName || "" });
+        } else {
+          setContenu({ ...contenuVide, prenom: userName || "" });
+        }
       } catch (e) {
         console.error("Erreur chargement immersion", e);
       }
@@ -226,7 +231,7 @@ export default function ImmersionConfigTab({ uid, db, isChef, statsTrigger }) {
   }, [isChef]);
 
   useEffect(() => {
-    if (sousOnglet !== "choix" || poolTemoignages.length > 0) return;
+    if ((sousOnglet !== "choix" && sousOnglet !== "banque") || poolTemoignages.length > 0) return;
     setLoadingPool(true);
     (async () => {
       try {
@@ -378,6 +383,9 @@ export default function ImmersionConfigTab({ uid, db, isChef, statsTrigger }) {
         <button onClick={() => setSousOnglet("temoignage")} style={btnOnglet(sousOnglet === "temoignage")}>
           Mon témoignage
         </button>
+        <button onClick={() => setSousOnglet("banque")} style={btnOnglet(sousOnglet === "banque")}>
+          Banque de témoignages
+        </button>
         <button onClick={() => setSousOnglet("choix")} style={btnOnglet(sousOnglet === "choix")}>
           Choisir mes témoignages
         </button>
@@ -454,7 +462,52 @@ export default function ImmersionConfigTab({ uid, db, isChef, statsTrigger }) {
       )}
 
       {sousOnglet === "temoignage" && (
-        <TemoignagesEspace distributriceId={uid} distributriceNom={contenu.prenom} db={db} />
+        <TemoignagesEspace distributriceId={uid} distributriceNom={contenu.prenom || userName} db={db} />
+      )}
+
+      {sousOnglet === "banque" && (
+        <>
+          <p style={{ fontSize: 13.5, opacity: 0.7, marginBottom: 20, lineHeight: 1.5 }}>
+            Tous les témoignages validés de l'équipe, classés par catégorie. De quoi t'inspirer, ou simplement voir le travail de toutes.
+          </p>
+          {loadingPool && <p style={{ fontSize: 13.5, opacity: 0.6 }}>Chargement…</p>}
+          {!loadingPool && poolTemoignages.length === 0 && (
+            <p style={{ fontSize: 13.5, opacity: 0.6 }}>Aucun témoignage validé pour le moment.</p>
+          )}
+          {Object.entries(poolParCategorie).map(([cat, liste]) => (
+            <div key={cat} style={{ marginBottom: 26 }}>
+              <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, color: COLORS.or, marginBottom: 10 }}>
+                {cat}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {liste.map((t) => (
+                  <div
+                    key={t.id}
+                    style={{
+                      borderRadius: 16,
+                      overflow: "hidden",
+                      border: "1px solid rgba(0,0,0,0.1)",
+                      background: "#fff",
+                    }}
+                  >
+                    {t.media?.type === "photo" && t.media?.url && (
+                      <img src={t.media.url} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "cover", display: "block" }} />
+                    )}
+                    {t.media?.type === "video" && t.media?.url && (
+                      <video src={t.media.url} controls style={{ width: "100%", maxHeight: 260, display: "block" }} />
+                    )}
+                    <div style={{ padding: 14 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>{t.nom}</div>
+                      {(t.media?.caption || t.texte) && (
+                        <div style={{ fontSize: 13.5, lineHeight: 1.5, opacity: 0.85 }}>{t.media?.caption || t.texte}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
       )}
 
       {sousOnglet === "choix" && (

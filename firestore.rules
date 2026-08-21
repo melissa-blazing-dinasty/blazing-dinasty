@@ -93,11 +93,12 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == docId;
     }
     // TÉMOIGNAGES : dépôt libre par l'équipe, lecture publique des seuls témoignages validés
-    match /temoignages/{docId} {
-      allow read: if resource.data.valide == true;
-      allow create: if true;
-      allow update, delete: if request.auth != null;
-    }
+   match /temoignages/{docId} {
+  allow read: if resource.data.valide == true;
+  allow create: if true;
+  allow update, delete: if request.auth != null
+    && (request.auth.uid == resource.data.distributriceId || request.auth.uid == 'melissa-da-silveira');
+}
     // LEADS IMMERSION : dépôt libre (formulaire de coordonnées), lecture réservée
     match /leads/{docId} {
       allow create: if true;
