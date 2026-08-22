@@ -14067,49 +14067,50 @@ function AdminConfigPeriodes(){
           Remet le CA et les recrues à 0 pour <strong>tous les membres</strong> (sans effacer le cumul ni l'historique). À utiliser au changement de période/campagne.
         </p>
         {resetGlobalResult&&<div style={{fontSize:".7rem",color:resetGlobalResult.startsWith("✅")?C.vert:"#B04040",marginBottom:".4rem"}}>{resetGlobalResult}</div>}
-        <button onClick={async()=>{
-          if(!window.confirm("Remettre CA et recrues à 0 pour TOUTE l'équipe ? Cette action est irréversible."))return;
-          setResetGlobalSaving(true);setResetGlobalResult("");
-          try{
-            const annRef=doc(db,"equipe","annuaire");
-            const annSnap=await getDoc(annRef);
-            if(!annSnap.exists()){setResetGlobalResult("❌ Annuaire introuvable.");setResetGlobalSaving(false);return;}
-            const membres2=annSnap.data().membres||{};
-            const uids=Object.keys(membres2);
-            let ok=0,err=0;
-            // Reset annuaire en une fois
-            const newMembres={};
-            uids.forEach(u=>{newMembres[u]={...membres2[u],ca:"",caPerso:"",recruesReal:"0"};});
-            await setDoc(annRef,{membres:newMembres},{merge:true});
-            // Reset objectifs individuels
-            for(const uid2 of uids){
-              try{
-                const uSnap=await getDoc(doc(db,"users",uid2));
-                if(uSnap.exists()){
-                  const d2=uSnap.data();
-                  if(d2["db-obj-perso"]){
-                    const obj2=JSON.parse(d2["db-obj-perso"]);
-                    const periode2=getPeriodeActuelle();
-                    // Sauvegarder dans historique avant reset
-                    const hist2=obj2.historique||[];
-                    if(obj2.ca||obj2.caPerso||obj2.recruesReal!=="0"){
-                      hist2.push({date:todayLocalStr(),ca:+obj2.ca||0,caPerso:+obj2.caPerso||0,recruesReal:+obj2.recruesReal||0,palier:obj2.palier||"2%"});
+          <button onClick={async()=>{
+            if(!window.confirm("Remettre CA et recrues a 0 pour TOUTE l equipe ? Cette action est irreversible. Les membres deja repassees en nouvelle periode seront ignorees automatiquement."))return;
+            setResetGlobalSaving(true);setResetGlobalResult("");
+            try{
+              const annRef=doc(db,"equipe","annuaire");
+              const annSnap=await getDoc(annRef);
+              if(!annSnap.exists()){setResetGlobalResult("Erreur : Annuaire introuvable.");setResetGlobalSaving(false);return;}
+              const membres2=annSnap.data().membres||{};
+              const uids=Object.keys(membres2);
+              const periodeCourante=getPeriodeActuelle();
+              let ok=0,err=0,ignorees=0;
+              const newMembres={...membres2};
+              for(const uid2 of uids){
+                try{
+                  const uSnap=await getDoc(doc(db,"users",uid2));
+                  if(uSnap.exists()){
+                    const d2=uSnap.data();
+                    if(d2["last_periode"]===periodeCourante){
+                      ignorees++;
+                      continue;
                     }
-                    const totalCaCumul=(+obj2.totalCaCumul||0)+(+obj2.ca||0);
-                    const totalRecruesCumul=(+obj2.totalRecruesCumul||0)+(+obj2.recruesReal||0);
-                    const nextObj2={...obj2,ca:"",caPerso:"",caEquipe:"",recruesReal:"0",nbDirecteurs:0,caDirecteurs:{},dirSelectionnes:{},historique:hist2.slice(-24),totalCaCumul:String(totalCaCumul),totalRecruesCumul:String(totalRecruesCumul)};
-                    await setDoc(doc(db,"users",uid2),{"db-obj-perso":JSON.stringify(nextObj2),"last_periode":periode2},{merge:true});
-                  } else {
-                    await setDoc(doc(db,"users",uid2),{"last_periode":getPeriodeActuelle()},{merge:true});
+                    if(d2["db-obj-perso"]){
+                      const obj2=JSON.parse(d2["db-obj-perso"]);
+                      const hist2=obj2.historique||[];
+                      if(obj2.ca||obj2.caPerso||obj2.recruesReal!=="0"){
+                        hist2.push({date:todayLocalStr(),periode:periodeCourante-1,ca:+obj2.ca||0,caPerso:+obj2.caPerso||0,recruesReal:+obj2.recruesReal||0,palier:obj2.palier||"2%"});
+                      }
+                      const totalCaCumul=(+obj2.totalCaCumul||0)+(+obj2.ca||0);
+                      const totalRecruesCumul=(+obj2.totalRecruesCumul||0)+(+obj2.recruesReal||0);
+                      const nextObj2={...obj2,ca:"",caPerso:"",caEquipe:"",recruesReal:"0",nbDirecteurs:0,caDirecteurs:{},dirSelectionnes:{},historique:hist2.slice(-24),totalCaCumul:String(totalCaCumul),totalRecruesCumul:String(totalRecruesCumul)};
+                      await setDoc(doc(db,"users",uid2),{"db-obj-perso":JSON.stringify(nextObj2),"last_periode":periodeCourante},{merge:true});
+                      newMembres[uid2]={...membres2[uid2],ca:"",caPerso:"",recruesReal:"0"};
+                    } else {
+                      await setDoc(doc(db,"users",uid2),{"last_periode":periodeCourante},{merge:true});
+                    }
+                    ok++;
                   }
-                  ok++;
-                }
-              }catch{err++;}
-            }
-            setResetGlobalResult(`✅ ${ok} membres remis à zéro${err>0?` (${err} erreurs)`:""}. Annuaire mis à jour.`);
-          }catch(e){setResetGlobalResult("Erreur : "+e.message);}
-          setResetGlobalSaving(false);
-        }} disabled={resetGlobalSaving}
+                }catch{err++;}
+              }
+              await setDoc(annRef,{membres:newMembres},{merge:true});
+              setResetGlobalResult(`OK : ${ok} membres remis a zero, ${ignorees} deja a jour ignorees${err>0?` (${err} erreurs)`:""}.`);
+            }catch(e){setResetGlobalResult("Erreur : "+e.message);}
+            setResetGlobalSaving(false);
+          }} disabled={resetGlobalSaving}
           style={{width:"100%",background:resetGlobalSaving?"#aaa":"#C0392B",color:"white",border:"none",borderRadius:8,padding:".5rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:resetGlobalSaving?"default":"pointer"}}>
           {resetGlobalSaving?"Remise à zéro en cours...":"🔄 Remettre toute l'équipe à zéro"}
         </button>
