@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
@@ -33,7 +33,7 @@ function LinkBioTab({uid, userName, initialSection="theme"}){
     bannierePersoBg:"",bannierePersoTexte:"",bannierePersoLien:"",bannierePersoActif:false,ebooksIds:[],
     parcoursPhotos:[],parcoursTexte1:"",parcoursTexte2:"",parcoursTexte3:"",parcoursProduits:[],
     reseauxFacebook:"",reseauxInstagram:"",reseauxTiktok:"",reseauxYoutube:"",
-    boutiqueActive:false,boutiquePresentation:"",bestSellers:[],packsPersonnalises:[],livraisonGratuite:false,
+    boutiqueActive:false,boutiquePresentation:"",bestSellers:[],packsPersonnalises:[],livraisonGratuite:false,  smartCostActif:false,smartCostMode:"commune",smartCostTexte:"",
   });
   const[banniereGlobale,setBanniereGlobale]=useState(null);
   const[saving,setSaving]=useState(false);
@@ -147,7 +147,7 @@ function LinkBioTab({uid, userName, initialSection="theme"}){
 
   const SECTIONS=[
     {id:"theme",icon:"🎨",label:"Thème"},
-    {id:"profil",icon:"✨",label:"Profil"},
+    {id:"profil",icon:"✨",label:"Profil"},{id:"smartcost",icon:"💎",label:"Smart Cost"},
     {id:"liens",icon:"🔗",label:"Liens"},
     {id:"photos",icon:"💬",label:"Retours clients"},{id:"parcours",icon:"🌟",label:"Mon Parcours"},{id:"reseaux",icon:"📱",label:"Reseaux"},
     {id:"ebooks",icon:"📚",label:"Ebooks"},{id:"banniere",icon:"📢",label:"Bannière"},{id:"boutique",icon:"🛍️",label:"Boutique"},
@@ -333,6 +333,78 @@ function LinkBioTab({uid, userName, initialSection="theme"}){
           <Preview/>
         </div>
       )}
+          {/* SECTION SMART COST */}
+          {/* SECTION SMART COST */}
+          {activeSection==="smartcost"&&(
+            <div>
+              <div style={{background:`linear-gradient(135deg,${C.brun},${C.brun2})`,borderRadius:14,padding:"1.1rem",marginBottom:"1rem",color:"white"}}>
+                <div style={{fontSize:"1rem",fontWeight:700,marginBottom:".25rem"}}>{"\uD83D\uDC8E Smart Cost"}</div>
+                <div style={{fontSize:".72rem",opacity:.85,lineHeight:1.5}}>Consommer mieux, depenser moins. Une vraie philosophie a partager avec tes clientes, si tu le souhaites.</div>
+              </div>
+
+              <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>Veux-tu en parler sur ta page ?</div>
+              <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
+                <button onClick={()=>setProfil(p=>({...p,smartCostActif:true}))}
+                  style={{flex:1,padding:".6rem",borderRadius:10,border:`2px solid ${profil.smartCostActif?C.rose:C.pale}`,background:profil.smartCostActif?C.rose:C.blanc,color:profil.smartCostActif?"white":C.gris,fontWeight:700,fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
+                  {"\u2705"} Oui
+                </button>
+                <button onClick={()=>setProfil(p=>({...p,smartCostActif:false}))}
+                  style={{flex:1,padding:".6rem",borderRadius:10,border:`2px solid ${!profil.smartCostActif?C.rose:C.pale}`,background:!profil.smartCostActif?C.rose:C.blanc,color:!profil.smartCostActif?"white":C.gris,fontWeight:700,fontSize:".78rem",fontFamily:"inherit",cursor:"pointer"}}>
+                  Non
+                </button>
+              </div>
+
+              {profil.smartCostActif&&(<>
+                <div style={{fontSize:".6rem",fontWeight:700,color:C.gris,letterSpacing:".1em",textTransform:"uppercase",marginBottom:".5rem"}}>Quelle presentation ?</div>
+                <div style={{display:"flex",gap:".5rem",marginBottom:"1rem"}}>
+                  <button onClick={()=>setProfil(p=>({...p,smartCostMode:"commune"}))}
+                    style={{flex:1,padding:".55rem",borderRadius:10,border:`2px solid ${profil.smartCostMode!=="perso"?C.or:C.pale}`,background:profil.smartCostMode!=="perso"?C.or+"20":C.blanc,color:C.brun,fontWeight:700,fontSize:".72rem",fontFamily:"inherit",cursor:"pointer"}}>
+                    Presentation commune
+                  </button>
+                  <button onClick={()=>setProfil(p=>({...p,smartCostMode:"perso"}))}
+                    style={{flex:1,padding:".55rem",borderRadius:10,border:`2px solid ${profil.smartCostMode==="perso"?C.or:C.pale}`,background:profil.smartCostMode==="perso"?C.or+"20":C.blanc,color:C.brun,fontWeight:700,fontSize:".72rem",fontFamily:"inherit",cursor:"pointer"}}>
+                    Ma propre presentation
+                  </button>
+                </div>
+
+                {profil.smartCostMode!=="perso"?(
+                  <div style={{background:C.creme,borderRadius:12,padding:"1rem",border:`1px solid ${C.pale}`}}>
+                    <div style={{fontFamily:"Georgia,serif",fontSize:".95rem",color:C.brun,fontWeight:700,marginBottom:".5rem"}}>Consommer mieux, depenser moins</div>
+                    <div style={{fontSize:".78rem",color:C.texte,lineHeight:1.6,marginBottom:".6rem",fontStyle:"italic"}}>Et si tu arretais de payer pour le superflu ?</div>
+                    <div style={{fontSize:".76rem",color:C.texte,lineHeight:1.65,marginBottom:".7rem"}}>Le Smart Cost, ce n est pas juste un argument de vente : c est une veritable philosophie de consommation intelligente. Un modele direct qui elimine les intermediaires inutiles, les couts de distribution massifs et la publicite traditionnelle. Resultat : des produits de qualite irreprochable, au prix juste.</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:".4rem",marginBottom:".5rem"}}>
+                      {["Zero intermediaire, 100% de valeur : tu investis dans la composition et l efficacite du produit, pas dans le marketing.","Un budget optimise : fini de payer des produits surcotes.","Une vision transparente qui remet le pouvoir d achat entre tes mains."].map((ligne,i)=>(<div key={i} style={{display:"flex",gap:".4rem",fontSize:".74rem",color:C.texte,lineHeight:1.5}}><span>{"\u2728"}</span><span>{ligne}</span></div>))}
+                    </div>
+                            <div style={{marginTop:".4rem"}}>
+                              <div style={{fontSize:".62rem",fontWeight:700,color:C.gris,letterSpacing:".08em",textTransform:"uppercase",marginBottom:".7rem"}}>Ou va ton argent, exemple illustratif</div>
+                              <div style={{display:"flex",gap:".9rem",justifyContent:"center"}}>
+                                {[{titre:"Marque classique",lignes:[{label:"Marketing & pub",pct:40,color:"#D08770"},{label:"Distribution & intermediaires",pct:25,color:"#EBCB8B"},{label:"Marge enseigne",pct:20,color:"#B48EAD"},{label:"Produit reel",pct:15,color:"#A3BE8C"}]},{titre:"Mihi (vente directe)",lignes:[{label:"Produit reel",pct:60,color:"#A3BE8C"},{label:"Marge distributrice",pct:30,color:"#B48EAD"},{label:"Distribution directe",pct:10,color:"#EBCB8B"}]}].map((bloc,bi)=>(
+                                  <div key={bi} style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}>
+                                    <div style={{width:20,height:9,background:"#3D2B1F",borderRadius:"3px 3px 0 0"}}/>
+                                    <div style={{width:26,height:12,background:"rgba(61,43,31,.15)"}}/>
+                                    <div style={{width:58,height:120,borderRadius:"6px 6px 18px 18px",overflow:"hidden",display:"flex",flexDirection:"column",border:"1px solid rgba(61,43,31,.2)",background:"rgba(255,255,255,.4)"}}>
+                                      {bloc.lignes.map((l,li)=>(<div key={li} title={l.label+" "+l.pct+"%"} style={{height:l.pct+"%",background:l.color}}/>))}
+                                    </div>
+                                    <div style={{fontSize:".68rem",fontWeight:700,color:C.brun,marginTop:".45rem",textAlign:"center"}}>{bloc.titre}</div>
+                                    <div style={{marginTop:".35rem",width:"100%"}}>
+                                      {bloc.lignes.map((l,li)=>(<div key={li} style={{display:"flex",alignItems:"center",gap:".3rem",fontSize:".58rem",color:C.gris,marginBottom:".15rem"}}><span style={{width:7,height:7,borderRadius:2,background:l.color,flexShrink:0}}/><span style={{flex:1,lineHeight:1.3}}>{l.label}</span><span style={{fontWeight:700}}>{l.pct}%</span></div>))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div style={{fontSize:".58rem",color:C.pale,fontStyle:"italic",marginTop:".5rem",textAlign:"center"}}>Repartition a titre illustratif, pour expliquer le principe du modele direct.</div>
+                            </div>
+                  </div>
+                ):(
+                  <textarea value={profil.smartCostTexte||""} onChange={e=>setProfil(p=>({...p,smartCostTexte:e.target.value}))} placeholder="Ecris ta propre presentation du Smart Cost..." rows={6}
+                    style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .65rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",resize:"vertical",lineHeight:1.55}}/>
+                )}
+              </>)}
+
+              <Preview/>
+            </div>
+          )}
+          {/* /SECTION SMART COST */}
 
       {/* SECTION LIENS */}
       {activeSection==="liens"&&(

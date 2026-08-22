@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
+﻿import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
 import { TunnelRecrutementPublic } from './TunnelRecrutementTab';
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
@@ -3256,6 +3256,30 @@ function LinkBioPublicPage({slug}){
         
         {profil.accroche&&<div style={{margin:".75rem 1rem",padding:".75rem 1rem",background:"rgba(255,255,255,.1)",borderRadius:12,borderLeft:"3px solid rgba(255,255,255,.4)",fontSize:".82rem",fontStyle:"italic",color:theme.light?"rgba(0,0,0,.7)":"rgba(255,255,255,.9)",lineHeight:1.6}}>❝ {profil.accroche} ❞</div>}
         {profil.histoire&&<div style={{padding:".85rem 1.1rem",fontSize:".78rem",lineHeight:1.7,color:sub,background:theme.bg}}>{profil.histoire}</div>}
+          {profil.smartCostActif&&(<div style={{margin:".75rem 1rem",padding:"1rem",background:theme.light?"white":"rgba(255,255,255,.06)",borderRadius:14,border:`1px solid ${theme.accent}33`}}>
+            <div style={{fontSize:".9rem",fontWeight:700,color:theme.light?"#3D1F0E":"white",marginBottom:".4rem"}}>{"\uD83D\uDC8E Smart Cost"}</div>
+            {profil.smartCostMode==="perso"&&profil.smartCostTexte?(
+              <div style={{fontSize:".78rem",lineHeight:1.65,color:sub,whiteSpace:"pre-line"}}>{profil.smartCostTexte}</div>
+            ):(
+              <>
+                <div style={{fontSize:".8rem",lineHeight:1.65,color:sub,fontStyle:"italic",marginBottom:".5rem"}}>Et si tu arretais de payer pour le superflu ?</div>
+                <div style={{fontSize:".78rem",lineHeight:1.65,color:sub,marginBottom:".75rem"}}>Le Smart Cost, ce n est pas juste un argument de vente : c est une veritable philosophie de consommation intelligente. Un modele direct qui elimine les intermediaires inutiles, les couts de distribution massifs et la publicite traditionnelle. Resultat : des produits de qualite irreprochable, au prix juste.</div>
+                <div style={{display:"flex",gap:".8rem",justifyContent:"center",marginBottom:".6rem"}}>
+                  {[{titre:"Marque classique",lignes:[{label:"Marketing & pub",pct:40,color:"#D08770"},{label:"Distribution & intermediaires",pct:25,color:"#EBCB8B"},{label:"Marge enseigne",pct:20,color:"#B48EAD"},{label:"Produit reel",pct:15,color:"#A3BE8C"}]},{titre:"Mihi (vente directe)",lignes:[{label:"Produit reel",pct:60,color:"#A3BE8C"},{label:"Marge distributrice",pct:30,color:"#B48EAD"},{label:"Distribution directe",pct:10,color:"#EBCB8B"}]}].map((bloc,bi)=>(
+                    <div key={bi} style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}>
+                      <div style={{width:18,height:8,background:"#3D2B1F",borderRadius:"3px 3px 0 0"}}/>
+                      <div style={{width:24,height:11,background:"rgba(61,43,31,.15)"}}/>
+                      <div style={{width:52,height:105,borderRadius:"6px 6px 16px 16px",overflow:"hidden",display:"flex",flexDirection:"column",border:"1px solid rgba(61,43,31,.2)",background:"rgba(255,255,255,.4)"}}>
+                        {bloc.lignes.map((l,li)=>(<div key={li} style={{height:l.pct+"%",background:l.color}}/>))}
+                      </div>
+                      <div style={{fontSize:".62rem",fontWeight:700,color:theme.light?"#3D1F0E":"white",marginTop:".4rem",textAlign:"center"}}>{bloc.titre}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{fontSize:".54rem",color:sub,fontStyle:"italic",textAlign:"center"}}>Repartition a titre illustratif, pour expliquer le principe du modele direct.</div>
+              </>
+            )}
+          </div>)}
         <div style={{background:"linear-gradient(135deg,#C49A8A,#A89BB5)",padding:".65rem 1rem",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:".5rem"}}><span style={{fontSize:"1rem"}}>🔥</span><span style={{fontSize:".78rem",fontWeight:700,color:"white",letterSpacing:".02em"}}>{nbDiagsEquipe}+ femmes ont recu leur bilan personnalise — et toi ?</span></div>
         {(profil.nbClientes||profil.nbDiags||profil.nbEquipe||profil.nbAnnees)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem",padding:".75rem 1rem",background:theme.bg}}>{[{k:"nbClientes",icon:"👥"},{k:"nbDiags",icon:"🔍"},{k:"nbEquipe",icon:"⭐"},{k:"nbAnnees",icon:"🏆"}].filter(f=>profil[f.k]).map(f=><div key={f.k} style={{background:theme.accent+"15",borderRadius:10,padding:".6rem .75rem",textAlign:"center"}}><div style={{fontSize:".7rem",marginBottom:".2rem"}}>{f.icon}</div><div style={{fontSize:".82rem",fontWeight:700,color:theme.accent}}>{profil[f.k]}</div></div>)}</div>}
         {(profil.temoignages||[]).filter(t=>t.texte).length>0&&(
