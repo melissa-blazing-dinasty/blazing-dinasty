@@ -1213,6 +1213,7 @@ function App(){
   const[forgotLoading,setForgotLoading]=useState(false);
   const[forgotError,setForgotError]=useState("");
   const[showMonCompte,setShowMonCompte]=useState(false);
+  const[pseudoLien,setPseudoLien]=useState("");const[pseudoLienActuel,setPseudoLienActuel]=useState("");const[pseudoLienSaving,setPseudoLienSaving]=useState(false);const[pseudoLienSaved,setPseudoLienSaved]=useState(false);const[pseudoLienError,setPseudoLienError]=useState("");
   const[showDecouverteCompte,setShowDecouverteCompte]=useState(false);
   const[contactWhatsapp,setContactWhatsapp]=useState("");
   const[stripeConnecte,setStripeConnecte]=useState(false);
@@ -1280,6 +1281,39 @@ function App(){
     }catch{}
   };
   useEffect(()=>{if(showMonCompte)verifierStripe();},[showMonCompte]);
+  useEffect(()=>{
+    if(!showMonCompte)return;
+    (async()=>{
+      try{
+        const uSnap=await getDoc(doc(db,"users",userId));
+        const p=uSnap.exists()?(uSnap.data()["db-lien-pseudo"]||""):"";
+        setPseudoLienActuel(p);setPseudoLien(p);setPseudoLienError("");
+      }catch{}
+    })();
+  },[showMonCompte]);
+  const sauverPseudoLien=async()=>{
+    const nouveau=(pseudoLien||"").toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9-]/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"");
+    if(!nouveau){setPseudoLienError("Choisis au moins quelques lettres.");return;}
+    if(nouveau===pseudoLienActuel){setPseudoLienError("");return;}
+    setPseudoLienSaving(true);setPseudoLienError("");setPseudoLienSaved(false);
+    try{
+      const existant=await getDoc(doc(db,"pseudos_liens",nouveau));
+      if(existant.exists()&&existant.data().uid!==userId){
+        setPseudoLienError("Ce pseudo est deja pris, essaie autre chose.");
+        setPseudoLienSaving(false);return;
+      }
+      await setDoc(doc(db,"pseudos_liens",nouveau),{uid:userId});
+      if(pseudoLienActuel&&pseudoLienActuel!==nouveau){
+        try{await deleteDoc(doc(db,"pseudos_liens",pseudoLienActuel));}catch{}
+      }
+      await setDoc(doc(db,"users",userId),{"db-lien-pseudo":nouveau},{merge:true});
+      setPseudoLienActuel(nouveau);setPseudoLien(nouveau);setPseudoLienSaved(true);
+      setTimeout(()=>setPseudoLienSaved(false),2500);
+    }catch(e){
+      setPseudoLienError("Erreur : "+e.message);
+    }
+    setPseudoLienSaving(false);
+  };
   const[lienPaypalMe,setLienPaypalMe]=useState("");
   const[lienStripePerso,setLienStripePerso]=useState("");
   const[paiementSaving,setPaiementSaving]=useState(false);
@@ -2315,6 +2349,22 @@ function App(){
   const diagMode = urlParams.has("diag");
   const diagUidFromPath = (window.location.pathname.match(/\/d\/([^/?]+)/)||[])[1] || "";
   const diagDistrib = urlParams.get("uid")||urlParams.get("distrib")||diagUidFromPath||"";
+  const [diagDistribReel, setDiagDistribReel] = useState(null);
+  useEffect(()=>{
+    if(!diagMode || !diagDistrib){ setDiagDistribReel(diagDistrib||"external"); return; }
+    (async()=>{
+      try{
+        const pSnap = await getDoc(doc(db,"pseudos_liens", diagDistrib.toLowerCase()));
+        if(pSnap.exists() && pSnap.data().uid){
+          setDiagDistribReel(pSnap.data().uid);
+        } else {
+          setDiagDistribReel(diagDistrib);
+        }
+      }catch(e){
+        setDiagDistribReel(diagDistrib);
+      }
+    })();
+  },[diagMode, diagDistrib]);
   const immersionUidFromPath = (window.location.pathname.match(/\/immersion\/([^/?]+)/)||[])[1] || "";
   const immersionMode = urlParams.has("immersion") || !!immersionUidFromPath;
   const immersionUid = urlParams.get("immersion") || immersionUidFromPath || "";
@@ -2379,7 +2429,7 @@ function App(){
             </div>
             <div style={{fontSize:".7rem",color:C.gris,marginTop:".2rem"}}>Diagnostic personnalisé ✨</div>
           </div>
-          <DiagnosticsTab uid={diagDistrib||"external"} userName={diagDistrib} externalMode={true} initialType={urlParams.get("diag")||""} initialClient={urlParams.get("client")||""}/>
+          {diagDistribReel===null?<div style={{padding:"3rem",textAlign:"center"}}>Chargement...</div>:<DiagnosticsTab uid={diagDistribReel} userName={diagDistribReel} externalMode={true} initialType={urlParams.get("diag")||""} initialClient={urlParams.get("client")||""}/>}
         </div>
       </div>
     );
@@ -2640,6 +2690,22 @@ function App(){
             </div>
           )}
         </div>
+            <div style={{marginTop:"1rem",paddingTop:"1rem",borderTop:"1px solid #E0D4F5"}}>
+              <div style={{fontSize:".7rem",fontWeight:700,color:"#3D1F0E",marginBottom:".3rem"}}>{"\u{1F517} Personnalise ton lien"}</div>
+              <div style={{fontSize:".68rem",color:"#888",marginBottom:".5rem",lineHeight:1.5}}>
+                Remplace ton identifiant technique par un pseudo dans tes liens de diagnostic partages.
+              </div>
+              <div style={{fontSize:".64rem",color:"#8B6FB3",marginBottom:".4rem",fontFamily:"monospace"}}>
+                blazing-dinasty-1fad9.web.app/d/{pseudoLien||"tonpseudo"}
+              </div>
+              <input value={pseudoLien} onChange={e=>{setPseudoLien(e.target.value);setPseudoLienError("");}} placeholder="tonpseudo"
+                style={{width:"100%",border:"1px solid #E0D4F5",borderRadius:8,padding:".45rem .65rem",fontSize:".78rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+              {pseudoLienError&&<div style={{fontSize:".66rem",color:"#B04040",marginBottom:".4rem"}}>{pseudoLienError}</div>}
+              <button onClick={sauverPseudoLien} disabled={pseudoLienSaving}
+                style={{width:"100%",background:pseudoLienSaved?"#2E7D32":"#8B6FB3",color:"white",border:"none",borderRadius:8,padding:".5rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                {pseudoLienSaving?"...":pseudoLienSaved?"Enregistre !":"Enregistrer mon pseudo"}
+              </button>
+            </div>
         <button onClick={()=>{setShowMonCompte(false);setCompteMdp1("");setCompteMdp2("");setCompteError("");}}
             style={{width:"100%",background:"none",border:"none",color:"#888",fontSize:".72rem",cursor:"pointer",fontFamily:"inherit"}}>
             Fermer

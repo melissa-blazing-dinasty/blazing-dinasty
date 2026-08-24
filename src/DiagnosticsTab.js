@@ -2177,7 +2177,9 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   async function construireLienDiag(diagType) {
     let bitlyToken2 = '';
     try { const snap = await getDoc(doc(db,'admin','config')); if(snap.exists()) bitlyToken2 = snap.data().bitlyToken||''; } catch {}
-    const lienBase = `https://blazing-dinasty-1fad9.web.app/d/${uid}?diag=${diagType}&client=${encodeURIComponent(nomClient||"")}`;
+        let idPourLien = uid;
+        try{ const uSnap2 = await getDoc(doc(db,"users",uid)); if(uSnap2.exists() && uSnap2.data()["db-lien-pseudo"]) idPourLien = uSnap2.data()["db-lien-pseudo"]; }catch{}
+        const lienBase = `https://blazing-dinasty-1fad9.web.app/d/${idPourLien}?diag=${diagType}&client=${encodeURIComponent(nomClient||"")}`;
     return await raccourcirLien(lienBase, bitlyToken2);
   }
   async function copierLienNu(diagType) {

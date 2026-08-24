@@ -109,6 +109,12 @@ match /immersion_stats/{docId} {
   allow create, update: if true;
   allow delete: if request.auth != null;
 }
+    match /pseudos_liens/{docId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow update: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+    }
     // RESTE
     match /{document=**} {
       allow read, write: if request.auth != null;
