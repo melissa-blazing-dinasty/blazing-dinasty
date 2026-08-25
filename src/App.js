@@ -2340,7 +2340,7 @@ function App(){
     {id:"outils",label:"🛠️ Outils",icon:"🛠️",col:C.or,desc:"Canva, CapCut, Linktree et plus"},
     {id:"devperso",label:"🧠 Dév. Personnel",icon:"🧠",col:C.lilas,desc:"Mindset et développement personnel"},
     {id:"formaproduits",label:"🧴 Formation Produits",icon:"🧴",col:C.rose,desc:"Tout savoir sur les produits Mihi"},
-    {id:"communication",label:"💬 Communication Mihi",icon:"💬",col:C.or,desc:"Bien communiquer autour de la marque Mihi"},
+    {id:"communication",label:"💬 Comment parler correctement de Mihi",icon:"💬",col:C.or,desc:"Bien communiquer autour de la marque Mihi"},
     {id:"nutrition",label:"🥗 Nutrition Smart Meal",icon:"🥗",col:C.vert,desc:"Comprendre la nutrition et les produits Smart Meal"},
   ];
 
@@ -4056,7 +4056,7 @@ function App(){
           <div>
             <SecTitle title="Communication" em="autour de Mihi" desc="Comment bien parler de Mihi, de la marque et de l'opportunité."/>
             <Card title="Formation Communication Mihi" sub="YouTube" icon="▶" color={C.or} defaultOpen>
-              <YTBtn href="https://youtu.be/iSkh6iwI2uI" label="💬 Communication autour de Mihi"/>
+              <YTBtn href="https://youtu.be/iSkh6iwI2uI" label="💬 Smart Cost, un concept a part entiere"/>
             </Card>
             <BoutonTermineFormation subTab="communication"/>
           </div>
