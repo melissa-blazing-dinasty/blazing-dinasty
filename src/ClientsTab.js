@@ -2,6 +2,8 @@
 import { db, storage } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
+import { fbFunctions } from './App';
 import { C } from './constants';
 import { todayLocalStr, ss, sg, sgAll } from './utils';
 import { getPeriodeActuelle, Confetti, MembreStatsCard } from './App';
@@ -12,6 +14,18 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, P
   const[showRappel,setShowRappel]=useState(false);
   const[editMode,setEditMode]=useState(false);
   const[cmdDetailOuverte,setCmdDetailOuverte]=useState(null);
+  const[confirmationEnCours,setConfirmationEnCours]=useState(null);
+  const confirmerPaiementPerso=async(clientId,commandeId)=>{
+    setConfirmationEnCours(commandeId);
+    try{
+      const fn=httpsCallable(fbFunctions,"confirmerCommandePaiementPerso");
+      await fn({clientId,commandeId});
+      save(clients.map(cl=>cl.id===clientId?{...cl,commandes:cl.commandes.map(cm=>cm.id===commandeId?{...cm,statutPaiement:"confirme"}:cm)}:cl));
+    }catch(e){
+      alert("Erreur lors de la confirmation : "+e.message);
+    }
+    setConfirmationEnCours(null);
+  };
   const[cmdForm,setCmdForm]=useState({lignes:[{nom:"",typeProduit:"shampoing"}],montant:"",date:todayLocalStr()});
   const[catalogue,setCatalogue]=useState(null);
 
@@ -317,6 +331,7 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, P
                       </div>
                     </div>
                     <div style={{display:"flex",alignItems:"flex-start",gap:".4rem",flexShrink:0}}>
+                      {cmd.statutPaiement==="en_attente"&&<span style={{background:"#FFF3E0",color:"#C97800",fontSize:".58rem",fontWeight:700,borderRadius:20,padding:".15rem .5rem",whiteSpace:"nowrap"}}>⏳ En attente</span>}
                       {cmd.montant&&<div style={{fontFamily:"Georgia,serif",fontSize:".9rem",fontWeight:600,color:C.brun}}>{cmd.montant}€</div>}
                       <span style={{fontSize:".7rem",color:C.gris,transform:cmdOuverte?"rotate(90deg)":"none",transition:"transform .2s"}}>›</span>
                     </div>
@@ -354,6 +369,13 @@ function FicheClienteCard({c, sel, setSel, clients, save, uid, STATUTS_CLIENT, P
                           {cmd.rappelFait?"✓ Rappel effectué":"Marquer le rappel comme fait"}
                         </span>
                       </div>
+
+                      {cmd.statutPaiement==="en_attente"&&(
+                        <button onClick={()=>confirmerPaiementPerso(c.id,cmd.id)} disabled={confirmationEnCours===cmd.id}
+                          style={{width:"100%",background:"#2E7D32",color:"white",border:"none",borderRadius:8,padding:".5rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",marginBottom:".4rem"}}>
+                          {confirmationEnCours===cmd.id?"...":"✅ Marquer comme payée"}
+                        </button>
+                      )}
 
                       <button onClick={()=>{if(window.confirm("Supprimer cette commande ?"))save(clients.map(cl=>cl.id===c.id?{...cl,commandes:cl.commandes.filter(cm=>cm.id!==cmd.id)}:cl));}}
                         style={{background:"none",border:"1px solid #E0C0C0",borderRadius:6,padding:".25rem .5rem",fontSize:".62rem",color:"#B04040",cursor:"pointer",fontFamily:"inherit"}}>

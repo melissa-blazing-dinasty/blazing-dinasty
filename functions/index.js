@@ -726,6 +726,7 @@ exports.creerSessionCheckout = onCall({secrets: [stripeSecretKey]}, async (reque
       clientNom: clientInfo?.nom || "",
       clientEmail: clientInfo?.email || "",
       clientTel: clientInfo?.tel || "",
+      clientAdresse: clientInfo?.adresse || "",
       fraisPort: String(fraisPort),
       items: JSON.stringify(items.map(i => ({nom: i.nom, prix: i.prix, quantite: i.quantite || 1})))
     }
@@ -840,6 +841,84 @@ function getPeriodeCAInfo() {
   return {periodNum: camp.num, joursEcoules};
 }
 
+// ── DEFI RENTREE (challenge equipe 21 jours) ────────────────────────────────
+const DEFI_RENTREE_DEBUT = "2026-09-01";
+const DEFI_RENTREE_JOURS = 21;
+const DEFI_RENTREE_PALIERS = [100, 250, 500];
+const MELISSA_UIDS = ["melissa-da-silveira", "melissa"];
+
+function estDansDefiRentree() {
+  const debut = new Date(DEFI_RENTREE_DEBUT + "T00:00:00");
+  const auj = new Date();
+  const diffJours = Math.floor((auj - debut) / (1000 * 60 * 60 * 24)) + 1;
+  return diffJours >= 1 && diffJours <= DEFI_RENTREE_JOURS;
+}
+
+async function alerterMelissaPalier(prenom, ancienPoints, nouveauxPoints, typeChallenge) {
+  const palierFranchi = DEFI_RENTREE_PALIERS.find(p => ancienPoints < p && nouveauxPoints >= p);
+  if (!palierFranchi) return;
+  const labelType = typeChallenge === "ventes" ? "Ventes" : typeChallenge === "recrutement" ? "Recrutement" : "Actions";
+  for (const uidMelissa of MELISSA_UIDS) {
+    try {
+      await sendNotifToUid(uidMelissa, "🎯 Palier Défi Rentrée franchi !", (prenom || "Une distributrice") + " vient d'atteindre " + palierFranchi + " pts au Challenge " + labelType + " — pense à lui envoyer sa récompense !");
+    } catch (e) {}
+  }
+}
+
+// Ajoute des points au challenge Ventes du Defi Rentree (appele apres chaque vente confirmee) - 1 euro = 1 point
+async function majDefiRentreeVentes(distributeurUid, montant, prenom) {
+  if (!estDansDefiRentree()) return;
+  try {
+    const ref = db.collection("equipe").doc("defi-rentree");
+    const snap = await ref.get();
+    const participants = snap.exists ? (snap.data().participants || {}) : {};
+    const actuel = participants[distributeurUid] || {};
+    const ancienPointsVentes = actuel.pointsVentes || 0;
+    const nouveauxPointsVentes = ancienPointsVentes + montant;
+    await ref.set({participants: {[distributeurUid]: {
+      prenom: prenom || actuel.prenom || "Distributrice",
+      pointsVentes: nouveauxPointsVentes
+    }}}, {merge: true});
+    await alerterMelissaPalier(prenom || actuel.prenom, ancienPointsVentes, nouveauxPointsVentes, "ventes");
+  } catch (e) {
+    console.error("[majDefiRentreeVentes] Erreur:", e);
+  }
+}
+
+// Notifie Melissa quand les points d'actions (checklist quotidienne) franchissent un palier
+exports.notifierPalierDefiRentreeActions = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Connexion requise");
+  const {prenom, ancienPoints, nouveauxPoints} = request.data || {};
+  await alerterMelissaPalier(prenom, ancienPoints || 0, nouveauxPoints || 0, "actions");
+  return {ok: true};
+});
+exports.declarerRecrueDefiRentree = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Connexion requise");
+  const {nomRecrue} = request.data || {};
+  if (!nomRecrue || !nomRecrue.trim()) throw new HttpsError("invalid-argument", "Le nom de la recrue est requis");
+
+  const distributeurUid = request.auth.uid;
+  const userSnap = await db.collection("users").doc(distributeurUid).get();
+  const prenom = (userSnap.exists && userSnap.data().prenom) || (userSnap.exists && userSnap.data().nom) || "Distributrice";
+
+  const ref = db.collection("equipe").doc("defi-rentree");
+  const snap = await ref.get();
+  const participants = snap.exists ? (snap.data().participants || {}) : {};
+  const actuel = participants[distributeurUid] || {};
+  const ancienPointsRecrutement = actuel.pointsRecrutement || 0;
+  const nouveauxPointsRecrutement = ancienPointsRecrutement + 100;
+  const recrues = [...(actuel.recrues || []), {nom: nomRecrue.trim(), date: new Date().toISOString().slice(0, 10)}];
+
+  await ref.set({participants: {[distributeurUid]: {
+    prenom,
+    pointsRecrutement: nouveauxPointsRecrutement,
+    recrues
+  }}}, {merge: true});
+  await alerterMelissaPalier(prenom, ancienPointsRecrutement, nouveauxPointsRecrutement, "recrutement");
+
+  return {ok: true, pointsRecrutement: nouveauxPointsRecrutement};
+});
+
 // Ajoute le montant d'une commande boutique au Suivi CA (case du jour actuel de la periode en cours)
 async function ajouterCommandeAuSuiviCA(userRef, userData, montant) {
   try {
@@ -869,7 +948,8 @@ async function ajouterCommandeAuSuiviCA(userRef, userData, montant) {
 }
 
 // Enregistre une commande boutique (Stripe ou PayPal) sur la fiche cliente + fait avancer la fidelite
-async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
+// statutPaiement: "confirme" (defaut, paiement verifie par webhook/capture) ou "en_attente" (lien perso, a verifier manuellement)
+async function enregistrerCommandeClient(distributeurUid, items, clientInfo, statutPaiement = "confirme") {
   const total = items.reduce((s, i) => s + i.prix * (i.quantite || 1), 0);
   const userRef = db.collection("users").doc(distributeurUid);
   const userSnap = await userRef.get();
@@ -895,15 +975,22 @@ async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
     montant: total,
     suivi8: false,
     suivi21: false,
-    source: "boutique-en-ligne"
+    source: "boutique-en-ligne",
+    statutPaiement,
+    adresseLivraison: clientInfo.adresse || ""
   };
 
   let clientsMisAJour;
   let nomPourNotif;
   if (clientExistantIdx !== -1) {
     const existant = clientsExistants[clientExistantIdx];
-    const nouveauxTampons = Math.min((existant.fideliteTampons || 0) + 1, nbTampons);
-    const clientMaj = {...existant, commandes: [...(existant.commandes || []), cmd], fideliteTampons: nouveauxTampons};
+    const nouveauxTampons = statutPaiement === "confirme" ? Math.min((existant.fideliteTampons || 0) + 1, nbTampons) : (existant.fideliteTampons || 0);
+    const clientMaj = {
+      ...existant,
+      commandes: [...(existant.commandes || []), cmd],
+      fideliteTampons: nouveauxTampons,
+      adresse: existant.adresse || clientInfo.adresse || ""
+    };
     clientsMisAJour = clientsExistants.map((c, i) => i === clientExistantIdx ? clientMaj : c);
     nomPourNotif = existant.prenom || existant.nom || "Une cliente";
   } else {
@@ -914,23 +1001,40 @@ async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
       nom: partsNom.slice(1).join(" ") || "",
       tel: clientInfo.tel || "",
       email: clientInfo.email || "",
-      ddn: "", adresse: "", notes: "",
+      ddn: "", adresse: clientInfo.adresse || "", notes: "",
       source: "boutique-en-ligne",
       commandes: [cmd],
-      fideliteTampons: Math.min(1, nbTampons)
+      fideliteTampons: statutPaiement === "confirme" ? Math.min(1, nbTampons) : 0
     };
     clientsMisAJour = [nouveauClient, ...clientsExistants];
     nomPourNotif = nouveauClient.prenom;
   }
 
   await userRef.set({"db-clients": JSON.stringify(clientsMisAJour)}, {merge: true});
-  await ajouterCommandeAuSuiviCA(userRef, userData, total);
-  await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", nomPourNotif + " vient de commander pour " + total.toFixed(2) + " euros !");
+
+  const estConfirme = statutPaiement === "confirme";
+  if (estConfirme) {
+    await ajouterCommandeAuSuiviCA(userRef, userData, total);
+    await majDefiRentreeVentes(distributeurUid, total, null);
+  }
+
+  const titreNotif = estConfirme ? "🛍️ Nouvelle commande !" : "⏳ Commande en attente de vérification";
+  const corpsNotif = estConfirme
+    ? nomPourNotif + " vient de commander pour " + total.toFixed(2) + " euros !"
+    : nomPourNotif + " a passe commande pour " + total.toFixed(2) + " euros via un lien de paiement perso — verifie la reception avant de confirmer.";
+  await sendNotifToUid(distributeurUid, titreNotif, corpsNotif);
 
   const emailNotif = userData["db-email-notif-commandes"];
   if (emailNotif) {
     try {
       const listeProduits = items.map(i => "• " + i.nom + (i.quantite > 1 ? " x" + i.quantite : "") + " — " + i.prix.toFixed(2) + " €").join("<br>");
+      const sujetEmail = estConfirme
+        ? "🛍️ Nouvelle commande — " + total.toFixed(2) + " €"
+        : "⏳ Commande en attente de verification — " + total.toFixed(2) + " €";
+      const titreEmail = estConfirme ? "🛍️ Nouvelle commande !" : "⏳ Commande en attente de vérification";
+      const noteEmail = estConfirme
+        ? `<p style="font-size:.95rem;line-height:1.6;"><strong>${nomPourNotif}</strong> vient de commander pour <strong>${total.toFixed(2)} €</strong> :</p>`
+        : `<p style="font-size:.95rem;line-height:1.6;"><strong>${nomPourNotif}</strong> a passe commande pour <strong>${total.toFixed(2)} €</strong> via un lien de paiement personnel — le paiement n'est pas encore confirme automatiquement :</p>`;
       await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -940,12 +1044,12 @@ async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
         body: JSON.stringify({
           from: "Blazing Dynasty <boutique@blazingdinasty.com>",
           to: [emailNotif],
-          subject: "🛍️ Nouvelle commande — " + total.toFixed(2) + " €",
+          subject: sujetEmail,
           html: `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;padding:2rem 1rem;color:#3D1F0E;">
-            <div style="font-size:1.3rem;font-weight:600;margin-bottom:1rem;">🛍️ Nouvelle commande !</div>
-            <p style="font-size:.95rem;line-height:1.6;"><strong>${nomPourNotif}</strong> vient de commander pour <strong>${total.toFixed(2)} €</strong> :</p>
+            <div style="font-size:1.3rem;font-weight:600;margin-bottom:1rem;">${titreEmail}</div>
+            ${noteEmail}
             <div style="background:#FFF3EC;border-radius:10px;padding:1rem;font-size:.85rem;line-height:1.8;margin:1rem 0;">${listeProduits}</div>
-            <p style="font-size:.85rem;color:#888;">Connecte-toi à ton app pour voir les coordonnées complètes et préparer l'envoi.</p>
+            <p style="font-size:.85rem;color:#888;">${estConfirme ? "Connecte-toi à ton app pour voir les coordonnées complètes et préparer l'envoi." : "Verifie la reception du paiement puis confirme la commande depuis ton app."}</p>
           </div>`
         })
       });
@@ -954,14 +1058,56 @@ async function enregistrerCommandeClient(distributeurUid, items, clientInfo) {
     }
   }
 
-  const nbCommandesFinal = clientExistantIdx !== -1
-    ? (clientsExistants[clientExistantIdx].commandes || []).length + 1
-    : 1;
-  if (nbCommandesFinal % 5 === 0) {
-    await sendNotifToUid(distributeurUid, "🎁 Palier fidélité atteint !", nomPourNotif + " vient de passer sa " + nbCommandesFinal + "eme commande — pense a lui envoyer une recommandation personnalisee !");
+  if (estConfirme) {
+    const nbCommandesFinal = clientExistantIdx !== -1
+      ? (clientsExistants[clientExistantIdx].commandes || []).length + 1
+      : 1;
+    if (nbCommandesFinal % 5 === 0) {
+      await sendNotifToUid(distributeurUid, "🎁 Palier fidélité atteint !", nomPourNotif + " vient de passer sa " + nbCommandesFinal + "eme commande — pense a lui envoyer une recommandation personnalisee !");
+    }
   }
   return total;
 }
+
+// Marque une commande "en_attente" (lien de paiement perso) comme confirmee une fois le paiement verifie manuellement par la distributrice
+exports.confirmerCommandePaiementPerso = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Connexion requise");
+  const {clientId, commandeId} = request.data || {};
+  if (!clientId || !commandeId) throw new HttpsError("invalid-argument", "clientId et commandeId requis");
+
+  const distributeurUid = request.auth.uid;
+  const userRef = db.collection("users").doc(distributeurUid);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  const clientsExistants = userData["db-clients"] ? JSON.parse(userData["db-clients"]) : [];
+
+  const clientIdx = clientsExistants.findIndex(c => c.id === clientId);
+  if (clientIdx === -1) throw new HttpsError("not-found", "Cliente introuvable");
+  const client = clientsExistants[clientIdx];
+  const cmdIdx = (client.commandes || []).findIndex(c => c.id === commandeId);
+  if (cmdIdx === -1) throw new HttpsError("not-found", "Commande introuvable");
+  const cmd = client.commandes[cmdIdx];
+  if (cmd.statutPaiement === "confirme") {
+    return {ok: true, dejaConfirme: true};
+  }
+
+  let nbTampons = 10;
+  try {
+    if (userData["db-fidelite-config"]) nbTampons = JSON.parse(userData["db-fidelite-config"]).nbTampons || 10;
+  } catch (e) {}
+
+  const cmdMaj = {...cmd, statutPaiement: "confirme"};
+  const commandesMaj = client.commandes.map((c, i) => i === cmdIdx ? cmdMaj : c);
+  const clientMaj = {...client, commandes: commandesMaj, fideliteTampons: Math.min((client.fideliteTampons || 0) + 1, nbTampons)};
+  const clientsMisAJour = clientsExistants.map((c, i) => i === clientIdx ? clientMaj : c);
+
+  await userRef.set({"db-clients": JSON.stringify(clientsMisAJour)}, {merge: true});
+  await ajouterCommandeAuSuiviCA(userRef, userData, cmd.montant);
+  await majDefiRentreeVentes(distributeurUid, cmd.montant, null);
+  await sendNotifToUid(distributeurUid, "🛍️ Nouvelle commande !", (client.prenom || client.nom || "Une cliente") + " vient de commander pour " + cmd.montant.toFixed(2) + " euros !");
+
+  return {ok: true};
+});
 
 exports.stripeWebhook = onRequest({secrets: [stripeSecretKey, resendApiKey]}, async (req, res) => {
   const stripe = require("stripe")(stripeSecretKey.value());
@@ -987,7 +1133,8 @@ exports.stripeWebhook = onRequest({secrets: [stripeSecretKey, resendApiKey]}, as
         await enregistrerCommandeClient(distributeurUid, items, {
           nom: meta.clientNom || "",
           email: meta.clientEmail || "",
-          tel: meta.clientTel || ""
+          tel: meta.clientTel || "",
+          adresse: meta.clientAdresse || ""
         });
         console.log("[stripeWebhook] enregistrerCommandeClient termine avec succes pour", distributeurUid);
       } catch (e) {
@@ -1156,8 +1303,9 @@ exports.enregistrerCommandeLienPerso = onCall({secrets: [resendApiKey]}, async (
       nom: (clientInfo && clientInfo.nom) || "",
       email: (clientInfo && clientInfo.email) || "",
       tel: (clientInfo && clientInfo.tel) || "",
+      adresse: (clientInfo && clientInfo.adresse) || "",
       notePaiement: "Paiement via " + (methode === "stripe" ? "lien Stripe personnel" : "PayPal.me") + " - a verifier manuellement"
-    });
+    }, "en_attente");
     return {ok: true};
   } catch (e) {
     console.error("[enregistrerCommandeLienPerso] Erreur:", e);

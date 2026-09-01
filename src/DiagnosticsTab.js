@@ -2727,16 +2727,24 @@ function DiagResultsTab({ uid, onNonLuChange=()=>{} }) {
 
   // Convertir prospect en client ou distributrice
   const convertirProspect = async (prospectId, vers) => {
-    const p = prospects.find(x => x.id===prospectId);
+    let freshProspects = prospects;
+    let freshClients = clients;
+    try{
+      const snap = await getDoc(doc(db,"users",uid));
+      if(snap.exists()){
+        if(snap.data()["db-prospects"]) freshProspects = JSON.parse(snap.data()["db-prospects"]);
+        if(snap.data()["db-clients"]) freshClients = JSON.parse(snap.data()["db-clients"]);
+      }
+    }catch{}
+    const p = freshProspects.find(x => x.id===prospectId);
     if (!p) return;
     if (vers === "client") {
       const newClient = {id:`c${Date.now()}`, nom:p.name, prenom:"", tel:"", email:"", produits:[], notes:p.note||"", dateAjout:todayLocalStr()};
-      const nextClients = [...clients, newClient];
+      const nextClients = [...freshClients, newClient];
       setClients(nextClients);
       try { await setDoc(doc(db,"users",uid), {"db-clients":JSON.stringify(nextClients)}, {merge:true}); } catch {}
     }
-    // Marquer comme converti dans prospects
-    const nextP = prospects.map(x => x.id===prospectId ? {...x, statut:"✅ Converti", convertiVers:vers} : x);
+    const nextP = freshProspects.map(x => x.id===prospectId ? {...x, statut:"✅ Converti", convertiVers:vers} : x);
     setProspects(nextP);
     try { await setDoc(doc(db,"users",uid), {"db-prospects":JSON.stringify(nextP)}, {merge:true}); } catch {}
   };
@@ -3034,7 +3042,7 @@ function DiagResultsTab({ uid, onNonLuChange=()=>{} }) {
           )}
           {actifs.map(d=>(
             <div key={d.id} style={{ background:d.nonLu?C.rose+"08":C.blanc, border:`1.5px solid ${d.nonLu?C.rose:C.pale}`, borderRadius:12, padding:".8rem 1rem", marginBottom:".5rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div onClick={()=>setSel(d)} style={{ cursor:"pointer", flex:1 }}>
+              <div onClick={()=>{setSel(d);if(d.nonLu)marquerLu(d.id);}} style={{ cursor:"pointer", flex:1 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:".4rem", flexWrap:"wrap" }}>
                   <div style={{ fontSize:".82rem", fontWeight:600, color:C.brun }}>{d.nomClient}</div>
                   {d.externe&&<span style={{ background:C.lilas+"20", color:C.lilas, fontSize:".58rem", fontWeight:700, borderRadius:20, padding:".1rem .4rem" }}>📩 Externe</span>}
@@ -3458,6 +3466,7 @@ function BoutiquePubliquePage({slug}){
   const [clientNom,setClientNom]=useState("");
   const [clientEmail,setClientEmail]=useState("");
   const [clientTel,setClientTel]=useState("");
+  const [clientAdresse,setClientAdresse]=useState("");
   const [checkoutLoading,setCheckoutLoading]=useState(false);
   const [moyensPaiement,setMoyensPaiement]=useState({lienPaypalMe:"",lienStripePerso:""});
   const [moyensPaiementCharges,setMoyensPaiementCharges]=useState(false);
@@ -3512,6 +3521,13 @@ function BoutiquePubliquePage({slug}){
     if(!profil||profil==="404"||!profil.uid)return;
     (async()=>{
       try{
+        // Lecture prioritaire depuis contacts_publics (lecture publique, accessible aux visiteuses anonymes)
+        const snapPubVip=await getDoc(doc(db,"contacts_publics",profil.uid));
+        if(snapPubVip.exists()&&snapPubVip.data()["db-afficher-prix-vip"]!==undefined){
+          setAfficherVIPBoutique(!!snapPubVip.data()["db-afficher-prix-vip"]);
+          return;
+        }
+        // Repli sur users/{uid} pour compatibilite (fonctionne seulement si la visiteuse est authentifiee)
         const snapU=await getDoc(doc(db,"users",profil.uid));
         if(snapU.exists())setAfficherVIPBoutique(!!snapU.data()["db-afficher-prix-vip"]);
       }catch{}
@@ -3812,13 +3828,14 @@ function BoutiquePubliquePage({slug}){
 
   const lancerCheckoutStripePerso=async()=>{
     if(!clientNom.trim()){setCheckoutError("Merci d'indiquer ton prénom.");return;}
+    if(!clientAdresse.trim()){setCheckoutError("Merci d'indiquer ton adresse de livraison.");return;}
     setCheckoutLoading(true);setCheckoutError("");
     try{
       const fn=httpsCallable(fbFunctions,"enregistrerCommandeLienPerso");
       await fn({
         distributeurUid:profil.uid,
         items:cart.map(i=>({nom:i.nom,prix:i.prix,quantite:i.quantite})),
-        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim()},
+        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim(),adresse:clientAdresse.trim()},
         methode:"stripe"
       });
       alert("Merci ! Tu vas être redirigée vers la page de paiement. Le montant à indiquer est bien de "+totalAvecPort.toFixed(2)+"€.");
@@ -3832,13 +3849,14 @@ function BoutiquePubliquePage({slug}){
 
   const lancerCheckoutPaypalMe=async()=>{
     if(!clientNom.trim()){setCheckoutError("Merci d'indiquer ton prénom.");return;}
+    if(!clientAdresse.trim()){setCheckoutError("Merci d'indiquer ton adresse de livraison.");return;}
     setCheckoutLoading(true);setCheckoutError("");
     try{
       const fn=httpsCallable(fbFunctions,"enregistrerCommandeLienPerso");
       await fn({
         distributeurUid:profil.uid,
         items:cart.map(i=>({nom:i.nom,prix:i.prix,quantite:i.quantite})),
-        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim()},
+        clientInfo:{nom:clientNom.trim(),email:clientEmail.trim(),tel:clientTel.trim(),adresse:clientAdresse.trim()},
         methode:"paypal"
       });
       let lien=moyensPaiement.lienPaypalMe.trim();
@@ -4211,6 +4229,8 @@ function BoutiquePubliquePage({slug}){
               <input placeholder="Email" type="email" value={clientEmail} onChange={e=>setClientEmail(e.target.value)}
                 style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
               <input placeholder="Téléphone" value={clientTel} onChange={e=>setClientTel(e.target.value)}
+                style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".5rem",outline:"none"}}/>
+              <input placeholder="Adresse de livraison *" value={clientAdresse} onChange={e=>setClientAdresse(e.target.value)}
                 style={{width:"100%",border:"1px solid #E8DDD4",borderRadius:10,padding:".6rem .9rem",fontSize:".85rem",fontFamily:"inherit",marginBottom:".75rem",outline:"none"}}/>
               {checkoutError&&<div style={{fontSize:".72rem",color:"#C44B1A",marginBottom:".6rem",lineHeight:1.5}}>{checkoutError}</div>}
               {!moyensPaiementCharges?(

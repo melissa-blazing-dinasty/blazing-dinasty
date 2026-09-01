@@ -1378,7 +1378,11 @@ function App(){
   const toggleAfficherPrixVIP=async()=>{
     const next=!afficherPrixVIP;
     setAfficherPrixVIP(next);
-    try{await setDoc(doc(db,"users",userId),{"db-afficher-prix-vip":next},{merge:true});}catch{}
+    try{
+      await setDoc(doc(db,"users",userId),{"db-afficher-prix-vip":next},{merge:true});
+      // Egalement dans contacts_publics (lecture publique, accessible aux visiteuses anonymes de la boutique)
+      await setDoc(doc(db,"contacts_publics",userId),{"db-afficher-prix-vip":next},{merge:true});
+    }catch{}
   };
   const[lienInscriptionMihi,setLienInscriptionMihi]=useState("");
   const[lienInscriptionSaving,setLienInscriptionSaving]=useState(false);
@@ -4245,7 +4249,7 @@ function App(){
         {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues} ouvrirBusiness={ouvrirBusinessTrigger}/>}
+        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onDiagNonLuChange={setNbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues} ouvrirBusiness={ouvrirBusinessTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="scripts"&&<ScriptsTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
@@ -4322,6 +4326,7 @@ function App(){
           nomAffiche={name}
           isMelissa={userId==="melissa-da-silveira"}
           onModifierAnnonce={()=>setShowAnnonceAdminFlottant(true)}
+          onClose={()=>setShowInfosImportantes(false)}
         />
       )}
       {showAnnonceAdminFlottant&&<AnnonceAdminPopup uid={userId} onClose={()=>setShowAnnonceAdminFlottant(false)}/>}
@@ -7752,7 +7757,7 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
   const PLAFOND_SECURITE=3;
   const totalLiensDisponibles=autresLiens.length;
   const aToutBooste=totalLiensDisponibles>0&&autresLiens.every(l=>l.boostePar.includes(uid));
-  const quotaJour=aToutBooste?Infinity:Math.min(PLAFOND_SECURITE,1+jhui.boosts);
+  const quotaJour=Math.min(PLAFOND_SECURITE,1+jhui.boosts);
 
   let statutTexte="", peutPoster=false;
   if(estSuspendu){
@@ -7975,7 +7980,7 @@ function EntraideLiensPanel({uid, nomAffiche, isMelissa}){
   );
 }
 
-function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
+function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce, onClose=()=>{}}){
   const[flux,setFlux]=useState(null);
   const[loading,setLoading]=useState(true);
   const[sondages,setSondages]=useState(null);
@@ -8075,7 +8080,8 @@ function InfosImportantesPanel({uid, nomAffiche, isMelissa, onModifierAnnonce}){
     <div style={{position:"fixed",bottom:"8rem",left:"1.2rem",width:300,maxWidth:"calc(100vw - 2.4rem)",background:C.blanc,borderRadius:16,boxShadow:"0 8px 32px rgba(61,31,14,.25)",border:`1px solid ${C.pale}`,zIndex:199,overflow:"hidden",maxHeight:"70vh",display:"flex",flexDirection:"column"}}>
       <div style={{background:C.brun,padding:".85rem 1rem",display:"flex",alignItems:"center",gap:".6rem"}}>
         <span style={{fontSize:"1.3rem"}}>📌</span>
-        <div style={{fontSize:".72rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase"}}>Infos importantes</div>
+        <div style={{fontSize:".72rem",fontWeight:700,letterSpacing:".1em",color:C.or,textTransform:"uppercase",flex:1}}>Infos importantes</div>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.or,fontSize:"1.1rem",cursor:"pointer",padding:0,lineHeight:1}}>✕</button>
       </div>
       <div style={{padding:"1rem",overflowY:"auto"}}>
         {isMelissa&&(

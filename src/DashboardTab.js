@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { C } from './constants';
@@ -18,7 +18,7 @@ import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
-function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onVoirDiagResultats=()=>{}, nbCommandesNonVues=0, onMarquerCommandesVues=()=>{}, ouvrirBusiness=0}){
+function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onDiagNonLuChange=()=>{}, onVoirDiagResultats=()=>{}, nbCommandesNonVues=0, onMarquerCommandesVues=()=>{}, ouvrirBusiness=0}){
   const[dtab,setDtab]=useState(forceQuizJour?"faststart":"today");
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
@@ -884,7 +884,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
       {dtab==="business"&&(<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:".6rem"}}><button onClick={()=>setShowDecouverteBusiness(true)} style={{background:"#C49A8A",color:"white",border:"none",borderRadius:20,padding:".35rem 1rem",fontSize:".75rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(196,154,138,.4)"}}>🧭 Découverte</button></div>{showDecouverteBusiness&&<DecouverteTour outil="business" onClose={()=>setShowDecouverteBusiness(false)}/>}<div id="decouverte-business-tabs" style={{display:"flex",gap:".3rem",marginBottom:"1rem",overflowX:"auto"}}>{[{id:"suivica",label:"CA"},{id:"entonnoir",label:"Entonnoir"},{id:"historique",label:"Historique"}].map(t=>(<button key={t.id} onClick={()=>setBtab(t.id)} style={{flex:"none",padding:".4rem .85rem",fontSize:".7rem",fontWeight:600,borderRadius:20,border:"1.5px solid "+(btab===t.id?"#C49A8A":"#E8DDD4"),background:btab===t.id?"#C49A8A":"white",color:btab===t.id?"white":"#888",cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>))}</div>{btab==="suivica"&&<SuiviCATab uid={uid}/>}
           {btab==="entonnoir"&&<div><div style={{background:"#FAF7F2",borderRadius:10,padding:".65rem .85rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".7rem",color:"#3D1F0E",lineHeight:1.6}}><strong>Comment lire l entonnoir ?</strong><br/>Les barres montrent combien de personnes passent d une etape a l autre. P vers C = % de prospects devenus clientes. C vers D = % de clientes qui ont rejoint l equipe. Plus ces taux sont eleves, meilleure est ta conversion.</div><EntonnoirTab prospects={prospects} clients={clients} distributeurs={distributeurs}/></div>}
           {btab==="historique"&&<div><div style={{background:"#FAF7F2",borderRadius:10,padding:".65rem .85rem",marginBottom:"1rem",border:"1px solid #E8DDD4",fontSize:".7rem",color:"#3D1F0E",lineHeight:1.6}}><strong>Comment lire l historique ?</strong><br/>Chaque barre = une periode de 21 jours. La barre la plus longue = ta meilleure periode. Clique sur une periode pour voir le detail des commandes. Si la periode affichee ne correspond pas (ex: P9 au lieu de P8), corrige la date dans Admin - Configuration des Periodes.</div><HistoriquePeriodes uid={uid}/></div>}</div>)}
-      {dtab==="diagnostics"&&<DiagResultsTab uid={uid}/>}
+      {dtab==="diagnostics"&&<DiagResultsTab uid={uid} onNonLuChange={onDiagNonLuChange}/>}
 
       {/* DISTRIBUTEURS (+ sous-onglet Nouveaux Distributeurs) */}
       {dtab==="distributeurs"&&(
