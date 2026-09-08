@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion, addDoc, increment } from "firebase/firestore";
 import ImmersionTunnel from "./components/Immersion/ImmersionTunnel";
@@ -3072,6 +3072,10 @@ function App(){
           </div>
           <div>
             <SecTitle title="Comprendre" em="Mihi" desc="L'essentiel sur la marque, les gammes et comment construire ton revenu."/>
+            <Card title="🌱 Nos racines" sub="Formation à écouter à tout prix" icon="🎥" color={C.rose} defaultOpen>
+              <Info color={C.rose}>Avant tout le reste, prends le temps d’écouter celle-ci. Elle explique d’où vient Mihi et pourquoi nous faisons ce que nous faisons.</Info>
+              <YTBtn href="https://youtu.be/tAQ_VODoME4" label="▶ Nos racines — la formation à ne pas manquer"/>
+            </Card>
             <Card title="Qui est Mihi ?" sub="Histoire · Valeurs · Forces" icon="🏢" color={C.or} defaultOpen>
               <Info color={C.or}>Mihi est une marque polonaise de bien-être, beauté et soins, portée par le laboratoire pharmaceutique <strong>ElfaPharm</strong>. Des produits avec de vraies études scientifiques derrière.</Info>
               {[
