@@ -2326,6 +2326,7 @@ function App(){
     {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
     {id:"monunivers",label:"🌟 Mon Univers"},
     {id:"immersion",label:"✨ Immersion"},
+    {id:"audit",label:"🔍 Audit Presence Digitale"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
@@ -4270,6 +4271,7 @@ function App(){
             <ImmersionConfigTab uid={userId} db={db} isChef={name.toLowerCase().startsWith("melissa")} statsTrigger={statsImmersionTrigger} userName={name&&name.split(" ")[0]}/>
           </>
         )}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="audit"&&<DiagnosticsTab uid={userId} userName={name} initialType="reseauxsociaux2"/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
