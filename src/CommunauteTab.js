@@ -6,6 +6,7 @@ import { MELISSA } from './ClientsTab';
 import { UploadPhoto } from './FormationProduitsTab';
 import { WallOfFameTab, DefisTab, PowerHourTab, THEMES_IMAGES, chargerChallenges, chargerDeclarations } from './App';
 import { DefiRentreeTab } from './DefiRentreeTab';
+import { BanqueImagesTab } from './App';
 import { MessagerieTab, getUnreadMessagesCount } from './MessagerieTab';
 import { CopyBtn } from './components';
 
@@ -237,7 +238,7 @@ function CommunauteTab({uid, userName, isChef, ouvrirChallenges=0}){
 
       {/* Bulles cliquables */}
       <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
-        {[{id:"partager",label:"✍️ Partager",icon:"✍️"},{id:"mur",label:"🏆 Mur de la gloire",icon:"🏆"},{id:"defis",label:"🎯 Challenges",icon:"🎯"},{id:"messages",label:"💬 Messages",icon:"💬"},{id:"defirentree",label:"🍂 Defi Rentree",icon:"🍂"}].map(b=>(
+        {[{id:"partager",label:"✍️ Partager",icon:"✍️"},{id:"mur",label:"🏆 Mur de la gloire",icon:"🏆"},{id:"defis",label:"🎯 Challenges",icon:"🎯"},{id:"messages",label:"💬 Messages",icon:"💬"},{id:"defirentree",label:"🍂 Defi Rentree",icon:"🍂"},{id:"banqueimages",label:"📸 Temoignages",icon:"📸"}].map(b=>(
           <div key={b.id} onClick={()=>{setBulleOuverte(prev=>{const next=prev===b.id?null:b.id;if(b.id==="messages"&&prev==="messages")chargerMessagesNonLus();return next;});}}
             style={{flex:1,textAlign:"center",background:bulleOuverte===b.id?C.rose:C.blanc,border:`1.5px solid ${bulleOuverte===b.id?C.rose:C.pale}`,borderRadius:14,padding:".7rem .4rem",cursor:"pointer",transition:"all .2s",position:"relative"}}>
             {b.id==="defis"&&challengeATraiter&&(
@@ -264,6 +265,11 @@ function CommunauteTab({uid, userName, isChef, ouvrirChallenges=0}){
           <div style={{marginTop:"1rem"}}>
             <PowerHourTab uid={uid} userName={userName} canCreate={isChef}/>
           </div>
+        </div>
+      )}
+      {bulleOuverte==="banqueimages"&&(
+        <div style={{marginBottom:"1rem",background:C.creme,borderRadius:14,padding:"1rem"}}>
+          <BanqueImagesTab isMelissa={uid.toLowerCase().startsWith("melissa")||isChef} userName={userName}/>
         </div>
       )}
       {bulleOuverte==="defirentree"&&(

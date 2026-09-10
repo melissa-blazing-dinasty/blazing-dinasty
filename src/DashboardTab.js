@@ -368,8 +368,6 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   const {t} = useLang();
   const DTABS=[
     {id:"today",        label:"⚡ Aujourd'hui"},
-    // Fast Start — visible seulement si assigné ET pas encore terminé
-    ...((hasFastStart&&!fastStartDone)?[{id:"faststart",label:"🚀 Fast Start"}]:[]),
     {id:"objperso",     label:"🎯 Objectifs"},
     {id:"clients",      label:"🛍️ Clients"},
     {id:"distributeurs",label:"👑 Distributeurs"},
@@ -437,7 +435,6 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
       </div>
 
       {/* FAST START J1-J7 */}
-      {dtab==="faststart"&&<FastStartTab uid={uid} userName={userName} goToFormation={goToFormation} forceQuizJour={forceQuizJour}/>}
 
       {/* TODAY */}
       {dtab==="today"&&(

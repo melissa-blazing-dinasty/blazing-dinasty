@@ -2321,7 +2321,6 @@ function App(){
     {id:"boutique",label:"🛍️ Boutique"},
     {id:"diagnostics",label:"🩺 Diagnostics"},
     {id:"scripts",label:"📝 Scripts"},
-    {id:"banqueimages",label:"📸 Témoignages & Visuels"},
     {id:"ebooks",label:"📚 Ebooks"},
     {id:"liensimportants",label:"🔗 Liens importants"},
     {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
@@ -2335,6 +2334,7 @@ function App(){
 
   // Sous-onglets du menu Formation
   const FORMATION_TABS=[
+    ...((hasFastStart&&!fastStartDone)?[{id:"faststart",label:"🚀 Fast Start",icon:"🚀",col:C.rose,desc:"Ton parcours de demarrage, etape par etape"}]:[]),
     {id:"demarrage",label:"📚 Démarrage",icon:"📚",col:C.rose,desc:"8 parties — étape par étape pour bien démarrer"},
     {id:"formationapp",label:"🎬 Formation App",icon:"🎬",col:C.lilas,desc:"Comment utiliser l'application Blazing Dynasty"},
     {id:"mihibd",label:"🔥 Mihi & Blazing Dynasty",icon:"🔥",col:C.or,desc:"Qui on est, la marque, l'équipe — pour comprendre et en parler"},
@@ -3033,6 +3033,7 @@ function App(){
           </div>
         )}
 
+        {tab==="formation"&&formationSubTab==="faststart"&&<FastStartTab uid={userId} userName={name} goToFormation={(sub)=>setFormationSubTab(sub)} forceQuizJour={forceQuizJourApp}/>}
         {tab==="formation"&&formationSubTab==="mihibd"&&(<>
           <div>
             <div style={{background:C.brun,borderRadius:16,padding:"2rem 1.4rem",marginBottom:"1rem",textAlign:"center",position:"relative",overflow:"hidden"}}>
@@ -4255,7 +4256,6 @@ function App(){
         {/* ── TABLEAU DE BORD ── */}
         {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onDiagNonLuChange={setNbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues} ouvrirBusiness={ouvrirBusinessTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="scripts"&&<ScriptsTab/>}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="banqueimages"&&<BanqueImagesTab isMelissa={name.toLowerCase().startsWith("melissa")||isChefApp} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="boutique"&&<LinkBioTab uid={userId} userName={name} initialSection="boutique"/>}
@@ -15234,7 +15234,7 @@ export const THEMES_IMAGES=[
   {id:"outils",icon:"🛠️",label:"Outils équipe"},
 ];
 
-function BanqueImagesTab({isMelissa,userName}){
+export function BanqueImagesTab({isMelissa,userName}){
   const[images,setImages]=useState([]);
   const[dossiersVisuels,setDossiersVisuels]=useState([]);
   const[vueTab,setVueTab]=useState("temoignages"); // temoignages | visuels | avalider
