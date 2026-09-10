@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
+﻿import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where, arrayUnion, addDoc, increment } from "firebase/firestore";
 import ImmersionTunnel from "./components/Immersion/ImmersionTunnel";
@@ -9422,7 +9422,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
     const nouveau={
       id,titre:form.titre.trim(),description:form.description.trim(),
       type:form.type,
-      deadline:form.dateFinExacte?new Date(form.dateFinExacte).getTime():(form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null),
+      deadline:form.dateFinExacte?new Date(form.dateFinExacte+"T23:59:59").getTime():(form.type==="flash"?Date.now()+(+form.dureeHeures||48)*3600000:form.type==="long"?Date.now()+21*24*3600000:null),
       objectif:form.type==="action"?0:(+form.objectif||0),unite:form.type==="action"?"actions":form.unite,
       cadeau:form.cadeau.trim(),cadeauImage:form.cadeauImage.trim(),
       actions:form.type==="action"?form.actionsListe.filter(a=>a.trim()).map((label,i)=>({id:"a"+i,label:label.trim()})):[],
@@ -9551,7 +9551,7 @@ export function DefisTab({uid, userName, canCreate, isChef, depuisEspaceChef=fal
   const enregistrerNouvelleDeadline=async()=>{
     const ch=challenges.find(x=>x.id===editDeadlineId);
     if(!ch)return;
-    const nouvelleDeadline=editDeadlineValue?new Date(editDeadlineValue).getTime():null;
+    const nouvelleDeadline=editDeadlineValue?new Date(editDeadlineValue+"T23:59:59").getTime():null;
     await enregistrerChallenge({...ch,deadline:nouvelleDeadline});
     setEditDeadlineId(null);
     rafraichirListe(await chargerChallenges());
