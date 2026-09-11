@@ -2309,16 +2309,16 @@ function App(){
   ];
 
   const DASHBOARD_SOUS_ONGLETS=[
-    {id:"quotidien",label:"Quotidien"},
-    {id:"reseaux",label:"Suivi Reseaux"},
-    {id:"objperso",label:"Objectifs"},
-    {id:"clients",label:"Clients"},
-    {id:"distributeurs",label:"Distributeurs"},
-    {id:"prospects",label:"Prospects"},
-    {id:"relances",label:"Relances"},
-    {id:"diagnostics",label:"Diagnostics"},
-    {id:"business",label:"Suivi CA"},
-    {id:"stats",label:"Stats"},
+    {id:"quotidien",label:"📊 Quotidien"},
+    {id:"reseaux",label:"📱 Suivi Reseaux"},
+    {id:"objperso",label:"🎯 Objectifs"},
+    {id:"clients",label:"🛍 Clients"},
+    {id:"distributeurs",label:"👑 Distributeurs"},
+    {id:"prospects",label:"👥 Prospects"},
+    {id:"relances",label:"🔔 Relances"},
+    {id:"diagnostics",label:"🩺 Diagnostics"},
+    {id:"business",label:"📈 Suivi CA"},
+    {id:"stats",label:"📉 Stats"},
   ];
   const OUTILS_SOUS_ONGLETS=[
     {id:"linkbio",label:"🔗 Link-in-Bio"},
@@ -2333,6 +2333,7 @@ function App(){
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[dtab,setDtab]=useState("today");
+  const[menuDashboardOuvert,setMenuDashboardOuvert]=useState(false);
   const[communicationSousOnglet,setCommunicationSousOnglet]=useState("semainetheme");
   const COMMUNICATION_SOUS_ONGLETS=[{id:"semainetheme",label:"Semaine a theme"},{id:"sprint",label:"Sprint editorial"},{id:"scripts",label:"Scripts"},{id:"editorial",label:"Editorial"}];
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
@@ -2906,18 +2907,37 @@ function App(){
 
       {/* SOUS-NAV TABLEAU DE BORD */}
       {tab==="dashboard"&&(
-        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:99,gap:".4rem",padding:".5rem .75rem"}}>
-          {DASHBOARD_SOUS_ONGLETS.map(s=>{
-            const nUrgentPill=s.id==="quotidien"?((objPeriodeRemplis?0:1)+nbNotifDashboard.relances):0;
-            const nActionsPill=s.id==="quotidien"?nbNotifDashboard.actions:0;
-            return(
-            <button key={s.id} onClick={()=>setDashboardSousOnglet(s.id)}
-              style={{flexShrink:0,padding:".4rem .8rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${dashboardSousOnglet===s.id?C.rose:C.pale}`,background:dashboardSousOnglet===s.id?C.rose:C.blanc,color:dashboardSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:".3rem"}}>
-              {s.label}
-              {nUrgentPill>0&&<span style={{background:dashboardSousOnglet===s.id?"white":"#E63946",color:dashboardSousOnglet===s.id?C.rose:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nUrgentPill}</span>}
-              {nActionsPill>0&&<span style={{background:dashboardSousOnglet===s.id?"white":C.or,color:dashboardSousOnglet===s.id?C.or:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nActionsPill}</span>}
-            </button>
-          );})}
+        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,position:"sticky",top:0,zIndex:99,padding:".6rem .9rem"}}>
+          <button onClick={()=>setMenuDashboardOuvert(true)}
+            style={{display:"flex",alignItems:"center",gap:".55rem",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0}}>
+            <span style={{fontSize:"1.2rem"}}>&#9776;</span>
+            <span style={{fontSize:".8rem",fontWeight:700,color:C.brun}}>{DASHBOARD_SOUS_ONGLETS.find(s=>s.id===dashboardSousOnglet)?.label||"Menu"}</span>
+          </button>
+        </div>
+      )}
+      {menuDashboardOuvert&&(
+        <div onClick={()=>setMenuDashboardOuvert(false)} style={{position:"fixed",inset:0,background:"rgba(61,31,14,.45)",zIndex:998}}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:0,left:0,bottom:0,width:"78%",maxWidth:300,background:"white",zIndex:999,padding:"1rem",overflowY:"auto",boxShadow:"4px 0 24px rgba(0,0,0,.25)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+              <span style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:C.brun}}>Tableau de bord</span>
+              <button onClick={()=>setMenuDashboardOuvert(false)} style={{background:"none",border:"none",fontSize:"1.15rem",color:C.gris,cursor:"pointer",padding:0}}>&#10005;</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+              {DASHBOARD_SOUS_ONGLETS.map(s=>{
+                const nUrgentPill=s.id==="quotidien"?((objPeriodeRemplis?0:1)+nbNotifDashboard.relances):0;
+                const nActionsPill=s.id==="quotidien"?nbNotifDashboard.actions:0;
+                return(
+                <button key={s.id} onClick={()=>{setDashboardSousOnglet(s.id);setMenuDashboardOuvert(false);}}
+                  style={{width:"100%",textAlign:"left",padding:".6rem .8rem",fontSize:".76rem",fontWeight:600,borderRadius:10,border:`1.5px solid ${dashboardSousOnglet===s.id?C.rose:C.pale}`,background:dashboardSousOnglet===s.id?C.rose:C.blanc,color:dashboardSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"space-between",gap:".3rem"}}>
+                  <span>{s.label}</span>
+                  <span style={{display:"flex",gap:".3rem"}}>
+                    {nUrgentPill>0&&<span style={{background:dashboardSousOnglet===s.id?"white":"#E63946",color:dashboardSousOnglet===s.id?C.rose:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nUrgentPill}</span>}
+                    {nActionsPill>0&&<span style={{background:dashboardSousOnglet===s.id?"white":C.or,color:dashboardSousOnglet===s.id?C.or:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nActionsPill}</span>}
+                  </span>
+                </button>
+              );})}
+            </div>
+          </div>
         </div>
       )}
 
