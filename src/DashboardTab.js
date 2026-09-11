@@ -18,8 +18,7 @@ import { DecouverteTour } from './App';
 import { DefisTab, PowerHourTab } from './App';
 import { todayLocalStr, sgAll } from './utils';
 
-function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onDiagNonLuChange=()=>{}, onVoirDiagResultats=()=>{}, nbCommandesNonVues=0, onMarquerCommandesVues=()=>{}, ouvrirBusiness=0}){
-  const[dtab,setDtab]=useState(forceQuizJour?"faststart":"today");
+function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, onFastStartDone=()=>{}, hasFastStart=false, onHasFastStart=()=>{}, isChef=false, onObjPersoChange=()=>{}, forceQuizJour=null, onCompteurChange=()=>{}, nbDiagNonLus=0, onDiagNonLuChange=()=>{}, onVoirDiagResultats=()=>{}, nbCommandesNonVues=0, onMarquerCommandesVues=()=>{}, ouvrirBusiness=0, dtab="today", setDtab=()=>{}}){
   const[showNotice,setShowNotice]=useState(false);
   const[showDecouverteClients,setShowDecouverteClients]=useState(false);
   const[showDecouverteProspects,setShowDecouverteProspects]=useState(false);
@@ -424,15 +423,6 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
         </div>
       )}
 
-      {/* Sub-nav */}
-      <div style={{display:"flex",gap:".3rem",marginBottom:"1rem",overflowX:"auto",paddingBottom:".3rem"}}>
-        {DTABS.map(t=>(
-          <button key={t.id} onClick={()=>setDtab(t.id)}
-            style={{flex:"none",padding:".5rem .9rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1px solid ${dtab===t.id?C.rose:C.pale}`,background:dtab===t.id?C.rose:C.blanc,color:dtab===t.id?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",transition:"all .2s"}}>
-            {t.label}
-          </button>
-        ))}
-      </div>
 
       {/* FAST START J1-J7 */}
 

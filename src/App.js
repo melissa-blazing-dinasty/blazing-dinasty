@@ -2309,8 +2309,16 @@ function App(){
   ];
 
   const DASHBOARD_SOUS_ONGLETS=[
-    {id:"quotidien",label:"📊 Quotidien"},
-    {id:"reseaux",label:"📱 Réseaux"},
+    {id:"quotidien",label:"Quotidien"},
+    {id:"reseaux",label:"Suivi Reseaux"},
+    {id:"objperso",label:"Objectifs"},
+    {id:"clients",label:"Clients"},
+    {id:"distributeurs",label:"Distributeurs"},
+    {id:"prospects",label:"Prospects"},
+    {id:"relances",label:"Relances"},
+    {id:"diagnostics",label:"Diagnostics"},
+    {id:"business",label:"Suivi CA"},
+    {id:"stats",label:"Stats"},
   ];
   const OUTILS_SOUS_ONGLETS=[
     {id:"linkbio",label:"🔗 Link-in-Bio"},
@@ -2324,6 +2332,7 @@ function App(){
     {id:"audit",label:"🔍 Audit Presence Digitale"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
+  const[dtab,setDtab]=useState("today");
   const[communicationSousOnglet,setCommunicationSousOnglet]=useState("semainetheme");
   const COMMUNICATION_SOUS_ONGLETS=[{id:"semainetheme",label:"Semaine a theme"},{id:"sprint",label:"Sprint editorial"},{id:"scripts",label:"Scripts"},{id:"editorial",label:"Editorial"}];
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
@@ -4263,7 +4272,7 @@ function App(){
         {tab==="suivi"&&<SuiviRecruTab uid={userId} isChef={isChefApp}/>}
 
         {/* ── TABLEAU DE BORD ── */}
-        {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onDiagNonLuChange={setNbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues} ouvrirBusiness={ouvrirBusinessTrigger}/>}
+        {tab==="dashboard"&&dashboardSousOnglet!=="reseaux"&&<DashboardTab uid={userId} dtab={dashboardSousOnglet==="quotidien"?"today":dashboardSousOnglet} setDtab={(d)=>setDashboardSousOnglet(d==="today"?"quotidien":d)} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onDiagNonLuChange={setNbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues} ouvrirBusiness={ouvrirBusinessTrigger}/>}
         {tab==="communication"&&communicationSousOnglet==="scripts"&&<ScriptsTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
