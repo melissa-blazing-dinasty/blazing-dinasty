@@ -2311,7 +2311,6 @@ function App(){
   const DASHBOARD_SOUS_ONGLETS=[
     {id:"quotidien",label:"📊 Quotidien"},
     {id:"reseaux",label:"📱 Réseaux"},
-    {id:"editorial",label:"✍️ Éditorial"},
   ];
   const OUTILS_SOUS_ONGLETS=[
     {id:"linkbio",label:"🔗 Link-in-Bio"},
@@ -2326,7 +2325,7 @@ function App(){
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[communicationSousOnglet,setCommunicationSousOnglet]=useState("semainetheme");
-  const COMMUNICATION_SOUS_ONGLETS=[{id:"semainetheme",label:"Semaine a theme"},{id:"sprint",label:"Sprint editorial"},{id:"scripts",label:"Scripts"}];
+  const COMMUNICATION_SOUS_ONGLETS=[{id:"semainetheme",label:"Semaine a theme"},{id:"sprint",label:"Sprint editorial"},{id:"scripts",label:"Scripts"},{id:"editorial",label:"Editorial"}];
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
   const[ouvrirChallengesTrigger,setOuvrirChallengesTrigger]=useState(0);
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
@@ -4293,7 +4292,7 @@ function App(){
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
         
-        {tab==="dashboard"&&dashboardSousOnglet==="editorial"&&<EditorialTab uid={userId} userName={name}/>}
+        {tab==="communication"&&communicationSousOnglet==="editorial"&&<EditorialTab uid={userId} userName={name}/>}
         {tab==="espacechef"&&(isChefApp||hasTeamApp)&&<EspaceChefTab uid={userId} isChef={isChefApp}/>}
         {tab==="formation"&&formationSubTab==="formationapp"&&<FormationAppTab adminItems={adminItems}/>}
         {tab==="objectifs"&&<ObjectifsTab uid={userId} userName={name} isMelissa={name.toLowerCase().startsWith("melissa")}/>}
