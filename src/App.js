@@ -2334,6 +2334,8 @@ function App(){
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[dtab,setDtab]=useState("today");
   const[menuDashboardOuvert,setMenuDashboardOuvert]=useState(false);
+  const[menuOutilsOuvert,setMenuOutilsOuvert]=useState(false);
+  const[menuCommunicationOuvert,setMenuCommunicationOuvert]=useState(false);
   const[communicationSousOnglet,setCommunicationSousOnglet]=useState("semainetheme");
   const COMMUNICATION_SOUS_ONGLETS=[{id:"semainetheme",label:"Semaine a theme"},{id:"sprint",label:"Sprint editorial"},{id:"scripts",label:"Scripts"},{id:"editorial",label:"Editorial"}];
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
@@ -2911,7 +2913,10 @@ function App(){
           <button onClick={()=>setMenuDashboardOuvert(true)}
             style={{display:"flex",alignItems:"center",gap:".55rem",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0}}>
             <span style={{fontSize:"1.2rem"}}>&#9776;</span>
-            <span style={{fontSize:".8rem",fontWeight:700,color:C.brun}}>{DASHBOARD_SOUS_ONGLETS.find(s=>s.id===dashboardSousOnglet)?.label||"Menu"}</span>
+            <span>
+              <div style={{fontSize:".95rem",fontWeight:700,color:C.brun}}>Menu</div>
+              <div style={{fontSize:".68rem",color:C.gris}}>{DASHBOARD_SOUS_ONGLETS.find(s=>s.id===dashboardSousOnglet)?.label||""}</div>
+            </span>
           </button>
         </div>
       )}
@@ -2941,30 +2946,70 @@ function App(){
         </div>
       )}
 
-      {/* SOUS-NAV MA BOÎTE À OUTILS */}
+      {/* SOUS-NAV MA BOITE A OUTILS */}
       {tab==="boiteaoutils"&&(
-        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:99,gap:".4rem",padding:".5rem .75rem"}}>
-          {OUTILS_SOUS_ONGLETS.map(s=>{
-            const nPill=s.id==="diagnostics"?nbDiagNonLus:0;
-            return(
-            <button key={s.id} onClick={()=>{setOutilsSousOnglet(s.id);if(s.id==="diagnostics")setNbDiagNonLus(0);}}
-              style={{flexShrink:0,padding:".4rem .8rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${outilsSousOnglet===s.id?C.rose:C.pale}`,background:outilsSousOnglet===s.id?C.rose:C.blanc,color:outilsSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:".3rem"}}>
-              {s.label}
-              {nPill>0&&<span style={{background:outilsSousOnglet===s.id?"white":"#E63946",color:outilsSousOnglet===s.id?C.rose:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nPill}</span>}
-            </button>
-          );})}
+        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,position:"sticky",top:0,zIndex:99,padding:".6rem .9rem"}}>
+          <button onClick={()=>setMenuOutilsOuvert(true)}
+            style={{display:"flex",alignItems:"center",gap:".55rem",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0}}>
+            <span style={{fontSize:"1.2rem"}}>&#9776;</span>
+            <span>
+              <div style={{fontSize:".95rem",fontWeight:700,color:C.brun}}>Menu</div>
+              <div style={{fontSize:".68rem",color:C.gris}}>{OUTILS_SOUS_ONGLETS.find(s=>s.id===outilsSousOnglet)?.label||""}</div>
+            </span>
+          </button>
+        </div>
+      )}
+      {menuOutilsOuvert&&(
+        <div onClick={()=>setMenuOutilsOuvert(false)} style={{position:"fixed",inset:0,background:"rgba(61,31,14,.45)",zIndex:998}}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:0,left:0,bottom:0,width:"78%",maxWidth:300,background:"white",zIndex:999,padding:"1rem",overflowY:"auto",boxShadow:"4px 0 24px rgba(0,0,0,.25)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+              <span style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:C.brun}}>Boite a outils</span>
+              <button onClick={()=>setMenuOutilsOuvert(false)} style={{background:"none",border:"none",fontSize:"1.15rem",color:C.gris,cursor:"pointer",padding:0}}>&#10005;</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+              {OUTILS_SOUS_ONGLETS.map(s=>{
+                const nPill=s.id==="diagnostics"?nbDiagNonLus:0;
+                return(
+                <button key={s.id} onClick={()=>{setOutilsSousOnglet(s.id);if(s.id==="diagnostics")setNbDiagNonLus(0);setMenuOutilsOuvert(false);}}
+                  style={{width:"100%",textAlign:"left",padding:".6rem .8rem",fontSize:".76rem",fontWeight:600,borderRadius:10,border:`1.5px solid ${outilsSousOnglet===s.id?C.rose:C.pale}`,background:outilsSousOnglet===s.id?C.rose:C.blanc,color:outilsSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"space-between",gap:".3rem"}}>
+                  <span>{s.label}</span>
+                  {nPill>0&&<span style={{background:outilsSousOnglet===s.id?"white":"#E63946",color:outilsSousOnglet===s.id?C.rose:"white",borderRadius:20,fontSize:".6rem",fontWeight:700,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px"}}>{nPill}</span>}
+                </button>
+              );})}
+            </div>
+          </div>
         </div>
       )}
 
       {/* SOUS-NAV AIDE A LA COMMUNICATION */}
       {tab==="communication"&&(
-        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:99,gap:".4rem",padding:".5rem .75rem"}}>
-          {COMMUNICATION_SOUS_ONGLETS.map(s=>(
-            <button key={s.id} onClick={()=>setCommunicationSousOnglet(s.id)}
-              style={{flexShrink:0,padding:".4rem .8rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${communicationSousOnglet===s.id?C.rose:C.pale}`,background:communicationSousOnglet===s.id?C.rose:C.blanc,color:communicationSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-              {s.label}
-            </button>
-          ))}
+        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,position:"sticky",top:0,zIndex:99,padding:".6rem .9rem"}}>
+          <button onClick={()=>setMenuCommunicationOuvert(true)}
+            style={{display:"flex",alignItems:"center",gap:".55rem",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0}}>
+            <span style={{fontSize:"1.2rem"}}>&#9776;</span>
+            <span>
+              <div style={{fontSize:".95rem",fontWeight:700,color:C.brun}}>Menu</div>
+              <div style={{fontSize:".68rem",color:C.gris}}>{COMMUNICATION_SOUS_ONGLETS.find(s=>s.id===communicationSousOnglet)?.label||""}</div>
+            </span>
+          </button>
+        </div>
+      )}
+      {menuCommunicationOuvert&&(
+        <div onClick={()=>setMenuCommunicationOuvert(false)} style={{position:"fixed",inset:0,background:"rgba(61,31,14,.45)",zIndex:998}}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:0,left:0,bottom:0,width:"78%",maxWidth:300,background:"white",zIndex:999,padding:"1rem",overflowY:"auto",boxShadow:"4px 0 24px rgba(0,0,0,.25)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem"}}>
+              <span style={{fontFamily:"Georgia,serif",fontSize:"1.05rem",color:C.brun}}>Aide a la communication</span>
+              <button onClick={()=>setMenuCommunicationOuvert(false)} style={{background:"none",border:"none",fontSize:"1.15rem",color:C.gris,cursor:"pointer",padding:0}}>&#10005;</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:".4rem"}}>
+              {COMMUNICATION_SOUS_ONGLETS.map(s=>(
+                <button key={s.id} onClick={()=>{setCommunicationSousOnglet(s.id);setMenuCommunicationOuvert(false);}}
+                  style={{width:"100%",textAlign:"left",padding:".6rem .8rem",fontSize:".76rem",fontWeight:600,borderRadius:10,border:`1.5px solid ${communicationSousOnglet===s.id?C.rose:C.pale}`,background:communicationSousOnglet===s.id?C.rose:C.blanc,color:communicationSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit"}}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
       {/* RETOUR FORMATION (quand un dossier est ouvert) */}
