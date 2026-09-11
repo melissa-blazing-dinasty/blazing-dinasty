@@ -2301,6 +2301,7 @@ function App(){
     {id:"home",label:"🏠"},
     {id:"dashboard",label:"📊 Tableau de bord"},
     {id:"boiteaoutils",label:"🛠️ Ma Boîte à Outils"},
+    {id:"communication",label:"💬 Aide a la communication"},
     {id:"communaute",label:"🌸 Communauté"},
     {id:"calendrier",label:"📅 Calendrier"},
     {id:"formation",label:"🎓 Formation"},
@@ -2325,6 +2326,8 @@ function App(){
     {id:"audit",label:"🔍 Audit Presence Digitale"},
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
+  const[communicationSousOnglet,setCommunicationSousOnglet]=useState("semainetheme");
+  const COMMUNICATION_SOUS_ONGLETS=[{id:"semainetheme",label:"Semaine a theme"},{id:"sprint",label:"Sprint editorial"}];
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
   const[ouvrirChallengesTrigger,setOuvrirChallengesTrigger]=useState(0);
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
@@ -2926,6 +2929,17 @@ function App(){
         </div>
       )}
 
+      {/* SOUS-NAV AIDE A LA COMMUNICATION */}
+      {tab==="communication"&&(
+        <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,display:"flex",overflowX:"auto",position:"sticky",top:0,zIndex:99,gap:".4rem",padding:".5rem .75rem"}}>
+          {COMMUNICATION_SOUS_ONGLETS.map(s=>(
+            <button key={s.id} onClick={()=>setCommunicationSousOnglet(s.id)}
+              style={{flexShrink:0,padding:".4rem .8rem",fontSize:".68rem",fontWeight:600,borderRadius:20,border:`1.5px solid ${communicationSousOnglet===s.id?C.rose:C.pale}`,background:communicationSousOnglet===s.id?C.rose:C.blanc,color:communicationSousOnglet===s.id?"white":C.gris,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
       {/* RETOUR FORMATION (quand un dossier est ouvert) */}
       {tab==="formation"&&formationSubTab&&(
         <div style={{background:C.creme,borderBottom:`1px solid ${C.pale}`,position:"sticky",top:0,zIndex:99,padding:".5rem 1rem"}}>
@@ -4161,8 +4175,8 @@ function App(){
         )}
 
         {/* ── SPRINT / ACCÉLÈRE ── */}
-        {tab==="dashboard"&&dashboardSousOnglet==="semainetheme"&&<SemaineThemeTab uid={userId}/>}
-        {tab==="dashboard"&&dashboardSousOnglet==="sprint"&&(
+        {tab==="communication"&&communicationSousOnglet==="semainetheme"&&<SemaineThemeTab uid={userId}/>}
+        {tab==="communication"&&communicationSousOnglet==="sprint"&&(
           <div>
             <SecTitle title="Prends" em="de la vitesse" desc="7 actions quotidiennes pour passer à l'action. Chaque jour compte — coche et avance."/>
             <div style={{background:C.brun,borderRadius:10,padding:".7rem 1rem",marginBottom:"1rem",fontSize:".74rem",color:C.pale,lineHeight:1.6}}>

@@ -1,0 +1,13 @@
+$path = "C:\Users\melou\blazing-dynasty\src\App.js"
+$lines = [System.IO.File]::ReadAllLines($path)
+
+$idx=-1
+for($i=0;$i -lt $lines.Length;$i++){ if($lines[$i] -match "COMMUNICATION_SOUS_ONGLETS="){$idx=$i;break} }
+Write-Host "Trouve index: $idx"
+
+if($idx -ge 0){
+    $endIdx=-1
+    for($j=$idx;$j -lt $idx+6;$j++){ if($lines[$j] -match '\];\s*$' -or $lines[$j] -match '\}\];'){$endIdx=$j;break} }
+    Write-Host "Fin trouvee index: $endIdx"
+    for($k=$idx;$k -le $endIdx;$k++){ Write-Host "$k`: $($lines[$k])" }
+}
