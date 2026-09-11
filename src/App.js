@@ -4278,7 +4278,6 @@ function App(){
           </div>
         )}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
-        {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
         
         {tab==="dashboard"&&dashboardSousOnglet==="editorial"&&<EditorialTab uid={userId} userName={name}/>}
