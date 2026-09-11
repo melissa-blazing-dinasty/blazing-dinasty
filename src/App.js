@@ -2309,10 +2309,6 @@ function App(){
 
   const DASHBOARD_SOUS_ONGLETS=[
     {id:"quotidien",label:"📊 Quotidien"},
-    {id:"semainetheme",label:"🗓️ Semaine à thème"},
-    {id:"sprint",label:"⚡ Sprint"},
-    {id:"audit",label:"🔍 Audit"},
-    {id:"dreamboard",label:"✨ Dream Board"},
     {id:"reseaux",label:"📱 Réseaux"},
     {id:"editorial",label:"✍️ Éditorial"},
   ];
@@ -2332,6 +2328,7 @@ function App(){
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
   const[ouvrirChallengesTrigger,setOuvrirChallengesTrigger]=useState(0);
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
+  const[auditVue,setAuditVue]=useState("remplir");
 
   // Sous-onglets du menu Formation
   const FORMATION_TABS=[
@@ -4165,7 +4162,6 @@ function App(){
 
         {/* ── SPRINT / ACCÉLÈRE ── */}
         {tab==="dashboard"&&dashboardSousOnglet==="semainetheme"&&<SemaineThemeTab uid={userId}/>}
-        {tab==="dashboard"&&dashboardSousOnglet==="audit"&&<AuditResultatsTab uid={userId} prenom={name&&name.split(' ')[0]}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="sprint"&&(
           <div>
             <SecTitle title="Prends" em="de la vitesse" desc="7 actions quotidiennes pour passer à l'action. Chaque jour compte — coche et avance."/>
@@ -4271,7 +4267,16 @@ function App(){
             <ImmersionConfigTab uid={userId} db={db} isChef={name.toLowerCase().startsWith("melissa")} statsTrigger={statsImmersionTrigger} userName={name&&name.split(" ")[0]}/>
           </>
         )}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="audit"&&<DiagnosticsTab uid={userId} userName={name} initialType="reseauxsociaux2"/>}
+        {tab==="boiteaoutils"&&outilsSousOnglet==="audit"&&(
+          <div>
+            <div style={{display:"flex",gap:".4rem",marginBottom:"1rem"}}>
+              <button onClick={()=>setAuditVue("remplir")} style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${auditVue==="remplir"?C.rose:C.pale}`,background:auditVue==="remplir"?C.rose:C.blanc,color:auditVue==="remplir"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>Remplir</button>
+              <button onClick={()=>setAuditVue("resultats")} style={{flex:1,padding:".5rem",fontSize:".72rem",fontWeight:600,borderRadius:10,border:`1px solid ${auditVue==="resultats"?C.rose:C.pale}`,background:auditVue==="resultats"?C.rose:C.blanc,color:auditVue==="resultats"?C.blanc:C.gris,cursor:"pointer",fontFamily:"inherit"}}>Resultats</button>
+            </div>
+            {auditVue==="remplir"&&<DiagnosticsTab uid={userId} userName={name} initialType="reseauxsociaux2"/>}
+            {auditVue==="resultats"&&<AuditResultatsTab uid={userId} prenom={name&&name.split(" ")[0]}/>}
+          </div>
+        )}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="dreamboard"&&<DreamBoardTab uid={userId}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
