@@ -2317,7 +2317,6 @@ function App(){
     {id:"linkbio",label:"🔗 Link-in-Bio"},
     {id:"boutique",label:"🛍️ Boutique"},
     {id:"diagnostics",label:"🩺 Diagnostics"},
-    {id:"scripts",label:"📝 Scripts"},
     {id:"ebooks",label:"📚 Ebooks"},
     {id:"liensimportants",label:"🔗 Liens importants"},
     {id:"tunnel-recrutement",label:"🎯 Tunnel Recrutement"},
@@ -2327,7 +2326,7 @@ function App(){
   ];
   const[dashboardSousOnglet,setDashboardSousOnglet]=useState("quotidien");
   const[communicationSousOnglet,setCommunicationSousOnglet]=useState("semainetheme");
-  const COMMUNICATION_SOUS_ONGLETS=[{id:"semainetheme",label:"Semaine a theme"},{id:"sprint",label:"Sprint editorial"}];
+  const COMMUNICATION_SOUS_ONGLETS=[{id:"semainetheme",label:"Semaine a theme"},{id:"sprint",label:"Sprint editorial"},{id:"scripts",label:"Scripts"}];
   const[ouvrirBusinessTrigger,setOuvrirBusinessTrigger]=useState(0);
   const[ouvrirChallengesTrigger,setOuvrirChallengesTrigger]=useState(0);
   const[outilsSousOnglet,setOutilsSousOnglet]=useState("linkbio");
@@ -4266,7 +4265,7 @@ function App(){
 
         {/* ── TABLEAU DE BORD ── */}
         {tab==="dashboard"&&dashboardSousOnglet==="quotidien"&&<DashboardTab uid={userId} goToFormation={(sub)=>{setTab("formation");setFormationSubTab(sub);}} goToTab={(t)=>setTab(t)} fastStartDone={fastStartDone} onFastStartDone={setFastStartDone} hasFastStart={hasFastStart} onHasFastStart={setHasFastStart} isChef={isChefApp} onObjPersoChange={setHomeObjPerso} forceQuizJour={forceQuizJourApp} onCompteurChange={setNbNotifDashboard} nbDiagNonLus={nbDiagNonLus} onDiagNonLuChange={setNbDiagNonLus} onVoirDiagResultats={voirDiagResultats} nbCommandesNonVues={nbCommandesNonVues} onMarquerCommandesVues={marquerCommandesVues} ouvrirBusiness={ouvrirBusinessTrigger}/>}
-        {tab==="boiteaoutils"&&outilsSousOnglet==="scripts"&&<ScriptsTab/>}
+        {tab==="communication"&&communicationSousOnglet==="scripts"&&<ScriptsTab/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="diagnostics"&&<DiagnosticsTab uid={userId} userName={name} onNonLuChange={setNbDiagNonLus} forceResultsView={diagResultsTrigger}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="linkbio"&&<LinkBioTab uid={userId} userName={name}/>}
         {tab==="boiteaoutils"&&outilsSousOnglet==="boutique"&&<LinkBioTab uid={userId} userName={name} initialSection="boutique"/>}
