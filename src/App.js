@@ -22,6 +22,7 @@ import { SemaineThemeTab } from './SemaineThemeTab';
 import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_PRODUITS } from './FormationProduitsTab';
 import { DashboardTab } from './DashboardTab';
 import { AuditResultatsTab } from './AuditResultatsTab';
+import { DefiRentreeTab } from './DefiRentreeTab';
 import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { FastStartTab } from './FastStartTab';
 import { ObjectifsTab } from './ObjectifsTab';
@@ -2302,6 +2303,7 @@ function App(){
     {id:"dashboard",label:"📊 Tableau de bord"},
     {id:"boiteaoutils",label:"🛠️ Ma Boîte à Outils"},
     {id:"communication",label:"💬 Aide a la communication"},
+    {id:"challenge",label:"🏆 Challenge"},
     {id:"communaute",label:"🌸 Communauté"},
     {id:"calendrier",label:"📅 Calendrier"},
     {id:"formation",label:"🎓 Formation"},
@@ -2868,7 +2870,7 @@ function App(){
                 else setFormationSubTab("");
               }
             }}
-            style={{flex:"none",padding:".72rem .85rem",fontSize:".6rem",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase",color:tab===tb.id?C.brun:C.gris,border:"none",borderBottom:`2px solid ${tab===tb.id?C.rose:"transparent"}`,background:"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",transition:"all .2s",position:"relative"}}>
+            style={{flex:"none",padding:".72rem .85rem",fontSize:".6rem",fontWeight:tb.id==="challenge"?800:600,letterSpacing:".05em",textTransform:"uppercase",color:tb.id==="challenge"?"#C62828":(tab===tb.id?C.brun:C.gris),border:"none",borderBottom:`2px solid ${tb.id==="challenge"?"#C62828":(tab===tb.id?C.rose:"transparent")}`,background:tb.id==="challenge"?"#C6282810":"none",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",transition:"all .2s",position:"relative"}}>
             {(()=>{
               let n=0;
               if(tb.id==="communaute")n=nbNotifCommunaute;
@@ -2904,7 +2906,7 @@ function App(){
         ))}
       </div>
 
-      {userId&&<BandeauChallenge uid={userId} onOuvrir={()=>{setTab("communaute");setOuvrirChallengesTrigger(t=>t+1);}}/>}
+      {userId&&<BandeauChallenge uid={userId} onOuvrir={()=>setTab("challenge")}/>}
       {userId&&<RappelPeriodePopup uid={userId} onAller={()=>{setTab("dashboard");setDashboardSousOnglet("quotidien");setOuvrirBusinessTrigger(t=>t+1);}}/>}
 
       {/* SOUS-NAV TABLEAU DE BORD */}
@@ -4363,6 +4365,7 @@ function App(){
             {auditVue==="resultats"&&<AuditResultatsTab uid={userId} prenom={name&&name.split(" ")[0]}/>}
           </div>
         )}
+        {tab==="challenge"&&(<div><DefiRentreeTab uid={userId} userName={name}/><div style={{marginTop:"1.5rem",borderTop:"1px solid #E8DDD4",paddingTop:"1rem"}}><DefisTab uid={userId} userName={name} canCreate={true} isChef={isChefApp}/><div style={{marginTop:"1rem"}}><PowerHourTab uid={userId} userName={name} canCreate={isChefApp}/></div></div></div>)}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
         
