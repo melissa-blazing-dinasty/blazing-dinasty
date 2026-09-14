@@ -3102,7 +3102,7 @@ function DiagResultsTab({ uid, onNonLuChange=()=>{} }) {
 
 
 // ── DIAG ADMIN EDITOR ────────────────────────────────────────────────────────
-function DiagAdminEditor(){
+export function DiagAdminEditor(){
   const[notes,setNotes]=useState({skincare:"",cheveux:"",sante:""});
   const[saving,setSaving]=useState(false);
   const[saved,setSaved]=useState(false);
@@ -3132,6 +3132,7 @@ function DiagAdminEditor(){
     {id:"skincare",icon:"✨",label:"Skincare"},
     {id:"cheveux",icon:"💇",label:"Cheveux"},
     {id:"sante",icon:"💊",label:"Santé"},
+    {id:"silhouette",icon:"⚖️",label:"Silhouette"},
   ];
 
   if(!loaded) return <div style={{fontSize:".74rem",color:C.gris}}>Chargement...</div>;

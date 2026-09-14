@@ -242,8 +242,9 @@ exports.authentifier = onCall(async (request) => {
       await accRef.set(Object.assign({}, accData, {chefs: chefsArr.concat(["melissa da silveira"])}), {merge: true});
     }
   } else {
-    const membres = accData.liste || [];
-    const autorise = membres.some((m) => m.toLowerCase() === fullName);
+    const rawListe = accData.liste || [];
+    const membres = Array.isArray(rawListe) ? rawListe : Object.values(rawListe);
+    const autorise = membres.some((m) => (m || "").toString().toLowerCase() === fullName);
     if (!autorise) {
       throw new HttpsError("permission-denied", "Prenom/Nom non reconnu");
     }
@@ -320,8 +321,9 @@ exports.reinitialiserMotDePasse = onCall(async (request) => {
     const accRef = db.collection("acces").doc("membres");
     const accSnap = await accRef.get();
     const accData = accSnap.exists ? accSnap.data() : {};
-    const membres = accData.liste || [];
-    const autorise = membres.some((m) => m.toLowerCase() === fullName);
+    const rawListe = accData.liste || [];
+    const membres = Array.isArray(rawListe) ? rawListe : Object.values(rawListe);
+    const autorise = membres.some((m) => (m || "").toString().toLowerCase() === fullName);
     if (!autorise) throw new HttpsError("permission-denied", "Prenom/Nom non reconnu");
   }
   await db.collection("secrets").doc(uid).set({"db-mdp": nouveauMotDePasse}, {merge: true});

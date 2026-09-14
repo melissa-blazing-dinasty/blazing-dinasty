@@ -22,6 +22,7 @@ import { SemaineThemeTab } from './SemaineThemeTab';
 import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_PRODUITS } from './FormationProduitsTab';
 import { DashboardTab } from './DashboardTab';
 import { AuditResultatsTab } from './AuditResultatsTab';
+import { DiagAdminEditor } from './DiagnosticsTab';
 import { DefiRentreeTab } from './DefiRentreeTab';
 import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { FastStartTab } from './FastStartTab';
@@ -14684,6 +14685,11 @@ function AdminTab({uid}){
       <AdminConfigPeriodes/>
       <AdminImportCatalogue/>
       <AdminFormationProduits/>
+
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+        <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".75rem"}}>Instructions IA par diagnostic</div>
+        <DiagAdminEditor/>
+      </div>
 
       {/* Fast Start vidéos */}
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
