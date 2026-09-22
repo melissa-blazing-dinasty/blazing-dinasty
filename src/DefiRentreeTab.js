@@ -142,8 +142,8 @@ function DefiRentreeTab({uid, userName}){
   };
 
   const classement=Object.entries(participants)
-    .map(([id,d])=>({id,...d}))
-    .sort((a,b)=>(b.points||0)-(a.points||0));
+    .map(([id,d])=>({id,...d,totalCombine:(d.points||0)+(d.pointsVentes||0)+(d.pointsRecrutement||0)}))
+    .sort((a,b)=>(b.totalCombine||0)-(a.totalCombine||0));
 
   const classementVentes=Object.entries(participants)
     .map(([id,d])=>({id,...d}))
@@ -158,7 +158,7 @@ function DefiRentreeTab({uid, userName}){
     setDeclarationEnCours(true);
     try{
       const fn=httpsCallable(fbFunctions,"declarerRecrueDefiRentree");
-      await fn({nomRecrue:nomRecrue.trim()});
+      await fn({nomRecrue:nomRecrue.trim(), uid, prenomAffiche:userName});
       setNomRecrue("");
       setDeclarationOk(true);
       setTimeout(()=>setDeclarationOk(false),2500);
@@ -328,7 +328,7 @@ function DefiRentreeTab({uid, userName}){
               </div>
               <div style={{flex:1,fontSize:".8rem",fontWeight:p.id===uid?700:600,color:C.brun}}>{p.prenom}{p.id===uid?" (toi)":""}</div>
               <div style={{fontSize:".65rem",color:C.gris}}>🔥{p.streak||0}</div>
-              <div style={{fontSize:".85rem",fontWeight:700,color:C.rose,flexShrink:0}}>{p.points||0} pts</div>
+              <div style={{fontSize:".85rem",fontWeight:700,color:C.rose,flexShrink:0}}>{p.totalCombine||0} pts</div>
             </div>
           ))}
         </div>

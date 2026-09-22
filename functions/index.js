@@ -1,4 +1,4 @@
-﻿const {onSchedule} = require("firebase-functions/v2/scheduler");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentUpdated, onDocumentCreated, onDocumentWritten} = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
@@ -278,6 +278,16 @@ exports.authentifier = onCall(async (request) => {
 exports.soumettreDiagnostic = onCall(async (request) => {
   const {uid, type, nomClient, contact, reponses} = request.data || {};
   if (!uid || !type) throw new HttpsError("invalid-argument", "Donnees manquantes");
+  // Verrou serveur : meme regle que l'app (prenom + au moins un moyen de contact reel)
+  const cc = contact || {};
+  const prenomOK = String(cc.prenom||"").trim().replace(/[^A-Za-z\u00C0-\u00FF]/g,"").length >= 2;
+  const chiffres = String(cc.tel||"").replace(/\D/g,"");
+  const telOK = chiffres.length >= 9 && !/^(\d)\1+$/.test(chiffres);
+  const mailOK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(cc.mail||"").trim());
+  const resOK = String(cc.reseau||"").trim().replace(/[^A-Za-z0-9]/g,"").length >= 3;
+  if (!prenomOK || !(telOK || mailOK || resOK)) {
+    throw new HttpsError("invalid-argument", "CONTACT_INVALIDE");
+  }
   const ts = Date.now();
   const dateStr = new Date().toISOString().slice(0,10);
   const nomFinal = nomClient || "Cliente";
@@ -895,13 +905,13 @@ exports.notifierPalierDefiRentreeActions = onCall(async (request) => {
   return {ok: true};
 });
 exports.declarerRecrueDefiRentree = onCall(async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Connexion requise");
-  const {nomRecrue} = request.data || {};
+  const {nomRecrue, uid, prenomAffiche} = request.data || {};
   if (!nomRecrue || !nomRecrue.trim()) throw new HttpsError("invalid-argument", "Le nom de la recrue est requis");
+  if (!uid) throw new HttpsError("invalid-argument", "Identifiant manquant");
 
-  const distributeurUid = request.auth.uid;
+  const distributeurUid = uid;
   const userSnap = await db.collection("users").doc(distributeurUid).get();
-  const prenom = (userSnap.exists && userSnap.data().prenom) || (userSnap.exists && userSnap.data().nom) || "Distributrice";
+  const prenom = prenomAffiche || (userSnap.exists && userSnap.data().prenom) || (userSnap.exists && userSnap.data().nom) || "Distributrice";
 
   const ref = db.collection("equipe").doc("defi-rentree");
   const snap = await ref.get();

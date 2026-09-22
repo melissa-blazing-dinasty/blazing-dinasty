@@ -23,6 +23,7 @@ import { FormationProduitsTab, AdminFormationProduits, UploadPhoto, CATEGORIES_P
 import { DashboardTab } from './DashboardTab';
 import { AuditResultatsTab } from './AuditResultatsTab';
 import { DiagAdminEditor } from './DiagnosticsTab';
+import { TemoignagesDiagAdmin } from './DiagnosticsTab';
 import { DefiRentreeTab } from './DefiRentreeTab';
 import { ObjectionBubbles, ObjectionsTab, ScriptsTab } from './ScriptsTab';
 import { FastStartTab } from './FastStartTab';
@@ -14689,6 +14690,10 @@ function AdminTab({uid}){
       <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
         <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".75rem"}}>Instructions IA par diagnostic</div>
         <DiagAdminEditor/>
+      </div>
+      <div style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:"1rem",marginBottom:"1.25rem"}}>
+        <div style={{fontSize:".62rem",fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:C.rose,marginBottom:".75rem"}}>Temoignages diagnostics (mon espace prive)</div>
+        <TemoignagesDiagAdmin/>
       </div>
 
       {/* Fast Start vidéos */}

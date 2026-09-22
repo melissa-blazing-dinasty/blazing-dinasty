@@ -1,10 +1,13 @@
-﻿import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
+import { useState, useEffect } from 'react'; import { TokensCadeauxPopup } from './TokensCadeauxTab';
 import { TunnelRecrutementPublic } from './TunnelRecrutementTab';
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, increment } from 'firebase/firestore';
 import { isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut } from 'firebase/auth';
 import { C } from './constants';
 import App from './App';
+import { THEMES_IMAGES } from './App';
+import { UploadPhoto } from './FormationProduitsTab';
+import { UploadVideo } from './FormationProduitsTab';
 import { SCRIPTS_DATA, DecouverteTour } from './App';
 import { fbFunctions } from './App';
 import { httpsCallable } from 'firebase/functions';
@@ -13,6 +16,17 @@ import { todayLocalStr } from './utils';
 let ANTHROPIC_API_KEY = '';
 async function chargerCleAPI(){try{const snap=await getDoc(doc(db,'admin','config'));if(snap.exists()&&snap.data().anthropicKey)ANTHROPIC_API_KEY=snap.data().anthropicKey;}catch{}}
 const chargementCleAPIPromise = chargerCleAPI();
+
+// Validation reelle des coordonnees (evite les "a", "0", "." qui passaient)
+function contactOK(prenom, tel, mail, reseau){
+  const p = String(prenom||"").trim();
+  if(p.replace(/[^A-Za-z\u00C0-\u00FF]/g,"").length < 2) return false;
+  const chiffres = String(tel||"").replace(/\D/g,"");
+  const telOK = chiffres.length >= 9 && !/^(\d)\1+$/.test(chiffres);
+  const mailOK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(mail||"").trim());
+  const resOK = String(reseau||"").trim().replace(/[^A-Za-z0-9]/g,"").length >= 3;
+  return telOK || mailOK || resOK;
+}
 
 
 // ── BITLY ────────────────────────────────────────────────────────────────────
@@ -89,6 +103,140 @@ Génère un plan d'action personnalisé en JSON avec cette structure exacte (ne 
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
 // ── DIAGNOSTIC IA ────────────────────────────────────────────────────────────
+function mapTypeVersThemeTemoignages(type){
+  const m = {
+    skincare:"skincare", peauvisage:"skincare",
+    makeup:"makeup",
+    cheveux:"cheveux",
+    parfum:"parfums",
+    peaucorps:"corps",
+    silhouette:"perte_poids", sante:"perte_poids", detox:"perte_poids", antiage:"perte_poids", budget:"perte_poids",
+    recrutement:"recrutement", complementrevenu:"recrutement", entrepreneuriat:"recrutement", valeurmarche:"recrutement",
+    chargementale:"recrutement", libertefin:"recrutement", maman:"recrutement", reconversion:"recrutement",
+    confianceensoi:"recrutement", reseauxsociaux2:"recrutement",
+  };
+  return m[type] || null;
+}
+export function TemoignagesDiagAdmin(){
+  const[items,setItems]=useState([]);
+  const[loaded,setLoaded]=useState(false);
+  const[form,setForm]=useState({theme:"skincare",texte:"",url:"",videoUrl:""});
+  const[saving,setSaving]=useState(false);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"banque","temoignages_diag"));
+        if(snap.exists()) setItems(snap.data().items||[]);
+      }catch{}
+      setLoaded(true);
+    })();
+  },[]);
+  const sauvegarder=async(next)=>{
+    setSaving(true);
+    try{ await setDoc(doc(db,"banque","temoignages_diag"),{items:next}); setItems(next); }catch{}
+    setSaving(false);
+  };
+  const ajouter=()=>{
+    if(!form.texte.trim())return;
+    const next=[...items,{...form,id:Date.now()}];
+    sauvegarder(next);
+    setForm({theme:form.theme,texte:"",url:""});
+  };
+  const supprimer=(id)=>{
+    sauvegarder(items.filter(i=>i.id!==id));
+  };
+  if(!loaded) return <div style={{fontSize:".74rem",color:C.gris}}>Chargement...</div>;
+  return(
+    <div>
+      <select value={form.theme} onChange={e=>setForm(p=>({...p,theme:e.target.value}))}
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .7rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".45rem"}}>
+        {THEMES_IMAGES.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+      </select>
+      <textarea placeholder="Texte du temoignage" value={form.texte} onChange={e=>setForm(p=>({...p,texte:e.target.value}))}
+        style={{width:"100%",minHeight:70,border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .7rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".45rem",resize:"vertical"}}/>
+      <input placeholder="URL photo (optionnel)" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))}
+        style={{width:"100%",border:`1px solid ${C.pale}`,borderRadius:8,padding:".45rem .7rem",fontSize:".8rem",fontFamily:"inherit",color:C.texte,background:C.creme,outline:"none",marginBottom:".3rem"}}/>
+      <div style={{fontSize:".62rem",color:C.gris,marginBottom:".3rem",textAlign:"center"}}>ou</div>
+      <UploadPhoto label="Uploader une photo" folder="temoignages_diag" value={form.url} onChange={(url)=>setForm(p=>({...p,url}))}/>
+      <div style={{marginBottom:".5rem"}}/>
+      <UploadVideo label="Ou uploader une video" folder="temoignages_diag_video" value={form.videoUrl} onChange={(videoUrl)=>setForm(p=>({...p,videoUrl}))}/>
+      <div style={{marginBottom:".3rem"}}/>
+      <button onClick={ajouter} disabled={saving}
+        style={{width:"100%",background:C.brun,color:C.blanc,border:"none",borderRadius:8,padding:".55rem",fontSize:".78rem",fontWeight:600,fontFamily:"inherit",cursor:"pointer",marginBottom:"1rem"}}>
+        Ajouter le temoignage
+      </button>
+      {items.map(i=>{
+        const th=THEMES_IMAGES.find(t=>t.id===i.theme);
+        return(
+        <div key={i.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:10,padding:".6rem .8rem",marginBottom:".4rem",display:"flex",gap:".6rem",alignItems:"flex-start"}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:".62rem",fontWeight:700,color:C.rose,marginBottom:".2rem"}}>{th?th.icon+" "+th.label:i.theme}</div>
+            <div style={{fontSize:".76rem",color:C.texte,lineHeight:1.5}}>{i.texte}</div>
+          </div>
+          <button onClick={()=>supprimer(i.id)} style={{background:"none",border:"none",color:"#B04040",cursor:"pointer",fontSize:".7rem",fontFamily:"inherit"}}>Supprimer</button>
+        </div>
+      );})}
+    </div>
+  );
+}
+function TemoignagesDiagSection({type}){
+  const[tous,setTous]=useState(null);
+  const[categorieOuverte,setCategorieOuverte]=useState(null);
+  const[visionneuse,setVisionneuse]=useState(null);
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const snap=await getDoc(doc(db,"banque","temoignages_diag"));
+        setTous(snap.exists()?(snap.data().items||[]):[]);
+      }catch{setTous([]);}
+    })();
+  },[]);
+  const groupes = (tous||[]).length===0 ? [] : THEMES_IMAGES.map(th=>({...th, items:tous.filter(t=>t.theme===th.id)})).filter(g=>g.items.length>0);
+  const groupeOuvert = groupes.find(g=>g.id===categorieOuverte);
+  if(tous&&groupes.length===0) return null;
+  return(
+    <div style={{marginBottom:"1rem"}}>
+      {tous===null&&<div style={{textAlign:"center",padding:"1rem",color:C.gris,fontSize:".76rem"}}>Chargement des temoignages...</div>}
+      {!groupeOuvert&&groupes.map(g=>{
+        const cover=g.items[0];
+        return(
+        <div key={g.id} onClick={()=>setCategorieOuverte(g.id)} style={{position:"relative",borderRadius:12,overflow:"hidden",marginBottom:".6rem",cursor:"pointer",minHeight:140,background:"#3D1F0E"}}>
+          {cover.videoUrl?<video src={cover.videoUrl} style={{width:"100%",height:140,objectFit:"cover",display:"block",opacity:.75}}/>:(cover.url&&<img src={cover.url} alt="temoignage" style={{width:"100%",height:140,objectFit:"cover",display:"block",opacity:.75}}/>)}
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.25)"}}>
+            <div style={{color:"white",fontSize:"1rem",fontWeight:700,textShadow:"0 2px 8px rgba(0,0,0,.6)",textAlign:"center",padding:"0 1rem"}}>{g.icon} Temoignages {g.label}</div>
+          </div>
+        </div>
+      );})}
+      {groupeOuvert&&(
+        <div>
+          <button onClick={()=>setCategorieOuverte(null)} style={{background:"none",border:"none",color:C.rose,fontSize:".76rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",padding:0,marginBottom:".6rem"}}>&#8592; Toutes les categories</button>
+          {groupeOuvert.items.map((t)=>{
+            const idxGlobal = groupeOuvert.items.indexOf(t);
+            return(
+            <div key={t.id} onClick={()=>setVisionneuse(idxGlobal)} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,overflow:"hidden",marginBottom:".6rem",cursor:"pointer"}}>
+              {t.videoUrl?<video src={t.videoUrl} style={{width:"100%",maxHeight:220,display:"block",background:"#000",pointerEvents:"none"}}/>:(t.url&&<img src={t.url} alt="temoignage" style={{width:"100%",maxHeight:220,objectFit:"cover",display:"block"}}/>)}
+              <p style={{fontSize:".78rem",color:C.texte,lineHeight:1.6,margin:0,padding:".7rem .9rem",fontStyle:"italic"}}>"{t.texte}"</p>
+            </div>
+          );})}
+        </div>
+      )}
+      {visionneuse!==null&&groupeOuvert&&groupeOuvert.items[visionneuse]&&(
+        <div onClick={()=>setVisionneuse(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.92)",zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"1rem"}}>
+          <button onClick={()=>setVisionneuse(null)} style={{position:"absolute",top:16,right:16,background:"none",border:"none",color:"white",fontSize:"1.6rem",cursor:"pointer"}}>&#10005;</button>
+          {visionneuse>0&&<button onClick={(e)=>{e.stopPropagation();setVisionneuse(visionneuse-1);}} style={{position:"absolute",left:8,background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:42,height:42,color:"white",fontSize:"1.3rem",cursor:"pointer"}}>&#8249;</button>}
+          {visionneuse<groupeOuvert.items.length-1&&<button onClick={(e)=>{e.stopPropagation();setVisionneuse(visionneuse+1);}} style={{position:"absolute",right:8,background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:42,height:42,color:"white",fontSize:"1.3rem",cursor:"pointer"}}>&#8250;</button>}
+          <div onClick={e=>e.stopPropagation()} style={{maxWidth:"92vw",maxHeight:"80vh"}}>
+            {groupeOuvert.items[visionneuse].videoUrl
+              ? <video src={groupeOuvert.items[visionneuse].videoUrl} controls autoPlay style={{maxWidth:"92vw",maxHeight:"70vh",display:"block"}}/>
+              : (groupeOuvert.items[visionneuse].url && <img src={groupeOuvert.items[visionneuse].url} alt="temoignage" style={{maxWidth:"92vw",maxHeight:"70vh",objectFit:"contain",display:"block"}}/>)
+            }
+          </div>
+          <p style={{color:"white",fontSize:".85rem",fontStyle:"italic",textAlign:"center",marginTop:"1rem",maxWidth:"88vw"}}>"{groupeOuvert.items[visionneuse].texte}"</p>
+        </div>
+      )}
+    </div>
+  );
+}
 async function genererOrdonnanceIA(type, reponses, nomClient) {
   if(!ANTHROPIC_API_KEY) await chargementCleAPIPromise;
   // Types business (pas de catalogue produits)
@@ -2254,7 +2402,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       </div>
 
       {/* Message d'alerte si contact manquant */}
-      {prenomContact.trim() && !telContact.trim() && !mailContact.trim() && !reseauContact.trim() && (
+      {prenomContact.trim() && !contactOK(prenomContact,telContact,mailContact,reseauContact) && (
         <div style={{background:"#FFF3F0",border:"1px solid #F4C0B0",borderRadius:8,padding:".55rem .75rem",marginBottom:".6rem",fontSize:".72rem",color:"#B04040",lineHeight:1.5}}>
           ⚠️ Ton téléphone, ton email ou ton pseudo réseau social est obligatoire — sans ça, ta conseillère ne peut tout simplement pas t'envoyer ni traiter tes recommandations.
         </div>
@@ -2262,6 +2410,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
 
       <button
         onClick={()=>{
+          if(!contactOK(prenomContact,telContact,mailContact,reseauContact))return;
           const contact={prenom:prenomContact,nom:nomContact,tel:telContact,mail:mailContact,reseau:reseauContact};
           if(TYPES_SCORING.includes(type)){
             genererResultatScoring({...reponsesFinales, _contact:JSON.stringify(contact)});
@@ -2269,8 +2418,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
             genererOrdonnance({...reponsesFinales, _contact:JSON.stringify(contact)});
           }
         }}
-        disabled={prenomContact.trim().length<2||!(telContact.trim()||mailContact.trim()||reseauContact.trim())}
-        style={{width:"100%",background:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.brun:C.pale,color:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:(prenomContact.trim().length>=2&&(telContact.trim()||mailContact.trim()||reseauContact.trim()))?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
+        disabled={!contactOK(prenomContact,telContact,mailContact,reseauContact)}
+        style={{width:"100%",background:(contactOK(prenomContact,telContact,mailContact,reseauContact))?C.brun:C.pale,color:(contactOK(prenomContact,telContact,mailContact,reseauContact))?C.blanc:C.gris,border:"none",borderRadius:10,padding:".75rem",fontSize:".84rem",fontWeight:600,fontFamily:"inherit",cursor:(contactOK(prenomContact,telContact,mailContact,reseauContact))?"pointer":"default",transition:"all .2s",marginBottom:".5rem"}}>
         Envoyer mes réponses →
       </button>
       <div style={{fontSize:".65rem",color:C.gris,textAlign:"center"}}>
@@ -2598,6 +2747,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
         <p style={{ fontSize: ".65rem", color: C.gris, textAlign: "center", marginTop:".5rem" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
         </>)}
 
+        <TemoignagesDiagSection type={type}/>
         {/* Boutique + lien VIP : visibles pour TOUT LE MONDE, y compris les clientes externes qui reçoivent le lien */}
         <div style={{display:"flex",flexDirection:"column",gap:".6rem",margin:"1rem 0 .5rem"}}>
           <button onClick={()=>window.open("?boutique="+uid, "_blank")}
