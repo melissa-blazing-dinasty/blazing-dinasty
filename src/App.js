@@ -2306,6 +2306,7 @@ function App(){
     {id:"boiteaoutils",label:"🛠️ Ma Boîte à Outils"},
     {id:"communication",label:"💬 Aide a la communication"},
     {id:"challenge",label:"🏆 Challenge"},
+    {id:"classement",label:"📊 Classement"},
     {id:"communaute",label:"🌸 Communauté"},
     {id:"calendrier",label:"📅 Calendrier"},
     {id:"formation",label:"🎓 Formation"},
@@ -4368,6 +4369,7 @@ function App(){
           </div>
         )}
         {tab==="challenge"&&(<div><DefiRentreeTab uid={userId} userName={name}/><div style={{marginTop:"1.5rem",borderTop:"1px solid #E8DDD4",paddingTop:"1rem"}}><DefisTab uid={userId} userName={name} canCreate={true} isChef={isChefApp}/><div style={{marginTop:"1rem"}}><PowerHourTab uid={userId} userName={name} canCreate={isChefApp}/></div></div></div>)}
+        {tab==="classement"&&<ClassementEquipe uid={userId}/>}
         {tab==="communaute"&&<CommunauteTab uid={userId} userName={name} isChef={isChefApp} ouvrirChallenges={ouvrirChallengesTrigger}/>}
         {tab==="dashboard"&&dashboardSousOnglet==="reseaux"&&<SuiviReseauxTab uid={userId}/>}
         
