@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
 import { db, storage } from './firebase';
 import { ref as storageRefVideo, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { C } from './constants';
@@ -50,8 +50,15 @@ function FormationProduitsTab(){
   useEffect(()=>{
     (async()=>{
       try{
-        const snap=await getDoc(doc(db,"admin","formation_produits"));
-        if(snap.exists()) setProduits(snap.data().produits||{});
+        const snapNouvelleStructure=await getDocs(collection(db,"admin","formation_produits_categories","items"));
+        if(!snapNouvelleStructure.empty){
+          const produitsCharges={};
+          snapNouvelleStructure.forEach(d=>{produitsCharges[d.id]=d.data().items||[];});
+          setProduits(produitsCharges);
+        }else{
+          const snap=await getDoc(doc(db,"admin","formation_produits"));
+          if(snap.exists()) setProduits(snap.data().produits||{});
+        }
       }catch{}
       setLoading(false);
     })();
@@ -377,8 +384,21 @@ function AdminFormationProduits(){
   useEffect(()=>{
     (async()=>{
       try{
-        const snap=await getDoc(doc(db,"admin","formation_produits"));
-        if(snap.exists()) setProduits(snap.data().produits||{});
+        // Nouvelle structure : un document Firestore par categorie (evite la limite de 1 Mo par document)
+        const snapNouvelleStructure=await getDocs(collection(db,"admin","formation_produits_categories","items"));
+        if(!snapNouvelleStructure.empty){
+          const produitsCharges={};
+          snapNouvelleStructure.forEach(d=>{produitsCharges[d.id]=d.data().items||[];});
+          setProduits(produitsCharges);
+        }else{
+          // Migration automatique unique depuis l'ancien document unique (trop volumineux desormais)
+          const snapAncien=await getDoc(doc(db,"admin","formation_produits"));
+          const produitsAnciens=snapAncien.exists()?(snapAncien.data().produits||{}):{};
+          setProduits(produitsAnciens);
+          for(const[cat,items] of Object.entries(produitsAnciens)){
+            try{await setDoc(doc(db,"admin","formation_produits_categories","items",cat),{items,derniereMaj:Date.now()});}catch(e){console.error("Migration categorie "+cat+" echouee:",e);}
+          }
+        }
       }catch{}
       try{
         const catSnap=await getDoc(doc(db,"admin","catalogue_mihi"));
@@ -390,7 +410,14 @@ function AdminFormationProduits(){
 
   const save=async(nextProduits)=>{
     setSaving(true);
-    try{await setDoc(doc(db,"admin","formation_produits"),{produits:nextProduits,derniereMaj:Date.now()});setProduits(nextProduits);}catch(e){console.error("Erreur sauvegarde formation produits:",e);alert("Erreur lors de l'enregistrement : "+e.message);}
+    try{
+      // N'ecrit que les categories qui ont reellement change, chacune dans son propre document
+      const categoriesModifiees=new Set([...Object.keys(nextProduits),...Object.keys(produits)].filter(cat=>JSON.stringify(nextProduits[cat]||[])!==JSON.stringify(produits[cat]||[])));
+      for(const cat of categoriesModifiees){
+        await setDoc(doc(db,"admin","formation_produits_categories","items",cat),{items:nextProduits[cat]||[],derniereMaj:Date.now()});
+      }
+      setProduits(nextProduits);
+    }catch(e){console.error("Erreur sauvegarde formation produits:",e);alert("Erreur lors de l'enregistrement : "+e.message);}
     setSaving(false);
   };
 

@@ -714,6 +714,18 @@ export async function chargerChallenges(){
   return out;
 }
 
+export async function chargerLiensTelegramEquipe(){
+  try{
+    const snap=await getDoc(doc(db,"equipe","liens_telegram"));
+    if(snap.exists())return snap.data().liste||[];
+  }catch(e){ console.error("chargerLiensTelegramEquipe:", e); }
+  return [];
+}
+
+export async function sauverLiensTelegramEquipe(liste){
+  await setDoc(doc(db,"equipe","liens_telegram"),{liste});
+}
+
 export async function chargerDeclarations(){
   const res = {};
   try{
@@ -3444,6 +3456,36 @@ function App(){
               <DriveBtn href="https://drive.google.com/file/d/1PFLOi8JNwREegXPnNAzGntKm4Z_a7dkn/view" label="Comment faire ses Lives + déclencher des ventes"/>
               <Btn href="https://us06web.zoom.us/rec/share/RwAb_48QbKt_jrn_91SJbfXZ8Sf8shCOpxzixhX0HdElfb4xDOU9nBEq-OdNms2b.RRxzRJZ53fmbvprr" label="Les réunions à domicile" icon="▶" color={C.brun}/>
               <DriveBtn href="https://drive.google.com/file/d/1wSOKykwqsrzkXPkP-alTXLZ2AIc3HyAM/view" label="Comment parler des produits (exercice équipe)"/>
+            </Card>
+
+            <Card title="Vendre grâce au BUNDLE" sub="Associer les produits selon les besoins" icon="🎁" color={C.rose} defaultOpen>
+              <div style={{position:"relative",paddingBottom:"56.25%",height:0,overflow:"hidden",borderRadius:12,marginBottom:".7rem"}}>
+                <iframe src="https://www.youtube.com/embed/XGjwbLJRua4" title="Vendre grâce au BUNDLE"
+                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none",borderRadius:12}}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen/>
+              </div>
+              <div style={{fontSize:".78rem",color:C.texte,lineHeight:1.7,marginTop:".7rem",whiteSpace:"pre-wrap"}}>
+{`LES BUNDLES : UN OUTIL POUR DÉVELOPPER NOTRE ACTIVITÉ 💕
+
+Comme expliqué dans la vidéo, les bundles sont des associations de produits pensées autour de besoins précis : peau, silhouette, ménopause, sommeil, charge mentale, etc.
+
+🎯 Leur objectif ? Nous aider à attirer de nouvelles clientes, susciter leur intérêt et faciliter nos échanges en privé.
+
+✨ Les bundles sont des bases de travail, pas des formules toutes faites ! Ils nous donnent des idées d'associations et nous permettent de gagner du temps, notamment lorsqu'on débute ou qu'on manque d'inspiration pour construire une routine.
+
+🤍 L'essentiel reste de personnaliser chaque proposition en fonction des besoins, des attentes et du budget de la cliente. Il ne s'agit pas de vendre le plus gros bundle, mais de proposer ce qui lui correspond réellement, sans pression.
+
+📲 Attention : les affiches présentant les différents packs avec tous leurs prix ne sont pas destinées à être diffusées sur nos réseaux sociaux. Sur nos publications et nos stories, on met plutôt en avant les besoins et les problématiques, puis on invite les personnes intéressées à nous contacter en privé. C'est dans cet échange que nous pouvons présenter les bundles adaptés, détailler leur composition et communiquer les tarifs en toute transparence.
+
+🌸 Notre objectif : créer du lien, conseiller avec authenticité et fidéliser grâce à la confiance.
+
+Les bundles sont là pour nous donner un cadre, nous aider à prendre confiance et nous permettre de développer notre activité plus simplement, chacune à notre rythme. 💪💕
+
+À nous de nous les approprier et de les adapter à notre façon de travailler ! ❤️`}
+              </div>
+              <div style={{marginTop:".9rem",paddingTop:".8rem",borderTop:`1px solid ${C.pale}`}}>
+                <Btn href="https://t.me/+pW8IR0W5lh03OTRk" label="💬 Rejoindre le groupe Telegram Bundles" icon="▶" color={"#2AABEE"}/>
+              </div>
             </Card>
 
             <Card title="Stratégies de vente" sub="Les méthodes qui marchent" icon="💡" color={C.or}>
@@ -12187,6 +12229,10 @@ export function LiensImportantsTab({uid}){
   const[nouveauLabel,setNouveauLabel]=useState("");
   const[nouveauUrl,setNouveauUrl]=useState("");
   const[copie,setCopie]=useState("");
+  const[liensTelegram,setLiensTelegram]=useState([]);
+  const[nvLabelTg,setNvLabelTg]=useState("");
+  const[nvUrlTg,setNvUrlTg]=useState("");
+  const isMelissa=uid==="melissa"||uid==="melissa-da-silveira";
 
   useEffect(()=>{
     (async()=>{
@@ -12204,9 +12250,25 @@ export function LiensImportantsTab({uid}){
           setLiensPerso(JSON.parse(snapU.data()["db-liens-perso"]));
         }
       }catch{}
+      setLiensTelegram(await chargerLiensTelegramEquipe());
       setLoaded(true);
     })();
   },[uid]);
+
+  const ajouterLienTelegram=async()=>{
+    if(!nvLabelTg.trim()||!nvUrlTg.trim())return;
+    let url=nvUrlTg.trim();
+    if(!/^https?:\/\//i.test(url))url="https://"+url;
+    const nouvelleListe=[...liensTelegram,{id:"tg"+Date.now(),label:nvLabelTg.trim(),url}];
+    setLiensTelegram(nouvelleListe);
+    await sauverLiensTelegramEquipe(nouvelleListe);
+    setNvLabelTg("");setNvUrlTg("");
+  };
+  const supprimerLienTelegram=async(id)=>{
+    const nouvelleListe=liensTelegram.filter(l=>l.id!==id);
+    setLiensTelegram(nouvelleListe);
+    await sauverLiensTelegramEquipe(nouvelleListe);
+  };
 
   const sauverLiensPerso=async(next)=>{
     setLiensPerso(next);
@@ -12252,6 +12314,48 @@ export function LiensImportantsTab({uid}){
           style={{background:copie==="bio"?"#2E7D32":C.rose,color:"white",border:"none",borderRadius:8,padding:".4rem .7rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
           {copie==="bio"?"✅ Copié":"📋 Copier"}
         </button>
+      </div>
+
+      <div style={{marginTop:"1.4rem",marginBottom:".6rem",background:"#FDF0ED",border:"1.5px solid #D84A3A50",borderRadius:14,padding:"1rem 1.1rem"}}>
+        <div style={{fontSize:".68rem",fontWeight:700,color:"#C4341F",letterSpacing:".08em",textTransform:"uppercase",marginBottom:".6rem"}}>📱 Liens Telegram de l'équipe</div>
+        {liensTelegram.length===0?(
+          <div style={{fontSize:".76rem",color:C.gris,fontStyle:"italic",padding:".4rem 0"}}>Aucun lien Telegram pour l'instant.</div>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}>
+            {liensTelegram.map(l=>(
+              <div key={l.id} style={{background:C.blanc,border:`1px solid ${C.pale}`,borderRadius:12,padding:".7rem .85rem",display:"flex",alignItems:"center",gap:".6rem"}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontSize:".78rem",fontWeight:700,color:C.brun}}>💬 {l.label}</div>
+                  <div style={{fontSize:".68rem",color:C.gris,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.url}</div>
+                </div>
+                <a href={l.url} target="_blank" rel="noopener noreferrer"
+                  style={{background:"#2AABEE",color:"white",border:"none",borderRadius:8,padding:".4rem .7rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0,textDecoration:"none"}}>
+                  Ouvrir
+                </a>
+                <button onClick={()=>copierLien(l.url,l.id)}
+                  style={{background:copie===l.id?"#2E7D32":C.rose,color:"white",border:"none",borderRadius:8,padding:".4rem .55rem",fontSize:".72rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer",flexShrink:0}}>
+                  {copie===l.id?"✅":"📋"}
+                </button>
+                {isMelissa&&(
+                  <button onClick={()=>supprimerLienTelegram(l.id)}
+                    style={{background:"none",border:"none",color:"#B04040",fontSize:".85rem",cursor:"pointer",padding:"0 .2rem",flexShrink:0}}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {isMelissa&&(
+          <div style={{display:"flex",gap:".4rem",marginTop:".6rem"}}>
+            <input value={nvLabelTg} onChange={e=>setNvLabelTg(e.target.value)} placeholder="Nom (ex: Groupe Équipe)"
+              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .6rem",fontSize:".74rem",fontFamily:"inherit",outline:"none"}}/>
+            <input value={nvUrlTg} onChange={e=>setNvUrlTg(e.target.value)} placeholder="Lien t.me/..."
+              style={{flex:1,border:`1px solid ${C.pale}`,borderRadius:8,padding:".5rem .6rem",fontSize:".74rem",fontFamily:"inherit",outline:"none"}}/>
+            <button onClick={ajouterLienTelegram} disabled={!nvLabelTg.trim()||!nvUrlTg.trim()}
+              style={{background:(nvLabelTg.trim()&&nvUrlTg.trim())?C.brun:C.pale,color:"white",border:"none",borderRadius:8,padding:".5rem .8rem",fontSize:".74rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+              +
+            </button>
+          </div>
+        )}
       </div>
 
       {boutiqueActive&&(
