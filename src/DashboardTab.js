@@ -399,6 +399,12 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
   },[cibleRappel,dtab]);
   return(
     <div>
+      <style>{`
+        @keyframes pulseRappelRouge {
+          0%,100% { box-shadow: 0 0 0 0 rgba(232,80,58,.55); }
+          50% { box-shadow: 0 0 0 7px rgba(232,80,58,0); }
+        }
+      `}</style>
       <SecTitle title="Tableau" em="de bord" desc="Tes actions quotidiennes · Tes prospects · Tes publications · Tes stats."/>
       {showCaReminder&&(
         <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,background:"rgba(61,31,14,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem"}}>
@@ -447,7 +453,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
           {relancesDuJour.length>0&&(
             <div style={{background:"#FFF3EC",border:"1.5px solid #C44B1A50",borderRadius:14,marginBottom:"1rem",overflow:"hidden"}}>
               <div onClick={()=>setRelanceBannerOuverte(p=>!p)}
-                style={{display:"flex",alignItems:"center",gap:".6rem",padding:".75rem 1rem",cursor:"pointer"}}>
+                style={{display:"flex",alignItems:"center",gap:".6rem",padding:".75rem 1rem",cursor:"pointer",animation:relanceBannerOuverte?"none":"pulseRappelRouge 1.3s ease-in-out infinite"}}>
                 <span style={{fontSize:"1.2rem"}}>🔔</span>
                 <div style={{flex:1}}>
                   <div style={{fontSize:".82rem",fontWeight:700,color:"#C44B1A"}}>{relancesDuJour.length} relance{relancesDuJour.length>1?"s":""} à faire aujourd'hui</div>
@@ -458,7 +464,7 @@ function DashboardTab({uid, goToFormation, goToTab=()=>{}, fastStartDone=false, 
                 <div style={{padding:"0 1rem .85rem"}}>
                   {relancesDuJour.map((p,i)=>(
                     <div key={i} onClick={()=>{if(p.id){setDtab(p.type!=="prospect"?"clients":"prospects");if(p.type!=="prospect"){setClientsSubTab("clients");setClientCibleId(p.id);}setCibleRappel({id:p.id,type:p.type==="prospect"?"prospect":"cliente"});}}}
-                      style={{background:"white",borderRadius:9,padding:".5rem .7rem",marginBottom:".4rem",fontSize:".78rem",color:"#3D2B1F",fontWeight:600,display:"flex",flexDirection:"column",cursor:p.id?"pointer":"default"}}>
+                      style={{background:"white",borderRadius:9,padding:".5rem .7rem",marginBottom:".4rem",fontSize:".78rem",color:"#3D2B1F",fontWeight:600,display:"flex",flexDirection:"column",cursor:p.id?"pointer":"default",border:"1.5px solid #E8503A",animation:"pulseRappelRouge 1.3s ease-in-out infinite"}}>
                       <span>{p.type==="cliente"?"💜 ":p.type==="suivi"?"📦 ":p.type==="conso"?"🔄 ":p.type==="anniversaire"?"🎂 ":"👥 "}{p.name}</span>
                       {p.texte&&<span style={{fontSize:".68rem",color:"#888",fontWeight:400,marginTop:".15rem"}}>{p.texte}</span>}
                     </div>
