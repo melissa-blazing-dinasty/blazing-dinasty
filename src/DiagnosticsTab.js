@@ -8,7 +8,7 @@ import App from './App';
 import { THEMES_IMAGES } from './App';
 import { UploadPhoto } from './FormationProduitsTab';
 import { UploadVideo } from './FormationProduitsTab';
-import { SCRIPTS_DATA, DecouverteTour } from './App';
+import { SCRIPTS_DATA, DecouverteTour, copierTexteRobuste } from './App';
 import { fbFunctions } from './App';
 import { httpsCallable } from 'firebase/functions';
 import { todayLocalStr } from './utils';
@@ -1731,10 +1731,10 @@ function ScriptsDiagSection(){
   const[copie,setCopie]=useState(null);
   const scripts=SCRIPTS_DATA.find(s=>s.cat==="🔬 Proposer un diagnostic")?.scripts||[];
 
-  const copier=(text,i)=>{
-    navigator.clipboard?.writeText(text);
-    setCopie(i);
-    setTimeout(()=>setCopie(null),2000);
+  const copier=async(text,i)=>{
+    const succes=await copierTexteRobuste(text);
+    if(succes){setCopie(i);setTimeout(()=>setCopie(null),2000);}
+    else{setCopie("erreur");setTimeout(()=>setCopie(null),2500);}
   };
 
   return(
@@ -2024,6 +2024,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   const [reponsesFinales, setReponsesFinales] = useState(null);
   const [nomClient, setNomClient] = useState(initialClient||"");
   const [choixLienPour, setChoixLienPour] = useState(null);
+  const [lienAPartager, setLienAPartager] = useState(null); // {texte, titre}
   const [contactClient, setContactClient] = useState(""); // tel, email ou réseau social
   const [prenomContact, setPrenomContact] = useState("");
   const [nomContact, setNomContact] = useState("");
@@ -2152,20 +2153,21 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     } catch {}
   };
 
-  const copierLien = () => {
+  const copierLien = async () => {
     const lien = `https://blazing-dinasty-1fad9.web.app?diag=${type}&uid=${uid}&client=${encodeURIComponent(nomClient||"")}`;
-    navigator.clipboard.writeText(lien).catch(()=>{});
+    await copierTexteRobuste(lien);
   };
 
   const reset = () => { setMode("choix"); setType(""); setStep(0); setReponses({}); setNomClient(""); setOrdonnance(null); setErreur(""); };
 
-  const copierPack = (pack) => {
+  const copierPack = async (pack) => {
     const p = ordonnance[pack];
     const text = `✨ ${pack==="budget"?"💚 Pack Petit Budget":pack==="bestseller"?"⭐ Pack Best Seller":"🚀 Pack Boost"} — ${p.total}\n\n${p.produits.map(pr=>`• ${pr.nom} (${pr.prix})\n  → ${pr.usage} | ${pr.benefice}`).join("\n")}\n\nRoutine: ${p.routine}`;
-    navigator.clipboard.writeText(text).catch(()=>{});
+    const succes = await copierTexteRobuste(text);
+    if(!succes)setLienAPartager({texte:text,titre:"⚠️ La copie automatique a échoué. Sélectionne le texte ci-dessous et copie-le toi-même :"});
   };
 
-  const copierTout = () => {
+  const copierTout = async () => {
     if(!ordonnance) return;
     const packs = ["budget","bestseller","premium"];
     const labels = {budget:"💚 Pack Petit Budget",bestseller:"⭐ Pack Best Seller",premium:"🚀 Pack Boost Premium"};
@@ -2174,8 +2176,9 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       if(!p)return"";
       return `${labels[pk]} — ${p.total}\n${(p.produits||[]).map(pr=>`• ${pr.nom} (${pr.prix}) — ${pr.usage}\n  → ${pr.benefice||""}${pr.comment?"\n  💡 "+pr.comment:""}`).join("\n")}\n\n${p.routine?"📋 Routine :\n"+p.routine:""}`;
     }).filter(Boolean).join("\n\n")}${ordonnance.conseil?"\n\n💛 "+ordonnance.conseil:""}`;
-    navigator.clipboard.writeText(text).catch(()=>{});
-    alert("✅ Ordonnance complète copiée !");
+    const succes = await copierTexteRobuste(text);
+    if(succes)alert("✅ Ordonnance complète copiée !");
+    else setLienAPartager({texte:text,titre:"⚠️ La copie automatique a échoué. Sélectionne le texte ci-dessous et copie-le toi-même :"});
   };
 
   const TYPES_DIAG = [
@@ -2320,6 +2323,25 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
       ))}
       </div>
 
+      {lienAPartager&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:99999,padding:"1rem"}}>
+          <div style={{background:"white",borderRadius:16,padding:"1.3rem",maxWidth:400,width:"100%"}}>
+            <div style={{fontSize:".82rem",fontWeight:700,color:C.brun,marginBottom:".7rem",lineHeight:1.5}}>{lienAPartager.titre}</div>
+            <textarea readOnly value={lienAPartager.texte} onFocus={e=>e.target.select()}
+              style={{width:"100%",minHeight:110,border:`1.5px solid ${C.pale}`,borderRadius:10,padding:".6rem .7rem",fontSize:".76rem",fontFamily:"inherit",color:C.texte,outline:"none",resize:"vertical",marginBottom:".7rem"}}/>
+            <div style={{display:"flex",gap:".5rem"}}>
+              <button onClick={async()=>{const ok=await copierTexteRobuste(lienAPartager.texte);if(ok)setLienAPartager(p=>({...p,titre:"✅ Copié !"}));}}
+                style={{flex:1,background:C.brun,color:"white",border:"none",borderRadius:9,padding:".6rem",fontSize:".76rem",fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+                📋 Réessayer de copier
+              </button>
+              <button onClick={()=>setLienAPartager(null)}
+                style={{background:"none",border:`1px solid ${C.pale}`,borderRadius:9,padding:".6rem 1rem",fontSize:".76rem",color:C.gris,fontFamily:"inherit",cursor:"pointer"}}>
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
   async function construireLienDiag(diagType) {
@@ -2332,8 +2354,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
   }
   async function copierLienNu(diagType) {
     const lien = await construireLienDiag(diagType);
-    navigator.clipboard && navigator.clipboard.writeText(lien);
-    alert("Lien copié ! Colle-le où tu veux.");
+    const succes = await copierTexteRobuste(lien);
+    setLienAPartager({texte: lien, titre: succes ? "✅ Lien copié ! Si ça ne colle pas, recopie-le ici :" : "⚠️ La copie automatique a échoué sur ton téléphone. Sélectionne le lien ci-dessous et copie-le toi-même :"});
   }
   async function copierLienDirect(diagType, labelCustom) {
     const lien = await construireLienDiag(diagType);
@@ -2344,8 +2366,8 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
     const msg = labelCustom
       ? labelCustom + "\n\n" + lien
       : e+"✨ "+(nomClient?nomClient+", ton":"Ton")+" diagnostic "+tl+" est pret ! ✨"+e+"\n\n💆 J'ai prepare tes recommandations personnalisees rien que pour toi !\n\n👇👇 CLIQUE ICI 👇👇\n➡️ "+lien+"\n\n⚠️ Clique bien sur le lien ci-dessus\n(pas sur le premier apercu qui apparait)\n\n🔥 Blazing Dynasty x Mihi France";
-    navigator.clipboard && navigator.clipboard.writeText(msg);
-    alert("Message copie ! Colle-le dans ta conversation.");
+    const succes = await copierTexteRobuste(msg);
+    setLienAPartager({texte: msg, titre: succes ? "✅ Message copié ! Si ça ne colle pas, recopie-le ici :" : "⚠️ La copie automatique a échoué sur ton téléphone. Sélectionne le message ci-dessous et copie-le toi-même :"});
   }
   if (mode === "loading") return (
     <LoadingOrdonnance nomClient={nomClient}/>
@@ -2742,7 +2764,7 @@ function DiagnosticsTab({ uid, userName, externalMode=false, initialType="", ini
           🖨️ Sauvegarder mon ordonnance en PDF
         </button>
 
-        <button type="button" onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;await navigator.clipboard.writeText(lien);alert('Lien copie - partage-le par WhatsApp ou Messenger');}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
+        <button type="button" onClick={async()=>{if(!ordonnance)return;try{const id='ord_'+Date.now();await setDoc(doc(db,'ordonnances_publiques',id),{ordonnance:ordonnance,nomClient:nomClient||'Cliente',date:todayLocalStr(),ts:Date.now(),distribUid:uid});const lien=window.location.origin+'?ordonnance='+id;const succes=await copierTexteRobuste(lien);setLienAPartager({texte:lien,titre:succes?"✅ Lien copié ! Si ça ne colle pas, recopie-le ici :":"⚠️ La copie automatique a échoué. Sélectionne le lien ci-dessous et copie-le toi-même :"});}catch(e){alert('Erreur');}}} style={{width:'100%',background:'#7FAF8A',color:'white',border:'none',borderRadius:10,padding:'.6rem',fontSize:'.78rem',fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginTop:'.4rem'}}>Partager mon ordonnance</button>
 
         <p style={{ fontSize: ".65rem", color: C.gris, textAlign: "center", marginTop:".5rem" }}>Résultat sauvegardé dans ton tableau de bord 🖤</p>
         </>)}
@@ -3054,8 +3076,10 @@ function DiagResultsTab({ uid, onNonLuChange=()=>{} }) {
                 `\n🚀 PACK BOOST\n${formatPack("",ord.premium)}`,
                 ord.conseil&&`\n💛 Conseil personnalisé : ${ord.conseil}`,
               ].filter(Boolean).join("\n");
-              navigator.clipboard?.writeText(texte);
-              alert("✅ Ordonnance copiée avec le détail complet !");
+              copierTexteRobuste(texte).then(succes=>{
+                if(succes)alert("✅ Ordonnance copiée avec le détail complet !");
+                else alert("⚠️ La copie automatique a échoué sur ce téléphone. Réessaie, ou prends une capture d'écran de l'ordonnance.");
+              });
             }}
               style={{ width:"100%", background:`linear-gradient(135deg,${C.brun},${C.brun2})`, color:"white", border:"none", borderRadius:10, padding:".6rem", fontSize:".78rem", fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
               📋 Copier l'ordonnance complète
@@ -3839,15 +3863,13 @@ function BoutiquePubliquePage({slug}){
     try{
       if(navigator.share){
         await navigator.share({title:titre,text:texte,url});
-      }else{
-        await navigator.clipboard.writeText(url);
-        setToast({type:"success",text:"🔗 Lien copié !"});
+        return;
       }
     }catch(e){
-      if(e.name!=="AbortError"){
-        try{await navigator.clipboard.writeText(url);setToast({type:"success",text:"🔗 Lien copié !"});}catch{}
-      }
+      if(e.name==="AbortError")return;
     }
+    const succes=await copierTexteRobuste(url);
+    setToast(succes?{type:"success",text:"🔗 Lien copié !"}:{type:"error",text:"⚠️ La copie a échoué, réessaie"});
   };
 
   const ajouterPanier=(prod)=>{

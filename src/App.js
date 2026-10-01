@@ -194,10 +194,42 @@ export async function syncAnnuaire(uid, displayName, objPerso, marraineUid){
 
 
 // Construit récursivement l'arbre des filleules (recrues directes et indirectes) d'un membre
+export async function copierTexteRobuste(text){
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const zoneTemp=document.createElement("textarea");
+    zoneTemp.value=text;
+    zoneTemp.style.position="fixed";
+    zoneTemp.style.opacity="0";
+    document.body.appendChild(zoneTemp);
+    zoneTemp.focus();
+    zoneTemp.select();
+    const succes=document.execCommand("copy");
+    document.body.removeChild(zoneTemp);
+    return succes;
+  }catch(e){
+    return false;
+  }
+}
+
 export function CopyBtn({text}){
   const[c,setC]=useState(false);
-  return <button onClick={()=>{navigator.clipboard.writeText(text);setC(true);setTimeout(()=>setC(false),2000);}}
-    style={{fontSize:".55rem",padding:".15rem .45rem",border:`1px solid ${c?C.vert:C.pale}`,borderRadius:5,background:"none",color:c?C.vert:C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{c?"✓":"Copier"}</button>;
+  const[erreur,setErreur]=useState(false);
+  const copier=async()=>{
+    const succes=await copierTexteRobuste(text);
+    if(succes){
+      setC(true);setErreur(false);
+      setTimeout(()=>setC(false),2000);
+    }else{
+      setErreur(true);
+      setTimeout(()=>setErreur(false),2500);
+    }
+  };
+  return <button onClick={copier}
+    style={{fontSize:".55rem",padding:".15rem .45rem",border:`1px solid ${c?C.vert:erreur?"#B04040":C.pale}`,borderRadius:5,background:"none",color:c?C.vert:erreur?"#B04040":C.gris,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>{c?"✓":erreur?"Échec, réessaie":"Copier"}</button>;
 }
 
 // ── POST IDEAS DATA ───────────────────────────────────────────────────────────
@@ -12190,9 +12222,10 @@ export function LiensImportantsTab({uid}){
   };
   const supprimerLien=(id)=>sauverLiensPerso(liensPerso.filter(l=>l.id!==id));
 
-  const copierLien=(url,cle)=>{
-    navigator.clipboard?.writeText(url);
-    setCopie(cle);setTimeout(()=>setCopie(""),2000);
+  const copierLien=async(url,cle)=>{
+    const succes=await copierTexteRobuste(url);
+    if(succes){setCopie(cle);setTimeout(()=>setCopie(""),2000);}
+    else{setCopie(cle+"-erreur");setTimeout(()=>setCopie(""),2500);}
   };
 
   const base="https://blazing-dinasty-1fad9.web.app";
